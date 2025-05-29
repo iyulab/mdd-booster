@@ -1,0 +1,13 @@
+global using System.CommandLine;
+global using System.Text.Json;
+global using System.Text.Json.Serialization;
+global using System.Reflection;
+global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.Logging;
+global using Serilog;
+global using MDDBooster.Models;
+global using MDDBooster.Builders;
+global using MDDBooster.Builders.MsSql;
+global using MDDBooster.Builders.ModelProject;
+global using MDDBooster.Builders.ServerProject;
+global using MDDBooster.ConsoleApp.Models;

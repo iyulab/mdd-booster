@@ -1,6 +1,3 @@
-﻿using System.Text.Json;
-using System.Text.Json.Serialization;
-
 namespace MDDBooster.ConsoleApp.Models;
 
 /// <summary>
@@ -137,18 +134,78 @@ public class Settings
     /// </summary>
     private static void ApplyDefaultsToBuilderConfig(BuilderInfo builderInfo)
     {
-        if (builderInfo.Type.Equals("MsSql", StringComparison.OrdinalIgnoreCase))
+        if (builderInfo.Type.Equals("DatabaseProject", StringComparison.OrdinalIgnoreCase))
         {
-            // Apply MsSql builder defaults
+            // Apply DatabaseProject builder defaults (formerly MsSql)
             var defaults = new Dictionary<string, JsonElement>
             {
                 ["tablePath"] = JsonDocument.Parse("\"dbo/Tables_\"").RootElement,
                 ["generateIndividualFiles"] = JsonDocument.Parse("true").RootElement,
-                ["generateCompleteFile"] = JsonDocument.Parse("true").RootElement,
-                ["schemaOnly"] = JsonDocument.Parse("false").RootElement,
+                ["schemaOnly"] = JsonDocument.Parse("true").RootElement,
                 ["useCreateIfNotExists"] = JsonDocument.Parse("true").RootElement,
                 ["includeIndexes"] = JsonDocument.Parse("true").RootElement,
-                ["clearOutputDirectoryBeforeGeneration"] = JsonDocument.Parse("true").RootElement
+                ["generateForeignKeys"] = JsonDocument.Parse("true").RootElement,
+                ["cascadeDelete"] = JsonDocument.Parse("true").RootElement,
+                ["clearOutputDirectoryBeforeGeneration"] = JsonDocument.Parse("true").RootElement,
+                ["schemaName"] = JsonDocument.Parse("\"dbo\"").RootElement,
+                ["useSchemaNamespace"] = JsonDocument.Parse("false").RootElement,
+                ["generateTriggers"] = JsonDocument.Parse("false").RootElement
+            };
+
+            // Add default values for any missing properties
+            foreach (var kvp in defaults)
+            {
+                if (!builderInfo.Config.ContainsKey(kvp.Key))
+                {
+                    builderInfo.Config[kvp.Key] = kvp.Value;
+                }
+            }
+        }
+        else if (builderInfo.Type.Equals("ModelProject", StringComparison.OrdinalIgnoreCase))
+        {
+            // Apply ModelProject builder defaults
+            var defaults = new Dictionary<string, JsonElement>
+            {
+                ["modelsPath"] = JsonDocument.Parse("\"Entity_\"").RootElement,
+                ["interfacesPath"] = JsonDocument.Parse("\"Models\"").RootElement,
+                ["enumsPath"] = JsonDocument.Parse("\"Models\"").RootElement,
+                ["generateNavigationProperties"] = JsonDocument.Parse("true").RootElement,
+                ["generateInterface"] = JsonDocument.Parse("true").RootElement,
+                ["generateAbstractModels"] = JsonDocument.Parse("true").RootElement,
+                ["usePartialClasses"] = JsonDocument.Parse("true").RootElement,
+                ["implementINotifyPropertyChanged"] = JsonDocument.Parse("false").RootElement,
+                ["useDateTimeOffset"] = JsonDocument.Parse("false").RootElement,
+                ["useNullableReferenceTypes"] = JsonDocument.Parse("true").RootElement,
+                ["defaultStringLength"] = JsonDocument.Parse("50").RootElement,
+                ["cleanup"] = JsonDocument.Parse("true").RootElement
+            };
+
+            // Add default values for any missing properties
+            foreach (var kvp in defaults)
+            {
+                if (!builderInfo.Config.ContainsKey(kvp.Key))
+                {
+                    builderInfo.Config[kvp.Key] = kvp.Value;
+                }
+            }
+        }
+        else if (builderInfo.Type.Equals("ServerProject", StringComparison.OrdinalIgnoreCase))
+        {
+            // Apply ServerProject builder defaults
+            var defaults = new Dictionary<string, JsonElement>
+            {
+                ["gqlPath"] = JsonDocument.Parse("\"Gql_\"").RootElement,
+                ["generateIndividualFiles"] = JsonDocument.Parse("true").RootElement,
+                ["cleanup"] = JsonDocument.Parse("true").RootElement,
+                ["generateRepositories"] = JsonDocument.Parse("true").RootElement,
+                ["generateGraphTypes"] = JsonDocument.Parse("true").RootElement,
+                ["generateQueries"] = JsonDocument.Parse("true").RootElement,
+                ["generateFieldTypes"] = JsonDocument.Parse("true").RootElement,
+                ["generateValidationRules"] = JsonDocument.Parse("true").RootElement,
+                ["generateSearchRequests"] = JsonDocument.Parse("true").RootElement,
+                ["usePartialClasses"] = JsonDocument.Parse("true").RootElement,
+                ["defaultPageSize"] = JsonDocument.Parse("50").RootElement,
+                ["maxPageSize"] = JsonDocument.Parse("1000").RootElement
             };
 
             // Add default values for any missing properties
@@ -196,17 +253,32 @@ public class Settings
             {
                 new BuilderInfo
                 {
-                    Type = "MsSql",
+                    Type = "DatabaseProject",
                     Config = new Dictionary<string, JsonElement>
                     {
-                        ["projectPath"] = JsonDocument.Parse("\"\"").RootElement, // Empty string instead of hardcoded path
-                        ["tablePath"] = JsonDocument.Parse("\"dbo/Tables_\"").RootElement,
-                        ["generateIndividualFiles"] = JsonDocument.Parse("true").RootElement,
-                        ["generateCompleteFile"] = JsonDocument.Parse("true").RootElement,
-                        ["schemaOnly"] = JsonDocument.Parse("false").RootElement,
-                        ["useCreateIfNotExists"] = JsonDocument.Parse("true").RootElement,
-                        ["includeIndexes"] = JsonDocument.Parse("true").RootElement,
-                        ["clearOutputDirectoryBeforeGeneration"] = JsonDocument.Parse("true").RootElement
+                        ["projectPath"] = JsonDocument.Parse("\"\"").RootElement,
+                        ["schemaName"] = JsonDocument.Parse("\"dbo\"").RootElement
+                    }
+                },
+                new BuilderInfo
+                {
+                    Type = "ModelProject",
+                    Config = new Dictionary<string, JsonElement>
+                    {
+                        ["projectPath"] = JsonDocument.Parse("\"\"").RootElement,
+                        ["namespace"] = JsonDocument.Parse("\"YourNamespace\"").RootElement,
+                        ["generateInterface"] = JsonDocument.Parse("false").RootElement,
+                        ["modelsPath"] = JsonDocument.Parse("\"Entity_\"").RootElement,
+                        ["enumsPath"] = JsonDocument.Parse("\"Entity_\"").RootElement
+                    }
+                },
+                new BuilderInfo
+                {
+                    Type = "ServerProject",
+                    Config = new Dictionary<string, JsonElement>
+                    {
+                        ["projectPath"] = JsonDocument.Parse("\"\"").RootElement,
+                        ["namespace"] = JsonDocument.Parse("\"YourNamespace.MainServer\"").RootElement
                     }
                 }
             }

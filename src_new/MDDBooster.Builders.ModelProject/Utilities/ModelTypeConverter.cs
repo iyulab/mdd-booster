@@ -1,5 +1,3 @@
-﻿using MDDBooster.Models;
-
 namespace MDDBooster.Builders.ModelProject.Utilities;
 
 /// <summary>

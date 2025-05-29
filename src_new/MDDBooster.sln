@@ -13,10 +13,13 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MDDBooster.Builders.MsSql",
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
 	ProjectSection(SolutionItems) = preProject
+		FOR_AI.md = FOR_AI.md
 		..\..\m3l\README.md = ..\..\m3l\README.md
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MDDBooster.Builders.ModelProject", "MDDBooster.Builders.ModelProject\MDDBooster.Builders.ModelProject.csproj", "{45EC6070-7CFA-4A82-AF2C-F1F2385B042F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MDDBooster.Builders.ServerProject", "MDDBooster.Builders.ServerProject\MDDBooster.Builders.ServerProject.csproj", "{4A976CB5-1556-46B2-AAF6-9D7F77F06B2B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -44,6 +47,10 @@ Global
 		{45EC6070-7CFA-4A82-AF2C-F1F2385B042F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{45EC6070-7CFA-4A82-AF2C-F1F2385B042F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{45EC6070-7CFA-4A82-AF2C-F1F2385B042F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4A976CB5-1556-46B2-AAF6-9D7F77F06B2B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4A976CB5-1556-46B2-AAF6-9D7F77F06B2B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4A976CB5-1556-46B2-AAF6-9D7F77F06B2B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4A976CB5-1556-46B2-AAF6-9D7F77F06B2B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,5 +1,3 @@
-﻿using MDDBooster.Models;
-
 namespace MDDBooster.Builders.ModelProject;
 
 /// <summary>
@@ -52,6 +50,15 @@ public class ModelGeneratorBuilder
     }
 
     /// <summary>
+    /// Sets the path for GraphQL search request classes
+    /// </summary>
+    public ModelGeneratorBuilder WithGqlSearchRequestPath(string path)
+    {
+        _config.GqlSearchRequestPath = path;
+        return this;
+    }
+
+    /// <summary>
     /// Configures whether to generate navigation properties
     /// </summary>
     public ModelGeneratorBuilder WithNavigationProperties(bool generate = true)
@@ -93,6 +100,55 @@ public class ModelGeneratorBuilder
     public ModelGeneratorBuilder WithPropertyChangeNotification(bool implement = true)
     {
         _config.ImplementINotifyPropertyChanged = implement;
+        return this;
+    }
+
+    /// <summary>
+    /// Configures whether to generate GraphQL search request classes
+    /// </summary>
+    public ModelGeneratorBuilder WithGqlSearchRequests(bool generate = true, string path = "Gql_")
+    {
+        _config.GenerateGqlSearchRequest = generate;
+        if (generate && !string.IsNullOrEmpty(path))
+        {
+            _config.GqlSearchRequestPath = path;
+        }
+        return this;
+    }
+
+    /// <summary>
+    /// Configures whether to generate interface files
+    /// </summary>
+    public ModelGeneratorBuilder WithInterfaceGeneration(bool generate = true)
+    {
+        _config.GenerateInterface = generate;
+        return this;
+    }
+
+    /// <summary>
+    /// Configures whether to generate abstract model classes
+    /// </summary>
+    public ModelGeneratorBuilder WithAbstractModels(bool generate = true)
+    {
+        _config.GenerateAbstractModels = generate;
+        return this;
+    }
+
+    /// <summary>
+    /// Configures directory cleanup behavior
+    /// </summary>
+    public ModelGeneratorBuilder WithCleanup(bool cleanup = true)
+    {
+        _config.Cleanup = cleanup;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the default string length for generated fields
+    /// </summary>
+    public ModelGeneratorBuilder WithDefaultStringLength(int length)
+    {
+        _config.DefaultStringLength = length;
         return this;
     }
 

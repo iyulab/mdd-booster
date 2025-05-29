@@ -1,15 +1,3 @@
-﻿using MDDBooster.ConsoleApp.Models;
-using MDDBooster.Builders;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Serilog;
-using System.CommandLine;
-using System.Text.Json;
-using MDDBooster.Builders.MsSql;
-using MDDBooster.Models;
-using System.Reflection;
-using MDDBooster.Builders.ModelProject;
-
 namespace MDDBooster.ConsoleApp;
 
 internal class Program
@@ -25,7 +13,7 @@ internal class Program
 #endif
 
         // Create root command
-        var rootCommand = new RootCommand("MDDBooster Console Application - M3L Parser and SQL Generator");
+        var rootCommand = new RootCommand("MDDBooster Console Application - M3L Parser and Code Generator");
 
         // Add settings file option
         var settingsOption = new Option<string>(
@@ -121,21 +109,25 @@ internal class Program
                 }
             }
 
-            // Verify the MsSqlBuilder exists in loaded assemblies
-            bool msSqlBuilderFound = false;
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            // Verify critical builders exist in loaded assemblies
+            var requiredBuilders = new[] { "MsSqlBuilder", "ModelProjectBuilder", "ServerProjectBuilder" };
+            foreach (var builderName in requiredBuilders)
             {
-                if (assembly.GetTypes().Any(t => t.Name == "MsSqlBuilder"))
+                bool builderFound = false;
+                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
                 {
-                    Console.WriteLine($"Found MsSqlBuilder in assembly: {assembly.FullName}");
-                    msSqlBuilderFound = true;
-                    break;
+                    if (assembly.GetTypes().Any(t => t.Name == builderName))
+                    {
+                        Console.WriteLine($"Found {builderName} in assembly: {assembly.FullName}");
+                        builderFound = true;
+                        break;
+                    }
                 }
-            }
 
-            if (!msSqlBuilderFound)
-            {
-                Console.WriteLine("WARNING: MsSqlBuilder type not found in any loaded assembly!");
+                if (!builderFound)
+                {
+                    Console.WriteLine($"WARNING: {builderName} type not found in any loaded assembly!");
+                }
             }
         }
         catch (Exception ex)
@@ -253,10 +245,11 @@ internal class Program
 
         try
         {
-            // Create parser with SQL options and MODEL options
+            // Create parser with all available builder options
             var options = new MDDParserOptions()
                 .UseMsSqlBuilder()
-                .UseModelProjectBuilder();
+                .UseModelProjectBuilder()
+                .UseServerProjectBuilder();
 
             var parser = new MDDBoosterParser(options);
 

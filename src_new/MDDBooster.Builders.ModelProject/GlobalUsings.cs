@@ -1,0 +1,11 @@
+global using System.Text;
+global using M3LParser.Helpers;
+global using M3LParser.Logging;
+global using MDDBooster.Models;
+global using MDDBooster.Utilities;
+global using MDDBooster.Processors;
+global using MDDBooster.Parsers;
+global using MDDBooster.Extensions;
+global using MDDBooster.Builders.ModelProject.Utilities;
+global using MDDBooster.Builders.ModelProject.Parsers;
+global using MDDBooster.Builders.ModelProject.Processors;

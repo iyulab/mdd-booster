@@ -1,5 +1,3 @@
-﻿using System.Text.Json;
-
 namespace MDDBooster.ConsoleApp.Models;
 
 /// <summary>

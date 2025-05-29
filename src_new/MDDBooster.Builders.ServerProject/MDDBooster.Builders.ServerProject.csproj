@@ -7,11 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Humanizer" Version="2.14.1" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\M3LParser\M3LParser.csproj" />
+    <ProjectReference Include="..\MDDBooster\MDDBooster.csproj" />
   </ItemGroup>
 
 </Project>

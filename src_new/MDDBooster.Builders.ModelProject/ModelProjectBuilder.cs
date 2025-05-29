@@ -1,7 +1,3 @@
-﻿using M3LParser.Logging;
-using MDDBooster.Models;
-using MDDBooster.Utilities;
-
 namespace MDDBooster.Builders.ModelProject;
 
 /// <summary>
@@ -23,12 +19,14 @@ public class ModelProjectBuilder : IBuilder
             ModelsPath = "Entity_",       // Changed to use underscore suffix
             InterfacesPath = "Models",
             EnumsPath = "Models",
+            GqlSearchRequestPath = "Gql_",
             GenerateNavigationProperties = true,
             UsePartialClasses = true,
             ImplementINotifyPropertyChanged = false,
             UseDateTimeOffset = false,
             UseNullableReferenceTypes = true,
             DefaultStringLength = 50,
+            GenerateGqlSearchRequest = true,  // Enable by default
             Cleanup = true
         };
     }
@@ -68,6 +66,9 @@ public class ModelProjectBuilder : IBuilder
 
             // Generate enums
             GenerateEnums(generator, modelConfig);
+
+            // Generate GraphQL search requests if configured
+            GenerateGqlSearchRequests(generator, modelConfig);
 
             AppLog.Information("ModelProject builder processing completed successfully");
             return true;
@@ -195,6 +196,55 @@ public class ModelProjectBuilder : IBuilder
     }
 
     /// <summary>
+    /// Generate GraphQL search request classes
+    /// </summary>
+    private void GenerateGqlSearchRequests(ModelGenerator generator, ModelProjectConfig config)
+    {
+        // Skip generating GraphQL search requests if not configured
+        if (!config.GenerateGqlSearchRequest)
+        {
+            AppLog.Information("Skipping GraphQL search request generation as per configuration (GenerateGqlSearchRequest = false)");
+            return;
+        }
+
+        AppLog.Information("Generating GraphQL search request classes (GenerateGqlSearchRequest = true)");
+
+        // Get output directory for GraphQL search requests
+        string outputDir = Path.Combine(config.ProjectPath, config.GqlSearchRequestPath);
+        AppLog.Debug("GraphQL search request output directory: {OutputDir}", outputDir);
+        EnsureDirectoryExists(outputDir);
+
+        // Generate code for each model (skip abstract models)
+        var eligibleModels = generator.Document.Models.Where(m => !m.BaseModel.IsAbstract).ToList();
+        AppLog.Information("Found {ModelCount} eligible models for GraphQL search request generation", eligibleModels.Count);
+
+        foreach (var model in eligibleModels)
+        {
+            AppLog.Debug("Processing model {ModelName} for GraphQL search request generation", model.BaseModel.Name);
+
+            ErrorHandling.ExecuteSafely(() => {
+                // Generate GraphQL search request code
+                string gqlCode = generator.GenerateGqlSearchRequestClasses(model);
+                if (string.IsNullOrEmpty(gqlCode))
+                {
+                    AppLog.Warning("Empty GraphQL search request code generated for {ModelName}", model.BaseModel.Name);
+                    return;
+                }
+
+                // Write to file
+                string fileName = $"{model.BaseModel.Name}SearchRequest.cs";
+                string outputPath = Path.Combine(outputDir, fileName);
+                File.WriteAllText(outputPath, gqlCode);
+
+                AppLog.Information("Generated GraphQL search request: {FileName} in directory {Directory}",
+                    fileName, outputDir);
+            }, "Failed to generate GraphQL search request for {ModelName}", model.BaseModel.Name);
+        }
+
+        AppLog.Information("Completed GraphQL search request generation for {ProcessedCount} models", eligibleModels.Count);
+    }
+
+    /// <summary>
     /// Clean up output directories before generation
     /// </summary>
     private void CleanupDirectories(ModelProjectConfig config)
@@ -226,6 +276,17 @@ public class ModelProjectBuilder : IBuilder
             {
                 AppLog.Information("Cleaning up enums directory: {Directory}", enumsDir);
                 ClearDirectory(enumsDir);
+            }
+
+            // Clean GraphQL search requests directory if generating them
+            if (config.GenerateGqlSearchRequest)
+            {
+                string gqlDir = Path.Combine(config.ProjectPath, config.GqlSearchRequestPath);
+                if (Directory.Exists(gqlDir))
+                {
+                    AppLog.Information("Cleaning up GraphQL search requests directory: {Directory}", gqlDir);
+                    ClearDirectory(gqlDir);
+                }
             }
         }, "Error cleaning up directories");
     }

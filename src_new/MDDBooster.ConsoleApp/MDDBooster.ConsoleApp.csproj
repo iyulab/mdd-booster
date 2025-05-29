@@ -10,13 +10,14 @@
   <ItemGroup>
     <PackageReference Include="Serilog.Extensions.Logging" Version="9.0.1" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
-    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\MDDBooster.Builders.ModelProject\MDDBooster.Builders.ModelProject.csproj" />
     <ProjectReference Include="..\MDDBooster.Builders.MsSql\MDDBooster.Builders.MsSql.csproj" />
+    <ProjectReference Include="..\MDDBooster.Builders.ServerProject\MDDBooster.Builders.ServerProject.csproj" />
   </ItemGroup>
 
 </Project>
