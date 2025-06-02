@@ -1,7 +1,7 @@
 namespace MDDBooster.Builders.ModelProject;
 
 /// <summary>
-/// Builder that generates C# entity model classes
+/// Builder that generates C# entity model classes using centralized helpers
 /// </summary>
 public class ModelProjectBuilder : IBuilder
 {
@@ -16,7 +16,7 @@ public class ModelProjectBuilder : IBuilder
         {
             ProjectPath = string.Empty,
             Namespace = "YourNamespace",
-            ModelsPath = "Entity_",       // Changed to use underscore suffix
+            ModelsPath = "Entity_",
             InterfacesPath = "Models",
             EnumsPath = "Models",
             GqlSearchRequestPath = "Gql_",
@@ -26,7 +26,7 @@ public class ModelProjectBuilder : IBuilder
             UseDateTimeOffset = false,
             UseNullableReferenceTypes = true,
             DefaultStringLength = 50,
-            GenerateGqlSearchRequest = true,  // Enable by default
+            GenerateGqlSearchRequest = true,
             Cleanup = true
         };
     }
@@ -48,6 +48,9 @@ public class ModelProjectBuilder : IBuilder
         {
             // Clear model utility cache before processing
             ModelUtilities.ClearFieldsCache();
+
+            // Initialize helpers with common patterns
+            InitializeHelpers();
 
             // Create generator with the given configuration
             var generator = new ModelGenerator(document, modelConfig);
@@ -81,18 +84,37 @@ public class ModelProjectBuilder : IBuilder
     }
 
     /// <summary>
+    /// Initialize helpers with project-specific patterns
+    /// </summary>
+    private void InitializeHelpers()
+    {
+        // Initialize navigation property helper with common patterns
+        NavigationPropertyHelper.InitializeCommonPatterns();
+
+        // Initialize attribute generation helper with common patterns
+        AttributeGenerationHelper.InitializeCommonPatterns();
+
+        // Add project-specific namespace mappings
+        MDDBooster.Helpers.NamespaceHelper.AddCustomNamespaceMapping("Entity_", "Entity");
+        MDDBooster.Helpers.NamespaceHelper.AddCustomNamespaceMapping("Gql_", "Gql");
+
+        AppLog.Debug("Initialized helpers with common patterns");
+    }
+
+    /// <summary>
     /// Generate C# model classes
     /// </summary>
     private void GenerateModelClasses(ModelGenerator generator, ModelProjectConfig config)
     {
         AppLog.Information("Generating model classes");
 
-        // Get output directory for models
         string outputDir = Path.Combine(config.ProjectPath, config.ModelsPath);
         EnsureDirectoryExists(outputDir);
 
-        // Generate code for each model (excluding abstract models if configured)
-        foreach (var model in generator.Document.Models)
+        var models = generator.Document.Models.ToList();
+        AppLog.Information("Found {ModelCount} models to generate", models.Count);
+
+        foreach (var model in models)
         {
             ErrorHandling.ExecuteSafely(() => {
                 // Skip abstract models if configured
@@ -115,10 +137,11 @@ public class ModelProjectBuilder : IBuilder
                 string outputPath = Path.Combine(outputDir, fileName);
                 File.WriteAllText(outputPath, modelCode);
 
-                AppLog.Information("Generated model class: {FileName} in directory {Directory}",
-                    fileName, outputDir);
+                AppLog.Information("Generated model class: {FileName}", fileName);
             }, "Failed to generate model {ModelName}", model.BaseModel.Name);
         }
+
+        AppLog.Information("Completed generating {Count} model classes", models.Count);
     }
 
     /// <summary>
@@ -126,7 +149,6 @@ public class ModelProjectBuilder : IBuilder
     /// </summary>
     private void GenerateInterfaces(ModelGenerator generator, ModelProjectConfig config)
     {
-        // Skip generating interfaces if configured not to
         if (!config.GenerateInterface)
         {
             AppLog.Information("Skipping interface generation as per configuration");
@@ -135,15 +157,15 @@ public class ModelProjectBuilder : IBuilder
 
         AppLog.Information("Generating interfaces");
 
-        // Get output directory for interfaces
         string outputDir = Path.Combine(config.ProjectPath, config.InterfacesPath);
         EnsureDirectoryExists(outputDir);
 
-        // Generate code for each interface
-        foreach (var iface in generator.Document.Interfaces)
+        var interfaces = generator.Document.Interfaces.ToList();
+        AppLog.Information("Found {InterfaceCount} interfaces to generate", interfaces.Count);
+
+        foreach (var iface in interfaces)
         {
             ErrorHandling.ExecuteSafely(() => {
-                // Generate interface code
                 string interfaceCode = generator.GenerateInterface(iface);
                 if (string.IsNullOrEmpty(interfaceCode))
                 {
@@ -151,7 +173,6 @@ public class ModelProjectBuilder : IBuilder
                     return;
                 }
 
-                // Write to file
                 string fileName = $"{iface.BaseInterface.Name}.cs";
                 string outputPath = Path.Combine(outputDir, fileName);
                 File.WriteAllText(outputPath, interfaceCode);
@@ -159,6 +180,8 @@ public class ModelProjectBuilder : IBuilder
                 AppLog.Information("Generated interface: {FileName}", fileName);
             }, "Failed to generate interface {InterfaceName}", iface.BaseInterface.Name);
         }
+
+        AppLog.Information("Completed generating {Count} interfaces", interfaces.Count);
     }
 
     /// <summary>
@@ -168,15 +191,15 @@ public class ModelProjectBuilder : IBuilder
     {
         AppLog.Information("Generating enums");
 
-        // Get output directory for enums
         string outputDir = Path.Combine(config.ProjectPath, config.EnumsPath);
         EnsureDirectoryExists(outputDir);
 
-        // Generate code for each enum
-        foreach (var enum_ in generator.Document.Enums)
+        var enums = generator.Document.Enums.ToList();
+        AppLog.Information("Found {EnumCount} enums to generate", enums.Count);
+
+        foreach (var enum_ in enums)
         {
             ErrorHandling.ExecuteSafely(() => {
-                // Generate enum code
                 string enumCode = generator.GenerateEnum(enum_);
                 if (string.IsNullOrEmpty(enumCode))
                 {
@@ -184,15 +207,15 @@ public class ModelProjectBuilder : IBuilder
                     return;
                 }
 
-                // Write to file
                 string fileName = $"{enum_.BaseEnum.Name}.cs";
                 string outputPath = Path.Combine(outputDir, fileName);
                 File.WriteAllText(outputPath, enumCode);
 
-                AppLog.Information("Generated enum: {FileName} in directory {Directory}",
-                    fileName, outputDir);
+                AppLog.Information("Generated enum: {FileName}", fileName);
             }, "Failed to generate enum {EnumName}", enum_.BaseEnum.Name);
         }
+
+        AppLog.Information("Completed generating {Count} enums", enums.Count);
     }
 
     /// <summary>
@@ -200,30 +223,23 @@ public class ModelProjectBuilder : IBuilder
     /// </summary>
     private void GenerateGqlSearchRequests(ModelGenerator generator, ModelProjectConfig config)
     {
-        // Skip generating GraphQL search requests if not configured
         if (!config.GenerateGqlSearchRequest)
         {
-            AppLog.Information("Skipping GraphQL search request generation as per configuration (GenerateGqlSearchRequest = false)");
+            AppLog.Information("Skipping GraphQL search request generation as per configuration");
             return;
         }
 
-        AppLog.Information("Generating GraphQL search request classes (GenerateGqlSearchRequest = true)");
+        AppLog.Information("Generating GraphQL search request classes");
 
-        // Get output directory for GraphQL search requests
         string outputDir = Path.Combine(config.ProjectPath, config.GqlSearchRequestPath);
-        AppLog.Debug("GraphQL search request output directory: {OutputDir}", outputDir);
         EnsureDirectoryExists(outputDir);
 
-        // Generate code for each model (skip abstract models)
         var eligibleModels = generator.Document.Models.Where(m => !m.BaseModel.IsAbstract).ToList();
         AppLog.Information("Found {ModelCount} eligible models for GraphQL search request generation", eligibleModels.Count);
 
         foreach (var model in eligibleModels)
         {
-            AppLog.Debug("Processing model {ModelName} for GraphQL search request generation", model.BaseModel.Name);
-
             ErrorHandling.ExecuteSafely(() => {
-                // Generate GraphQL search request code
                 string gqlCode = generator.GenerateGqlSearchRequestClasses(model);
                 if (string.IsNullOrEmpty(gqlCode))
                 {
@@ -231,13 +247,11 @@ public class ModelProjectBuilder : IBuilder
                     return;
                 }
 
-                // Write to file
                 string fileName = $"{model.BaseModel.Name}SearchRequest.cs";
                 string outputPath = Path.Combine(outputDir, fileName);
                 File.WriteAllText(outputPath, gqlCode);
 
-                AppLog.Information("Generated GraphQL search request: {FileName} in directory {Directory}",
-                    fileName, outputDir);
+                AppLog.Information("Generated GraphQL search request: {FileName}", fileName);
             }, "Failed to generate GraphQL search request for {ModelName}", model.BaseModel.Name);
         }
 
@@ -249,55 +263,47 @@ public class ModelProjectBuilder : IBuilder
     /// </summary>
     private void CleanupDirectories(ModelProjectConfig config)
     {
-        ErrorHandling.ExecuteSafely(() => {
-            // Clean models directory
-            string modelsDir = Path.Combine(config.ProjectPath, config.ModelsPath);
-            if (Directory.Exists(modelsDir))
-            {
-                AppLog.Information("Cleaning up models directory: {Directory}", modelsDir);
-                ClearDirectory(modelsDir);
-            }
+        AppLog.Information("Cleaning up output directories");
 
-            // Clean interfaces directory if generating interfaces
+        ErrorHandling.ExecuteSafely(() => {
+            var directoriesToClean = new List<(string path, string description)>
+            {
+                (Path.Combine(config.ProjectPath, config.ModelsPath), "models"),
+                (Path.Combine(config.ProjectPath, config.EnumsPath), "enums")
+            };
+
+            // Add interfaces directory if generating interfaces and it's different from models
             if (config.GenerateInterface)
             {
                 string interfacesDir = Path.Combine(config.ProjectPath, config.InterfacesPath);
-                if (Directory.Exists(interfacesDir))
+                if (interfacesDir != Path.Combine(config.ProjectPath, config.ModelsPath))
                 {
-                    AppLog.Information("Cleaning up interfaces directory: {Directory}", interfacesDir);
-                    ClearDirectory(interfacesDir);
+                    directoriesToClean.Add((interfacesDir, "interfaces"));
                 }
             }
 
-            // Clean enums directory
-            string enumsDir = Path.Combine(config.ProjectPath, config.EnumsPath);
-            // Only cleanup if it's a different directory than models
-            if (enumsDir != modelsDir && Directory.Exists(enumsDir))
-            {
-                AppLog.Information("Cleaning up enums directory: {Directory}", enumsDir);
-                ClearDirectory(enumsDir);
-            }
-
-            // Clean GraphQL search requests directory if generating them
+            // Add GraphQL directory if generating search requests
             if (config.GenerateGqlSearchRequest)
             {
-                string gqlDir = Path.Combine(config.ProjectPath, config.GqlSearchRequestPath);
-                if (Directory.Exists(gqlDir))
+                directoriesToClean.Add((Path.Combine(config.ProjectPath, config.GqlSearchRequestPath), "GraphQL search requests"));
+            }
+
+            foreach (var (path, description) in directoriesToClean)
+            {
+                if (Directory.Exists(path))
                 {
-                    AppLog.Information("Cleaning up GraphQL search requests directory: {Directory}", gqlDir);
-                    ClearDirectory(gqlDir);
+                    ClearDirectory(path, description);
                 }
             }
         }, "Error cleaning up directories");
     }
 
     /// <summary>
-    /// Clears all files in a directory but leaves the directory structure intact
+    /// Clears all .cs files in a directory
     /// </summary>
-    private void ClearDirectory(string directory)
+    private void ClearDirectory(string directory, string description)
     {
         ErrorHandling.ExecuteSafely(() => {
-            // Only delete .cs files and leave any other files/folders intact
             string[] files = Directory.GetFiles(directory, "*.cs");
             int deletedCount = 0;
 
@@ -315,8 +321,9 @@ public class ModelProjectBuilder : IBuilder
                 }
             }
 
-            AppLog.Information("Cleaned {Count} files from directory: {Directory}", deletedCount, directory);
-        }, "Error clearing directory: {Directory}", directory);
+            AppLog.Information("Cleaned {Count} {Description} files from directory: {Directory}",
+                deletedCount, description, directory);
+        }, "Error clearing {Description} directory: {Directory}", description, directory);
     }
 
     /// <summary>

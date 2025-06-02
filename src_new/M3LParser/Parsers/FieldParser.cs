@@ -1,4 +1,4 @@
-﻿namespace M3LParser.Parsers;
+namespace M3LParser.Parsers;
 
 /// <summary>
 /// Parser for field definitions
@@ -23,7 +23,7 @@ public class FieldParser : BaseParser
         }
 
         var field = new M3LField();
-        AppLog.Debug("Parsing field at line {LineNumber}", Context.CurrentLineIndex + 1);
+        AppLog.Debug("Parsing field at line {LineNumber}: {Line}", Context.CurrentLineIndex + 1, currentLine);
 
         // Remove the leading dash
         var fieldContent = currentLine.Substring(1).Trim();
@@ -51,7 +51,7 @@ public class FieldParser : BaseParser
         field.Name = parts[0].Trim();
 
         var typePart = parts[1].Trim();
-        AppLog.Debug("Parsing simple field: {FieldName}", field.Name);
+        AppLog.Debug("Parsing simple field: {FieldName} with type part: {TypePart}", field.Name, typePart);
 
         // First extract framework attributes (in square brackets) before processing default values
         // This ensures framework attributes aren't mistakenly treated as default values
@@ -81,7 +81,7 @@ public class FieldParser : BaseParser
             AppLog.Debug("Field {FieldName} has default value: {DefaultValue}", field.Name, field.DefaultValue);
         }
 
-        // Parse attributes
+        // Parse attributes BEFORE processing type and nullable
         if (typePart.Contains('@'))
         {
             var attributeParts = typePart.Split('@', StringSplitOptions.RemoveEmptyEntries);
@@ -99,7 +99,7 @@ public class FieldParser : BaseParser
         if (typePart.EndsWith("?"))
         {
             field.IsNullable = true;
-            typePart = typePart.Substring(0, typePart.Length - 1);
+            typePart = typePart.Substring(0, typePart.Length - 1).Trim();
             AppLog.Debug("Field {FieldName} is nullable", field.Name);
         }
 
@@ -117,7 +117,7 @@ public class FieldParser : BaseParser
         }
         else
         {
-            field.Type = typePart;
+            field.Type = typePart.Trim();
             AppLog.Debug("Field {FieldName} has type {FieldType}", field.Name, field.Type);
         }
 

@@ -21,6 +21,11 @@ public class ServerProjectConfig : IBuilderConfig
     public string GqlPath { get; set; } = "Gql_";
 
     /// <summary>
+    /// Relative path for OData service files (from project path)
+    /// </summary>
+    public string ServicesPath { get; set; } = "Services_";
+
+    /// <summary>
     /// Generate individual files for each model
     /// </summary>
     public bool GenerateIndividualFiles { get; set; } = true;
@@ -54,6 +59,11 @@ public class ServerProjectConfig : IBuilderConfig
     /// Generate validation rules
     /// </summary>
     public bool GenerateValidationRules { get; set; } = true;
+
+    /// <summary>
+    /// Generate OData services (DataContext, EntitySetBuilder)
+    /// </summary>
+    public bool GenerateODataServices { get; set; } = true;
 
     /// <summary>
     /// Use partial classes

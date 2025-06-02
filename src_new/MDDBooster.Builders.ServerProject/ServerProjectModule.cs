@@ -23,13 +23,17 @@ public static class ServerProjectModule
         this MDDDocument document,
         string projectNamespace,
         string gqlPath = "Gql_",
-        bool usePartialClasses = true)
+        string servicesPath = "Services_",
+        bool usePartialClasses = true,
+        bool generateODataServices = true)
     {
         var config = new ServerProjectConfig
         {
             Namespace = projectNamespace,
             GqlPath = gqlPath,
+            ServicesPath = servicesPath,
             UsePartialClasses = usePartialClasses,
+            GenerateODataServices = generateODataServices,
             GenerateIndividualFiles = true,
             GenerateRepositories = true,
             GenerateGraphTypes = true,

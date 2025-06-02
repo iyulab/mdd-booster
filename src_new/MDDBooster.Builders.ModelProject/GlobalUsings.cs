@@ -9,3 +9,4 @@ global using MDDBooster.Extensions;
 global using MDDBooster.Builders.ModelProject.Utilities;
 global using MDDBooster.Builders.ModelProject.Parsers;
 global using MDDBooster.Builders.ModelProject.Processors;
+global using MDDBooster.Builders.ModelProject.Helpers;

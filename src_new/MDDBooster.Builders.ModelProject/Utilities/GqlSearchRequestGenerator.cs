@@ -1,16 +1,14 @@
 namespace MDDBooster.Builders.ModelProject.Utilities;
 
 /// <summary>
-/// Generates GraphQL search request classes
+/// Generates GraphQL search request classes using centralized helpers
 /// </summary>
 internal class GqlSearchRequestGenerator
 {
-    private readonly ModelTypeConverter _typeConverter;
     private readonly ModelProjectConfig _config;
 
-    internal GqlSearchRequestGenerator(ModelTypeConverter typeConverter, ModelProjectConfig config)
+    internal GqlSearchRequestGenerator(ModelProjectConfig config)
     {
-        _typeConverter = typeConverter;
         _config = config;
     }
 
@@ -110,7 +108,7 @@ internal class GqlSearchRequestGenerator
     {
         string propertyName = field.BaseField.Name.ToPlural();
         string propertyType = GetSearchPropertyType(field);
-        string nullableMarker = _config.UseNullableReferenceTypes && propertyType.IsReferenceType() ? "?" : "";
+        string nullableMarker = _config.UseNullableReferenceTypes && TypeConversionHelper.IsReferenceType(propertyType) ? "?" : "";
 
         // Add summary comment
         sb.AppendLine($"        /// <summary>");
@@ -134,9 +132,21 @@ internal class GqlSearchRequestGenerator
             "decimal" => "decimal",
             "boolean" => "bool",
             "datetime" or "timestamp" or "date" => _config.UseDateTimeOffset ? "DateTimeOffset" : "DateTime",
-            "enum" => _typeConverter.GetEnumType(field),
+            "enum" => GetEnumTypeName(field),
             _ => "string"
         };
+    }
+
+    private string GetEnumTypeName(MDDField field)
+    {
+        // Use the type conversion helper for consistency
+        if (!string.IsNullOrEmpty(field.BaseField.ReferenceTarget))
+        {
+            return field.BaseField.ReferenceTarget;
+        }
+
+        // Fallback to string if enum type cannot be determined
+        return "string";
     }
 
     private bool IsSearchableField(MDDField field)
@@ -148,21 +158,14 @@ internal class GqlSearchRequestGenerator
             return false;
         }
 
-        // Most fields are searchable except computed ones
-        return !IsComputedField(field);
+        // Use the base helper for computed field detection
+        return !MDDBooster.Helpers.FieldHelper.IsComputedField(field);
     }
 
     private bool ShouldExcludeFromSearch(MDDField field)
     {
-        // Exclude sensitive fields from search by default
-        if (field.ExtendedMetadata.ContainsKey("Sensitive") &&
-            (bool)field.ExtendedMetadata["Sensitive"])
-        {
-            return true;
-        }
-
-        // Exclude password fields
-        if (field.BaseField.Name.Contains("Password", StringComparison.OrdinalIgnoreCase))
+        // Use the base helper for sensitive field detection
+        if (MDDBooster.Helpers.FieldHelper.IsSensitiveField(field))
         {
             return true;
         }
@@ -177,12 +180,6 @@ internal class GqlSearchRequestGenerator
         return false;
     }
 
-    private bool IsComputedField(MDDField field)
-    {
-        return field.ExtendedMetadata.ContainsKey("Computed") &&
-               (bool)field.ExtendedMetadata["Computed"];
-    }
-
     private bool IsDateTimeField(MDDField field)
     {
         var fieldType = field.BaseField.Type.ToLowerInvariant();
@@ -191,15 +188,9 @@ internal class GqlSearchRequestGenerator
 
     private string GetNamespace()
     {
-        string baseNamespace = string.IsNullOrEmpty(_config.Namespace) ? "DefaultNamespace" : _config.Namespace;
-
-        // If GqlSearchRequestPath ends with underscore, use "Gql" as folder name
-        if (_config.GqlSearchRequestPath.EndsWith("_"))
-        {
-            return $"{baseNamespace}.Gql";
-        }
-
-        string folderName = Path.GetFileName(_config.GqlSearchRequestPath);
-        return $"{baseNamespace}.{folderName}";
+        return MDDBooster.Helpers.NamespaceHelper.GetNamespace(
+            _config.Namespace,
+            _config.GqlSearchRequestPath,
+            null);
     }
 }

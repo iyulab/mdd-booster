@@ -1,7 +1,7 @@
 namespace MDDBooster.Builders.ServerProject;
 
 /// <summary>
-/// Builder that generates GraphQL server classes
+/// Builder that generates GraphQL server classes and OData services
 /// </summary>
 public class ServerProjectBuilder : IBuilder
 {
@@ -17,6 +17,7 @@ public class ServerProjectBuilder : IBuilder
             ProjectPath = string.Empty,
             Namespace = "YourNamespace.MainServer",
             GqlPath = "Gql_",
+            ServicesPath = "Services_",
             GenerateIndividualFiles = true,
             Cleanup = true,
             GenerateRepositories = true,
@@ -24,6 +25,7 @@ public class ServerProjectBuilder : IBuilder
             GenerateQueries = true,
             GenerateFieldTypes = true,
             GenerateValidationRules = true,
+            GenerateODataServices = true,
             UsePartialClasses = true,
             DefaultPageSize = 50,
             MaxPageSize = 1000
@@ -59,6 +61,12 @@ public class ServerProjectBuilder : IBuilder
 
             // Generate model-specific GraphQL files
             GenerateModelGraphQLFiles(generator, serverConfig);
+
+            // Generate OData services
+            if (serverConfig.GenerateODataServices)
+            {
+                GenerateODataServices(generator, serverConfig);
+            }
 
             AppLog.Information("ServerProject builder processing completed successfully");
             return true;
@@ -129,6 +137,39 @@ public class ServerProjectBuilder : IBuilder
         {
             GenerateModelFiles(generator, model, config);
         }
+    }
+
+    /// <summary>
+    /// Generate OData services
+    /// </summary>
+    private void GenerateODataServices(ServerProjectGenerator generator, ServerProjectConfig config)
+    {
+        AppLog.Information("Generating OData services");
+
+        string outputDir = Path.Combine(config.ProjectPath, config.ServicesPath);
+        EnsureDirectoryExists(outputDir);
+
+        // Generate DataContext
+        ErrorHandling.ExecuteSafely(() => {
+            string dataContextCode = generator.GenerateDataContext();
+            if (!string.IsNullOrEmpty(dataContextCode))
+            {
+                string outputPath = Path.Combine(outputDir, "DataContext.cs");
+                File.WriteAllText(outputPath, dataContextCode);
+                AppLog.Information("Generated DataContext.cs");
+            }
+        }, "Failed to generate DataContext");
+
+        // Generate EntitySetBuilder
+        ErrorHandling.ExecuteSafely(() => {
+            string entitySetBuilderCode = generator.GenerateEntitySetBuilder();
+            if (!string.IsNullOrEmpty(entitySetBuilderCode))
+            {
+                string outputPath = Path.Combine(outputDir, "EntitySetBuilder.cs");
+                File.WriteAllText(outputPath, entitySetBuilderCode);
+                AppLog.Information("Generated EntitySetBuilder.cs");
+            }
+        }, "Failed to generate EntitySetBuilder");
     }
 
     /// <summary>
@@ -207,6 +248,16 @@ public class ServerProjectBuilder : IBuilder
             {
                 AppLog.Information("Cleaning up GraphQL directory: {Directory}", gqlDir);
                 ClearDirectory(gqlDir);
+            }
+
+            if (config.GenerateODataServices)
+            {
+                string servicesDir = Path.Combine(config.ProjectPath, config.ServicesPath);
+                if (Directory.Exists(servicesDir))
+                {
+                    AppLog.Information("Cleaning up Services directory: {Directory}", servicesDir);
+                    ClearDirectory(servicesDir);
+                }
             }
         }, "Error cleaning up directories");
     }

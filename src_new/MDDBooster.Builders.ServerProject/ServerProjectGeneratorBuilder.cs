@@ -32,6 +32,15 @@ public class ServerProjectGeneratorBuilder
     }
 
     /// <summary>
+    /// Sets the path for OData service files
+    /// </summary>
+    public ServerProjectGeneratorBuilder WithServicesPath(string path)
+    {
+        _config.ServicesPath = path;
+        return this;
+    }
+
+    /// <summary>
     /// Configures whether to generate individual files for each model
     /// </summary>
     public ServerProjectGeneratorBuilder WithIndividualFiles(bool generate = true)
@@ -82,6 +91,15 @@ public class ServerProjectGeneratorBuilder
     public ServerProjectGeneratorBuilder WithValidationRules(bool generate = true)
     {
         _config.GenerateValidationRules = generate;
+        return this;
+    }
+
+    /// <summary>
+    /// Configures whether to generate OData services
+    /// </summary>
+    public ServerProjectGeneratorBuilder WithODataServices(bool generate = true)
+    {
+        _config.GenerateODataServices = generate;
         return this;
     }
 
