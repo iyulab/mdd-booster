@@ -114,6 +114,13 @@ public static class AttributeGenerationHelper
 
     private static void GenerateCoreAttributes(MDDField field, List<string> attributes, HashSet<string> addedAttributes)
     {
+        // Key attribute for primary key fields
+        if (field.BaseField.IsPrimaryKey)
+        {
+            attributes.Add("[Key]");
+            addedAttributes.Add("Key");
+        }
+
         // Required attribute
         if (field.BaseField.IsRequired && !field.BaseField.IsNullable)
         {
