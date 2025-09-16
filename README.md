@@ -1,18 +1,20 @@
 # MDD Booster
 
-A powerful code generator that supports M3L (Meta Model Markup Language) with **SQL Server cascade path validation**.
+A powerful code generator that transforms M3L (Meta Model Markup Language) into production-ready code with **SQL Server cascade path validation**.
+
+[M3L Syntax](https://github.com/iyulab/m3l)
 
 ## Features
-
-✨ **NEW in v2.1.0**: **SQL Server Cascade Path Validation**
-- Automatically detects multiple cascade paths that cause SQL Server errors
-- Provides clear warnings and suggestions for resolution
-- Uses M3L syntax (`!` for NO ACTION, `?` for SET NULL)
 
 🚀 **Code Generation Support:**
 - Database projects (SQL Server with cascade validation)
 - Model projects (C# entities)
 - Server projects (ASP.NET Core APIs)
+
+📝 **M3L Language**: Clean, markdown-based syntax for defining data models
+- Platform-independent model definitions
+- Human-readable and AI-friendly format
+- Complete documentation available at [M3L Syntax](https://github.com/iyulab/m3l)
 
 ## Installation
 
@@ -30,21 +32,17 @@ dotnet tool update --global MDD-Booster
 
 ## Usage
 
-### Quick Start (Direct Parameters)
+### Quick Start
 
 ```bash
-# Generate SQL database project
-mdd --input tables.md --output ./src/MyApp.Database
+# Auto-detect settings.json in current directory
+mdd
 
-# Generate with specific builder type
-mdd --input tables.md --output ./src/MyApp --builder ModelProject
-```
+# Use specific settings file
+mdd "./path/to/settings.json"
 
-### Advanced Usage (Settings File)
-
-```bash
-# Use settings file for complex configurations
-mdd --settings settings.json
+# Direct parameters for simple cases
+mdd --input tables.md --output ./src/MyApp.Database --builder DatabaseProject
 ```
 
 ## Command Line Options
@@ -62,9 +60,9 @@ mdd --settings settings.json
 - **ModelProject**: Generates C# entity models
 - **ServerProject**: Generates ASP.NET Core API projects
 
-## M3L Syntax
+## M3L Syntax Overview
 
-### Basic Table Definition
+M3L is a markdown-based language for defining data models. Here's a quick example:
 
 ```markdown
 ## User
@@ -77,66 +75,14 @@ mdd --settings settings.json
 - UpdatedAt?: datetime
 ```
 
-### Foreign Key References with Cascade Control
+### Key Features
 
-```markdown
-## Post
-- Id: identifier @primary
-- Title: string(200)
-- AuthorId: identifier @reference(User)     # CASCADE (default)
-- CategoryId: identifier @reference(Category)!  # NO ACTION
-- TagId?: identifier @reference(Tag)?       # SET NULL
-```
+- **Clean Syntax**: Human-readable markdown format
+- **Cascade Control**: `@reference(Table)!` (NO ACTION), `@reference(Table)?` (SET NULL)
+- **Type Safety**: Strong typing with nullable support (`?`)
+- **Rich Metadata**: Enums, indexes, constraints, and more
 
-### Cascade Syntax
-
-- `@reference(Table)` - CASCADE delete (default)
-- `@reference(Table)!` - NO ACTION (prevents cascade)
-- `@reference(Table)?` - SET NULL (nullifies on delete)
-
-### Example with Cascade Path Conflict Resolution
-
-❌ **This will cause SQL Server error:**
-```markdown
-## Follow
-- FollowerId: identifier @reference(User)    # CASCADE
-- FollowingId: identifier @reference(User)   # CASCADE - CONFLICT!
-```
-
-✅ **Corrected version:**
-```markdown
-## Follow
-- FollowerId: identifier @reference(User)    # CASCADE
-- FollowingId: identifier @reference(User)!  # NO ACTION - FIXED!
-```
-
-### Advanced Features
-
-#### Enums
-```markdown
-## UserStatus ::enum
-- Active: integer = 0
-- Inactive: integer = 1
-- Suspended: integer = 2
-```
-
-#### Indexes and Constraints
-```markdown
-## User
-- Email: string(320)
-- Phone?: string(20)
-- @unique(Email)
-- @index(Email, Phone)
-```
-
-#### Composite Keys
-```markdown
-## UserRole
-- UserId: identifier @reference(User)!
-- RoleId: identifier @reference(Role)!
-- @unique(UserId, RoleId)
-- @primary(UserId, RoleId)
-```
+📖 **Complete M3L documentation**: [M3L Syntax](https://github.com/iyulab/m3l)
 
 ## Settings File Configuration
 
@@ -197,71 +143,24 @@ MDD Booster automatically validates cascade paths and warns about potential SQL 
 
 ## Examples
 
-### Complete Example: Social Media Database
+### Quick Example: Social Media Database
 
 ```markdown
-# Social Media Platform Database
-
 ## User
-> Platform user accounts
 - Id: identifier @primary
 - Email: string(320) @unique
 - Username: string(50) @unique
-- PasswordHash: string(256)
 - CreatedAt: datetime = "@now"
 
 ## Post
-> User posts and content
 - Id: identifier @primary
 - Title: string(200)
-- Content: string(2000)
 - AuthorId: identifier @reference(User)
 - CreatedAt: datetime = "@now"
-- LikeCount: integer = 0
-
-## PostLike
-> Post like system
-- Id: identifier @primary
-- UserId: identifier @reference(User)!  # NO ACTION to prevent cascade conflicts
-- PostId: identifier @reference(Post)   # CASCADE when post deleted
-- CreatedAt: datetime = "@now"
-- @unique(UserId, PostId)
 
 ## Follow
-> User follow relationships
-- Id: identifier @primary
-- FollowerId: identifier @reference(User)!   # NO ACTION
-- FollowingId: identifier @reference(User)!  # NO ACTION
-- CreatedAt: datetime = "@now"
+# Prevents cascade conflicts with NO ACTION
+- FollowerId: identifier @reference(User)!
+- FollowingId: identifier @reference(User)!
 - @unique(FollowerId, FollowingId)
-
-## PostStatus ::enum
-- Draft: integer = 0
-- Published: integer = 1
-- Archived: integer = 2
 ```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details.
-
-## Changelog
-
-### v2.1.0 (Latest)
-- ✅ Added SQL Server cascade path validation
-- ✅ Automatic conflict detection and resolution suggestions
-- ✅ Enhanced M3L syntax with `!` and `?` modifiers
-- ✅ Improved command-line interface with direct parameters
-- ✅ Better error messages and warnings
-
-### v2.0.0
-- Complete rewrite with modular builder architecture
-- Support for multiple project types
-- Enhanced M3L parsing engine
