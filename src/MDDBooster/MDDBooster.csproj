@@ -1,27 +1,17 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-	<PropertyGroup>
-		<OutputType>Exe</OutputType>
-		<TargetFramework>net9.0</TargetFramework>
-		<ImplicitUsings>enable</ImplicitUsings>
-		<Nullable>enable</Nullable>
-		<Version>1.0.20</Version>
-		<PackageId>MDD-Booster</PackageId>
-		<Authors>iyulab</Authors>
-		<Description>Code generation tool that supports M3L.</Description>
-	    <PackageProjectUrl>https://github.com/iyulab-rnd/mdd-booster</PackageProjectUrl>
-	    <RepositoryUrl>https://github.com/iyulab-rnd/mdd-booster.git</RepositoryUrl>
-		<RepositoryType>git</RepositoryType>
-		<PackageTags>mdd</PackageTags>
-		<PackageIconUrl>https://raw.githubusercontent.com/iyulab-rnd/public/main/images/iyulab_128.png</PackageIconUrl>
-		<PackAsTool>true</PackAsTool>
-		<ToolCommandName>mdd</ToolCommandName>
-		<PackageOutputPath>./nupkg</PackageOutputPath>
-	</PropertyGroup>
-	<ItemGroup>
-	  <None Include="..\.editorconfig" Link=".editorconfig" />
-	</ItemGroup>
-	<ItemGroup>
-	  <ProjectReference Include="..\MDDBooster.Core\MDDBooster.Core.csproj" />
-	</ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Humanizer" Version="2.14.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\M3LParser\M3LParser.csproj" />
+  </ItemGroup>
 
 </Project>

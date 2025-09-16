@@ -1,188 +1,267 @@
 # MDD Booster
 
-A code generator that supports MDD.
+A powerful code generator that supports M3L (Meta Model Markup Language) with **SQL Server cascade path validation**.
 
-**Install**
+## Features
 
-> `dotnet tool install --global MDD-Booster`
+✨ **NEW in v2.1.0**: **SQL Server Cascade Path Validation**
+- Automatically detects multiple cascade paths that cause SQL Server errors
+- Provides clear warnings and suggestions for resolution
+- Uses M3L syntax (`!` for NO ACTION, `?` for SET NULL)
 
-**Update**
+🚀 **Code Generation Support:**
+- Database projects (SQL Server with cascade validation)
+- Model projects (C# entities)
+- Server projects (ASP.NET Core APIs)
 
-> `dotnet tool update mdd-booster --global --no-cache`
+## Installation
 
-**Run**
+### Global Tool (Recommended)
 
-> `mdd <directory-path>` // `directory-path` Run with parameters
-<br /> `mdd` // Current Path
-
-**Settings**
-
-`settings.json`
-
+```bash
+dotnet tool install --global MDD-Booster
 ```
+
+### Update
+
+```bash
+dotnet tool update --global MDD-Booster
+```
+
+## Usage
+
+### Quick Start (Direct Parameters)
+
+```bash
+# Generate SQL database project
+mdd --input tables.md --output ./src/MyApp.Database
+
+# Generate with specific builder type
+mdd --input tables.md --output ./src/MyApp --builder ModelProject
+```
+
+### Advanced Usage (Settings File)
+
+```bash
+# Use settings file for complex configurations
+mdd --settings settings.json
+```
+
+## Command Line Options
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `--input` | Path to M3L input file | `--input tables.md` |
+| `--output` | Output directory path | `--output ./src/MyApp.Database` |
+| `--builder` | Builder type | `--builder DatabaseProject` |
+| `--settings` | Settings JSON file path | `--settings config/settings.json` |
+
+### Builder Types
+
+- **DatabaseProject** (default): Generates SQL Server database schemas with cascade validation
+- **ModelProject**: Generates C# entity models
+- **ServerProject**: Generates ASP.NET Core API projects
+
+## M3L Syntax
+
+### Basic Table Definition
+
+```markdown
+## User
+> User account information
+
+- Id: identifier @primary
+- Email: string(320) @unique
+- Name: string(100)
+- CreatedAt: datetime = "@now"
+- UpdatedAt?: datetime
+```
+
+### Foreign Key References with Cascade Control
+
+```markdown
+## Post
+- Id: identifier @primary
+- Title: string(200)
+- AuthorId: identifier @reference(User)     # CASCADE (default)
+- CategoryId: identifier @reference(Category)!  # NO ACTION
+- TagId?: identifier @reference(Tag)?       # SET NULL
+```
+
+### Cascade Syntax
+
+- `@reference(Table)` - CASCADE delete (default)
+- `@reference(Table)!` - NO ACTION (prevents cascade)
+- `@reference(Table)?` - SET NULL (nullifies on delete)
+
+### Example with Cascade Path Conflict Resolution
+
+❌ **This will cause SQL Server error:**
+```markdown
+## Follow
+- FollowerId: identifier @reference(User)    # CASCADE
+- FollowingId: identifier @reference(User)   # CASCADE - CONFLICT!
+```
+
+✅ **Corrected version:**
+```markdown
+## Follow
+- FollowerId: identifier @reference(User)    # CASCADE
+- FollowingId: identifier @reference(User)!  # NO ACTION - FIXED!
+```
+
+### Advanced Features
+
+#### Enums
+```markdown
+## UserStatus ::enum
+- Active: integer = 0
+- Inactive: integer = 1
+- Suspended: integer = 2
+```
+
+#### Indexes and Constraints
+```markdown
+## User
+- Email: string(320)
+- Phone?: string(20)
+- @unique(Email)
+- @index(Email, Phone)
+```
+
+#### Composite Keys
+```markdown
+## UserRole
+- UserId: identifier @reference(User)!
+- RoleId: identifier @reference(Role)!
+- @unique(UserId, RoleId)
+- @primary(UserId, RoleId)
+```
+
+## Settings File Configuration
+
+Create a `settings.json` file for advanced configurations:
+
+```json
 {
-	"modelProject": {
-		"path": "../src/MyApp",
-		"ns": "MyApp",
-		"usings": [ "Iyu.Entity" ]
-	},
-	"databaseProject": {
-		"path": "../src/MyApp.Database"
-	},
-	"serverProject": {
-		"path": "../src/MyApp.MainServer",
-		"ns": "MyApp.MainServer",
-		"useGraphQL": true
-	},
-	"webFrontEnd": {
-		"models": [
-			{
-				"ns": "MetaModels",
-				"modelPath": "../src/MyApp.Bridge/Models",
-				"ts-file": "../src/MyApp.MainServer.WebApp.FE/src/models/meta-models.ts"
-			}
-		]
-	},	
-	"flutterProject": {
-		"models": [
-			{ 
-				"cs-file": "../src/Plands.MainServer/Contracts/PlanRequests.cs",
-				"dart-file": "../src/plands_app/lib/src/contracts/plan_requests.dart"
-		 	}
-		]
-	},
+  "logging": {
+    "verbose": false,
+    "logFilePath": "./logs/mdd-booster.log"
+  },
+  "mddConfigs": [
+    {
+      "mddPath": "./models/tables.md",
+      "builders": [
+        {
+          "type": "DatabaseProject",
+          "config": {
+            "projectPath": "./src/MyApp.Database",
+            "tablePath": "dbo/Tables_",
+            "generateIndividualFiles": true,
+            "generateForeignKeys": true,
+            "cascadeDelete": true
+          }
+        },
+        {
+          "type": "ModelProject",
+          "config": {
+            "projectPath": "./src/MyApp.Models",
+            "generateRepositories": false
+          }
+        }
+      ]
+    }
+  ]
 }
 ```
 
-## M3L
+## SQL Server Cascade Path Validation
 
-`tables.m3l`
+MDD Booster automatically validates cascade paths and warns about potential SQL Server errors:
 
-### Interface
-
-prefix: `I`
+### Example Validation Output
 
 ```
-## IEntity
+[CASCADE VALIDATION] Multiple CASCADE paths detected to table 'User': Follow.FollowerId, Follow.FollowingId
+[CASCADE VALIDATION] Suggestions:
+- Keep Follow.FollowerId as CASCADE
+- Change Follow.FollowingId to @reference(User)! (NO ACTION)
+[CASCADE VALIDATION] Use @reference(Table)! syntax to set NO ACTION cascade behavior
 ```
 
-### Abstract
+### Common Cascade Path Conflicts
 
-options: `@abstract`
+1. **Self-referencing many-to-many** (Follow, Friend relationships)
+2. **Complex hierarchies** (User → Plan → Series → User)
+3. **Multiple user references** (CreatedBy, UpdatedBy, AssignedTo)
 
-```
-## GuidEntity : IGuidEntity, @abstract
-```
+## Examples
 
-### Implementation
+### Complete Example: Social Media Database
 
-```
-## IGuidEntity : IEntity
-- _id: guid			            [PK, Without]
-```
+```markdown
+# Social Media Platform Database
 
-### Default Entity
+## User
+> Platform user accounts
+- Id: identifier @primary
+- Email: string(320) @unique
+- Username: string(50) @unique
+- PasswordHash: string(256)
+- CreatedAt: datetime = "@now"
 
-options: `@default`
+## Post
+> User posts and content
+- Id: identifier @primary
+- Title: string(200)
+- Content: string(2000)
+- AuthorId: identifier @reference(User)
+- CreatedAt: datetime = "@now"
+- LikeCount: integer = 0
 
-### Property (Column)
+## PostLike
+> Post like system
+- Id: identifier @primary
+- UserId: identifier @reference(User)!  # NO ACTION to prevent cascade conflicts
+- PostId: identifier @reference(Post)   # CASCADE when post deleted
+- CreatedAt: datetime = "@now"
+- @unique(UserId, PostId)
 
-Start with a list item ('-').
+## Follow
+> User follow relationships
+- Id: identifier @primary
+- FollowerId: identifier @reference(User)!   # NO ACTION
+- FollowingId: identifier @reference(User)!  # NO ACTION
+- CreatedAt: datetime = "@now"
+- @unique(FollowerId, FollowingId)
 
-`- {name}: {type}`
-
-default value: `= {default}`
-
-options: `[options]`
-
-description: `// DESCRIPTION`
-
-label: `- {name}({label}): {type}`
-
-#### nullable
-
-Add a `?` after the Name or Type.
-
-```
-- Locale?: string
-- Location_id: guid? // DESCRIPTION
-```
-
-#### Foriegn Key
-
-Once the naming convention is applied, you can also write it simply. [FK]
-
-`- ServiceAccount_id: guid [FK]`
-
-If you don't follow naming conventions
-
-`- FollowerId: guid [FK: Account._id]`
-
-On Delete or Update Actions
-
-`[FK: {Table}.{Column}, ON {DELETE|UPDATE} {Action}]]`
-
-`- Account_id: guid [FK: Account._id, ON DELETE NO ACTION]`
-
-#### Unique
-
-`- Email: string(256) [UQ]`
-
-If you combine them, add an item for each.
-
-`- @unique: ({columns})`
-
-```
-## PlanTag
-- Plan_id: guid
-- Tag_id: guid
-- @unique: (Plan_id, Tag_id)
+## PostStatus ::enum
+- Draft: integer = 0
+- Published: integer = 1
+- Archived: integer = 2
 ```
 
-#### Index
+## Contributing
 
-use index `[UI]`
+1. Fork the repository
+2. Create a feature branch
+3. Add tests for new functionality
+4. Submit a pull request
 
-```
-- EntityName: string [UI]
-```
+## License
 
-#### Anyting attributes
+MIT License - see LICENSE file for details.
 
-You can add anything by wrapping it in '[]'. [anything] 
+## Changelog
 
-`- PasswordHash?: string(256)		[DataType(DataType.Password)][JsonIgnore]`
+### v2.1.0 (Latest)
+- ✅ Added SQL Server cascade path validation
+- ✅ Automatic conflict detection and resolution suggestions
+- ✅ Enhanced M3L syntax with `!` and `?` modifiers
+- ✅ Improved command-line interface with direct parameters
+- ✅ Better error messages and warnings
 
-## Samples
-
-### sample #1
-
-```
-
-## IEntity
-
-## IGuidEntity : IEntity
-- _id: guid			            [PK, Without]
-
-## IAtEntity : IEntity
-- CreatedAt: datetime = "@now"		[Insert("@now")]
-- CreatedBy: string = "@by"			[Insert("@by")]
-- UpdatedAt?: datetime				[Update("@now")]
-- UpdatedBy?: string				[Update("@by")]
-
-## GuidEntity : IGuidEntity, @abstract
-
-## EntityBase : GuidEntity, IAtEntity, @default, @abstract
-
-## Account:
-- Email: string(256)
-- NormalizedEmail: string(256)		[UQ]
-- EmailConfirmed?: bool
-- Name: string
-- Phone?: string
-- PhoneConfirmed?: bool
-- PasswordHash?: string(256)		[DataType(DataType.Password)]
-- PasswordChangedAt?: datetime
-- AcceptTermsAt?: datetime
-
-```
+### v2.0.0
+- Complete rewrite with modular builder architecture
+- Support for multiple project types
+- Enhanced M3L parsing engine
