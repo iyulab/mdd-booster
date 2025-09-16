@@ -16,6 +16,17 @@ internal class Program
         args = new string[] { "--settings", DefaultSettingsPath };
 #endif
 
+        // Pre-process arguments to handle positional settings file argument
+        // If first argument doesn't start with '--' and looks like a settings file, treat it as --settings
+        if (args.Length > 0 && !args[0].StartsWith("--") &&
+            (args[0].EndsWith(".json", StringComparison.OrdinalIgnoreCase) || args[0].Contains("settings")))
+        {
+            // Convert positional argument to --settings flag
+            var newArgs = new List<string> { "--settings", args[0] };
+            newArgs.AddRange(args.Skip(1));
+            args = newArgs.ToArray();
+        }
+
         // Create root command
         var rootCommand = new RootCommand("MDDBooster Console Application - M3L Parser and Code Generator with SQL Server Cascade Path Validation");
 
@@ -64,7 +75,7 @@ internal class Program
                 // Determine which mode to use
                 if (!string.IsNullOrEmpty(settingsPath))
                 {
-                    // Settings file mode (legacy)
+                    // Settings file mode (explicit path provided)
                     ProcessWithSettingsFile(settingsPath);
                 }
                 else if (!string.IsNullOrEmpty(inputPath) && !string.IsNullOrEmpty(outputPath))
@@ -74,16 +85,29 @@ internal class Program
                 }
                 else
                 {
+                    // No explicit settings provided - try default settings.json in current directory
+                    string defaultSettingsPath = Path.Combine(Directory.GetCurrentDirectory(), "settings.json");
+
+                    if (File.Exists(defaultSettingsPath))
+                    {
+                        Console.WriteLine($"Using default settings file: {defaultSettingsPath}");
+                        ProcessWithSettingsFile(defaultSettingsPath);
+                    }
+                    else
+                    {
 #if DEBUG
-                    // Debug mode - use default settings
-                    ProcessWithSettingsFile(DefaultSettingsPath);
+                        // Debug mode - use debug default settings
+                        ProcessWithSettingsFile(DefaultSettingsPath);
 #else
-                    Console.WriteLine("Error: Either --settings or both --input and --output must be specified");
-                    Console.WriteLine("Usage:");
-                    Console.WriteLine("  mdd --settings <path-to-settings.json>");
-                    Console.WriteLine("  mdd --input <path-to-m3l-file> --output <output-directory> [--builder <builder-type>]");
-                    return;
+                        Console.WriteLine("Error: Either --settings or both --input and --output must be specified");
+                        Console.WriteLine($"Note: No default settings.json found in current directory: {Directory.GetCurrentDirectory()}");
+                        Console.WriteLine("Usage:");
+                        Console.WriteLine("  mdd --settings <path-to-settings.json>");
+                        Console.WriteLine("  mdd --input <path-to-m3l-file> --output <output-directory> [--builder <builder-type>]");
+                        Console.WriteLine("  mdd   (uses ./settings.json if it exists)");
+                        return;
 #endif
+                    }
                 }
 
                 Console.WriteLine("Processing completed successfully.");
