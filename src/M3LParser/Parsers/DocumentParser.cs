@@ -38,7 +38,8 @@ public class DocumentParser : BaseParser
             // Parse namespace
             if (line.StartsWith("# Namespace:"))
             {
-                Context.Document.Namespace = line.Substring("# Namespace:".Length).Trim();
+                var namespacePart = line.Substring("# Namespace:".Length).Trim();
+                Context.Document.Namespace = CleanNamespaceString(namespacePart);
                 AppLog.Debug("Parsed namespace: {Namespace}", Context.Document.Namespace);
                 Context.NextLine();
             }
@@ -47,7 +48,8 @@ public class DocumentParser : BaseParser
             {
                 if (string.IsNullOrEmpty(Context.Document.Namespace))
                 {
-                    Context.Document.Namespace = line.Substring(1).Trim();
+                    var titlePart = line.Substring(1).Trim();
+                    Context.Document.Namespace = CleanNamespaceString(titlePart);
                     AppLog.Debug("Using document title as namespace: {Namespace}", Context.Document.Namespace);
                 }
                 Context.NextLine();
@@ -90,5 +92,28 @@ public class DocumentParser : BaseParser
             Context.Document.Models.Count, Context.Document.Interfaces.Count, Context.Document.Enums.Count);
 
         return Context.Document;
+    }
+
+    /// <summary>
+    /// Clean namespace string by removing or replacing problematic characters
+    /// </summary>
+    private static string CleanNamespaceString(string input)
+    {
+        if (string.IsNullOrEmpty(input))
+            return input;
+
+        // Remove non-printable control characters
+        var cleaned = new string(input.Where(c => !char.IsControl(c) || char.IsWhiteSpace(c)).ToArray());
+
+        // Replace any remaining problematic Unicode characters with safe equivalents
+        cleaned = cleaned.Replace('\u00A0', ' '); // Non-breaking space
+        cleaned = cleaned.Replace('\u2013', '-'); // En dash
+        cleaned = cleaned.Replace('\u2014', '-'); // Em dash
+        cleaned = cleaned.Replace('\u2018', '\''); // Left single quotation mark
+        cleaned = cleaned.Replace('\u2019', '\''); // Right single quotation mark
+        cleaned = cleaned.Replace('\u201C', '"'); // Left double quotation mark
+        cleaned = cleaned.Replace('\u201D', '"'); // Right double quotation mark
+
+        return cleaned.Trim();
     }
 }

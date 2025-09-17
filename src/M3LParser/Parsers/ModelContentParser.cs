@@ -107,57 +107,7 @@ public class ModelContentParser : BaseParser
                 // 현재 라인 체크
                 var currentLine = Context.CurrentLineTrimmed;
 
-                // @unique로 시작하는 필드 줄인 경우, 인덱스로 처리
-                if (currentLine.StartsWith("- @unique("))
-                {
-                    var modelIndex = ParseModelLevelIndex(currentLine);
-                    if (modelIndex != null)
-                    {
-                        AppLog.Debug("Added model-level unique constraint to model {ModelName}: {IndexName} (fields: {Fields})",
-                            model.Name, modelIndex.Name, string.Join(", ", modelIndex.Fields));
-                        model.Indexes.Add(modelIndex);
-                        Context.NextLine();
-                        break;
-                    }
-                }
-
-                // 만약 필드 정의라면 일반적인 방식으로 처리
-                var field = _fieldParser.Parse();
-                if (field != null)
-                {
-                    // @unique로 시작하는 필드 이름인 경우 이것도 인덱스로 변환
-                    if (field.Name.StartsWith("@unique("))
-                    {
-                        var match = Regex.Match(field.Name, @"@unique\(([^)]+)\)");
-                        if (match.Success)
-                        {
-                            var uniqueParams = match.Groups[1].Value;
-                            var parameters = uniqueParams.Split(',')
-                                .Select(p => p.Trim())
-                                .ToList();
-
-                            var index1 = new M3LIndex
-                            {
-                                Name = $"UK_{model.Name}_{string.Join("_", parameters)}",
-                                Fields = parameters,
-                                IsUnique = true
-                            };
-
-                            AppLog.Debug("Converted field to unique constraint in model {ModelName}: {IndexName} (fields: {Fields})",
-                                model.Name, index1.Name, string.Join(", ", index1.Fields));
-                            model.Indexes.Add(index1);
-                        }
-                    }
-                    else
-                    {
-                        AppLog.Debug("Added field to model {ModelName}: {FieldName} ({FieldType})",
-                            model.Name, field.Name, field.Type);
-                        model.Fields.Add(field);
-                    }
-                    break;
-                }
-
-                // Check if it's an index or relation at model level
+                // Check for model-level indexes and attributes FIRST before field parsing
                 if (currentLine.Contains("@index") || currentLine.Contains("@unique"))
                 {
                     var modelIndex = ParseModelLevelIndex(currentLine);
@@ -166,6 +116,7 @@ public class ModelContentParser : BaseParser
                         AppLog.Debug("Added model-level index to model {ModelName}: {IndexName} (fields: {Fields})",
                             model.Name, modelIndex.Name, string.Join(", ", modelIndex.Fields));
                         model.Indexes.Add(modelIndex);
+                        break;
                     }
                 }
                 else if (currentLine.Contains("@relation"))
@@ -176,7 +127,17 @@ public class ModelContentParser : BaseParser
                         AppLog.Debug("Added model-level relation to model {ModelName}: {RelationName} -> {Target}",
                             model.Name, modelRelation.Name, modelRelation.Target);
                         model.Relations.Add(modelRelation);
+                        break;
                     }
+                }
+
+                // If not an index/relation, try parsing as a field
+                var field = _fieldParser.Parse();
+                if (field != null)
+                {
+                    AppLog.Debug("Added field to model {ModelName}: {FieldName} ({FieldType})",
+                        model.Name, field.Name, field.Type);
+                    model.Fields.Add(field);
                 }
                 break;
         }

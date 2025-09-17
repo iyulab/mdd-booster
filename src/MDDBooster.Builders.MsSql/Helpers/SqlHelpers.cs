@@ -27,7 +27,7 @@ public static class SqlHelpers
     /// <summary>
     /// Gets the SQL type for a field
     /// </summary>
-    public static string GetSqlType(MDDField field)
+    public static string GetSqlType(MDDField field, MDDDocument document = null)
     {
         if (field == null)
         {
@@ -50,8 +50,17 @@ public static class SqlHelpers
         }
 
         string sqlType;
+        var fieldType = field.BaseField.Type;
 
-        switch (field.BaseField.Type.ToLowerInvariant())
+        // Check if the field type is an enum reference
+        if (document != null && IsEnumType(fieldType, document))
+        {
+            AppLog.Debug("Field {FieldName} uses enum type {EnumType}, mapping to NVARCHAR(50)",
+                field.BaseField.Name, fieldType);
+            return "NVARCHAR(50)";
+        }
+
+        switch (fieldType.ToLowerInvariant())
         {
             case "identifier":
                 sqlType = "UNIQUEIDENTIFIER";
@@ -89,14 +98,42 @@ public static class SqlHelpers
                 sqlType = "NVARCHAR(50)";
                 break;
             default:
-                // Handle unknown types as NVARCHAR(50)
-                AppLog.Warning("Unknown field type: {FieldType} for field: {FieldName}",
-                    field.BaseField.Type, field.BaseField.Name);
-                sqlType = "NVARCHAR(50)";
+                // Check if it might be an enum type based on naming conventions
+                if (IsLikelyEnumType(fieldType))
+                {
+                    AppLog.Information("Field {FieldName} appears to use enum type {EnumType}, mapping to NVARCHAR(50)",
+                        field.BaseField.Name, fieldType);
+                    sqlType = "NVARCHAR(50)";
+                }
+                else
+                {
+                    // Handle unknown types as NVARCHAR(50)
+                    AppLog.Warning("Unknown field type: {FieldType} for field: {FieldName}",
+                        fieldType, field.BaseField.Name);
+                    sqlType = "NVARCHAR(50)";
+                }
                 break;
         }
 
         return sqlType;
+    }
+
+    /// <summary>
+    /// Check if a field type refers to a defined enum
+    /// </summary>
+    private static bool IsEnumType(string fieldType, MDDDocument document)
+    {
+        return document.Enums.Any(e => e.BaseEnum.Name.Equals(fieldType, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Check if a field type is likely an enum based on naming conventions
+    /// </summary>
+    private static bool IsLikelyEnumType(string fieldType)
+    {
+        var enumSuffixes = new[] { "Status", "Type", "Kind", "Role", "State", "Mode", "Level" };
+        return enumSuffixes.Any(suffix =>
+            fieldType.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

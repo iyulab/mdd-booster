@@ -160,7 +160,7 @@ public class TableDefinitionGenerator
     {
         // Get field properties with proper casing
         var fieldName = StringHelper.NormalizeName(field.BaseField.Name);
-        var sqlType = SqlHelpers.GetSqlType(field);
+        var sqlType = SqlHelpers.GetSqlType(field, _document);
         var nullableStr = field.BaseField.IsNullable ? "NULL" : "NOT NULL";
 
         string defaultStr = "";

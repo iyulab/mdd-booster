@@ -136,7 +136,7 @@ public class MigrationScriptGenerator
 
                 foreach (var field in newFields)
                 {
-                    var sqlType = SqlHelpers.GetSqlType(field);
+                    var sqlType = SqlHelpers.GetSqlType(field, _newDocument);
                     var nullableStr = field.BaseField.IsNullable ? "NULL" : "NOT NULL";
                     var defaultStr = !string.IsNullOrEmpty(field.BaseField.DefaultValue)
                         ? $" DEFAULT {SqlHelpers.TransformDefaultValue(field.BaseField.DefaultValue, field.BaseField.Type)}"
@@ -169,7 +169,7 @@ public class MigrationScriptGenerator
                     newField.BaseField.Length != oldField.BaseField.Length ||
                     newField.BaseField.IsNullable != oldField.BaseField.IsNullable)
                 {
-                    var sqlType = SqlHelpers.GetSqlType(newField);
+                    var sqlType = SqlHelpers.GetSqlType(newField, _newDocument);
                     var nullableStr = newField.BaseField.IsNullable ? "NULL" : "NOT NULL";
 
                     AppLog.Debug("Found changed field {FieldName} in model {ModelName}",

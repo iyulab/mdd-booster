@@ -55,7 +55,7 @@ public class FieldParser : BaseParser
         {
             field.IsNullable = true;
             fieldName = fieldName.Substring(0, fieldName.Length - 1).Trim();
-            AppLog.Information("Field {FieldName} is NULLABLE (from field name)", fieldName);
+            AppLog.Debug("Field {FieldName} is NULLABLE (from field name)", fieldName);
         }
 
         field.Name = fieldName;
@@ -110,13 +110,13 @@ public class FieldParser : BaseParser
         {
             field.IsNullable = true;
             typePart = typePart.Substring(0, typePart.Length - 1).Trim();
-            AppLog.Information("Field {FieldName} is NULLABLE (from type)", field.Name);
+            AppLog.Debug("Field {FieldName} is NULLABLE (from type)", field.Name);
         }
         else if (!field.IsNullable)
         {
             // Only set to false if not already set to true from field name
             field.IsNullable = false;
-            AppLog.Information("Field {FieldName} is NOT NULLABLE", field.Name);
+            AppLog.Debug("Field {FieldName} is NOT NULLABLE", field.Name);
         }
 
         // Parse type and length
