@@ -221,27 +221,40 @@ Fields define individual attributes of a model.
 #### 2.3.1 Basic Field Format (Recommended)
 
 ```markdown
-- fieldName: type @attribute @attribute(value)
+- fieldName: type @attribute @attribute(value) "description"
 ```
 
 Components:
 - **fieldName**: Name of the field used as an identifier
 - **type**: Data type of the field (required)
 - **attribute**: Additional information starting with @ (optional)
+- **description**: Field description in quotes (optional)
 
 Example:
 
 ```markdown
 - id: identifier @primary
-- name: string(200) @searchable
-- price: decimal(10, 2) @min(0)
-- category_id: identifier? @reference(Category)
-- created_at: timestamp = now()
+- name: string(200) @searchable "Product name"
+- price: decimal(10, 2) @min(0) "Price in USD"
+- category_id: identifier? @reference(Category) "Optional category"
+- created_at: timestamp = now() "Creation timestamp"
 ```
 
-#### 2.3.2 Extended Field Format
+#### 2.3.1.1 Shortened Type Notations
 
-Multi-line format for complex field definitions:
+For common data patterns, M3L provides convenient shorthand types:
+
+```markdown
+- email: email @unique           # Equivalent to: string(320) with email validation
+- phone: phone                   # Equivalent to: string(20) with phone validation
+- url: url                       # Equivalent to: string(2048) with URL validation
+- money: money                   # Equivalent to: decimal(10,2)
+- percentage: percentage         # Equivalent to: decimal(5,2) with 0-100 range
+```
+
+#### 2.3.2 Extended Field Format (For Complex Cases Only)
+
+**Use Basic Format whenever possible.** Extended format is only for very complex field definitions:
 
 ```markdown
 - fieldName
@@ -261,6 +274,8 @@ Example:
   - description: "Primary contact email address"
   - validate: email
 ```
+
+**Prefer Basic Format:** `- email: email @unique @index "Primary contact email"`
 
 #### 2.3.3 Field Metadata
 
@@ -528,20 +543,22 @@ Relationships define connections between models.
 - reviewed_by_id?: identifier @reference(User)?    # SET NULL (nullable field)
 ```
 
-#### 3.2.1.1 Cascade Behavior Syntax
+#### 3.2.1.1 CASCADE Behavior - Simple Symbol Syntax
 
-M3L supports concise cascade behavior notation using symbol suffixes:
+**간결한 심볼 기반 문법:**
 
-- **Default (CASCADE)**: `@reference(Model)` - Parent deletion cascades to child
-- **NO ACTION**: `@reference(Model)!` - Prevents parent deletion if children exist
-- **SET NULL**: `@reference(Model)?` - Sets field to NULL when parent is deleted (requires nullable field)
+- `@reference(Model)` → CASCADE (기본값)
+- `@reference(Model)!` → NO ACTION
+- `@reference(Model)?` → SET NULL (nullable 필수)
 
-Alternative explicit syntax:
+**충돌 방지 패턴:**
 ```markdown
-- author_id: identifier @reference(Person) @cascade(cascade)
-- blocked_user_id: identifier @reference(User) @cascade(no-action)
-- reviewed_by_id?: identifier @reference(User) @cascade(set-null)
-```
+# 주요 관계: CASCADE 유지
+- CreatedBy: identifier @reference(User)
+
+# 감사/참조: NO ACTION으로 안전하게
+- ReviewedBy: identifier @reference(User)!
+- ModifiedBy?: identifier @reference(User)?
 
 #### 3.2.2 Model Level Relationships (Single Line)
 

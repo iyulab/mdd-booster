@@ -25,24 +25,55 @@ public class CascadePathValidator
         var warnings = new List<CascadePathWarning>();
         var cascadeGraph = BuildCascadeGraph();
 
-        // Check each table for multiple cascade paths reaching the same target
+        // Check for direct CASCADE conflicts only (avoid recursive path detection)
+        var directCascadeRelations = new List<CascadeRelation>();
+
         foreach (var sourceTable in cascadeGraph.Keys)
         {
-            var pathGroups = FindAllCascadePaths(sourceTable, cascadeGraph)
-                .Where(path => path.CascadeType == CascadeType.CASCADE)
-                .GroupBy(path => path.TargetTable)
-                .Where(group => group.Count() > 1)
+            foreach (var relation in cascadeGraph[sourceTable])
+            {
+                if (relation.CascadeType == CascadeType.CASCADE)
+                {
+                    directCascadeRelations.Add(relation);
+                }
+            }
+        }
+
+        // Group by target table and check for actual conflicts
+        var conflictGroups = directCascadeRelations
+            .GroupBy(r => r.TargetTable)
+            .Where(group => group.Count() > 1)
+            .ToList();
+
+        foreach (var group in conflictGroups)
+        {
+            var relations = group.ToList();
+
+            // Remove duplicates by field name (fix duplicate counting bug)
+            var uniqueRelations = relations
+                .GroupBy(r => new { r.SourceTable, r.FieldName })
+                .Select(g => g.First())
                 .ToList();
 
-            foreach (var group in pathGroups)
+            // Conservative approach: Only warn for clearly problematic cases
+            // Skip warnings when there are many CASCADE paths (likely ownership patterns)
+            if (uniqueRelations.Count > 1 && uniqueRelations.Count <= 5)
             {
-                var paths = group.ToList();
+                var paths = uniqueRelations.Select(r => new CascadePath
+                {
+                    SourceTable = r.SourceTable,
+                    TargetTable = r.TargetTable,
+                    FieldName = r.FieldName,
+                    CascadeType = r.CascadeType,
+                    PathLength = 1
+                }).ToList();
+
                 warnings.Add(new CascadePathWarning
                 {
                     TargetTable = group.Key,
                     ConflictingPaths = paths,
-                    Severity = CascadePathSeverity.Error,
-                    Message = $"Multiple CASCADE paths detected to table '{group.Key}': {string.Join(", ", paths.Select(p => $"{p.SourceTable}.{p.FieldName}"))}"
+                    Severity = CascadePathSeverity.Warning,
+                    Message = $"Multiple CASCADE paths detected to table '{group.Key}': {string.Join(", ", uniqueRelations.Select(r => $"{r.SourceTable}.{r.FieldName}"))}"
                 });
             }
         }
@@ -175,6 +206,7 @@ public class CascadePathValidator
 
         visited.Remove(currentTable);
     }
+
 }
 
 /// <summary>

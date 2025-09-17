@@ -5,7 +5,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>2.0.3</Version>
+    <Version>2.0.4</Version>
     <PackageId>MDD-Booster</PackageId>
     <Authors>iyulab</Authors>
     <Description>Code generation tool that supports M3L with SQL Server cascade path validation.</Description>

@@ -119,6 +119,14 @@ public class FieldParser : BaseParser
             AppLog.Debug("Field {FieldName} is NOT NULLABLE", field.Name);
         }
 
+        // Remove comments (# comment) from type part before processing
+        if (typePart.Contains('#'))
+        {
+            var commentIndex = typePart.IndexOf('#');
+            typePart = typePart.Substring(0, commentIndex).Trim();
+            AppLog.Debug("Removed comment from type part, cleaned type: {TypePart}", typePart);
+        }
+
         // Parse type and length
         if (typePart.Contains('(') && typePart.Contains(')'))
         {
@@ -167,15 +175,15 @@ public class FieldParser : BaseParser
         {
             var subLine = Context.CurrentLineTrimmed;
 
-            // End of extended field definition - must be a line that doesn't start with a dash 
-            // or doesn't have a nested dash after the initial dash
-            if (!subLine.StartsWith("-") || !subLine.Substring(1).TrimStart().StartsWith("-"))
+            // End of extended field definition - check for proper indentation
+            if (!subLine.StartsWith("-") || !IsNestedProperty(subLine))
             {
                 break;
             }
 
-            // Parse subproperty - remove the leading dashes and trim
-            var subProperty = subLine.Substring(1).Trim().Substring(1).Trim();
+            // Parse subproperty - remove leading spaces/tabs and dash
+            var subProperty = subLine.TrimStart().Substring(1).Trim();
+            AppLog.Debug("Processing subproperty: '{SubProperty}' from line: '{SubLine}' for field: {FieldName}", subProperty, subLine, field.Name);
 
             // Check for framework attributes first (they should be prioritized over other properties)
             if (subProperty.StartsWith("[") && subProperty.Contains("]"))
@@ -189,6 +197,7 @@ public class FieldParser : BaseParser
             }
             else if (subProperty.StartsWith("type:"))
             {
+                AppLog.Debug("Found type property: {TypeProperty} for field {FieldName}", subProperty, field.Name);
                 ParseTypeProperty(field, subProperty);
             }
             else if (subProperty.StartsWith("description:"))
@@ -294,5 +303,25 @@ public class FieldParser : BaseParser
         }
 
         return value;
+    }
+
+    /// <summary>
+    /// Check if a line represents a nested property (indented dash)
+    /// </summary>
+    private bool IsNestedProperty(string line)
+    {
+        // Check if line starts with indentation followed by dash
+        if (line.StartsWith("  -") || line.StartsWith("\t-"))
+        {
+            return true;
+        }
+
+        // Check if it's indented more than the field level
+        var trimmed = line.TrimStart();
+        var indentLength = line.Length - trimmed.Length;
+
+        // Field level should have more indentation than model level (which is typically 0)
+        // Extended field properties should have even more indentation
+        return indentLength >= 2 && trimmed.StartsWith("-");
     }
 }
