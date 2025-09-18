@@ -98,16 +98,42 @@ public static class StringHelper
         for (int i = 1; i < parts.Length; i++)
         {
             var attrText = parts[i].Trim();
-            var endOfAttr = attrText.IndexOfAny(new[] { ' ', '\t', '(', ')' });
+            var endOfAttr = attrText.IndexOfAny(new[] { ' ', '\t', '(' });
 
             if (endOfAttr > 0)
             {
                 if (attrText[endOfAttr] == '(')
                 {
-                    // Find the closing parenthesis
-                    int closeParenIndex = attrText.IndexOf(')', endOfAttr);
+                    // Find the matching closing parenthesis using proper bracket counting
+                    var openParens = 0;
+                    var closeParenIndex = -1;
+                    for (int j = endOfAttr; j < attrText.Length; j++)
+                    {
+                        if (attrText[j] == '(') openParens++;
+                        else if (attrText[j] == ')')
+                        {
+                            openParens--;
+                            if (openParens == 0)
+                            {
+                                closeParenIndex = j;
+                                break;
+                            }
+                        }
+                    }
+
                     if (closeParenIndex != -1)
-                        attrText = attrText.Substring(0, closeParenIndex + 1);
+                    {
+                        // Check for suffix symbols after the closing parenthesis (!, ?)
+                        var afterParen = closeParenIndex + 1;
+                        if (afterParen < attrText.Length && (attrText[afterParen] == '!' || attrText[afterParen] == '?'))
+                        {
+                            attrText = attrText.Substring(0, afterParen + 1);
+                        }
+                        else
+                        {
+                            attrText = attrText.Substring(0, closeParenIndex + 1);
+                        }
+                    }
                     else
                         attrText = attrText.Substring(0, endOfAttr);
                 }

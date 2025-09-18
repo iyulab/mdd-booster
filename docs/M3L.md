@@ -22,7 +22,7 @@
    1. [Composite Key Definition](#41-composite-key-definition)
    2. [Comments and Documentation](#42-comments-and-documentation)
    3. [Behavior Definition](#43-behavior-definition)
-   4. [Calculated Fields](#44-calculated-fields)
+   4. [Computed Fields](#44-computed-fields)
    5. [Conditional Fields](#45-conditional-fields)
    6. [Complex Data Structures](#46-complex-data-structures)
    7. [Validation Rules](#47-validation-rules)
@@ -543,22 +543,53 @@ Relationships define connections between models.
 - reviewed_by_id?: identifier @reference(User)?    # SET NULL (nullable field)
 ```
 
-#### 3.2.1.1 CASCADE Behavior - Simple Symbol Syntax
+#### 3.2.1.1 CASCADE Behavior - Multiple Syntax Options
 
-**간결한 심볼 기반 문법:**
+**Symbol-Based Syntax (Recommended for Simple Cases):**
 
-- `@reference(Model)` → CASCADE (기본값)
-- `@reference(Model)!` → NO ACTION
-- `@reference(Model)?` → SET NULL (nullable 필수)
+- `@reference(Model)` → Automatic decision based on field nullability
+- `@reference(Model)!` → NO ACTION (prevent deletion)
+- `@reference(Model)?` → SET NULL (requires nullable field)
+- `@reference(Model)!!` → RESTRICT (strict prevention)
 
-**충돌 방지 패턴:**
+**Explicit Attribute Syntax:**
 ```markdown
-# 주요 관계: CASCADE 유지
-- CreatedBy: identifier @reference(User)
+- UserId: identifier @reference(User) @cascade        # Explicit CASCADE
+- ReviewerId: identifier @reference(User) @no_action  # Explicit NO ACTION
+- AssignedTo?: identifier @reference(User) @set_null  # Explicit SET NULL
+- ModeratorId: identifier @reference(User) @restrict  # Explicit RESTRICT
+```
 
-# 감사/참조: NO ACTION으로 안전하게
-- ReviewedBy: identifier @reference(User)!
-- ModifiedBy?: identifier @reference(User)?
+**Parameter-Based Syntax:**
+```markdown
+- UserId: identifier @reference(User) @cascade(CASCADE)
+- ReviewerId: identifier @reference(User) @cascade(NO-ACTION)
+- AssignedTo?: identifier @reference(User) @cascade(SET-NULL)
+- ModeratorId: identifier @reference(User) @cascade(RESTRICT)
+```
+
+**Automatic Decision Logic:**
+When no explicit symbol or attribute is provided, CASCADE behavior is determined automatically:
+- **Nullable FK** → SET NULL (safe cleanup)
+- **Non-nullable FK** → CASCADE (strong relationship)
+
+**Mixed Syntax (Advanced Usage):**
+```markdown
+- UserId: identifier @reference(User)! @cascade     # Override symbol with explicit
+- CreatedBy: identifier @reference(User)! @no_action # Explicit combination
+```
+
+**Conflict Prevention Patterns:**
+```markdown
+# Primary relationships: Allow CASCADE
+- AuthorId: identifier @reference(User)
+
+# Audit/reference data: Preserve with NO ACTION
+- ReviewedBy: identifier @reference(User)! @no_action
+- ModifiedBy?: identifier @reference(User)? @set_null
+
+# Critical constraints: Use RESTRICT
+- SystemAdminId: identifier @reference(User)!! @restrict
 
 #### 3.2.2 Model Level Relationships (Single Line)
 
@@ -815,23 +846,115 @@ Behaviors define events and actions associated with a model.
   - condition: status_changed
 ```
 
-### 4.4 Calculated Fields
+### 4.4 Computed Fields
 
-Calculated fields derive their values from other fields.
+Computed fields derive their values from expressions and other fields, providing calculated columns in the database.
 
-#### 4.4.1 Basic Calculated Fields
+#### 4.4.1 Basic Computed Fields
 
+**Simple Format (권장):**
 ```markdown
 - full_name: string @computed("first_name + ' ' + last_name")
+- age: integer @computed("DATEDIFF(YEAR, birth_date, GETDATE())")
+- total_amount: decimal(12,2) @computed("quantity * unit_price")
+- DisplayName: string @computed("ISNULL([Name], 'Anonymous User')")
 ```
 
-#### 4.4.2 Complex Calculated Fields
-
+**With Persistence (성능 최적화):**
 ```markdown
-- total_price: decimal
+- total_amount: decimal(12,2) @computed("quantity * unit_price") @persisted
+- search_vector: string @computed("name + ' ' + description") @persisted
+- display_name: string @computed("COALESCE([nickname], [first_name] + ' ' + [last_name])") @persisted
+```
+
+**실제 사용 예제:**
+```markdown
+## User
+- Id: identifier @primary
+- Name: string(100)
+- Email: string(320) @unique
+- DisplayName: string @computed("ISNULL([Name], 'Anonymous User')")
+- SearchText: string @computed("[Name] + ' ' + [Email]") @persisted @index
+```
+
+#### 4.4.2 Advanced Computed Fields
+
+**Extended Format (복잡한 경우만):**
+```markdown
+- total_price: decimal(12,2)
   - computed: true
   - formula: "quantity * unit_price * (1 - discount_rate)"
-  - persist: false
+  - persisted: true
+  - description: "Final price after quantity and discount"
+```
+
+#### 4.4.3 Computed Field Types
+
+**문자열 연산:**
+```markdown
+- display_name: string @computed("COALESCE(nickname, first_name + ' ' + last_name)")
+- slug: string @computed("LOWER(REPLACE(title, ' ', '-'))") @persisted
+```
+
+**숫자 계산:**
+```markdown
+- bmi: decimal(5,2) @computed("weight / (height * height)")
+- tax_amount: decimal(10,2) @computed("subtotal * tax_rate")
+- profit_margin: decimal(5,2) @computed("((selling_price - cost_price) / cost_price) * 100")
+```
+
+**날짜/시간 계산:**
+```markdown
+- age: integer @computed("DATEDIFF(YEAR, birth_date, GETDATE())")
+- days_since_created: integer @computed("DATEDIFF(DAY, created_at, GETDATE())")
+- is_recent: boolean @computed("created_at > DATEADD(DAY, -30, GETDATE())")
+```
+
+**조건부 계산:**
+```markdown
+- status_label: string @computed("CASE WHEN is_active = 1 THEN 'Active' ELSE 'Inactive' END")
+- discount_tier: string @computed("CASE WHEN total_purchases > 1000 THEN 'Gold' WHEN total_purchases > 500 THEN 'Silver' ELSE 'Bronze' END")
+```
+
+#### 4.4.4 Computed Field Best Practices
+
+**성능 고려사항:**
+```markdown
+# 자주 조회되는 복잡한 계산: @persisted 사용
+- search_text: string @computed("title + ' ' + description + ' ' + tags") @persisted
+
+# 단순한 계산: 실시간 계산으로 두기
+- full_name: string @computed("first_name + ' ' + last_name")
+
+# 인덱스가 필요한 계산 필드: @persisted + @index
+- age_group: string @computed("CASE WHEN age < 18 THEN 'Minor' WHEN age < 65 THEN 'Adult' ELSE 'Senior' END") @persisted @index
+```
+
+**타입 추론:**
+```markdown
+- age: integer @computed("DATEDIFF(YEAR, birth_date, GETDATE())")  # integer 타입 자동 추론
+- total: decimal @computed("price * quantity")                     # decimal 타입 자동 추론
+- is_adult: boolean @computed("age >= 18")                         # boolean 타입 자동 추론
+```
+
+#### 4.4.5 Database-Specific Expressions
+
+**SQL Server:**
+```markdown
+- full_name: string @computed("CONCAT(first_name, ' ', last_name)")
+- year_created: integer @computed("YEAR(created_at)")
+```
+
+**PostgreSQL:**
+```markdown
+- full_name: string @computed("first_name || ' ' || last_name")
+- json_extract: string @computed("metadata->>'category'")
+```
+
+**MySQL:**
+```markdown
+- full_name: string @computed("CONCAT(first_name, ' ', last_name)")
+- json_extract: string @computed("JSON_EXTRACT(metadata, '$.category')")
 ```
 
 ### 4.5 Conditional Fields
@@ -1189,7 +1312,7 @@ Support for modern data types:
 
 ### 8.4 Cascade Behavior for Foreign Keys
 
-M3L provides concise syntax for controlling foreign key cascade behavior:
+M3L provides comprehensive syntax for controlling foreign key cascade behavior with automatic decision logic:
 
 #### 8.4.1 Symbol-Based Cascade Notation
 
@@ -1211,27 +1334,48 @@ M3L provides concise syntax for controlling foreign key cascade behavior:
 - TargetType: ReportTargetType
 - TargetId: identifier
 - Status: ReportStatus = "Pending"
-- ReviewedBy?: identifier @reference(User)?    # SET NULL - clear on reviewer deletion
+- ReviewedBy?: identifier @reference(User)     # Automatic → SET NULL (nullable)
+- SystemAdmin: identifier @reference(User)!!   # RESTRICT - critical system constraint
+
+## Post
+> Blog post with automatic cascade decisions
+
+- Id: identifier @primary
+- AuthorId: identifier @reference(User)        # Automatic → CASCADE (non-nullable)
+- CategoryId?: identifier @reference(Category) # Automatic → SET NULL (nullable)
+- ModeratedBy?: identifier @reference(User)    # Automatic → SET NULL (nullable)
 ```
 
 #### 8.4.2 Cascade Behavior Guidelines
 
-**CASCADE (default)**: Use for parent-child relationships where child data becomes meaningless without parent
+**Automatic Decision (recommended)**: Let M3L decide based on field nullability
 ```markdown
-- AuthorId: identifier @reference(User)        # Delete posts when author deleted
-- CategoryId: identifier @reference(Category)  # Delete products when category deleted
+- AuthorId: identifier @reference(User)        # Non-nullable → CASCADE
+- CategoryId?: identifier @reference(Category) # Nullable → SET NULL
+```
+
+**CASCADE**: Use for parent-child relationships where child data becomes meaningless without parent
+```markdown
+- AuthorId: identifier @reference(User) @cascade        # Delete posts when author deleted
+- CategoryId: identifier @reference(Category) @cascade  # Delete products when category deleted
 ```
 
 **NO ACTION (!)**: Use for important reference data that should be preserved
 ```markdown
-- CreatedBy: identifier @reference(User)!      # Preserve audit trail
-- ModeratorId: identifier @reference(User)!    # Prevent moderator deletion
+- CreatedBy: identifier @reference(User)! @no_action      # Preserve audit trail
+- ModeratorId: identifier @reference(User)! @no_action    # Prevent moderator deletion
 ```
 
 **SET NULL (?)**: Use for optional relationships where record should survive parent deletion
 ```markdown
-- ReviewedBy?: identifier @reference(User)?    # Clear reviewer on deletion
-- AssignedTo?: identifier @reference(User)?    # Clear assignment on deletion
+- ReviewedBy?: identifier @reference(User)? @set_null    # Clear reviewer on deletion
+- AssignedTo?: identifier @reference(User)? @set_null    # Clear assignment on deletion
+```
+
+**RESTRICT (!!)**: Use for critical system constraints that must never be deleted
+```markdown
+- SystemAdminId: identifier @reference(User)!! @restrict  # Critical system constraint
+- RootCategory: identifier @reference(Category)!! @restrict # Foundation data
 ```
 
 ## 9. Best Practices and Anti-patterns
@@ -1267,22 +1411,55 @@ M3L provides concise syntax for controlling foreign key cascade behavior:
 
 #### 9.1.5 Cascade Behavior Best Practices
 
-- **Default to CASCADE** for true parent-child relationships where child data has no meaning without parent
+- **Leverage automatic decisions** for simple relationships - nullable fields automatically get SET NULL, non-nullable get CASCADE
 - **Use NO ACTION (!)** for audit trail preservation, user blocking systems, and critical reference data
 - **Use SET NULL (?)** for optional assignments where the record should survive reference deletion
+- **Use RESTRICT (!!)** for critical system constraints that should never be deleted
 - **Document cascade decisions** with inline comments explaining the business rationale
 - **Test cascade scenarios** thoroughly, especially for complex multi-table relationships
 - **Avoid cascade conflicts** by using NO ACTION for circular or complex reference patterns
 
+**Automatic Decision Examples:**
+```markdown
+# Automatic behavior based on nullability
+- AuthorId: identifier @reference(User)      # Non-nullable → CASCADE
+- ReviewedBy?: identifier @reference(User)   # Nullable → SET NULL
+```
+
+**Syntax Choice Guidelines:**
+```markdown
+# Simple cases: Use symbol syntax
+- CreatedBy: identifier @reference(User)   # Automatic (CASCADE for non-nullable)
+- ReviewedBy: identifier @reference(User)! # NO ACTION
+- AssignedTo?: identifier @reference(User) # Automatic (SET NULL for nullable)
+- SystemAdmin: identifier @reference(User)!! # RESTRICT
+
+# Complex cases: Use explicit attributes for clarity
+- UserId: identifier @reference(User)! @cascade    # Override symbol with explicit
+- ModeratorId: identifier @reference(User) @no_action # Explicit NO ACTION
+- CriticalRef: identifier @reference(User) @restrict  # Explicit RESTRICT
+
+# Parameter syntax for maximum clarity
+- UserId: identifier @reference(User) @cascade(CASCADE)
+- ReviewerId: identifier @reference(User) @cascade(NO-ACTION)
+- AssignedTo?: identifier @reference(User) @cascade(SET-NULL)
+- SystemId: identifier @reference(User) @cascade(RESTRICT)
+```
+
 **Anti-patterns to avoid:**
 ```markdown
 # BAD: Multiple CASCADE paths to same table can cause conflicts
-- BlockerId: identifier @reference(User)     # CASCADE
-- BlockedUserId: identifier @reference(User) # CASCADE - can cause cascade conflicts!
+- BlockerId: identifier @reference(User)     # AUTO → CASCADE
+- BlockedUserId: identifier @reference(User) # AUTO → CASCADE - can cause conflicts!
 
 # GOOD: Use NO ACTION for blocking/audit systems
-- BlockerId: identifier @reference(User)!     # NO ACTION - preserve blocking data
-- BlockedUserId: identifier @reference(User)! # NO ACTION - preserve blocking data
+- BlockerId: identifier @reference(User)! @no_action     # NO ACTION - preserve blocking data
+- BlockedUserId: identifier @reference(User)! @no_action # NO ACTION - preserve blocking data
+
+# MIXED: Different business logic for same reference
+- UserId: identifier @reference(User)! @cascade     # User data can be deleted
+- CreatedBy: identifier @reference(User)! @no_action # Creator audit preserved
+- SystemRole: identifier @reference(User)!! @restrict # Critical system constraint
 ```
 - Apply security attributes consistently across models
 - Use events sparingly for critical business state changes

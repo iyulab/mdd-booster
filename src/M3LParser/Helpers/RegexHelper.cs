@@ -99,7 +99,7 @@ public static class RegexHelper
     /// Extract cascade behavior from reference attribute
     /// Supports: @reference(User)!, @ref(User)?, @cascade(no-action)
     /// </summary>
-    public static string ExtractCascadeBehavior(string attributeText)
+    public static string ExtractCascadeBehavior(string attributeText, bool isFieldNullable = false)
     {
         if (string.IsNullOrEmpty(attributeText))
             return "CASCADE"; // default
@@ -110,22 +110,90 @@ public static class RegexHelper
         {
             return cascadeParam.ToUpperInvariant() switch
             {
-                "NO-ACTION" or "NOACTION" or "RESTRICT" => "NO ACTION",
+                "NO-ACTION" or "NOACTION" => "NO ACTION",
+                "RESTRICT" => "RESTRICT",
                 "SET-NULL" or "SETNULL" => "SET NULL",
                 "CASCADE" => "CASCADE",
                 _ => "CASCADE"
             };
         }
 
+        // Check for @no_action attribute
+        if (attributeText.Contains("@no_action"))
+        {
+            return "NO ACTION";
+        }
+
+        // Check for @cascade attribute
+        if (attributeText.Contains("@cascade"))
+        {
+            return "CASCADE";
+        }
+
+        // Check for @set_null attribute
+        if (attributeText.Contains("@set_null"))
+        {
+            return "SET NULL";
+        }
+
+        // Check for @restrict attribute
+        if (attributeText.Contains("@restrict"))
+        {
+            return "RESTRICT";
+        }
+
         // Check for suffix symbols on @reference() or @ref()
         if (attributeText.Contains("@reference(") || attributeText.Contains("@ref("))
         {
-            if (attributeText.EndsWith(")!"))
+            // Handle comments by looking for )!! or )! or )? before any comment marker
+            if (attributeText.Contains(")!!"))
+                return "RESTRICT";
+            else if (attributeText.Contains(")!"))
                 return "NO ACTION";
-            else if (attributeText.EndsWith(")?"))
+            else if (attributeText.Contains(")?"))
                 return "SET NULL";
         }
 
+        // Automatic decision logic for @reference(Model) without explicit symbols
+        if (attributeText.Contains("@reference(") || attributeText.Contains("@ref("))
+        {
+            var cascadeBehavior = DetermineAutomaticCascadeBehavior(attributeText, isFieldNullable);
+            if (!string.IsNullOrEmpty(cascadeBehavior))
+            {
+                return cascadeBehavior;
+            }
+        }
+
         return "CASCADE"; // default
+    }
+
+    /// <summary>
+    /// Determine automatic cascade behavior based on field nullability and business logic
+    /// </summary>
+    private static string DetermineAutomaticCascadeBehavior(string attributeText, bool isFieldNullable = false, bool isReferencedPrimaryKeyNullable = false)
+    {
+        // This method is called when @reference(Model) has no explicit symbol
+        // Decision logic based on nullable status, not hardcoded entity names
+
+        // Rule 1: If FK field is nullable, prefer SET NULL (safe cleanup)
+        if (isFieldNullable)
+        {
+            return "SET NULL";
+        }
+
+        // Rule 2: If FK is not nullable but references nullable PK, use NO ACTION (prevent orphans)
+        if (!isFieldNullable && isReferencedPrimaryKeyNullable)
+        {
+            return "NO ACTION";
+        }
+
+        // Rule 3: If both FK and referenced PK are not nullable, use CASCADE (strong relationship)
+        if (!isFieldNullable && !isReferencedPrimaryKeyNullable)
+        {
+            return "CASCADE";
+        }
+
+        // Default fallback to CASCADE for standard parent-child relationships
+        return "CASCADE";
     }
 }

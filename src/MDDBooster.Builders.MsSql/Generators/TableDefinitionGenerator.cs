@@ -1,4 +1,4 @@
-﻿using M3LParser.Helpers;
+using M3LParser.Helpers;
 using MDDBooster.Builders.MsSql.Helpers;
 using MDDBooster.Utilities;
 
@@ -132,19 +132,49 @@ public class TableDefinitionGenerator
             // We don't hardcode the field now - the primary key should come from proper inheritance resolution
         }
 
-        // Add all column definitions first
+        // Add all column definitions with proper comma placement
+        for (int i = 0; i < columnDefs.Count; i++)
+        {
+            var columnDef = columnDefs[i];
+
+            // Add comma after column definition (except for the last one if no constraints)
+            if (i < columnDefs.Count - 1 || uniqueConstraints.Any())
+            {
+                // Find the position to insert comma (before comment if exists)
+                if (columnDef.Contains(" -- "))
+                {
+                    var commentIndex = columnDef.IndexOf(" -- ");
+                    var beforeComment = columnDef.Substring(0, commentIndex);
+                    var comment = columnDef.Substring(commentIndex);
+                    sb.AppendLine(beforeComment + "," + comment);
+                }
+                else
+                {
+                    sb.AppendLine(columnDef + ",");
+                }
+            }
+            else
+            {
+                // Last column without constraints - no comma
+                sb.AppendLine(columnDef);
+            }
+        }
+
+        // Add constraints if any
         if (uniqueConstraints.Any())
         {
-            // Add comma at the end of the last column definition
-            sb.AppendLine(string.Join(",\n", columnDefs) + ",");
-
-            // Add constraints without extra comma at the end of the last one
-            sb.AppendLine(string.Join(",\n", uniqueConstraints));
-        }
-        else
-        {
-            // No constraints, just add columns
-            sb.AppendLine(string.Join(",\n", columnDefs));
+            for (int i = 0; i < uniqueConstraints.Count; i++)
+            {
+                var constraint = uniqueConstraints[i];
+                if (i < uniqueConstraints.Count - 1)
+                {
+                    sb.AppendLine(constraint + ",");
+                }
+                else
+                {
+                    sb.AppendLine(constraint);
+                }
+            }
         }
 
         sb.AppendLine(")");
@@ -162,6 +192,30 @@ public class TableDefinitionGenerator
         var fieldName = StringHelper.NormalizeName(field.BaseField.Name);
         var sqlType = SqlHelpers.GetSqlType(field, _document);
         var nullableStr = field.BaseField.IsNullable ? "NULL" : "NOT NULL";
+
+        // Handle computed columns
+        if (field.BaseField.IsComputed)
+        {
+            var computedExpression = field.BaseField.ComputedExpression;
+            if (!string.IsNullOrEmpty(computedExpression))
+            {
+                var persistedStr = field.BaseField.IsPersisted ? " PERSISTED" : "";
+                AppLog.Debug("Creating computed column: {FieldName} AS ({Expression}){Persisted}",
+                    fieldName, computedExpression, persistedStr);
+
+                var result = $"    [{fieldName}] AS ({computedExpression}){persistedStr}";
+                if (!string.IsNullOrEmpty(field.BaseField.InlineComment))
+                {
+                    result += $" --  {field.BaseField.InlineComment}";
+                }
+                return result;
+            }
+            else
+            {
+                AppLog.Warning("Computed column {FieldName} has no expression defined", fieldName);
+                // Fall back to regular column if no expression
+            }
+        }
 
         string defaultStr = "";
         if (!string.IsNullOrEmpty(field.BaseField.DefaultValue))
@@ -188,16 +242,31 @@ public class TableDefinitionGenerator
             if (field.BaseField.Type.ToLowerInvariant() == "identifier" ||
                 sqlType.Contains("UNIQUEIDENTIFIER"))
             {
-                return $"    [{fieldName}] {sqlType} NOT NULL PRIMARY KEY DEFAULT NEWSEQUENTIALID()";
+                var result = $"    [{fieldName}] {sqlType} NOT NULL PRIMARY KEY DEFAULT NEWSEQUENTIALID()";
+                if (!string.IsNullOrEmpty(field.BaseField.InlineComment))
+                {
+                    result += $" --  {field.BaseField.InlineComment}";
+                }
+                return result;
             }
             else
             {
-                return $"    [{fieldName}] {sqlType} NOT NULL PRIMARY KEY{defaultStr}";
+                var result = $"    [{fieldName}] {sqlType} NOT NULL PRIMARY KEY{defaultStr}";
+                if (!string.IsNullOrEmpty(field.BaseField.InlineComment))
+                {
+                    result += $" --  {field.BaseField.InlineComment}";
+                }
+                return result;
             }
         }
         else
         {
-            return $"    [{fieldName}] {sqlType} {nullableStr}{defaultStr}";
+            var result = $"    [{fieldName}] {sqlType} {nullableStr}{defaultStr}";
+            if (!string.IsNullOrEmpty(field.BaseField.InlineComment))
+            {
+                result += $" --  {field.BaseField.InlineComment}";
+            }
+            return result;
         }
     }
 

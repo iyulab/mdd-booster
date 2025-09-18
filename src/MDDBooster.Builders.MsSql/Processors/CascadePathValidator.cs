@@ -150,62 +150,6 @@ public class CascadePathValidator
         return CascadeType.CASCADE; // Default behavior
     }
 
-    /// <summary>
-    /// Find all cascade paths from a source table using DFS
-    /// </summary>
-    private List<CascadePath> FindAllCascadePaths(string sourceTable, Dictionary<string, List<CascadeRelation>> cascadeGraph)
-    {
-        var paths = new List<CascadePath>();
-        var visited = new HashSet<string>();
-
-        FindCascadePathsRecursive(sourceTable, cascadeGraph, paths, visited, new List<CascadeRelation>());
-
-        return paths;
-    }
-
-    /// <summary>
-    /// Recursive helper for finding cascade paths
-    /// </summary>
-    private void FindCascadePathsRecursive(
-        string currentTable,
-        Dictionary<string, List<CascadeRelation>> cascadeGraph,
-        List<CascadePath> paths,
-        HashSet<string> visited,
-        List<CascadeRelation> currentPath)
-    {
-        if (visited.Contains(currentTable))
-            return; // Avoid infinite loops
-
-        visited.Add(currentTable);
-
-        if (cascadeGraph.ContainsKey(currentTable))
-        {
-            foreach (var relation in cascadeGraph[currentTable])
-            {
-                // Only follow CASCADE relationships for conflict detection
-                if (relation.CascadeType == CascadeType.CASCADE)
-                {
-                    var newPath = new List<CascadeRelation>(currentPath) { relation };
-
-                    // Add this path
-                    paths.Add(new CascadePath
-                    {
-                        SourceTable = currentPath.FirstOrDefault()?.SourceTable ?? currentTable,
-                        TargetTable = relation.TargetTable,
-                        FieldName = relation.FieldName,
-                        CascadeType = relation.CascadeType,
-                        PathLength = newPath.Count,
-                        Relations = newPath.ToList()
-                    });
-
-                    // Continue searching deeper
-                    FindCascadePathsRecursive(relation.TargetTable, cascadeGraph, paths, visited, newPath);
-                }
-            }
-        }
-
-        visited.Remove(currentTable);
-    }
 
 }
 

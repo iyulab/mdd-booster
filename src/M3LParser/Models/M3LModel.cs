@@ -13,4 +13,5 @@ public class M3LModel
     public List<string> Attributes { get; set; } = new List<string>();
     public bool IsAbstract => Attributes.Contains("@abstract");
     public bool IsDefault => Attributes.Contains("@default");
+    public bool IsSoftDelete => Attributes.Contains("@soft-delete");
 }

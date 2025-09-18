@@ -65,16 +65,36 @@ public class FieldParser : BaseParser
 
         // First extract framework attributes (in square brackets) before processing default values
         // This ensures framework attributes aren't mistakenly treated as default values
+        // BUT: Only extract brackets that are NOT inside quoted strings (to avoid removing SQL column references like [Name])
         if (typePart.Contains('[') && typePart.Contains(']'))
         {
             var matches = Regex.Matches(typePart, @"\[([^\]]+)\]");
+            var toRemove = new List<string>();
+
             foreach (Match match in matches)
             {
-                field.FrameworkAttributes.Add(match.Groups[1].Value);
-                AppLog.Debug("Field {FieldName} has framework attribute: {Attribute}", field.Name, match.Groups[1].Value);
+                // Check if this bracket is inside a quoted string
+                var beforeMatch = typePart.Substring(0, match.Index);
+                var quoteCount = beforeMatch.Count(c => c == '"');
 
-                // Remove the framework attribute from the type part to avoid confusion with default values
-                typePart = typePart.Replace(match.Value, "").Trim();
+                // If odd number of quotes before the match, we're inside a quoted string - skip it
+                if (quoteCount % 2 == 0)
+                {
+                    // We're outside quoted strings, this is a framework attribute
+                    field.FrameworkAttributes.Add(match.Groups[1].Value);
+                    AppLog.Debug("Field {FieldName} has framework attribute: {Attribute}", field.Name, match.Groups[1].Value);
+                    toRemove.Add(match.Value);
+                }
+                else
+                {
+                    AppLog.Debug("Field {FieldName} skipping bracket inside quoted string: {Bracket}", field.Name, match.Value);
+                }
+            }
+
+            // Remove framework attributes from typePart
+            foreach (var item in toRemove)
+            {
+                typePart = typePart.Replace(item, "").Trim();
             }
         }
 
@@ -84,6 +104,16 @@ public class FieldParser : BaseParser
             var defaultParts = typePart.Split('=', 2);
             typePart = defaultParts[0].Trim();
             field.DefaultValue = defaultParts[1].Trim();
+
+            // Extract and preserve inline comments from default value
+            if (field.DefaultValue.Contains('#'))
+            {
+                var commentIndex = field.DefaultValue.IndexOf('#');
+                field.InlineComment = field.DefaultValue.Substring(commentIndex + 1).Trim();
+                field.DefaultValue = field.DefaultValue.Substring(0, commentIndex).Trim();
+                AppLog.Debug("Extracted inline comment from default value. Value: {DefaultValue}, Comment: {InlineComment}", field.DefaultValue, field.InlineComment);
+            }
+
             if (field.DefaultValue.StartsWith('\"') && field.DefaultValue.EndsWith('\"'))
             {
                 field.DefaultValue = field.DefaultValue[1..^1];
@@ -100,6 +130,26 @@ public class FieldParser : BaseParser
             for (int i = 1; i < attributeParts.Length; i++)
             {
                 var attr = "@" + attributeParts[i].Trim();
+
+                // Extract and preserve inline comments from attributes
+                if (attr.Contains('#'))
+                {
+                    var commentIndex = attr.IndexOf('#');
+                    var attributeComment = attr.Substring(commentIndex + 1).Trim();
+                    attr = attr.Substring(0, commentIndex).Trim();
+
+                    // Append to existing inline comment if present
+                    if (!string.IsNullOrEmpty(field.InlineComment))
+                    {
+                        field.InlineComment += " | " + attributeComment;
+                    }
+                    else
+                    {
+                        field.InlineComment = attributeComment;
+                    }
+                    AppLog.Debug("Extracted inline comment from attribute. Attribute: {Attribute}, Comment: {InlineComment}", attr, attributeComment);
+                }
+
                 field.Attributes.Add(attr);
                 AppLog.Debug("Field {FieldName} has attribute: {Attribute}", field.Name, attr);
             }
