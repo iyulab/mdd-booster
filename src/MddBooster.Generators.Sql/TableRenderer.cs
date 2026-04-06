@@ -22,7 +22,7 @@ public static class TableRenderer
         // materialize in the _ext view (Phase I, ViewPlanner) — they must never
         // appear as physical columns here.
         var storedFields = model.Fields.Where(f => f.Kind == FieldKind.Stored).ToList();
-        var columnLines = storedFields.Select(f => ColumnRenderer.Render(f, enumLookup)).ToList();
+        var columnLines = storedFields.Select(f => ColumnRenderer.Render(f, enumLookup, model.Name)).ToList();
         var uniqueConstraints = BuildUniqueConstraints(storedFields, model.Name).ToList();
 
         var bodyLines = new List<string>(columnLines.Count + uniqueConstraints.Count);

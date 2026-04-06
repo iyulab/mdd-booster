@@ -20,11 +20,11 @@ public class EnumSqlTests
 
         // status is non-null OrderStatus with 5 values; longest is 'in_production' (13 chars)
         Assert.Contains("[Status] NVARCHAR(20) NOT NULL", sql);
-        Assert.Contains("CHECK ([Status] IN (N'draft', N'confirmed', N'in_production', N'shipped', N'cancelled'))", sql);
+        Assert.Contains("CONSTRAINT [CK_Order_Status] CHECK ([Status] IN (N'draft', N'confirmed', N'in_production', N'shipped', N'cancelled'))", sql);
 
         // priority is nullable Priority with values low/normal/high
         Assert.Contains("[Priority] NVARCHAR(20) NULL", sql);
-        Assert.Contains("CHECK ([Priority] IN (N'low', N'normal', N'high'))", sql);
+        Assert.Contains("CONSTRAINT [CK_Order_Priority] CHECK ([Priority] IN (N'low', N'normal', N'high'))", sql);
     }
 
     [Fact]

@@ -5,7 +5,7 @@ namespace MddBooster.Generators.Sql;
 
 public static class ColumnRenderer
 {
-    public static string Render(FieldNode field, IReadOnlyDictionary<string, EnumNode>? enumLookup = null)
+    public static string Render(FieldNode field, IReadOnlyDictionary<string, EnumNode>? enumLookup = null, string? tableName = null)
     {
         ArgumentNullException.ThrowIfNull(field);
 
@@ -17,13 +17,13 @@ public static class ColumnRenderer
 
         var nullability = field.Nullable ? "NULL" : "NOT NULL";
 
-        var suffix = BuildSuffix(field, m3lType, columnName, enumLookup);
+        var suffix = BuildSuffix(field, m3lType, columnName, enumLookup, tableName);
 
         var core = $"[{columnName}] {sqlType} {nullability}";
         return string.IsNullOrEmpty(suffix) ? core : $"{core} {suffix}";
     }
 
-    private static string BuildSuffix(FieldNode field, string m3lType, string columnName, IReadOnlyDictionary<string, EnumNode>? enumLookup)
+    private static string BuildSuffix(FieldNode field, string m3lType, string columnName, IReadOnlyDictionary<string, EnumNode>? enumLookup, string? tableName)
     {
         var parts = new List<string>();
 
@@ -54,7 +54,8 @@ public static class ColumnRenderer
         {
             var values = string.Join(", ",
                 enumNode.Values.Select(v => "N'" + (v.Name?.Replace("'", "''") ?? string.Empty) + "'"));
-            parts.Add($"CHECK ([{columnName}] IN ({values}))");
+            var constraintName = tableName is not null ? $"CONSTRAINT [CK_{tableName}_{columnName}] " : "";
+            parts.Add($"{constraintName}CHECK ([{columnName}] IN ({values}))");
         }
 
         // 기본값 처리
