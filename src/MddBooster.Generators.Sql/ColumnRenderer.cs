@@ -23,23 +23,6 @@ public static class ColumnRenderer
         return string.IsNullOrEmpty(suffix) ? core : $"{core} {suffix}";
     }
 
-    /// <summary>
-    /// Enum 필드에 대한 table-level CHECK 제약을 반환합니다.
-    /// 해당 필드가 enum이 아니면 null을 반환합니다.
-    /// </summary>
-    public static string? BuildCheckConstraint(FieldNode field, string tableName, IReadOnlyDictionary<string, EnumNode>? enumLookup)
-    {
-        if (enumLookup is null) return null;
-        var m3lType = field.Type;
-        if (m3lType is null) return null;
-        if (!enumLookup.TryGetValue(m3lType, out var enumNode) || enumNode.Values.Count == 0) return null;
-
-        var columnName = ToPascalCase(field.Name);
-        var values = string.Join(", ",
-            enumNode.Values.Select(v => "N'" + (v.Name?.Replace("'", "''") ?? string.Empty) + "'"));
-        return $"CONSTRAINT [CK_{tableName}_{columnName}] CHECK ([{columnName}] IN ({values}))";
-    }
-
     private static string BuildSuffix(FieldNode field, string m3lType, string columnName, IReadOnlyDictionary<string, EnumNode>? enumLookup)
     {
         var parts = new List<string>();

@@ -24,16 +24,10 @@ public static class TableRenderer
         var storedFields = model.Fields.Where(f => f.Kind == FieldKind.Stored).ToList();
         var columnLines = storedFields.Select(f => ColumnRenderer.Render(f, enumLookup)).ToList();
         var uniqueConstraints = BuildUniqueConstraints(storedFields, model.Name).ToList();
-        var checkConstraints = storedFields
-            .Select(f => ColumnRenderer.BuildCheckConstraint(f, model.Name, enumLookup))
-            .Where(c => c is not null)
-            .Cast<string>()
-            .ToList();
 
-        var bodyLines = new List<string>(columnLines.Count + uniqueConstraints.Count + checkConstraints.Count);
+        var bodyLines = new List<string>(columnLines.Count + uniqueConstraints.Count);
         bodyLines.AddRange(columnLines);
         bodyLines.AddRange(uniqueConstraints);
-        bodyLines.AddRange(checkConstraints);
 
         for (var i = 0; i < bodyLines.Count; i++)
         {

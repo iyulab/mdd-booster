@@ -69,7 +69,8 @@ public class BuildCommandFullFixtureTests
             // Enum CHECK constraint is in the Order.sql
             var orderSql = File.ReadAllText(Path.Combine(dbDir, "dbo", "Tables_gen", "Order.sql"));
             Assert.Contains("[Status] NVARCHAR(", orderSql);
-            Assert.Contains("CONSTRAINT [CK_Order_Status] CHECK ([Status] IN", orderSql);
+            // CHECK constraints removed — EF Core handles enum validation
+            Assert.DoesNotContain("CHECK", orderSql);
             Assert.Contains("REFERENCES [dbo].[Customer]([Id])", orderSql);
             // Derived fields must not land in the base table
             Assert.DoesNotContain("[CustomerName]", orderSql);
