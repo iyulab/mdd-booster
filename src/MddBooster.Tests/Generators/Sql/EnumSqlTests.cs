@@ -20,7 +20,10 @@ public class EnumSqlTests
 
         // status is non-null OrderStatus with 5 values; longest is 'in_production' (13 chars)
         Assert.Contains("[Status] NVARCHAR(20) NOT NULL", sql);
+        // CHECK constraints are table-level (not inline) for SSDT dacpac idempotency
         Assert.Contains("CONSTRAINT [CK_Order_Status] CHECK ([Status] IN (N'draft', N'confirmed', N'in_production', N'shipped', N'cancelled'))", sql);
+        // Column definition must NOT contain inline CHECK
+        Assert.DoesNotContain("[Status] NVARCHAR(20) NOT NULL CONSTRAINT", sql);
 
         // priority is nullable Priority with values low/normal/high
         Assert.Contains("[Priority] NVARCHAR(20) NULL", sql);

@@ -5,7 +5,7 @@ namespace MddBooster.Generators.Sql;
 
 public static class ColumnRenderer
 {
-    public static string Render(FieldNode field, IReadOnlyDictionary<string, EnumNode>? enumLookup = null, string? tableName = null)
+    public static string Render(FieldNode field, IReadOnlyDictionary<string, EnumNode>? enumLookup = null)
     {
         ArgumentNullException.ThrowIfNull(field);
 
@@ -17,13 +17,30 @@ public static class ColumnRenderer
 
         var nullability = field.Nullable ? "NULL" : "NOT NULL";
 
-        var suffix = BuildSuffix(field, m3lType, columnName, enumLookup, tableName);
+        var suffix = BuildSuffix(field, m3lType, columnName, enumLookup);
 
         var core = $"[{columnName}] {sqlType} {nullability}";
         return string.IsNullOrEmpty(suffix) ? core : $"{core} {suffix}";
     }
 
-    private static string BuildSuffix(FieldNode field, string m3lType, string columnName, IReadOnlyDictionary<string, EnumNode>? enumLookup, string? tableName)
+    /// <summary>
+    /// Enum 필드에 대한 table-level CHECK 제약을 반환합니다.
+    /// 해당 필드가 enum이 아니면 null을 반환합니다.
+    /// </summary>
+    public static string? BuildCheckConstraint(FieldNode field, string tableName, IReadOnlyDictionary<string, EnumNode>? enumLookup)
+    {
+        if (enumLookup is null) return null;
+        var m3lType = field.Type;
+        if (m3lType is null) return null;
+        if (!enumLookup.TryGetValue(m3lType, out var enumNode) || enumNode.Values.Count == 0) return null;
+
+        var columnName = ToPascalCase(field.Name);
+        var values = string.Join(", ",
+            enumNode.Values.Select(v => "N'" + (v.Name?.Replace("'", "''") ?? string.Empty) + "'"));
+        return $"CONSTRAINT [CK_{tableName}_{columnName}] CHECK ([{columnName}] IN ({values}))";
+    }
+
+    private static string BuildSuffix(FieldNode field, string m3lType, string columnName, IReadOnlyDictionary<string, EnumNode>? enumLookup)
     {
         var parts = new List<string>();
 
@@ -47,16 +64,9 @@ public static class ColumnRenderer
             parts.Add($"REFERENCES [dbo].[{referenceTarget}]([Id])");
         }
 
-        // Enum CHECK constraint — columns typed to a known enum carry an
-        // `IN (...)` guard so stray values (legacy migration, manual SQL) are
-        // rejected at the storage layer.
-        if (enumLookup is not null && enumLookup.TryGetValue(m3lType, out var enumNode) && enumNode.Values.Count > 0)
-        {
-            var values = string.Join(", ",
-                enumNode.Values.Select(v => "N'" + (v.Name?.Replace("'", "''") ?? string.Empty) + "'"));
-            var constraintName = tableName is not null ? $"CONSTRAINT [CK_{tableName}_{columnName}] " : "";
-            parts.Add($"{constraintName}CHECK ([{columnName}] IN ({values}))");
-        }
+        // Enum CHECK 제약은 table-level로 분리 (BuildCheckConstraint 메서드).
+        // inline CHECK는 SSDT dacpac이 서버 표현식과 매칭하지 못해 매번
+        // Drop→Create 스크립트를 생성하는 문제가 있음.
 
         // 기본값 처리
         if (!string.IsNullOrEmpty(field.DefaultValue))
