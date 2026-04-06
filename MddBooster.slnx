@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="src/MddBooster.Core/MddBooster.Core.csproj" />
+  <Project Path="src/MddBooster.Generators.Sql/MddBooster.Generators.Sql.csproj" />
+  <Project Path="src/MddBooster.Generators.Model/MddBooster.Generators.Model.csproj" />
+  <Project Path="src/MddBooster.Generators.Api/MddBooster.Generators.Api.csproj" />
+  <Project Path="src/MddBooster.Cli/MddBooster.Cli.csproj" />
+  <Project Path="src/MddBooster.Tests/MddBooster.Tests.csproj" />
+</Solution>

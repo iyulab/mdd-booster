@@ -1,166 +1,137 @@
-# MDD Booster
+# mdd-booster
 
-A powerful code generator that transforms M3L (Meta Model Markup Language) into production-ready code with **SQL Server cascade path validation**.
+M3L → SQL/C#/API 코드 생성기. 단일 `tables.m3l.md` 소스로 SSDT 스키마, EF Core 엔티티 + DbContext, OData/GraphQL 등록 코드를 일괄 생성한다.
 
-[M3L Syntax](https://github.com/iyulab/m3l)
+> **상태**: 리라이트 중 (2026-04-05). 이전 `MDD-Booster` 전역 도구는 이 저장소의 과거 버전. 현재 구조는 4-저장소 스택 (`m3l` / `mdd-booster` / `iyu-framework-v5` / consumer) 일부로 재설계됨. 자세한 배경: [`claudedocs/plans/2026-04-05-mdd-booster-rewrite-design.md`](claudedocs/plans/2026-04-05-mdd-booster-rewrite-design.md).
 
-## Features
+## 생성 타깃
 
-🚀 **Code Generation Support:**
-- Database projects (SQL Server with cascade validation)
-- Model projects (C# entities)
-- Server projects (ASP.NET Core APIs)
+| 타입 | 출력 | 소비자 |
+|---|---|---|
+| **Sql** | `dbo/Tables_gen/{Entity}.sql`, `dbo/Views_gen/{Entity}_{full,ext}.sql`, `.sqlproj` ItemGroup 패치 | SSDT 프로젝트 |
+| **Model** | `Entity_gen/{I,}{Entity}{,Ext}.cs`, `Enum_gen/{Enum}.cs`, `DbContext_gen/{Name}.cs` (with auto-`ToView` 매핑) | C# classlib (EF Core + Iyu.Core) |
+| **Api** | `Api_gen/ApiRegistration_gen.cs` (OData + GraphQL 엔티티 페어 등록) | ASP.NET Core MainServer (iyu-framework-v5) |
 
-📝 **M3L Language**: Clean, markdown-based syntax for defining data models
-- Platform-independent model definitions
-- Human-readable and AI-friendly format
-- Complete documentation available at [M3L Syntax](https://github.com/iyulab/m3l)
+## 사용법
 
-## Installation
-
-### Global Tool (Recommended)
-
-```bash
-dotnet tool install --global MDD-Booster
-```
-
-### Update
-
-```bash
-dotnet tool update --global MDD-Booster
-```
-
-## Usage
-
-### Quick Start
-
-```bash
-# Auto-detect settings.json in current directory
-mdd
-
-# Use specific settings file
-mdd "./path/to/settings.json"
-
-# Direct parameters for simple cases
-mdd --input tables.md --output ./src/MyApp.Database --builder DatabaseProject
-```
-
-## Command Line Options
-
-| Option | Description | Example |
-|--------|-------------|---------|
-| `--input` | Path to M3L input file | `--input tables.md` |
-| `--output` | Output directory path | `--output ./src/MyApp.Database` |
-| `--builder` | Builder type | `--builder DatabaseProject` |
-| `--settings` | Settings JSON file path | `--settings config/settings.json` |
-
-### Builder Types
-
-- **DatabaseProject** (default): Generates SQL Server database schemas with cascade validation
-- **ModelProject**: Generates C# entity models
-- **ServerProject**: Generates ASP.NET Core API projects
-
-## M3L Syntax Overview
-
-M3L is a markdown-based language for defining data models. Here's a quick example:
-
-```markdown
-## User
-> User account information
-
-- Id: identifier @primary
-- Email: string(320) @unique
-- Name: string(100)
-- CreatedAt: datetime = "@now"
-- UpdatedAt?: datetime
-```
-
-### Key Features
-
-- **Clean Syntax**: Human-readable markdown format
-- **Cascade Control**: `@reference(Table)!` (NO ACTION), `@reference(Table)?` (SET NULL)
-- **Type Safety**: Strong typing with nullable support (`?`)
-- **Rich Metadata**: Enums, indexes, constraints, and more
-
-📖 **Complete M3L documentation**: [M3L Syntax](https://github.com/iyulab/m3l)
-
-## Settings File Configuration
-
-Create a `settings.json` file for advanced configurations:
+### mdd.json (소비 프로젝트에 배치)
 
 ```json
 {
-  "logging": {
-    "verbose": false,
-    "logFilePath": "./logs/mdd-booster.log"
-  },
-  "mddConfigs": [
-    {
-      "mddPath": "./models/tables.md",
-      "builders": [
-        {
-          "type": "DatabaseProject",
-          "config": {
-            "projectPath": "./src/MyApp.Database",
-            "tablePath": "dbo/Tables_",
-            "generateIndividualFiles": true,
-            "generateForeignKeys": true,
-            "cascadeDelete": true
-          }
-        },
-        {
-          "type": "ModelProject",
-          "config": {
-            "projectPath": "./src/MyApp.Models",
-            "generateRepositories": false
-          }
-        }
-      ]
-    }
+  "sources": ["./tables.m3l.md"],
+  "targets": [
+    { "type": "Sql", "projectPath": "../src/MyApp.Database", "schema": "dbo" },
+    { "type": "Model", "projectPath": "../src/MyApp.Entities", "namespace": "MyApp.Entities", "dbContextName": "MyAppDbContext" },
+    { "type": "Api", "projectPath": "../src/MyApp.Server", "namespace": "MyApp.Server" }
   ]
 }
 ```
 
-## SQL Server Cascade Path Validation
+### 빌드 실행
 
-MDD Booster automatically validates cascade paths and warns about potential SQL Server errors:
-
-### Example Validation Output
-
-```
-[CASCADE VALIDATION] Multiple CASCADE paths detected to table 'User': Follow.FollowerId, Follow.FollowingId
-[CASCADE VALIDATION] Suggestions:
-- Keep Follow.FollowerId as CASCADE
-- Change Follow.FollowingId to @reference(User)! (NO ACTION)
-[CASCADE VALIDATION] Use @reference(Table)! syntax to set NO ACTION cascade behavior
+```bash
+cd path/to/mdd
+dotnet run --project D:/data/mdd-booster/src/MddBooster.Cli -- .
 ```
 
-### Common Cascade Path Conflicts
+또는 배포된 `mdd.exe`:
 
-1. **Self-referencing many-to-many** (Follow, Friend relationships)
-2. **Complex hierarchies** (User → Plan → Series → User)
-3. **Multiple user references** (CreatedBy, UpdatedBy, AssignedTo)
-
-## Examples
-
-### Quick Example: Social Media Database
-
-```markdown
-## User
-- Id: identifier @primary
-- Email: string(320) @unique
-- Username: string(50) @unique
-- CreatedAt: datetime = "@now"
-
-## Post
-- Id: identifier @primary
-- Title: string(200)
-- AuthorId: identifier @reference(User)
-- CreatedAt: datetime = "@now"
-
-## Follow
-# Prevents cascade conflicts with NO ACTION
-- FollowerId: identifier @reference(User)!
-- FollowingId: identifier @reference(User)!
-- @unique(FollowerId, FollowingId)
+```bash
+mdd ./mdd  # mdd.json이 있는 디렉터리
 ```
+
+## M3L 기능 지원 (현재)
+
+| 기능 | 지원 |
+|---|---|
+| Primitive 타입 18종 (identifier/string/decimal/phone/email/...) | ✅ |
+| Enum (C# enum + `[EnumMember]` + SQL CHECK) | ✅ |
+| Value Object (`phone`/`email`/`url` → `Iyu.Core.ValueObjects.*`) | ✅ |
+| `@reference(Target)` → SQL FK + C# `[Reference]` 속성 | ✅ |
+| `@unique` (단일 컬럼) | ✅ |
+| `@lookup(fk.col)` → `_full` 뷰 LEFT JOIN + `[Lookup]` 속성 | ✅ |
+| `@rollup(Target.fk, aggregate)` → `_ext` 뷰 서브쿼리 + `[Rollup]` | ✅ |
+| `@computed("expr")` → `_ext` 뷰 표현식 컬럼 + `[Computed]` | ✅ |
+| `@indexed` + rollup → `WITH SCHEMABINDING` | ✅ |
+| `@unique(col1, col2)` 복합 | ⏳ |
+| `### Indexes` 섹션 | ⏳ |
+
+## 생성물 구조
+
+```
+consumer-repo/
+├── mdd/
+│   ├── mdd.json
+│   └── tables.m3l.md
+└── src/
+    ├── MyApp.Database/
+    │   ├── MyApp.Database.sqlproj  (patched)
+    │   └── dbo/
+    │       ├── Tables_gen/         ← 매번 재생성
+    │       │   ├── User.sql
+    │       │   └── Order.sql
+    │       └── Views_gen/          ← 매번 재생성 (derived 필드 있는 모델만)
+    │           ├── Order_full.sql
+    │           └── Order_ext.sql
+    ├── MyApp.Entities/
+    │   ├── Entity_gen/             ← 매번 재생성
+    │   ├── Enum_gen/
+    │   └── DbContext_gen/
+    └── MyApp.Server/
+        └── Api_gen/
+            └── ApiRegistration_gen.cs
+```
+
+생성된 partial 클래스는 같은 네임스페이스의 수동 확장을 지원한다. `_gen` 접미 폴더는 재생성 시 완전히 덮어써지므로 절대 수동 편집하지 말 것.
+
+## 의미 분석 (SemanticAnalyzer)
+
+빌드 전에 cross-entity 무결성 검사:
+
+| 코드 | 의미 |
+|---|---|
+| MDD001 | 필드 타입이 primitive/enum/model 어느 것도 아님 |
+| MDD002 | `@reference(X)` 대상 엔티티 없음 |
+| MDD003 | `@lookup` 경로가 `fk.col` 형태가 아님 |
+| MDD004 | `@lookup(fk.col)`의 fk가 동일 모델에 없음 |
+| MDD005 | 해당 fk에 `@reference` 없음 |
+| MDD006 | lookup target 엔티티에 `col` 필드 없음 |
+| MDD007-9 | `@rollup` 대응 검증 |
+
+에러 발생 시 exitcode 3으로 종료.
+
+## 프로젝트 구조
+
+```
+src/
+├── MddBooster.Core/              AST 로딩, Semantic 분석, 공용 naming/primitives
+├── MddBooster.Generators.Sql/    TableRenderer, ViewPlanner, Full/ExtViewRenderer, SqlProjPatcher
+├── MddBooster.Generators.Model/  CSharpTypeMapper, EnumRenderer, EntityPairRenderer, DbContextRenderer
+├── MddBooster.Generators.Api/    ApiRegistrationRenderer (OData + GraphQL)
+├── MddBooster.Cli/               BuildCommand (mdd.json 소비)
+└── MddBooster.Tests/             126+ xUnit tests (Roslyn 구문 검증 포함)
+```
+
+## 테스트 실행
+
+```bash
+dotnet test MddBooster.slnx --nologo
+```
+
+테스트 커버리지:
+- Renderer 단위 (E2E Roslyn 구문 검증)
+- Semantic analyzer cross-entity 검증
+- CLI 3-타깃 통합 E2E (임시 디렉터리에서 전체 파이프라인 실행)
+- **Yesung 실제 14엔티티 + 13 enum acceptance test**
+
+## 관련 저장소
+
+- [m3l](https://github.com/iyulab/m3l) — Rust 기반 M3L 파서 (NuGet `M3L.Native`)
+- [iyu-framework-v5](https://github.com/iyulab/iyu-framework-v5) — 런타임 (EF Core + OData + HotChocolate GraphQL)
+- yesung — 첫 소비 애플리케이션 (예성카렌다 OMS)
+
+## 설계 문서
+
+- [`claudedocs/plans/2026-04-05-mdd-booster-rewrite-design.md`](claudedocs/plans/2026-04-05-mdd-booster-rewrite-design.md) — 정본 설계 스펙
+- [`claudedocs/cycle-logs/`](claudedocs/cycle-logs/) — 사이클별 개발 이력 (local, .gitignore)
+- [`TASKS.md`](TASKS.md) — Plan 단위 완료/잔여 추적

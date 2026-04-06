@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>MddBooster.Cli</RootNamespace>
+    <AssemblyName>mdd</AssemblyName>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MddBooster.Core\MddBooster.Core.csproj" />
+    <ProjectReference Include="..\MddBooster.Generators.Sql\MddBooster.Generators.Sql.csproj" />
+    <ProjectReference Include="..\MddBooster.Generators.Model\MddBooster.Generators.Model.csproj" />
+    <ProjectReference Include="..\MddBooster.Generators.Api\MddBooster.Generators.Api.csproj" />
+  </ItemGroup>
+
+</Project>
