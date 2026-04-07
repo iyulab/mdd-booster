@@ -8,6 +8,7 @@
     <RootNamespace>MddBooster.Cli</RootNamespace>
     <AssemblyName>mdd</AssemblyName>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Version>0.2.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
