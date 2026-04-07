@@ -23,11 +23,35 @@ public static class TableRenderer
         // appear as physical columns here.
         var storedFields = model.Fields.Where(f => f.Kind == FieldKind.Stored).ToList();
         var columnLines = storedFields.Select(f => ColumnRenderer.Render(f, enumLookup)).ToList();
-        var uniqueConstraints = BuildUniqueConstraints(storedFields, model.Name).ToList();
 
-        var bodyLines = new List<string>(columnLines.Count + uniqueConstraints.Count);
+        // Unique 제약 분기: nullable은 filtered unique index(CREATE INDEX ... WHERE IS NOT NULL)로
+        // 테이블 뒤에 별도 statement로 emit. non-nullable만 inline CONSTRAINT.
+        // SQL Server의 UNIQUE NONCLUSTERED는 NULL을 "값"으로 취급하여 NULL 2개 이상을 허용하지 않으므로,
+        // nullable unique 필드는 filtered index가 유일하게 정확한 모델링.
+        var inlineUniques = new List<string>();
+        var postTableStatements = new List<string>();
+        foreach (var field in storedFields)
+        {
+            if (!HasAttribute(field, "unique")) continue;
+            if (HasAttribute(field, "pk")) continue; // PK는 이미 유일
+
+            var column = ToPascalCase(field.Name);
+            if (field.Nullable)
+            {
+                postTableStatements.Add(
+                    $"CREATE UNIQUE NONCLUSTERED INDEX [UK_{model.Name}_{column}] " +
+                    $"ON [{schema}].[{model.Name}]([{column}]) " +
+                    $"WHERE [{column}] IS NOT NULL;");
+            }
+            else
+            {
+                inlineUniques.Add($"CONSTRAINT [UK_{model.Name}_{column}] UNIQUE NONCLUSTERED ([{column}])");
+            }
+        }
+
+        var bodyLines = new List<string>(columnLines.Count + inlineUniques.Count);
         bodyLines.AddRange(columnLines);
-        bodyLines.AddRange(uniqueConstraints);
+        bodyLines.AddRange(inlineUniques);
 
         for (var i = 0; i < bodyLines.Count; i++)
         {
@@ -40,22 +64,15 @@ public static class TableRenderer
         }
 
         sb.AppendLine(")");
-        sb.Append("GO");
-        sb.AppendLine();
+        sb.AppendLine("GO");
+
+        foreach (var stmt in postTableStatements)
+        {
+            sb.AppendLine(stmt);
+            sb.AppendLine("GO");
+        }
 
         return sb.ToString();
-    }
-
-    private static IEnumerable<string> BuildUniqueConstraints(IReadOnlyList<FieldNode> fields, string modelName)
-    {
-        foreach (var field in fields)
-        {
-            if (!HasAttribute(field, "unique")) continue;
-            if (HasAttribute(field, "pk")) continue; // PK는 이미 유일
-
-            var column = ToPascalCase(field.Name);
-            yield return $"CONSTRAINT [UK_{modelName}_{column}] UNIQUE NONCLUSTERED ([{column}])";
-        }
     }
 
     private static bool HasAttribute(FieldNode field, string name) =>
