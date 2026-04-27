@@ -43,6 +43,27 @@ public class TableSectionsIndexesTests
     }
 
     [Fact]
+    public void Labeled_indexes_emit_same_as_directive_form()
+    {
+        // M3L.Native 0.5.5+ 라벨드 형식 지원 — `- idx_xxx: @index(col)` 도
+        // attribute 정보를 보존하므로 directive 형식과 동등하게 emit되어야 함.
+        var ast = new M3lLoader().LoadFile(FixturePath("table-with-labeled-indexes.m3l.md"));
+        var resolved = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Order");
+
+        var sql = TableRenderer.Render(resolved, schema: "dbo");
+
+        Assert.Contains(
+            "CREATE NONCLUSTERED INDEX [IX_Order_CustomerId] ON [dbo].[Order] ([CustomerId]);",
+            sql);
+        Assert.Contains(
+            "CREATE NONCLUSTERED INDEX [IX_Order_Status_Season] ON [dbo].[Order] ([Status], [Season]);",
+            sql);
+        Assert.Contains(
+            "CONSTRAINT [UK_Order_CustomerId_Season] UNIQUE NONCLUSTERED ([CustomerId], [Season])",
+            sql);
+    }
+
+    [Fact]
     public void Directive_index_emits_after_create_table_go()
     {
         var ast = new M3lLoader().LoadFile(FixturePath("table-with-indexes.m3l.md"));
