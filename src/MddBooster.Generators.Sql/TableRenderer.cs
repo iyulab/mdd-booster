@@ -55,7 +55,7 @@ public static class TableRenderer
         // `idx_name: @index(col)` 형식은 args 없이 들어와 정보 부족(skip).
         // enum CHECK 제약은 의도적으로 미emit — EF Core가 string converter로 검증하며,
         // SSDT가 CHECK를 매번 Drop→Create로 표현해 dacpac diff가 불안정. (정책: cycle 27)
-        AppendSectionIndexes(model, schema, inlineUniques, postTableStatements);
+        AppendSectionIndexes(model, schema, storedFields, inlineUniques, postTableStatements);
 
         var bodyLines = new List<string>(columnLines.Count + inlineUniques.Count);
         bodyLines.AddRange(columnLines);
@@ -94,10 +94,19 @@ public static class TableRenderer
     /// </summary>
     private static void AppendSectionIndexes(
         ResolvedModel model, string schema,
+        IReadOnlyList<FieldNode> storedFields,
         List<string> inlineUniques, List<string> postTableStatements)
     {
         var indexes = model.Source.Sections?.Indexes;
         if (indexes is null || indexes.Count == 0) return;
+
+        // PascalCase 컬럼명 → nullable 매핑. 다중 컬럼 UK에 nullable 컬럼이 끼면
+        // SQL Server UNIQUE 제약은 NULL을 값으로 취급(다중 NULL 허용 안 됨)하므로
+        // filtered unique index로 변환해 NULL 행을 제약 평가에서 제외해야 한다.
+        var columnNullability = storedFields.ToDictionary(
+            f => ToPascalCase(f.Name),
+            f => f.Nullable,
+            StringComparer.Ordinal);
 
         foreach (var idxEl in indexes)
         {
@@ -135,8 +144,24 @@ public static class TableRenderer
 
             if (isUnique)
             {
-                inlineUniques.Add(
-                    $"CONSTRAINT [UK_{model.Name}_{colJoined}] UNIQUE NONCLUSTERED ({colList})");
+                // 컬럼 중 하나라도 nullable이면 filtered unique index로 emit.
+                // 모두 NOT NULL이면 inline UK constraint(테이블 본문에 함께 emit).
+                var anyNullable = cols.Any(c =>
+                    columnNullability.TryGetValue(c, out var n) && n);
+                if (anyNullable)
+                {
+                    var notNullPredicate = string.Join(" AND ",
+                        cols.Select(c => $"[{c}] IS NOT NULL"));
+                    postTableStatements.Add(
+                        $"CREATE UNIQUE NONCLUSTERED INDEX [UK_{model.Name}_{colJoined}] " +
+                        $"ON [{schema}].[{model.Name}] ({colList}) " +
+                        $"WHERE {notNullPredicate};");
+                }
+                else
+                {
+                    inlineUniques.Add(
+                        $"CONSTRAINT [UK_{model.Name}_{colJoined}] UNIQUE NONCLUSTERED ({colList})");
+                }
             }
             else
             {

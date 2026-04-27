@@ -14,15 +14,40 @@ public class TableSectionsIndexesTests
         Path.Combine(AppContext.BaseDirectory, "fixtures", name);
 
     [Fact]
-    public void Directive_unique_emits_named_unique_constraint()
+    public void Directive_unique_with_nullable_columns_emits_filtered_index()
     {
+        // SQL Server UNIQUE 제약은 NULL 다중을 허용하지 않으므로, nullable 컬럼이
+        // 하나라도 끼면 filtered unique index로 emit해야 함. yesung Order
+        // (part?, season?, original_order_number?) 사례에서 발견된 결함 회귀 차단.
         var ast = new M3lLoader().LoadFile(FixturePath("table-with-indexes.m3l.md"));
         var resolved = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Order");
 
         var sql = TableRenderer.Render(resolved, schema: "dbo");
 
         Assert.Contains(
-            "CONSTRAINT [UK_Order_Part_Season_OriginalNumber] UNIQUE NONCLUSTERED ([Part], [Season], [OriginalNumber])",
+            "CREATE UNIQUE NONCLUSTERED INDEX [UK_Order_Part_Season_OriginalNumber] ON [dbo].[Order] ([Part], [Season], [OriginalNumber]) WHERE [Part] IS NOT NULL AND [Season] IS NOT NULL AND [OriginalNumber] IS NOT NULL;",
+            sql);
+        // inline CONSTRAINT으로 emit되면 안 됨 (NULL 다중 허용 위반)
+        Assert.DoesNotContain(
+            "CONSTRAINT [UK_Order_Part_Season_OriginalNumber] UNIQUE NONCLUSTERED",
+            sql);
+    }
+
+    [Fact]
+    public void Directive_unique_with_all_not_null_columns_emits_inline_constraint()
+    {
+        // 모든 UK 컬럼이 NOT NULL이면 기존처럼 inline CONSTRAINT.
+        // EnterpriseRole(EnterpriseId, RoleType) 같은 케이스.
+        var ast = new M3lLoader().LoadFile(FixturePath("table-with-indexes.m3l.md"));
+        var resolved = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Membership");
+
+        var sql = TableRenderer.Render(resolved, schema: "dbo");
+
+        Assert.Contains(
+            "CONSTRAINT [UK_Membership_UserId_GroupId] UNIQUE NONCLUSTERED ([UserId], [GroupId])",
+            sql);
+        Assert.DoesNotContain(
+            "CREATE UNIQUE NONCLUSTERED INDEX [UK_Membership_UserId_GroupId]",
             sql);
     }
 
