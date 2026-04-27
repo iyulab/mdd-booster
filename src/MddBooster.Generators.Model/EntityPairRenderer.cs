@@ -29,8 +29,8 @@ public static class EntityPairRenderer
     /// <summary>
     /// Which SQL view (if any) backs the Ext read model.
     /// <c>None</c> → Ext class maps to the base table;
-    /// <c>Full</c> → Ext class maps to <c>{Name}_full</c> (lookup columns only);
-    /// <c>Ext</c> → Ext class maps to <c>{Name}_ext</c> (full + rollup/computed).
+    /// <c>Full</c> → Ext class maps to <c>{Name}FullView</c> (lookup columns only);
+    /// <c>Ext</c> → Ext class maps to <c>{Name}ExtView</c> (full + rollup/computed).
     /// </summary>
     public enum ExtBacking { None, Full, Ext }
 
@@ -96,15 +96,15 @@ public static class EntityPairRenderer
     {
         var className = isExt ? entityName + "Ext" : entityName;
         // Ext classes route to the SQL layer that actually exposes their
-        // derived columns: _ext view (rollup/computed), _full view (lookups
+        // derived columns: {Name}ExtView (rollup/computed), {Name}FullView (lookups
         // only), or the base table (table-only model). Write classes always
         // target the base table.
         var tableName = !isExt
             ? entityName
             : extBacking switch
             {
-                ExtBacking.Ext => entityName + "_ext",
-                ExtBacking.Full => entityName + "_full",
+                ExtBacking.Ext => entityName + "ExtView",
+                ExtBacking.Full => entityName + "FullView",
                 _ => entityName,
             };
 

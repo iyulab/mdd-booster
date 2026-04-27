@@ -5,7 +5,7 @@ using M3L.Native;
 namespace MddBooster.Generators.Sql;
 
 /// <summary>
-/// Renders the <c>{Name}_ext</c> SQL view layered on top of the full view
+/// Renders the <c>{Name}ExtView</c> SQL view layered on top of the full view
 /// (or directly on the base table when no lookups exist). The ext view
 /// projects every column from its source and adds correlated rollup
 /// subqueries and computed column expressions.
@@ -49,9 +49,9 @@ public static class ExtViewRenderer
             throw new InvalidOperationException($"Model '{plan.Model.Name}' does not need an ext view.");
 
         var baseName = plan.Model.Name;
-        var viewName = baseName + "_ext";
+        var viewName = baseName + "ExtView";
         // Source is the full view when one exists, otherwise the base table.
-        var sourceTable = plan.NeedsFullView ? baseName + "_full" : baseName;
+        var sourceTable = plan.NeedsFullView ? baseName + "FullView" : baseName;
         const string baseAlias = "b";
 
         var hasIndexed = plan.Rollups.Any(r => r.Attributes.Any(a =>
@@ -155,10 +155,10 @@ public static class ExtViewRenderer
         var field = def.Field;
 
         // When the aggregated column is a computed/rollup field on the target
-        // model, it only exists in the target's _ext view, not the base table.
-        // Use the _ext view as the FROM source when the target has one.
+        // model, it only exists in the target's ExtView, not the base table.
+        // Use the ExtView as the FROM source when the target has one.
         var fromTarget = (extViewModels != null && extViewModels.Contains(target))
-            ? target + "_ext"
+            ? target + "ExtView"
             : target;
 
         var innerExpr = aggregate switch

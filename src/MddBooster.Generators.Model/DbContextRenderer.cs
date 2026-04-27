@@ -68,7 +68,7 @@ public static class DbContextRenderer
 
         // OnModelCreating override — map ALL Ext read models so EF Core treats
         // them separately from the write entities. Models with derived fields
-        // map to their SQL view (_full or _ext); table-only models map to the
+        // map to their SQL view ({Name}FullView or {Name}ExtView); table-only models map to the
         // base table via ToView() so EF Core sees them as a distinct read-only
         // mapping (avoids the "shared table" validation error on SQL Server).
         var extMappings = ordered
@@ -83,8 +83,8 @@ public static class DbContextRenderer
         {
             var viewName = m.Backing switch
             {
-                "ext" => m.Name + "_ext",
-                "full" => m.Name + "_full",
+                "ext" => m.Name + "ExtView",
+                "full" => m.Name + "FullView",
                 _ => m.Name,   // table-only: map to base table as a "view"
             };
             sb.Append("        modelBuilder.Entity<").Append(m.Name).Append("Ext>().ToTable((string?)null).ToView(\"")

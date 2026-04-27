@@ -30,14 +30,14 @@ public class SqlProjPatcherMultiFolderTests
         try
         {
             SqlProjPatcher.Patch(projPath, @"dbo\Tables_gen", new[] { "Order.sql", "Customer.sql" });
-            SqlProjPatcher.Patch(projPath, @"dbo\Views_gen", new[] { "Order_full.sql", "Order_ext.sql" });
+            SqlProjPatcher.Patch(projPath, @"dbo\Views_gen", new[] { "OrderFullView.sql", "OrderExtView.sql" });
 
             var updated = File.ReadAllText(projPath);
 
             Assert.Contains(@"<Build Include=""dbo\Tables_gen\Order.sql""", updated);
             Assert.Contains(@"<Build Include=""dbo\Tables_gen\Customer.sql""", updated);
-            Assert.Contains(@"<Build Include=""dbo\Views_gen\Order_full.sql""", updated);
-            Assert.Contains(@"<Build Include=""dbo\Views_gen\Order_ext.sql""", updated);
+            Assert.Contains(@"<Build Include=""dbo\Views_gen\OrderFullView.sql""", updated);
+            Assert.Contains(@"<Build Include=""dbo\Views_gen\OrderExtView.sql""", updated);
         }
         finally { File.Delete(projPath); }
     }
@@ -57,13 +57,13 @@ public class SqlProjPatcherMultiFolderTests
         {
             SqlProjPatcher.Patch(projPath, @"dbo\Tables_gen", new[] { "BankAccount.sql" });
             var afterFirst = File.ReadAllText(projPath);
-            SqlProjPatcher.Patch(projPath, @"dbo\Views_gen", new[] { "Order_full.sql" });
+            SqlProjPatcher.Patch(projPath, @"dbo\Views_gen", new[] { "OrderFullView.sql" });
             var afterSecond = File.ReadAllText(projPath);
 
             // The first-folder entry must survive the second patch
             Assert.Contains(@"Tables_gen\BankAccount.sql", afterFirst);
             Assert.Contains(@"Tables_gen\BankAccount.sql", afterSecond);
-            Assert.Contains(@"Views_gen\Order_full.sql", afterSecond);
+            Assert.Contains(@"Views_gen\OrderFullView.sql", afterSecond);
         }
         finally { File.Delete(projPath); }
     }

@@ -54,10 +54,10 @@ public class EntityPairRendererTests
         Assert.Contains("[Table(\"BankAccount\")]", bankRendered.Read);
 
         var withFull = EntityPairRenderer.Render(resolved, "Yesung.Entities", extBacking: EntityPairRenderer.ExtBacking.Full);
-        Assert.Contains("[Table(\"BankAccount_full\")]", withFull.Read);
+        Assert.Contains("[Table(\"BankAccountFullView\")]", withFull.Read);
 
         var withExt = EntityPairRenderer.Render(resolved, "Yesung.Entities", extBacking: EntityPairRenderer.ExtBacking.Ext);
-        Assert.Contains("[Table(\"BankAccount_ext\")]", withExt.Read);
+        Assert.Contains("[Table(\"BankAccountExtView\")]", withExt.Read);
     }
 
     [Fact]

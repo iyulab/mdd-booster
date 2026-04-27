@@ -18,7 +18,7 @@ public class FullViewRendererTests
 
         var sql = FullViewRenderer.Render(plan, "dbo");
 
-        Assert.Contains("CREATE VIEW [dbo].[Order_full]", sql);
+        Assert.Contains("CREATE VIEW [dbo].[OrderFullView]", sql);
         Assert.Contains("FROM [dbo].[Order] AS b", sql);
         Assert.Contains("LEFT JOIN [dbo].[Customer] AS j_customer_id ON b.[CustomerId] = j_customer_id.[Id]", sql);
         // Two lookups on the same FK → still one JOIN

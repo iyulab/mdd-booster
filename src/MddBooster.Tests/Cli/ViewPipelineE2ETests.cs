@@ -51,23 +51,23 @@ public class ViewPipelineE2ETests
             var viewsDir = Path.Combine(dbDir, "dbo", "Views_gen");
 
             // Only Order has derived fields → Only Order views exist
-            Assert.True(File.Exists(Path.Combine(viewsDir, "Order_full.sql")));
-            Assert.True(File.Exists(Path.Combine(viewsDir, "Order_ext.sql")));
-            Assert.False(File.Exists(Path.Combine(viewsDir, "Customer_full.sql")));
-            Assert.False(File.Exists(Path.Combine(viewsDir, "OrderItem_ext.sql")));
+            Assert.True(File.Exists(Path.Combine(viewsDir, "OrderFullView.sql")));
+            Assert.True(File.Exists(Path.Combine(viewsDir, "OrderExtView.sql")));
+            Assert.False(File.Exists(Path.Combine(viewsDir, "CustomerFullView.sql")));
+            Assert.False(File.Exists(Path.Combine(viewsDir, "OrderItemExtView.sql")));
 
-            var orderFullSql = File.ReadAllText(Path.Combine(viewsDir, "Order_full.sql"));
-            Assert.Contains("CREATE VIEW [dbo].[Order_full]", orderFullSql);
+            var orderFullSql = File.ReadAllText(Path.Combine(viewsDir, "OrderFullView.sql"));
+            Assert.Contains("CREATE VIEW [dbo].[OrderFullView]", orderFullSql);
             Assert.Contains("LEFT JOIN [dbo].[Customer]", orderFullSql);
 
-            var orderExtSql = File.ReadAllText(Path.Combine(viewsDir, "Order_ext.sql"));
-            Assert.Contains("CREATE VIEW [dbo].[Order_ext]", orderExtSql);
+            var orderExtSql = File.ReadAllText(Path.Combine(viewsDir, "OrderExtView.sql"));
+            Assert.Contains("CREATE VIEW [dbo].[OrderExtView]", orderExtSql);
             Assert.Contains("WITH SCHEMABINDING", orderExtSql);
             Assert.Contains("COUNT(*)", orderExtSql);
 
             // Model classes map correctly
             var orderExt = File.ReadAllText(Path.Combine(modelDir, "Entity_gen", "OrderExt.cs"));
-            Assert.Contains("[Table(\"Order_ext\")]", orderExt);
+            Assert.Contains("[Table(\"OrderExtView\")]", orderExt);
 
             // Customer has no derived → Ext maps to base table
             var customerExt = File.ReadAllText(Path.Combine(modelDir, "Entity_gen", "CustomerExt.cs"));
@@ -76,8 +76,8 @@ public class ViewPipelineE2ETests
             // Verify .sqlproj includes both Tables_gen and Views_gen entries
             var sqlProj = File.ReadAllText(Path.Combine(dbDir, "X.sqlproj"));
             Assert.Contains("dbo\\Tables_gen\\Order.sql", sqlProj);
-            Assert.Contains("dbo\\Views_gen\\Order_full.sql", sqlProj);
-            Assert.Contains("dbo\\Views_gen\\Order_ext.sql", sqlProj);
+            Assert.Contains("dbo\\Views_gen\\OrderFullView.sql", sqlProj);
+            Assert.Contains("dbo\\Views_gen\\OrderExtView.sql", sqlProj);
         }
         finally
         {

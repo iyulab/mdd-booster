@@ -42,7 +42,7 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
         foreach (var model in context.Models)
         {
             // Route the Ext class to the matching SQL layer:
-            // rollup/computed → _ext view, lookup only → _full view,
+            // rollup/computed → {Name}ExtView, lookup only → {Name}FullView,
             // neither → base table. Mirrors ViewPlanner classification.
             var hasRollupOrComputed = model.Fields.Any(f =>
                 f.Kind is FieldKind.Rollup or FieldKind.Computed);

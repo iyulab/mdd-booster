@@ -5,7 +5,7 @@ using MddBooster.Core.Semantic;
 namespace MddBooster.Generators.Sql;
 
 /// <summary>
-/// Renders a <c>{Name}_full</c> SQL view: the base table plus a LEFT JOIN
+/// Renders a <c>{Name}FullView</c> SQL view: the base table plus a LEFT JOIN
 /// for every <c>@lookup(fk.field)</c> declaration. Each unique FK column
 /// produces one JOIN (shared across all lookups that traverse it) to
 /// keep the generated SQL compact and the query plan predictable.
@@ -38,7 +38,7 @@ public static class FullViewRenderer
             throw new InvalidOperationException($"Model '{plan.Model.Name}' does not need a full view.");
 
         var baseName = plan.Model.Name;
-        var viewName = baseName + "_full";
+        var viewName = baseName + "FullView";
         var baseAlias = "b";
 
         // Group lookups by FK column so each join is emitted once.

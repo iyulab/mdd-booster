@@ -18,7 +18,7 @@ public class DbContextViewMappingTests
         var src = DbContextRenderer.Render(models, "TestDbContext", "Test.Entities");
 
         // Order has rollup+computed → _ext view
-        Assert.Contains("modelBuilder.Entity<OrderExt>().ToTable((string?)null).ToView(\"Order_ext\")", src);
+        Assert.Contains("modelBuilder.Entity<OrderExt>().ToTable((string?)null).ToView(\"OrderExtView\")", src);
         // Customer/OrderItem have no derived fields → mapped to base table as view
         Assert.Contains("CustomerExt>().ToTable((string?)null).ToView(\"Customer\")", src);
         Assert.Contains("OrderItemExt>().ToTable((string?)null).ToView(\"OrderItem\")", src);

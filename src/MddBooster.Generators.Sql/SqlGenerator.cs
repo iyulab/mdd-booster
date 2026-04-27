@@ -40,7 +40,7 @@ public sealed class SqlGenerator : IArtifactGenerator
 
         // 2. Views (conditional — only models with derived fields)
         // First pass: plan all models and collect which ones have ext views,
-        // so rollup subqueries can reference _ext when the target has computed fields.
+        // so rollup subqueries can reference {Name}ExtView when the target has computed fields.
         var allPlans = context.Models.Select(m => planner.Plan(m)).ToList();
         var extViewModels = new HashSet<string>(
             allPlans.Where(p => p.NeedsExtView).Select(p => p.Model.Name));
@@ -53,14 +53,14 @@ public sealed class SqlGenerator : IArtifactGenerator
             if (plan.NeedsFullView)
             {
                 var sql = FullViewRenderer.Render(plan, _options.Schema);
-                var fileName = $"{plan.Model.Name}_full.sql";
+                var fileName = $"{plan.Model.Name}FullView.sql";
                 File.WriteAllText(Path.Combine(viewsGenDir, fileName), sql);
                 viewFileNames.Add(fileName);
             }
             if (plan.NeedsExtView)
             {
                 var sql = ExtViewRenderer.Render(plan, _options.Schema, extViewModels);
-                var fileName = $"{plan.Model.Name}_ext.sql";
+                var fileName = $"{plan.Model.Name}ExtView.sql";
                 File.WriteAllText(Path.Combine(viewsGenDir, fileName), sql);
                 viewFileNames.Add(fileName);
             }

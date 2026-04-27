@@ -21,8 +21,8 @@ public class ExtViewRendererTests
     {
         var sql = ExtViewRenderer.Render(OrderPlan(), "dbo");
 
-        Assert.Contains("CREATE VIEW [dbo].[Order_ext]", sql);
-        Assert.Contains("FROM [dbo].[Order_full] AS b", sql);
+        Assert.Contains("CREATE VIEW [dbo].[OrderExtView]", sql);
+        Assert.Contains("FROM [dbo].[OrderFullView] AS b", sql);
     }
 
     [Fact]
