@@ -46,7 +46,7 @@ public static class EnumRenderer
         if (!string.IsNullOrWhiteSpace(enumNode.Description))
         {
             sb.AppendLine("/// <summary>");
-            sb.Append("/// ").AppendLine(EscapeXmlDoc(enumNode.Description!));
+            AppendXmlDocLines(sb, enumNode.Description!, indent: "");
             sb.AppendLine("/// </summary>");
         }
 
@@ -61,7 +61,7 @@ public static class EnumRenderer
             if (!string.IsNullOrWhiteSpace(v.Description))
             {
                 sb.AppendLine("    /// <summary>");
-                sb.Append("    /// ").AppendLine(EscapeXmlDoc(v.Description!));
+                AppendXmlDocLines(sb, v.Description!, indent: "    ");
                 sb.AppendLine("    /// </summary>");
             }
             sb.Append("    [EnumMember(Value = \"").Append(EscapeString(v.Name)).AppendLine("\")]");
@@ -101,6 +101,20 @@ public static class EnumRenderer
 
     private static string EscapeXmlDoc(string s) =>
         s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+
+    /// <summary>
+    /// description 멀티라인 처리 — 줄별로 <c>/// </c> prefix를 붙여 emit.
+    /// 단일 라인은 한 줄 emit, 줄바꿈(\n / \r\n)이 있으면 각 줄에 prefix가 붙는다.
+    /// 멀티라인을 일괄 emit 시 둘째 줄 이후에 <c>/// </c>가 누락되어 C# 컴파일 에러가 나는 회귀 차단.
+    /// </summary>
+    private static void AppendXmlDocLines(StringBuilder sb, string description, string indent)
+    {
+        var lines = description.Replace("\r\n", "\n").Split('\n');
+        foreach (var line in lines)
+        {
+            sb.Append(indent).Append("/// ").AppendLine(EscapeXmlDoc(line));
+        }
+    }
 
     private static string PascalCase(string snake)
     {

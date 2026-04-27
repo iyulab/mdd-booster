@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using M3L.Native;
 using MddBooster.Core.Semantic;
 
@@ -49,6 +50,13 @@ public static class TableRenderer
             }
         }
 
+        // Sections.Indexes 처리 — table-level @unique(c1, c2) directive + @index(c1) directive를
+        // 각각 UNIQUE 제약 / NONCLUSTERED INDEX로 emit. M3L.Native가 directive 형식만 args를 보존하므로
+        // `idx_name: @index(col)` 형식은 args 없이 들어와 정보 부족(skip).
+        // enum CHECK 제약은 의도적으로 미emit — EF Core가 string converter로 검증하며,
+        // SSDT가 CHECK를 매번 Drop→Create로 표현해 dacpac diff가 불안정. (정책: cycle 27)
+        AppendSectionIndexes(model, schema, inlineUniques, postTableStatements);
+
         var bodyLines = new List<string>(columnLines.Count + inlineUniques.Count);
         bodyLines.AddRange(columnLines);
         bodyLines.AddRange(inlineUniques);
@@ -73,6 +81,65 @@ public static class TableRenderer
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// `### Indexes` 섹션 — directive(`- @unique(...)` / `- @index(...)`)만 처리.
+    /// `idx_xxx: @index(col)` 형식은 M3L.Native가 column 정보 dropping하므로 정보 부족 — 회피책으로
+    /// m3l 작성자가 directive 형식 통일 권장. directive는 JsonElement로 전달되며 `args` + `unique` 키 보유.
+    /// </summary>
+    private static void AppendSectionIndexes(
+        ResolvedModel model, string schema,
+        List<string> inlineUniques, List<string> postTableStatements)
+    {
+        var indexes = model.Source.Sections?.Indexes;
+        if (indexes is null || indexes.Count == 0) return;
+
+        foreach (var idxEl in indexes)
+        {
+            if (idxEl.ValueKind != JsonValueKind.Object) continue;
+
+            // directive 패턴만 처리 — type=directive + args 컬럼 배열 보유
+            if (!idxEl.TryGetProperty("type", out var typeProp)
+                || typeProp.GetString() != "directive") continue;
+
+            if (!idxEl.TryGetProperty("args", out var argsEl)) continue;
+
+            // M3L.Native quirk — 단일 인자 directive는 args를 string으로,
+            // 다인자는 array로 emit. 양쪽 모두 처리.
+            var cols = new List<string>();
+            if (argsEl.ValueKind == JsonValueKind.String)
+            {
+                var s = argsEl.GetString();
+                if (!string.IsNullOrWhiteSpace(s)) cols.Add(ToPascalCase(s!));
+            }
+            else if (argsEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var a in argsEl.EnumerateArray())
+                {
+                    var s = a.ValueKind == JsonValueKind.String ? a.GetString() : a.GetRawText();
+                    if (!string.IsNullOrWhiteSpace(s)) cols.Add(ToPascalCase(s!));
+                }
+            }
+            if (cols.Count == 0) continue;
+
+            var isUnique = idxEl.TryGetProperty("unique", out var uniqueProp)
+                           && uniqueProp.ValueKind == JsonValueKind.True;
+            var colJoined = string.Join("_", cols);
+            var colList = string.Join(", ", cols.Select(c => $"[{c}]"));
+
+            if (isUnique)
+            {
+                inlineUniques.Add(
+                    $"CONSTRAINT [UK_{model.Name}_{colJoined}] UNIQUE NONCLUSTERED ({colList})");
+            }
+            else
+            {
+                postTableStatements.Add(
+                    $"CREATE NONCLUSTERED INDEX [IX_{model.Name}_{colJoined}] " +
+                    $"ON [{schema}].[{model.Name}] ({colList});");
+            }
+        }
     }
 
     private static bool HasAttribute(FieldNode field, string name) =>

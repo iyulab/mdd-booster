@@ -80,6 +80,29 @@ public class EnumRendererTests
     }
 
     [Fact]
+    public void Multiline_description_emits_xmldoc_prefix_per_line()
+    {
+        // 2026-04-27 회귀 차단 — 멀티라인 description의 둘째 줄 이후에 ///가 누락되면
+        // "v3+: ..." 같은 텍스트가 C# 코드로 해석되어 컴파일 에러 33건 발생한 yesung 사례.
+        var ast = new M3lLoader().LoadFile(FixturePath("enum-multiline-desc.m3l.md"));
+        var status = ast.Enums.Single(e => e.Name == "Status");
+
+        var rendered = EnumRenderer.Render(status, "Test.X");
+
+        Assert.Contains("/// 주문 상태.", rendered);
+        Assert.Contains("/// 두 번째 줄에 추가 설명.", rendered);
+        Assert.Contains("/// 세 번째 줄까지.", rendered);
+
+        // Roslyn 파싱 — 멀티라인이 코드로 해석되면 syntax error 발생
+        var tree = CSharpSyntaxTree.ParseText(rendered,
+            CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest));
+        var errors = tree.GetDiagnostics()
+            .Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error).ToList();
+        Assert.True(errors.Count == 0,
+            $"Multiline description이 코드로 해석되어 syntax error: {string.Join("; ", errors.Select(d => d.GetMessage()))}\n---\n{rendered}");
+    }
+
+    [Fact]
     public void OrderWithEnum_fixture_end_to_end_parses_clean()
     {
         var ast = LoadFixture();
