@@ -54,7 +54,7 @@ public static class ColumnRenderer
         // 기본값 처리
         if (!string.IsNullOrEmpty(field.DefaultValue))
         {
-            var def = MapDefaultValue(field.DefaultValue!, m3lType);
+            var def = MapDefaultValue(field.DefaultValue!, m3lType, enumLookup);
             if (def is not null)
             {
                 parts.Add($"DEFAULT {def}");
@@ -64,7 +64,9 @@ public static class ColumnRenderer
         return string.Join(" ", parts);
     }
 
-    private static string? MapDefaultValue(string raw, string m3lType)
+    private static string? MapDefaultValue(
+        string raw, string m3lType,
+        IReadOnlyDictionary<string, EnumNode>? enumLookup)
     {
         var trimmed = raw.Trim();
 
@@ -86,16 +88,34 @@ public static class ColumnRenderer
             return "SYSDATETIMEOFFSET()";
         }
 
-        // 숫자 리터럴
+        // 숫자 리터럴 (decimal/integer 등)
         if (double.TryParse(trimmed, out _))
         {
             return trimmed;
         }
 
-        // 문자열 리터럴 ("..." 형식)
+        // 문자열 리터럴 ("..." 형식 — m3l 파서가 quote를 보존한 경우)
         if (trimmed.Length >= 2 && trimmed.StartsWith('"') && trimmed.EndsWith('"'))
         {
             var inner = trimmed.Substring(1, trimmed.Length - 2).Replace("'", "''");
+            return $"N'{inner}'";
+        }
+
+        // enum 타입 default — m3l 파서가 quote를 제거한 채 raw value를 반환하므로
+        // (예: `row_type: OrderItemRowType = "product"` → DefaultValue="product"),
+        // enum 컬럼은 별도 분기로 N'value' 직 emit. SSDT가 NOT NULL 컬럼 추가 시
+        // 기존 행에 default를 채울 수 있게 함 (Msg 515 회피).
+        if (enumLookup is not null && enumLookup.ContainsKey(m3lType))
+        {
+            var inner = trimmed.Replace("'", "''");
+            return $"N'{inner}'";
+        }
+
+        // string/text 타입의 quote 없는 raw default도 동일 정책
+        if (m3lType == "string" || m3lType == "text"
+            || m3lType.StartsWith("string(", StringComparison.OrdinalIgnoreCase))
+        {
+            var inner = trimmed.Replace("'", "''");
             return $"N'{inner}'";
         }
 
