@@ -1,6 +1,7 @@
 using MddBooster.Core.Ast;
 using MddBooster.Core.Semantic;
 using MddBooster.Generators.Model;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace MddBooster.Tests.Generators.Model;
 
@@ -95,5 +96,23 @@ public class EntityPairRendererTests
     {
         var resolved = LoadBankAccount();
         Assert.Throws<ArgumentException>(() => EntityPairRenderer.Render(resolved, ""));
+    }
+
+    [Fact]
+    public void Decimal_with_precision_emits_Column_TypeName_attribute()
+    {
+        var ast = new M3lLoader().LoadFile(
+            Path.Combine(AppContext.BaseDirectory, "fixtures", "order-with-derived.m3l.md"));
+        var enumNames = new HashSet<string>(ast.Enums.Select(e => e.Name), StringComparer.Ordinal);
+        var order = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Order");
+        var pair = EntityPairRenderer.Render(order, "Test.Orders", enumNames, EntityPairRenderer.ExtBacking.Ext);
+
+        // subtotal: decimal(12,2) stored → [Column(TypeName = "decimal(12,2)")]
+        Assert.Contains("[Column(TypeName = \"decimal(12,2)\")]", pair.Write);
+
+        // Generated code must be valid C#
+        var tree = CSharpSyntaxTree.ParseText(pair.Write);
+        Assert.Empty(tree.GetDiagnostics()
+            .Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error));
     }
 }
