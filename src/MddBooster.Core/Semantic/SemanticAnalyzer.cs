@@ -44,6 +44,7 @@ public sealed class SemanticAnalyzer
                 CheckReferenceTarget(model, field, diagnostics);
                 CheckLookupPath(model, field, diagnostics);
                 CheckRollupTarget(model, field, diagnostics);
+                CheckBinding(model, field, diagnostics);
             }
         }
 
@@ -137,6 +138,32 @@ public sealed class SemanticAnalyzer
                     $"'{model.Name}.{field.Name}' @rollup({target}.{fk}): 대상 엔티티에 FK 필드 '{fk}'가 존재하지 않습니다.",
                     field.Loc));
             }
+        }
+    }
+
+    private void CheckBinding(ResolvedModel model, FieldNode field, List<SemanticDiagnostic> diagnostics)
+    {
+        if (field.Binding is null) return;
+
+        var b = field.Binding;
+        if (!_modelNames.Contains(b.Entity))
+        {
+            diagnostics.Add(new SemanticDiagnostic(
+                "MDD010",
+                $"'{model.Name}.{field.Name}' # {b.Entity}.{b.Column}: 대상 엔티티 '{b.Entity}'가 존재하지 않습니다.",
+                field.Loc));
+            return;
+        }
+
+        var targetModel = _models.First(m => m.Name == b.Entity);
+        if (!targetModel.Fields.Any(f =>
+                string.Equals(f.Name, b.Column, StringComparison.OrdinalIgnoreCase) &&
+                f.Kind == FieldKind.Stored))
+        {
+            diagnostics.Add(new SemanticDiagnostic(
+                "MDD011",
+                $"'{model.Name}.{field.Name}' # {b.Entity}.{b.Column}: 대상 엔티티에 저장 필드 '{b.Column}'가 없습니다.",
+                field.Loc));
         }
     }
 
