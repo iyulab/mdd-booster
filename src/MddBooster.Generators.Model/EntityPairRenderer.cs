@@ -60,8 +60,8 @@ public static class EntityPairRenderer
 
         return new RenderedPair(
             Interface: RenderInterface(entityName, storedFields, ns, knownEnumNames),
-            Write: RenderClass(entityName, storedFields, derivedFields: null, ns, isExt: false, knownEnumNames, extBacking),
-            Read: RenderClass(entityName, storedFields, derivedFields, ns, isExt: true, knownEnumNames, extBacking));
+            Write: RenderClass(entityName, storedFields, derivedFields: null, ns, isExt: false, knownEnumNames, extBacking, model.Source),
+            Read: RenderClass(entityName, storedFields, derivedFields, ns, isExt: true, knownEnumNames, extBacking, model.Source));
     }
 
     private static string RenderInterface(string entityName, IReadOnlyList<FieldNode> fields, string ns, IReadOnlySet<string>? knownEnumNames)
@@ -93,7 +93,8 @@ public static class EntityPairRenderer
         string ns,
         bool isExt,
         IReadOnlySet<string>? knownEnumNames,
-        ExtBacking extBacking)
+        ExtBacking extBacking,
+        ModelNode source)
     {
         var className = isExt ? entityName + "Ext" : entityName;
         // Ext classes route to the SQL layer that actually exposes their
@@ -109,6 +110,17 @@ public static class EntityPairRenderer
                 _ => entityName,
             };
 
+        // @implements 어트리뷰트에서 추가 인터페이스 추출
+        var extraInterfaces = (source.Attributes ?? [])
+            .Where(a => string.Equals(a.Name, "implements", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(a => a.Args ?? [])
+            .Select(arg => arg.ValueKind == System.Text.Json.JsonValueKind.String
+                ? arg.GetString()!
+                : arg.GetRawText().Trim('"'))
+            .Where(s => !string.IsNullOrEmpty(s))
+            .Select(iface => $"global::Iyu.Core.Entities.{iface}")
+            .ToList();
+
         var sb = new StringBuilder();
         sb.AppendLine(Header);
         sb.AppendLine("#nullable enable");
@@ -119,7 +131,10 @@ public static class EntityPairRenderer
         sb.AppendLine();
         sb.Append("[Table(\"").Append(tableName).AppendLine("\")]");
         sb.Append("public partial class ").Append(className)
-          .Append(" : global::Iyu.Core.Entities.IyuEntity, I").Append(entityName).AppendLine();
+          .Append(" : global::Iyu.Core.Entities.IyuEntity, I").Append(entityName);
+        foreach (var iface in extraInterfaces)
+            sb.Append(", ").Append(iface);
+        sb.AppendLine();
         sb.AppendLine("{");
         // Build a map of stored FK field nullability so Lookup fields can
         // inherit the correct optionality from their FK path's first hop.
