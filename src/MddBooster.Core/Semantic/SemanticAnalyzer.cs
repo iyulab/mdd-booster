@@ -156,6 +156,8 @@ public sealed class SemanticAnalyzer
         }
 
         var targetModel = _models.First(m => m.Name == b.Entity);
+        // Entity name: case-sensitive (m3l entity names are always PascalCase, stored as-is).
+        // Column name: case-insensitive (binding syntax uses PascalCase "Key" but m3l AST stores snake_case "key").
         if (!targetModel.Fields.Any(f =>
                 string.Equals(f.Name, b.Column, StringComparison.OrdinalIgnoreCase) &&
                 f.Kind == FieldKind.Stored))
