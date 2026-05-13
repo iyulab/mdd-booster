@@ -201,6 +201,14 @@ public static class EntityPairRenderer
               .Append(referenceTarget).AppendLine("\")]");
         }
 
+        // [Binding("Entity", "Column")] — # Entity.Column 바인딩
+        if (f.Binding is not null)
+        {
+            sb.Append("    [global::Iyu.Core.Attributes.Binding(\"")
+              .Append(f.Binding.Entity).Append("\", \"")
+              .Append(f.Binding.Column).AppendLine("\")]");
+        }
+
         // Derived-field markers: [Lookup], [Rollup], [Computed].
         // The SQL view populates these; EF never writes them back.
         switch (f.Kind)
