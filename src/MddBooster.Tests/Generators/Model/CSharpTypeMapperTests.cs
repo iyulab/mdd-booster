@@ -29,10 +29,10 @@ public class CSharpTypeMapperTests
     }
 
     [Theory]
-    [InlineData("phone", "global::Iyu.Core.ValueObjects.PhoneNumber")]
-    [InlineData("email", "global::Iyu.Core.ValueObjects.EmailAddress")]
-    [InlineData("url", "global::Iyu.Core.ValueObjects.WebUrl")]
-    public void Map_value_objects_fully_qualified(string m3l, string expected)
+    [InlineData("phone", "string")]
+    [InlineData("email", "string")]
+    [InlineData("url", "string")]
+    public void Map_value_object_types_to_string(string m3l, string expected)
     {
         Assert.Equal(expected, CSharpTypeMapper.Map(m3l));
     }
@@ -53,9 +53,9 @@ public class CSharpTypeMapperTests
     [InlineData("identifier", true)]
     [InlineData("integer", true)]
     [InlineData("decimal", true)]
-    [InlineData("phone", true)]
-    [InlineData("email", true)]
-    [InlineData("url", true)]
+    [InlineData("phone", false)]
+    [InlineData("email", false)]
+    [InlineData("url", false)]
     [InlineData("string", false)]
     [InlineData("text", false)]
     [InlineData("binary", false)]
@@ -70,8 +70,10 @@ public class CSharpTypeMapperTests
     [InlineData("text", " = string.Empty;")]
     [InlineData("json", " = string.Empty;")]
     [InlineData("binary", " = Array.Empty<byte>();")]
+    [InlineData("phone", " = string.Empty;")]
+    [InlineData("email", " = string.Empty;")]
+    [InlineData("url", " = string.Empty;")]
     [InlineData("integer", "")]
-    [InlineData("phone", "")]
     [InlineData("identifier", "")]
     [InlineData("boolean", "")]
     public void DefaultInitializer(string m3l, string expected)

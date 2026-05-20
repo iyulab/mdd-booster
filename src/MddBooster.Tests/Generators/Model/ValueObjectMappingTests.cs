@@ -10,36 +10,48 @@ public class ValueObjectMappingTests
         Path.Combine(AppContext.BaseDirectory, "fixtures", name);
 
     [Fact]
-    public void Phone_email_url_fields_map_to_Iyu_Core_value_objects()
+    public void Phone_email_url_fields_map_to_string()
     {
+        // phone/email/url m3l types → plain C# string (not Iyu.Core.ValueObjects)
         var ast = new M3lLoader().LoadFile(FixturePath("contact-with-vos.m3l.md"));
         var resolved = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Contact");
 
         var rendered = EntityPairRenderer.Render(resolved, "Test.Contacts");
 
-        // Write class uses the fully-qualified Iyu.Core.ValueObjects types
-        Assert.Contains("public global::Iyu.Core.ValueObjects.PhoneNumber PhoneNumber { get; set; }", rendered.Write);
-        Assert.Contains("public global::Iyu.Core.ValueObjects.EmailAddress EmailAddress { get; set; }", rendered.Write);
-        // Nullable VO — url is declared nullable
-        Assert.Contains("public global::Iyu.Core.ValueObjects.WebUrl? Homepage { get; set; }", rendered.Write);
+        Assert.Contains("public string PhoneNumber { get; set; } = string.Empty;", rendered.Write);
+        Assert.Contains("public string EmailAddress { get; set; } = string.Empty;", rendered.Write);
+        Assert.Contains("public string? Homepage { get; set; }", rendered.Write);
 
-        // Interface mirrors the same types (get-only)
-        Assert.Contains("global::Iyu.Core.ValueObjects.PhoneNumber PhoneNumber { get; }", rendered.Interface);
-        Assert.Contains("global::Iyu.Core.ValueObjects.EmailAddress EmailAddress { get; }", rendered.Interface);
-        Assert.Contains("global::Iyu.Core.ValueObjects.WebUrl? Homepage { get; }", rendered.Interface);
+        Assert.Contains("string PhoneNumber { get; }", rendered.Interface);
+        Assert.Contains("string? Homepage { get; }", rendered.Interface);
     }
 
     [Fact]
-    public void VO_fields_have_no_default_initializer()
+    public void Phone_email_url_map_to_plain_string_for_OData_compatibility()
     {
-        // Value objects are struct-like; non-nullable fields should get a
-        // bare `;` suffix rather than `= string.Empty;`. Verify by asserting
-        // the string.Empty pattern is not applied to VO properties.
+        // Value object types (PhoneNumber/EmailAddress/WebUrl) cause OData
+        // serialization failures (connection reset) because ODataConventionModelBuilder
+        // cannot register them as EDM complex types. Map to plain string instead.
         var ast = new M3lLoader().LoadFile(FixturePath("contact-with-vos.m3l.md"));
         var resolved = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Contact");
+
         var rendered = EntityPairRenderer.Render(resolved, "Test.Contacts");
 
-        Assert.DoesNotContain("PhoneNumber PhoneNumber { get; set; } = string.Empty", rendered.Write);
-        Assert.DoesNotContain("EmailAddress EmailAddress { get; set; } = string.Empty", rendered.Write);
+        // Write + Read: plain string, not Iyu.Core.ValueObjects types
+        Assert.Contains("public string PhoneNumber { get; set; } = string.Empty;", rendered.Write);
+        Assert.Contains("public string EmailAddress { get; set; } = string.Empty;", rendered.Write);
+        Assert.Contains("public string? Homepage { get; set; }", rendered.Write);
+
+        Assert.Contains("public string PhoneNumber { get; set; } = string.Empty;", rendered.Read);
+        Assert.Contains("public string? Homepage { get; set; }", rendered.Read);
+
+        // Interface: same string types
+        Assert.Contains("string PhoneNumber { get; }", rendered.Interface);
+        Assert.Contains("string? Homepage { get; }", rendered.Interface);
+
+        // Value object types must NOT appear anywhere in generated output
+        Assert.DoesNotContain("Iyu.Core.ValueObjects", rendered.Write);
+        Assert.DoesNotContain("Iyu.Core.ValueObjects", rendered.Read);
+        Assert.DoesNotContain("Iyu.Core.ValueObjects", rendered.Interface);
     }
 }

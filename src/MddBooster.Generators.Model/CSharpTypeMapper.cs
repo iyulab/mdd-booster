@@ -62,9 +62,11 @@ public static class CSharpTypeMapper
             "time" => "TimeOnly",
             "timestamp" => "DateTimeOffset",
             "datetime" => "DateTimeOffset",
-            "phone" => "global::Iyu.Core.ValueObjects.PhoneNumber",
-            "email" => "global::Iyu.Core.ValueObjects.EmailAddress",
-            "url" => "global::Iyu.Core.ValueObjects.WebUrl",
+            // phone/email/url → plain string: ODataConventionModelBuilder cannot register
+            // value object structs as EDM complex types, causing connection-reset on serialization.
+            "phone" => "string",
+            "email" => "string",
+            "url" => "string",
             "json" => "string",
             "binary" => "byte[]",
             _ => throw new NotSupportedException($"Unsupported M3L type: '{m3lType}'"),
@@ -81,8 +83,9 @@ public static class CSharpTypeMapper
     {
         "identifier" or "boolean" or "integer" or "long" or "short" or "byte"
             or "float" or "double" or "decimal"
-            or "date" or "time" or "timestamp" or "datetime"
-            or "phone" or "email" or "url" => true,
+            or "date" or "time" or "timestamp" or "datetime" => true,
+        // phone/email/url now map to string (reference type)
+        "phone" or "email" or "url" => false,
         _ => false,
     };
 
@@ -95,7 +98,7 @@ public static class CSharpTypeMapper
     /// </summary>
     public static string DefaultInitializer(string m3lType) => m3lType switch
     {
-        "string" or "text" or "json" => " = string.Empty;",
+        "string" or "text" or "json" or "phone" or "email" or "url" => " = string.Empty;",
         "binary" => " = Array.Empty<byte>();",
         _ => string.Empty,
     };

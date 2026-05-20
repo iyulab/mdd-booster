@@ -143,13 +143,13 @@ public static class EntityPairRenderer
         var storedNullability = BuildStoredNullabilityMap(storedFields);
         foreach (var f in storedFields)
         {
-            RenderProperty(sb, f, knownEnumNames, storedNullability);
+            RenderProperty(sb, f, knownEnumNames, storedNullability, isExt);
         }
         if (derivedFields is { Count: > 0 })
         {
             foreach (var f in derivedFields)
             {
-                RenderProperty(sb, f, knownEnumNames, storedNullability);
+                RenderProperty(sb, f, knownEnumNames, storedNullability, isExt);
             }
         }
         sb.AppendLine("}");
@@ -160,7 +160,8 @@ public static class EntityPairRenderer
         StringBuilder sb,
         FieldNode f,
         IReadOnlySet<string>? knownEnumNames,
-        IReadOnlyDictionary<string, bool>? storedNullability)
+        IReadOnlyDictionary<string, bool>? storedNullability,
+        bool isExt = false)
     {
         var cs = CSharpTypeMapper.MapFieldType(f.Type!, knownEnumNames);
 
@@ -257,6 +258,36 @@ public static class EntityPairRenderer
 
         sb.Append("    public ").Append(cs).Append(nullable).Append(' ')
           .Append(prop).Append(" { get; set; }").AppendLine(initializer);
+
+        // Write entity only: emit EF Core navigation property for [Reference] FK fields
+        // that follow the standard xxx_id naming convention.
+        // EF Core uses nav properties to infer INSERT order; without them, bulk
+        // SaveChanges calls with parent+child in the same batch produce FK violations.
+        if (!isExt && !string.IsNullOrEmpty(referenceTarget)
+            && f.Name.EndsWith("_id", StringComparison.OrdinalIgnoreCase))
+        {
+            var navName = NavPropertyName(f.Name);
+            if (effectiveNullable)
+                sb.Append("    public ").Append(referenceTarget).Append("? ")
+                  .Append(navName).AppendLine(" { get; set; }");
+            else
+                sb.Append("    public ").Append(referenceTarget).Append(" ")
+                  .Append(navName).AppendLine(" { get; set; } = null!;");
+        }
+    }
+
+    /// <summary>
+    /// Derives the EF Core navigation property name from a FK field name ending in <c>_id</c>.
+    /// Strips the <c>_id</c> suffix and converts the remainder to PascalCase.
+    /// For example <c>customer_id</c> → <c>Customer</c>,
+    /// <c>channel_partner_id</c> → <c>ChannelPartner</c>.
+    /// </summary>
+    private static string NavPropertyName(string fkFieldName)
+    {
+        var name = fkFieldName.EndsWith("_id", StringComparison.OrdinalIgnoreCase)
+            ? fkFieldName[..^3]
+            : fkFieldName;
+        return PascalCase(name);
     }
 
     private static IReadOnlyDictionary<string, bool> BuildStoredNullabilityMap(IReadOnlyList<FieldNode> storedFields)
