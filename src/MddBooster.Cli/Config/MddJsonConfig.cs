@@ -29,4 +29,8 @@ public sealed class MddJsonTarget
 
     [JsonPropertyName("dbContextName")]
     public string? DbContextName { get; set; }
+
+    // TypeScript target
+    [JsonPropertyName("outputPath")]
+    public string? OutputPath { get; set; }
 }

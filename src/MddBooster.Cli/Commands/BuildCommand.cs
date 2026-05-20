@@ -1,4 +1,5 @@
 using MddBooster.Cli.Config;
+using MddBooster.Generators.TypeScript;
 
 namespace MddBooster.Cli.Commands;
 
@@ -59,7 +60,8 @@ public sealed class BuildCommand
         foreach (var target in cfg.Targets)
         {
             var generator = ResolveGenerator(target, modelNamespace);
-            Console.WriteLine($"[{generator.Name}] 생성 시작 (target: {target.ProjectPath})");
+            var targetPath = !string.IsNullOrEmpty(target.OutputPath) ? target.OutputPath : target.ProjectPath;
+            Console.WriteLine($"[{generator.Name}] 생성 시작 (target: {targetPath})");
             generator.Generate(context);
             Console.WriteLine($"[{generator.Name}] 완료");
         }
@@ -94,8 +96,14 @@ public sealed class BuildCommand
                         ?? throw new InvalidOperationException("Api target requires 'namespace'."),
                     EntitiesNamespace = modelNamespace,
                 }),
+            "TypeScript" => new TypeScriptGenerator(
+                new TypeScriptGeneratorOptions
+                {
+                    OutputPath = target.OutputPath
+                        ?? throw new InvalidOperationException("TypeScript target requires 'outputPath'."),
+                }),
             _ => throw new NotSupportedException(
-                $"지원하지 않는 target type: '{target.Type}' (지원: Sql, Model)"),
+                $"지원하지 않는 target type: '{target.Type}' (지원: Sql, Model, Api, TypeScript)"),
         };
     }
 }
