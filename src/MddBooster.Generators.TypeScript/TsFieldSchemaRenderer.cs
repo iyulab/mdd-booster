@@ -60,8 +60,8 @@ public static class TsFieldSchemaRenderer
                 var parts = new List<string>();
                 if (constraints.Required)           parts.Add("required: true");
                 if (constraints.MaxLength.HasValue) parts.Add($"maxLength: {constraints.MaxLength.Value}");
-                if (constraints.Min.HasValue)       parts.Add($"min: {constraints.Min.Value}");
-                if (constraints.Max.HasValue)       parts.Add($"max: {constraints.Max.Value}");
+                if (constraints.Min.HasValue)       parts.Add($"min: {constraints.Min.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+                if (constraints.Max.HasValue)       parts.Add($"max: {constraints.Max.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
 
                 sb.Append(' ').Append(string.Join(", ", parts)).AppendLine(" },");
             }
