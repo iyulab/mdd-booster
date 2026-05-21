@@ -3,12 +3,13 @@ using MddBooster.Core.Generation;
 namespace MddBooster.Generators.TypeScript;
 
 /// <summary>
-/// End-to-end generator that produces four TypeScript files from M3L models:
+/// End-to-end generator that produces five TypeScript files from M3L models:
 /// <list type="bullet">
 ///   <item><c>enums_gen.ts</c> — Union literal types for every M3L enum</item>
 ///   <item><c>entities_gen.ts</c> — TypeScript interfaces for every M3L entity</item>
 ///   <item><c>entity_names_gen.ts</c> — <c>ENTITY_NAMES</c> const array + <c>EntitySetName</c> type</item>
 ///   <item><c>enum_labels_gen.ts</c> — <c>{Enum}Labels</c> const map from enum value to display label</item>
+///   <item><c>field_schema_gen.ts</c> — <c>FieldSchema</c> const map of field validation constraints</item>
 /// </list>
 /// </summary>
 public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IArtifactGenerator
@@ -45,5 +46,9 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
         // enum_labels_gen.ts
         var enumLabelsContent = TsEnumLabelsRenderer.RenderAll(context.Enums);
         File.WriteAllText(Path.Combine(outDir, "enum_labels_gen.ts"), enumLabelsContent);
+
+        // field_schema_gen.ts
+        var fieldSchemaContent = TsFieldSchemaRenderer.RenderAll(context.Models);
+        File.WriteAllText(Path.Combine(outDir, "field_schema_gen.ts"), fieldSchemaContent);
     }
 }

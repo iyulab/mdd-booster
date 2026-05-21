@@ -21,6 +21,7 @@
     <ProjectReference Include="..\MddBooster.Generators.Sql\MddBooster.Generators.Sql.csproj" />
     <ProjectReference Include="..\MddBooster.Generators.Model\MddBooster.Generators.Model.csproj" />
     <ProjectReference Include="..\MddBooster.Generators.Api\MddBooster.Generators.Api.csproj" />
+    <ProjectReference Include="..\MddBooster.Generators.TypeScript\MddBooster.Generators.TypeScript.csproj" />
     <ProjectReference Include="..\MddBooster.Cli\MddBooster.Cli.csproj" />
   </ItemGroup>
 
