@@ -40,5 +40,9 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
         // entity_names_gen.ts
         var namesContent = TsEntityNamesRenderer.RenderAll(context.Models);
         File.WriteAllText(Path.Combine(outDir, "entity_names_gen.ts"), namesContent);
+
+        // enum_labels_gen.ts
+        var enumLabelsContent = TsEnumLabelsRenderer.RenderAll(context.Enums);
+        File.WriteAllText(Path.Combine(outDir, "enum_labels_gen.ts"), enumLabelsContent);
     }
 }
