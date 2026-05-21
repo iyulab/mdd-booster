@@ -3,11 +3,12 @@ using MddBooster.Core.Generation;
 namespace MddBooster.Generators.TypeScript;
 
 /// <summary>
-/// End-to-end generator that produces three TypeScript files from M3L models:
+/// End-to-end generator that produces four TypeScript files from M3L models:
 /// <list type="bullet">
 ///   <item><c>enums_gen.ts</c> — Union literal types for every M3L enum</item>
 ///   <item><c>entities_gen.ts</c> — TypeScript interfaces for every M3L entity</item>
 ///   <item><c>entity_names_gen.ts</c> — <c>ENTITY_NAMES</c> const array + <c>EntitySetName</c> type</item>
+///   <item><c>enum_labels_gen.ts</c> — <c>{Enum}Labels</c> const map from enum value to display label</item>
 /// </list>
 /// </summary>
 public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IArtifactGenerator
