@@ -4,21 +4,21 @@ using MddBooster.Core.Semantic;
 namespace MddBooster.Generators.Sql;
 
 /// <summary>
-/// Classifies each resolved model by which SQL view layer it needs. The
-/// rules mirror design spec section 3.1 and Plan 5.1:
+/// Classifies each resolved model by which SQL view layer(s) it needs.
 /// <list type="bullet">
 /// <item><description>
-/// Any model with at least one <see cref="FieldKind.Lookup"/> field needs a
-/// <c>{Name}_full</c> view (base table LEFT JOINed onto every lookup target).
+/// Any model with a <c>deleted_at</c> stored field needs a
+/// <c>{Name}UdView</c> (UndeletedView) that filters <c>WHERE [DeletedAt] IS NULL</c>.
 /// </description></item>
 /// <item><description>
-/// Any model with at least one <see cref="FieldKind.Rollup"/> or
-/// <see cref="FieldKind.Computed"/> field needs a <c>{Name}_ext</c> view
-/// layered on top of the full view.
+/// Any model with at least one <see cref="FieldKind.Lookup"/>, <see cref="FieldKind.Rollup"/>,
+/// or <see cref="FieldKind.Computed"/> field needs a <c>{Name}FullView</c>.
+/// When UdView exists, FullView is derived from UdView; otherwise from the base table.
 /// </description></item>
 /// <item><description>
-/// Models with neither remain table-only — the Model generator still emits
-/// an <c>XxxExt</c> read class backed directly by the base table.
+/// <c>{Name}ExtView</c> is user-maintained (lives in <c>dbo/Views/</c>, not <c>dbo/Views_gen/</c>)
+/// and is NOT generated here. It is detected by file scan in the consumers
+/// (<see cref="MddBooster.Generators.Model.ModelGenerator"/>).
 /// </description></item>
 /// </list>
 /// This classification is a pure function of the AST; it has no side effects
@@ -34,17 +34,16 @@ public sealed class ViewPlanner
         var rollups = model.Fields.Where(f => f.Kind == FieldKind.Rollup).ToList();
         var computeds = model.Fields.Where(f => f.Kind == FieldKind.Computed).ToList();
 
-        var needsFull = lookups.Count > 0;
-        // Rollup aggregates and computed expressions can be materialized in the
-        // _ext view even without a lookup layer, but the common case pairs
-        // them — the ExtViewRenderer (Cycle 29/30) will add a no-op FROM on
-        // the base table when no lookups exist.
-        var needsExt = rollups.Count > 0 || computeds.Count > 0;
+        var needsUd = model.Fields.Any(f =>
+            f.Kind == FieldKind.Stored &&
+            string.Equals(f.Name, "deleted_at", StringComparison.Ordinal));
+
+        var needsFull = lookups.Count > 0 || rollups.Count > 0 || computeds.Count > 0;
 
         return new ViewPlan(
             Model: model,
             NeedsFullView: needsFull,
-            NeedsExtView: needsExt,
+            NeedsUdView: needsUd,
             Lookups: lookups,
             Rollups: rollups,
             Computeds: computeds);
@@ -59,16 +58,16 @@ public sealed class ViewPlanner
 
 /// <summary>
 /// Result of <see cref="ViewPlanner.Plan"/>. Tells downstream renderers
-/// whether to emit a full view, an ext view, and exposes the classified
+/// whether to emit a UdView, a FullView, and exposes the classified
 /// field groups so the renderers don't re-walk the model.
 /// </summary>
 public sealed record ViewPlan(
     ResolvedModel Model,
     bool NeedsFullView,
-    bool NeedsExtView,
+    bool NeedsUdView,
     IReadOnlyList<FieldNode> Lookups,
     IReadOnlyList<FieldNode> Rollups,
     IReadOnlyList<FieldNode> Computeds)
 {
-    public bool NeedsAnyView => NeedsFullView || NeedsExtView;
+    public bool NeedsAnyView => NeedsFullView || NeedsUdView;
 }

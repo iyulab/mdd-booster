@@ -87,6 +87,7 @@ public sealed class BuildCommand
                         ?? throw new InvalidOperationException("Model target requires 'namespace'."),
                     DbContextName = target.DbContextName
                         ?? throw new InvalidOperationException("Model target requires 'dbContextName'."),
+                    SqlProjectPath = target.SqlProjectPath,
                 }),
             "Api" => new MddBooster.Generators.Api.ApiRegistrationGenerator(
                 new MddBooster.Generators.Api.ApiRegistrationGeneratorOptions

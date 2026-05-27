@@ -28,12 +28,11 @@ public static class EntityPairRenderer
     public sealed record RenderedPair(string Interface, string Write, string Read);
 
     /// <summary>
-    /// Which SQL view (if any) backs the Ext read model.
-    /// <c>None</c> → Ext class maps to the base table;
-    /// <c>Full</c> → Ext class maps to <c>{Name}FullView</c> (lookup columns only);
-    /// <c>Ext</c> → Ext class maps to <c>{Name}ExtView</c> (full + rollup/computed).
+    /// Which SQL view (if any) backs the Ext read model. Priority:
+    /// <c>Ext</c> (user-maintained ExtView) &gt; <c>Full</c> (FullView) &gt;
+    /// <c>Ud</c> (UdView) &gt; <c>None</c> (base table).
     /// </summary>
-    public enum ExtBacking { None, Full, Ext }
+    public enum ExtBacking { None, Ud, Full, Ext }
 
     public static RenderedPair Render(
         ResolvedModel model,
@@ -107,6 +106,7 @@ public static class EntityPairRenderer
             {
                 ExtBacking.Ext => entityName + "ExtView",
                 ExtBacking.Full => entityName + "FullView",
+                ExtBacking.Ud => entityName + "UdView",
                 _ => entityName,
             };
 

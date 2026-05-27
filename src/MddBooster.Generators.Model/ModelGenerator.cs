@@ -29,8 +29,6 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
         CleanDir(contextDir);
         CleanDir(enumDir);
 
-        // Emit C# enum files first so entity renderers can reference them
-        // by bare type name (same namespace).
         foreach (var enumNode in context.Enums)
         {
             var rendered = EnumRenderer.Render(enumNode, _options.Namespace);
@@ -39,19 +37,12 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
 
         var enumNames = new HashSet<string>(context.Enums.Select(e => e.Name), StringComparer.Ordinal);
 
+        // Scan dbo/Views/ in the SQL project for user-maintained {Name}ExtView.sql files.
+        var customExtViewModels = ScanCustomExtViews(context.WorkingDirectory);
+
         foreach (var model in context.Models)
         {
-            // Route the Ext class to the matching SQL layer:
-            // rollup/computed → {Name}ExtView, lookup only → {Name}FullView,
-            // neither → base table. Mirrors ViewPlanner classification.
-            var hasRollupOrComputed = model.Fields.Any(f =>
-                f.Kind is FieldKind.Rollup or FieldKind.Computed);
-            var hasLookup = model.Fields.Any(f => f.Kind is FieldKind.Lookup);
-            var backing = hasRollupOrComputed
-                ? EntityPairRenderer.ExtBacking.Ext
-                : hasLookup
-                    ? EntityPairRenderer.ExtBacking.Full
-                    : EntityPairRenderer.ExtBacking.None;
+            var backing = DetermineExtBacking(model, customExtViewModels);
             var rendered = EntityPairRenderer.Render(model, _options.Namespace, enumNames, backing);
             var baseName = model.Name;
             File.WriteAllText(Path.Combine(entityDir, $"I{baseName}.cs"), rendered.Interface);
@@ -62,8 +53,47 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
         var dbContext = DbContextRenderer.Render(
             context.Models.ToList(),
             _options.DbContextName,
-            _options.Namespace);
+            _options.Namespace,
+            customExtViewModels);
         File.WriteAllText(Path.Combine(contextDir, $"{_options.DbContextName}.cs"), dbContext);
+    }
+
+    private HashSet<string> ScanCustomExtViews(string workingDirectory)
+    {
+        if (string.IsNullOrEmpty(_options.SqlProjectPath))
+            return [];
+
+        var sqlRoot = Path.IsPathRooted(_options.SqlProjectPath)
+            ? Path.GetFullPath(_options.SqlProjectPath)
+            : Path.GetFullPath(Path.Combine(workingDirectory, _options.SqlProjectPath));
+
+        var viewsDir = Path.Combine(sqlRoot, "dbo", "Views");
+        if (!Directory.Exists(viewsDir))
+            return [];
+
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var file in Directory.GetFiles(viewsDir, "*ExtView.sql"))
+        {
+            var stem = Path.GetFileNameWithoutExtension(file); // e.g. "OrderExtView"
+            if (stem.EndsWith("ExtView", StringComparison.Ordinal))
+                result.Add(stem[..^"ExtView".Length]); // "Order"
+        }
+        return result;
+    }
+
+    private static EntityPairRenderer.ExtBacking DetermineExtBacking(
+        ResolvedModel model,
+        HashSet<string> customExtViewModels)
+    {
+        var pascalName = PascalCase(model.Name);
+        if (customExtViewModels.Contains(pascalName))
+            return EntityPairRenderer.ExtBacking.Ext;
+        if (model.Fields.Any(f => f.Kind is FieldKind.Lookup or FieldKind.Rollup or FieldKind.Computed))
+            return EntityPairRenderer.ExtBacking.Full;
+        if (model.Fields.Any(f => f.Kind == FieldKind.Stored &&
+            string.Equals(f.Name, "deleted_at", StringComparison.Ordinal)))
+            return EntityPairRenderer.ExtBacking.Ud;
+        return EntityPairRenderer.ExtBacking.None;
     }
 
     private string ResolveProjectRoot(string workingDirectory)
@@ -85,6 +115,13 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
             Directory.CreateDirectory(dir);
         }
     }
+
+    private static string PascalCase(string snake)
+    {
+        if (string.IsNullOrEmpty(snake)) return snake;
+        var parts = snake.Split('_', StringSplitOptions.RemoveEmptyEntries);
+        return string.Concat(parts.Select(p => char.ToUpperInvariant(p[0]) + p.Substring(1)));
+    }
 }
 
 public sealed class ModelGeneratorOptions
@@ -92,4 +129,11 @@ public sealed class ModelGeneratorOptions
     public required string ProjectPath { get; init; }
     public required string Namespace { get; init; }
     public required string DbContextName { get; init; }
+
+    /// <summary>
+    /// Optional path to the SSDT SQL project root. When provided, the generator
+    /// scans <c>dbo/Views/</c> for <c>{Name}ExtView.sql</c> files to determine
+    /// which models have a user-maintained ExtView (highest priority backing).
+    /// </summary>
+    public string? SqlProjectPath { get; init; }
 }

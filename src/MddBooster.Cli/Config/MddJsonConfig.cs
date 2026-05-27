@@ -30,6 +30,14 @@ public sealed class MddJsonTarget
     [JsonPropertyName("dbContextName")]
     public string? DbContextName { get; set; }
 
+    /// <summary>
+    /// Optional: path to the SSDT SQL project root (relative to mdd.json or absolute).
+    /// When set on a Model target, the generator scans <c>dbo/Views/</c> for
+    /// <c>{Name}ExtView.sql</c> files to use as the highest-priority read backing.
+    /// </summary>
+    [JsonPropertyName("sqlProjectPath")]
+    public string? SqlProjectPath { get; set; }
+
     // TypeScript target
     [JsonPropertyName("outputPath")]
     public string? OutputPath { get; set; }

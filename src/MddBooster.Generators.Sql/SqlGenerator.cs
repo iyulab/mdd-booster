@@ -38,35 +38,43 @@ public sealed class SqlGenerator : IArtifactGenerator
             tableFileNames.Add(fileName);
         }
 
-        // 2. Views (conditional — only models with derived fields)
-        // First pass: plan all models and collect which ones have ext views,
-        // so rollup subqueries can reference {Name}ExtView when the target has computed fields.
+        // 2. Views
+        // First pass: plan all models and collect which ones have a FullView,
+        // so rollup subqueries can reference {Name}FullView when the target has derived fields.
         var allPlans = context.Models.Select(m => planner.Plan(m)).ToList();
-        var extViewModels = new HashSet<string>(
-            allPlans.Where(p => p.NeedsExtView).Select(p => p.Model.Name));
+        var fullViewModels = new HashSet<string>(
+            allPlans.Where(p => p.NeedsFullView).Select(p => p.Model.Name));
 
         var viewFileNames = new List<string>();
-        var fullViewModelNames = new List<string>();
-        var extViewSqls = new List<(string modelName, string createSql)>();
+        var udViewModelNames = new List<string>();
+        var simpleFullViewModelNames = new List<string>();
+        var cteFullViewSqls = new List<(string modelName, string createSql)>();
+
         foreach (var plan in allPlans)
         {
             if (!plan.NeedsAnyView) continue;
 
+            if (plan.NeedsUdView)
+            {
+                var sql = UdViewRenderer.Render(plan.Model.Name, _options.Schema);
+                var fileName = $"{plan.Model.Name}UdView.sql";
+                File.WriteAllText(Path.Combine(viewsGenDir, fileName), sql);
+                viewFileNames.Add(fileName);
+                udViewModelNames.Add(plan.Model.Name);
+            }
+
             if (plan.NeedsFullView)
             {
-                var sql = FullViewRenderer.Render(plan, _options.Schema);
+                var sql = FullViewRenderer.Render(plan, _options.Schema, fullViewModels);
                 var fileName = $"{plan.Model.Name}FullView.sql";
                 File.WriteAllText(Path.Combine(viewsGenDir, fileName), sql);
                 viewFileNames.Add(fileName);
-                fullViewModelNames.Add(plan.Model.Name);
-            }
-            if (plan.NeedsExtView)
-            {
-                var sql = ExtViewRenderer.Render(plan, _options.Schema, extViewModels);
-                var fileName = $"{plan.Model.Name}ExtView.sql";
-                File.WriteAllText(Path.Combine(viewsGenDir, fileName), sql);
-                viewFileNames.Add(fileName);
-                extViewSqls.Add((plan.Model.Name, sql));
+
+                // CTE path requires ALTER VIEW; flat SELECT path uses sp_refreshview.
+                if (plan.Computeds.Count > 0)
+                    cteFullViewSqls.Add((plan.Model.Name, sql));
+                else
+                    simpleFullViewModelNames.Add(plan.Model.Name);
             }
         }
 
@@ -75,12 +83,15 @@ public sealed class SqlGenerator : IArtifactGenerator
         if (!Directory.Exists(scriptsGenDir))
             Directory.CreateDirectory(scriptsGenDir);
 
-        var refreshScript = PostDeploymentScriptRenderer.Render(fullViewModelNames, extViewSqls);
+        var refreshScript = PostDeploymentScriptRenderer.Render(
+            udViewModelNames,
+            simpleFullViewModelNames,
+            cteFullViewSqls);
         File.WriteAllText(
             Path.Combine(scriptsGenDir, "Script.PostDeployment.RefreshViews.sql"),
             refreshScript);
 
-        // 4. .sqlproj 패치 — tables + views + scripts_gen
+        // 4. .sqlproj patch — tables + views + scripts_gen
         SqlProjPatcher.Patch(
             sqlProjPath,
             generatedFolderRelative: Path.Combine("dbo", "Tables_gen"),

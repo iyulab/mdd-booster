@@ -11,18 +11,10 @@ namespace MddBooster.Generators.Model;
 /// <c>DbSet&lt;TExt&gt;</c> for every entity in the input model collection.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The generated file lives in <c>DbContext_gen/</c> and is marked
-/// <c>partial</c> so that consumers can add bespoke <c>OnModelCreating</c>
-/// configuration in a sibling <c>DbContext/</c> file without touching
-/// generated code.
-/// </para>
-/// <para>
-/// Plural naming convention: the DbSet name is <c>PluralOf(EntityName)</c>
-/// using naïve "+s" pluralization. Yesung entities don't have irregular
-/// plurals; the spec defers custom override support to a future
-/// configuration option.
-/// </para>
+/// The Ext read model is mapped to the highest available view layer by priority:
+/// <c>ExtView</c> (user-maintained) &gt; <c>FullView</c> &gt; <c>UdView</c> &gt; base table.
+/// The caller passes <paramref name="customExtViewModels"/> for the ExtView tier;
+/// UdView and FullView tiers are detected from model fields.
 /// </remarks>
 public static class DbContextRenderer
 {
@@ -31,7 +23,8 @@ public static class DbContextRenderer
     public static string Render(
         IReadOnlyList<ResolvedModel> models,
         string contextName,
-        string ns)
+        string ns,
+        IReadOnlySet<string>? customExtViewModels = null)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentException.ThrowIfNullOrWhiteSpace(contextName);
@@ -66,13 +59,14 @@ public static class DbContextRenderer
               .Append(plural).Append("Ext => Set<").Append(name).AppendLine("Ext>();");
         }
 
-        // OnModelCreating override — map ALL Ext read models so EF Core treats
-        // them separately from the write entities. Models with derived fields
-        // map to their SQL view ({Name}FullView or {Name}ExtView); table-only models map to the
-        // base table via ToView() so EF Core sees them as a distinct read-only
-        // mapping (avoids the "shared table" validation error on SQL Server).
+        // OnModelCreating: map all Ext read models to their view layer.
+        // Priority: ExtView (user file) > FullView > UdView > base table.
         var extMappings = ordered
-            .Select(m => new { Name = PascalCase(m.Name), Backing = ClassifyBacking(m) })
+            .Select(m => new
+            {
+                Name = PascalCase(m.Name),
+                Backing = ClassifyBacking(m, customExtViewModels)
+            })
             .ToList();
 
         sb.AppendLine();
@@ -85,22 +79,25 @@ public static class DbContextRenderer
             {
                 "ext" => m.Name + "ExtView",
                 "full" => m.Name + "FullView",
-                _ => m.Name,   // table-only: map to base table as a "view"
+                "ud" => m.Name + "UdView",
+                _ => m.Name,   // base table
             };
             sb.Append("        modelBuilder.Entity<").Append(m.Name).Append("Ext>().ToTable((string?)null).ToView(\"")
               .Append(viewName).AppendLine("\");");
         }
         sb.AppendLine("    }");
 
-
         sb.AppendLine("}");
         return sb.ToString();
     }
 
-    private static string ClassifyBacking(ResolvedModel model)
+    private static string ClassifyBacking(ResolvedModel model, IReadOnlySet<string>? customExtViewModels)
     {
-        if (model.Fields.Any(f => f.Kind is FieldKind.Rollup or FieldKind.Computed)) return "ext";
-        if (model.Fields.Any(f => f.Kind is FieldKind.Lookup)) return "full";
+        var name = PascalCase(model.Name);
+        if (customExtViewModels != null && customExtViewModels.Contains(name)) return "ext";
+        if (model.Fields.Any(f => f.Kind is FieldKind.Lookup or FieldKind.Rollup or FieldKind.Computed)) return "full";
+        if (model.Fields.Any(f => f.Kind == FieldKind.Stored &&
+            string.Equals(f.Name, "deleted_at", StringComparison.Ordinal))) return "ud";
         return "none";
     }
 
