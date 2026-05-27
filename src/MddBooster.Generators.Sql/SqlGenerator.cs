@@ -46,6 +46,8 @@ public sealed class SqlGenerator : IArtifactGenerator
             allPlans.Where(p => p.NeedsExtView).Select(p => p.Model.Name));
 
         var viewFileNames = new List<string>();
+        var fullViewModelNames = new List<string>();
+        var extViewSqls = new List<(string modelName, string createSql)>();
         foreach (var plan in allPlans)
         {
             if (!plan.NeedsAnyView) continue;
@@ -56,6 +58,7 @@ public sealed class SqlGenerator : IArtifactGenerator
                 var fileName = $"{plan.Model.Name}FullView.sql";
                 File.WriteAllText(Path.Combine(viewsGenDir, fileName), sql);
                 viewFileNames.Add(fileName);
+                fullViewModelNames.Add(plan.Model.Name);
             }
             if (plan.NeedsExtView)
             {
@@ -63,10 +66,21 @@ public sealed class SqlGenerator : IArtifactGenerator
                 var fileName = $"{plan.Model.Name}ExtView.sql";
                 File.WriteAllText(Path.Combine(viewsGenDir, fileName), sql);
                 viewFileNames.Add(fileName);
+                extViewSqls.Add((plan.Model.Name, sql));
             }
         }
 
-        // 3. .sqlproj 패치 — tables + views
+        // 3. Post-deployment refresh script (Scripts_gen)
+        var scriptsGenDir = Path.Combine(projectRoot, "dbo", "Scripts_gen");
+        if (!Directory.Exists(scriptsGenDir))
+            Directory.CreateDirectory(scriptsGenDir);
+
+        var refreshScript = PostDeploymentScriptRenderer.Render(fullViewModelNames, extViewSqls);
+        File.WriteAllText(
+            Path.Combine(scriptsGenDir, "Script.PostDeployment.RefreshViews.sql"),
+            refreshScript);
+
+        // 4. .sqlproj 패치 — tables + views + scripts_gen
         SqlProjPatcher.Patch(
             sqlProjPath,
             generatedFolderRelative: Path.Combine("dbo", "Tables_gen"),
@@ -78,6 +92,11 @@ public sealed class SqlGenerator : IArtifactGenerator
                 generatedFolderRelative: Path.Combine("dbo", "Views_gen"),
                 generatedFileNames: viewFileNames);
         }
+        SqlProjPatcher.Patch(
+            sqlProjPath,
+            generatedFolderRelative: Path.Combine("dbo", "Scripts_gen"),
+            generatedFileNames: ["Script.PostDeployment.RefreshViews.sql"],
+            itemType: "None");
     }
 
     private static void CleanSqlDir(string dir)

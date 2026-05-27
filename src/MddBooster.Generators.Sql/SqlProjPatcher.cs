@@ -4,11 +4,12 @@ namespace MddBooster.Generators.Sql;
 
 public static class SqlProjPatcher
 {
-    public static void Patch(string sqlProjPath, string generatedFolderRelative, IEnumerable<string> generatedFileNames)
+    public static void Patch(string sqlProjPath, string generatedFolderRelative, IEnumerable<string> generatedFileNames, string itemType = "Build")
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sqlProjPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(generatedFolderRelative);
         ArgumentNullException.ThrowIfNull(generatedFileNames);
+        ArgumentException.ThrowIfNullOrWhiteSpace(itemType);
 
         var targetEntries = generatedFileNames
             .Select(name => Path.Combine(generatedFolderRelative, name).Replace('/', '\\'))
@@ -19,10 +20,10 @@ public static class SqlProjPatcher
         var root = doc.Root ?? throw new InvalidOperationException($"유효하지 않은 sqlproj: {sqlProjPath}");
         var ns = root.GetDefaultNamespace();
 
-        // 1. 기존의 generatedFolderRelative 아래 Build Include 노드 전부 제거.
+        // 1. 기존의 generatedFolderRelative 아래 해당 itemType Include 노드 전부 제거.
         //    각 요소의 직전 whitespace 텍스트 노드도 함께 제거하여 호출이
         //    거듭되어도 공백이 축적되지 않게 한다(idempotent).
-        var managedBuildNodes = root.Descendants(ns + "Build")
+        var managedBuildNodes = root.Descendants(ns + itemType)
             .Where(b =>
             {
                 var include = (string?)b.Attribute("Include");
@@ -57,7 +58,7 @@ public static class SqlProjPatcher
         // 3. 신규 엔트리 삽입 (정렬 순서로).
         //    LoadOptions.PreserveWhitespace + SaveOptions.None 은 기존 공백만
         //    보존할 뿐 새로 추가되는 요소 사이의 개행을 만들지 않는다. 사람이
-        //    diff/리뷰할 수 있도록 각 Build 요소 앞에 명시적으로 개행+들여쓰기
+        //    diff/리뷰할 수 있도록 각 요소 앞에 명시적으로 개행+들여쓰기
         //    텍스트 노드를 삽입한다. 들여쓰기는 ItemGroup의 기존 자식/꼬리
         //    공백에서 추정하며, 없으면 4-space 기본값.
         var indent = DetectChildIndent(itemGroupToUse) ?? "    ";
@@ -71,7 +72,7 @@ public static class SqlProjPatcher
         foreach (var include in targetEntries)
         {
             var prefix = new XText(newline + indent);
-            var element = new XElement(ns + "Build", new XAttribute("Include", include));
+            var element = new XElement(ns + itemType, new XAttribute("Include", include));
             if (tailText is not null)
             {
                 tailText.AddBeforeSelf(prefix);
