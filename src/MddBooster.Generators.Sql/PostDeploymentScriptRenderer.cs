@@ -51,6 +51,12 @@ public static class PostDeploymentScriptRenderer
                 sb.Append("EXEC sp_refreshview N'[dbo].[").Append(name).AppendLine("FullView]';");
         }
 
+        bool hasExecStatements = udViews.Count > 0 || simpleFullViews.Count > 0;
+        if (cteFullViewList.Count > 0 && hasExecStatements)
+        {
+            sb.AppendLine("GO");
+        }
+
         foreach (var (_, createSql) in cteFullViewList)
         {
             sb.AppendLine();
