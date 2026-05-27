@@ -46,9 +46,6 @@ public sealed class SqlGenerator : IArtifactGenerator
             allPlans.Where(p => p.NeedsFullView).Select(p => p.Model.Name));
 
         var viewFileNames = new List<string>();
-        var udViewModelNames = new List<string>();
-        var simpleFullViewModelNames = new List<string>();
-        var cteFullViewSqls = new List<(string modelName, string createSql)>();
 
         foreach (var plan in allPlans)
         {
@@ -60,7 +57,6 @@ public sealed class SqlGenerator : IArtifactGenerator
                 var fileName = $"{plan.Model.Name}UdView.sql";
                 File.WriteAllText(Path.Combine(viewsGenDir, fileName), sql);
                 viewFileNames.Add(fileName);
-                udViewModelNames.Add(plan.Model.Name);
             }
 
             if (plan.NeedsFullView)
@@ -69,24 +65,17 @@ public sealed class SqlGenerator : IArtifactGenerator
                 var fileName = $"{plan.Model.Name}FullView.sql";
                 File.WriteAllText(Path.Combine(viewsGenDir, fileName), sql);
                 viewFileNames.Add(fileName);
-
-                // CTE path requires ALTER VIEW; flat SELECT path uses sp_refreshview.
-                if (plan.Computeds.Count > 0)
-                    cteFullViewSqls.Add((plan.Model.Name, sql));
-                else
-                    simpleFullViewModelNames.Add(plan.Model.Name);
             }
         }
 
         // 3. Post-deployment refresh script (Scripts_gen)
+        // Scans Views_gen/ and Views/ to emit sp_refreshview for every view in dependency order.
         var scriptsGenDir = Path.Combine(projectRoot, "dbo", "Scripts_gen");
         if (!Directory.Exists(scriptsGenDir))
             Directory.CreateDirectory(scriptsGenDir);
 
-        var refreshScript = PostDeploymentScriptRenderer.Render(
-            udViewModelNames,
-            simpleFullViewModelNames,
-            cteFullViewSqls);
+        var viewsDir = Path.Combine(projectRoot, "dbo", "Views");
+        var refreshScript = PostDeploymentScriptRenderer.Render(viewsGenDir, viewsDir);
         File.WriteAllText(
             Path.Combine(scriptsGenDir, "Script.PostDeployment.RefreshViews.sql"),
             refreshScript);
