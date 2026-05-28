@@ -56,24 +56,30 @@ public static class TsFormRenderer
             sections[group].Add(field);
         }
 
-        // Collect FK fields (for slots type).
-        var fkFields = storedFields
-            .Where(f => HasAttribute(f, "reference"))
+        // Collect slot fields: @reference FK fields AND @slot-annotated non-FK fields.
+        // @slot allows non-FK fields (e.g. a field with a custom auto-generate button) to be
+        // rendered as slot placeholders rather than as inline form controls.
+        var slotFields = storedFields
+            .Where(f => HasAttribute(f, "reference") || HasAttribute(f, "slot"))
             .Select(f => TypeScriptTypeMapper.PascalCase(f.Name))
             .ToList();
+        // Keep fkFields as alias for backwards-compat with downstream code.
+        var fkFields = slotFields;
 
-        // Collect enum imports needed.
+        // Collect enum imports needed — only from renderable (non-slot, non-reference) fields,
+        // since slot fields render their enum types via the caller's slot content, not here.
         var enumImports = storedFields
             .Where(f => f.Type != null && enumNames.Contains(f.Type))
+            .Where(f => !HasAttribute(f, "reference") && !HasAttribute(f, "slot"))
             .Select(f => f.Type!)
             .Distinct()
             .Select(TypeScriptTypeMapper.PascalCase)
             .OrderBy(e => e)
             .ToList();
 
-        // Non-FK renderable fields — these determine which UI component imports are needed.
+        // Non-slot renderable fields — these determine which UI component imports are needed.
         var renderableFields = storedFields
-            .Where(f => !HasAttribute(f, "reference"))
+            .Where(f => !HasAttribute(f, "reference") && !HasAttribute(f, "slot"))
             .ToList();
         var allFieldsAreSlots = renderableFields.Count == 0;
 
@@ -194,6 +200,7 @@ public static class TsFormRenderer
     private static bool IsFullWidth(FieldNode field)
     {
         if (HasAttribute(field, "reference")) return true;
+        if (HasAttribute(field, "slot")) return true;
         if (string.Equals(field.Type, "text", StringComparison.OrdinalIgnoreCase)) return true;
         return false;
     }
@@ -205,9 +212,10 @@ public static class TsFormRenderer
         var required = !field.Nullable;
         var requiredAttr = required ? " required" : "";
 
-        // FK → slot
-        if (HasAttribute(field, "reference"))
-            return $"{{slots?.{prop} ?? <span className=\"text-gray-400 text-xs\">{label} slot</span>}}";
+        // FK or @slot → slot placeholder.
+        // Uses `!== undefined` check (not ??) so callers can pass null to suppress the field entirely.
+        if (HasAttribute(field, "reference") || HasAttribute(field, "slot"))
+            return $"{{slots?.{prop} !== undefined ? slots.{prop} : <span className=\"text-gray-400 text-xs\">{label} slot</span>}}";
 
         // boolean → UCheckbox
         if (string.Equals(field.Type, "boolean", StringComparison.OrdinalIgnoreCase))
