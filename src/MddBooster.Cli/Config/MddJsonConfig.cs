@@ -41,4 +41,11 @@ public sealed class MddJsonTarget
     // TypeScript target
     [JsonPropertyName("outputPath")]
     public string? OutputPath { get; set; }
+
+    /// <summary>
+    /// Optional path for generated {Entity}Form_gen.tsx files (TypeScript target only).
+    /// When omitted, form generation is skipped.
+    /// </summary>
+    [JsonPropertyName("formsOutputPath")]
+    public string? FormsOutputPath { get; set; }
 }

@@ -50,5 +50,21 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
         // field_schema_gen.ts
         var fieldSchemaContent = TsFieldSchemaRenderer.RenderAll(context.Models);
         File.WriteAllText(Path.Combine(outDir, "field_schema_gen.ts"), fieldSchemaContent);
+
+        // {Entity}Form_gen.tsx (optional)
+        if (_options.FormsOutputPath is not null)
+        {
+            var formsDir = Path.IsPathRooted(_options.FormsOutputPath)
+                ? Path.GetFullPath(_options.FormsOutputPath)
+                : Path.GetFullPath(Path.Combine(context.WorkingDirectory, _options.FormsOutputPath));
+
+            Directory.CreateDirectory(formsDir);
+
+            var formFiles = TsFormRenderer.RenderAll(context.Models, enumNames);
+            foreach (var (entityName, content) in formFiles)
+            {
+                File.WriteAllText(Path.Combine(formsDir, $"{entityName}Form_gen.tsx"), content);
+            }
+        }
     }
 }

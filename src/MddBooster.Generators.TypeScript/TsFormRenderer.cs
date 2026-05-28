@@ -138,7 +138,7 @@ public static class TsFormRenderer
         while (i < fields.Count)
         {
             var field = fields[i];
-            var isFullWidth = IsFullWidth(field, enumNames);
+            var isFullWidth = IsFullWidth(field);
 
             if (isFullWidth)
             {
@@ -147,7 +147,7 @@ public static class TsFormRenderer
                 sb.AppendLine("        </FormRow>");
                 i++;
             }
-            else if (i + 1 < fields.Count && !IsFullWidth(fields[i + 1], enumNames))
+            else if (i + 1 < fields.Count && !IsFullWidth(fields[i + 1]))
             {
                 sb.AppendLine("        <FormRow>");
                 sb.Append("          ").AppendLine(RenderField(field, enumNames));
@@ -166,7 +166,7 @@ public static class TsFormRenderer
         }
     }
 
-    private static bool IsFullWidth(FieldNode field, IReadOnlySet<string> enumNames)
+    private static bool IsFullWidth(FieldNode field)
     {
         if (HasAttribute(field, "reference")) return true;
         if (string.Equals(field.Type, "text", StringComparison.OrdinalIgnoreCase)) return true;

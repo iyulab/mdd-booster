@@ -102,6 +102,7 @@ public sealed class BuildCommand
                 {
                     OutputPath = target.OutputPath
                         ?? throw new InvalidOperationException("TypeScript target requires 'outputPath'."),
+                    FormsOutputPath = target.FormsOutputPath,
                 }),
             _ => throw new NotSupportedException(
                 $"지원하지 않는 target type: '{target.Type}' (지원: Sql, Model, Api, TypeScript)"),

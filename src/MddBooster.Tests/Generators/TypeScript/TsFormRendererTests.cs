@@ -54,4 +54,16 @@ public class TsFormRendererTests
 
         Assert.Contains("export function OrderItemFormBase(", content);
     }
+
+    [Fact]
+    public void Renders_USelect_for_enum_field()
+    {
+        var models = LoadFixture("order-with-group.m3l.md");
+        var results = TsFormRenderer.RenderAll(models, new HashSet<string> { "Priority" });
+        var content = results["OrderItem"];
+
+        Assert.Contains("<USelect", content);
+        Assert.Contains("PriorityLabels", content);
+        Assert.Contains("label=\"우선순위\"", content);
+    }
 }
