@@ -71,20 +71,41 @@ public static class TsFormRenderer
             .OrderBy(e => e)
             .ToList();
 
+        // Non-FK renderable fields — these determine which UI component imports are needed.
+        var renderableFields = storedFields
+            .Where(f => !HasAttribute(f, "reference"))
+            .ToList();
+        var allFieldsAreSlots = renderableFields.Count == 0;
+
         var sb = new StringBuilder();
         sb.AppendLine(Header);
-        sb.AppendLine("import type { ReactNode } from 'react'");
+
+        // ReactNode is only used for FK slot types — only import when needed.
+        if (fkFields.Count > 0)
+            sb.AppendLine("import type { ReactNode } from 'react'");
+
         sb.AppendLine("import { FormSection, FormRow } from '@iyulab/enterprise'");
 
-        var hasBooleans = storedFields.Any(f =>
+        var hasBooleans = renderableFields.Any(f =>
             string.Equals(f.Type, "boolean", StringComparison.OrdinalIgnoreCase));
-        var uiImports = new List<string> { "UInput", "USelect" };
+        var hasEnums = enumImports.Count > 0;
+        // UInput is only needed when there are renderable non-enum, non-boolean, non-FK fields.
+        var hasUInput = renderableFields.Any(f =>
+            !string.Equals(f.Type, "boolean", StringComparison.OrdinalIgnoreCase)
+            && (f.Type == null || !enumImports.Any(e =>
+                string.Equals(TypeScriptTypeMapper.PascalCase(f.Type!), e, StringComparison.Ordinal))));
+        var uiImports = new List<string>();
+        if (hasUInput) uiImports.Add("UInput");
+        if (hasEnums) uiImports.Add("USelect");
         if (hasBooleans) uiImports.Add("UCheckbox");
-        sb.Append("import { ").Append(string.Join(", ", uiImports)).AppendLine(" } from '../components/ui'");
+        if (uiImports.Count > 0)
+            sb.Append("import { ").Append(string.Join(", ", uiImports)).AppendLine(" } from '../components/ui'");
         sb.Append("import type { ").Append(entityName).AppendLine(" } from '../types/entities_gen'");
 
         if (enumImports.Count > 0)
         {
+            var typeImports = string.Join(", ", enumImports);
+            sb.Append("import type { ").Append(typeImports).AppendLine(" } from '../types/enums_gen'");
             var labelImports = string.Join(", ", enumImports.Select(e => $"{e}Labels"));
             sb.Append("import { ").Append(labelImports).AppendLine(" } from '../types/enum_labels_gen'");
             sb.AppendLine("import { enumToOptions } from '../lib/select-options'");
@@ -103,9 +124,13 @@ public static class TsFormRenderer
         }
 
         // FormBase function.
+        // When all fields are FK slots, form/onChange are not used in JSX.
+        // Use destructuring rename { form: _form } to satisfy noUnusedParameters.
+        var formDestructure = allFieldsAreSlots ? "form: _form" : "form";
+        var onChangeDestructure = allFieldsAreSlots ? "onChange: _onChange" : "onChange";
         sb.Append("export function ").Append(entityName).AppendLine("FormBase({");
-        sb.AppendLine("  form,");
-        sb.AppendLine("  onChange,");
+        sb.Append("  ").AppendLine(formDestructure + ",");
+        sb.Append("  ").AppendLine(onChangeDestructure + ",");
         if (fkFields.Count > 0) sb.AppendLine("  slots,");
         sb.AppendLine("}: {");
         sb.Append("  form: Partial<").Append(entityName).AppendLine(">");
@@ -192,23 +217,32 @@ public static class TsFormRenderer
         if (field.Type != null && enumNames.Contains(field.Type))
         {
             var enumTypeName = TypeScriptTypeMapper.PascalCase(field.Type);
-            var defaultVal = field.Nullable ? "null" : "''";
+            // USelect.value is T extends string, it cannot accept null.
+            // Use '' as the empty-state sentinel; onChange receives '' for no-selection.
             var placeholder = field.Nullable ? $" placeholder=\"{label} 선택\"" : "";
-            return $"<USelect label=\"{label}\"{requiredAttr}{placeholder} value={{form.{prop} ?? {defaultVal}}} options={{enumToOptions({enumTypeName}Labels)}} onChange={{v => onChange({{ {prop}: v as {enumTypeName}{(field.Nullable ? " | null" : "")} }})}} />";
+            var onChangeCast = field.Nullable
+                ? $"v => onChange({{ {prop}: (v || null) as {enumTypeName} | null }})"
+                : $"v => onChange({{ {prop}: v as {enumTypeName} }})";
+            return $"<USelect label=\"{label}\"{requiredAttr}{placeholder} value={{form.{prop} ?? ''}} options={{enumToOptions({enumTypeName}Labels)}} onChange={{{onChangeCast}}} />";
         }
 
         // date → UInput type="date"
+        // Required date fields use || undefined (Partial<T> expects T | undefined, not null).
+        // Nullable date fields use || null (entity type is string | null, null is the correct empty value).
         if (string.Equals(field.Type, "date", StringComparison.OrdinalIgnoreCase))
-            return $"<UInput label=\"{label}\"{requiredAttr} type=\"date\" value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || null }})}} />";
+        {
+            var dateEmpty = field.Nullable ? "null" : "undefined";
+            return $"<UInput label=\"{label}\"{requiredAttr} type=\"date\" value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || {dateEmpty} }})}} />";
+        }
 
         // text → UInput (full-width handled by IsFullWidth)
         if (string.Equals(field.Type, "text", StringComparison.OrdinalIgnoreCase))
             return $"<UInput label=\"{label}\" value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || null }})}} />";
 
-        // number types
+        // number types — onChange uses undefined (not null) because Partial<T> marks fields as T | undefined.
         if (field.Type != null && (field.Type.StartsWith("integer", StringComparison.OrdinalIgnoreCase)
             || field.Type.StartsWith("decimal", StringComparison.OrdinalIgnoreCase)))
-            return $"<UInput label=\"{label}\"{requiredAttr} type=\"number\" value={{form.{prop} != null ? String(form.{prop}) : ''}} onChange={{v => onChange({{ {prop}: v ? Number(v) : null }})}} />";
+            return $"<UInput label=\"{label}\"{requiredAttr} type=\"number\" value={{form.{prop} != null ? String(form.{prop}) : ''}} onChange={{v => onChange({{ {prop}: v ? Number(v) : undefined }})}} />";
 
         // string (default)
         return $"<UInput label=\"{label}\"{requiredAttr} value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v }})}} />";
