@@ -66,4 +66,15 @@ public class TsFormRendererTests
         Assert.Contains("PriorityLabels", content);
         Assert.Contains("label=\"우선순위\"", content);
     }
+
+    [Fact]
+    public void Imports_enum_labels_from_types_directory()
+    {
+        var models = LoadFixture("order-with-group.m3l.md");
+        var results = TsFormRenderer.RenderAll(models, new HashSet<string> { "Priority" });
+        var content = results["OrderItem"];
+
+        Assert.Contains("from '../types/enum_labels_gen'", content);
+        Assert.DoesNotContain("from '../lib/enum_labels_gen'", content);
+    }
 }

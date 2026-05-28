@@ -86,7 +86,7 @@ public static class TsFormRenderer
         if (enumImports.Count > 0)
         {
             var labelImports = string.Join(", ", enumImports.Select(e => $"{e}Labels"));
-            sb.Append("import { ").Append(labelImports).AppendLine(" } from '../lib/enum_labels_gen'");
+            sb.Append("import { ").Append(labelImports).AppendLine(" } from '../types/enum_labels_gen'");
             sb.AppendLine("import { enumToOptions } from '../lib/select-options'");
         }
 
