@@ -125,6 +125,7 @@ public static class EntityPairRenderer
         sb.AppendLine(Header);
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
+        sb.AppendLine("using System.ComponentModel.DataAnnotations;");
         sb.AppendLine("using System.ComponentModel.DataAnnotations.Schema;");
         sb.AppendLine();
         sb.Append("namespace ").Append(ns).AppendLine(";");
@@ -256,6 +257,19 @@ public static class EntityPairRenderer
                 break;
         }
 
+        // [Display(Name, GroupName)] — field label and/or group from M3L declaration
+        var displayLabel = f.Description;
+        var displayGroup = GetAttributeString(f, "group");
+        if (displayLabel != null || displayGroup != null)
+        {
+            sb.Append("    [Display(");
+            var displayParts = new List<string>();
+            if (displayLabel != null) displayParts.Add($"Name = \"{EscapeStringLiteral(displayLabel)}\"");
+            if (displayGroup != null) displayParts.Add($"GroupName = \"{EscapeStringLiteral(displayGroup)}\"");
+            sb.Append(string.Join(", ", displayParts));
+            sb.AppendLine(")]");
+        }
+
         sb.Append("    public ").Append(cs).Append(nullable).Append(' ')
           .Append(prop).Append(" { get; set; }").AppendLine(initializer);
 
@@ -352,6 +366,18 @@ public static class EntityPairRenderer
         return first.ValueKind == System.Text.Json.JsonValueKind.String
             ? first.GetString()
             : first.GetRawText();
+    }
+
+    private static string? GetAttributeString(FieldNode field, string attrName)
+    {
+        var attr = field.Attributes.FirstOrDefault(a =>
+            string.Equals(a.Name, attrName, StringComparison.OrdinalIgnoreCase));
+        if (attr?.Args is { Count: > 0 }
+            && attr.Args[0].ValueKind == System.Text.Json.JsonValueKind.String)
+        {
+            return attr.Args[0].GetString();
+        }
+        return null;
     }
 
     private static bool HasAttribute(FieldNode field, string name) =>
