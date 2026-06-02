@@ -157,7 +157,73 @@ public static class TsFormRenderer
         sb.AppendLine("  )");
         sb.AppendLine("}");
 
+        // Form-state helpers — empty defaults + entity→form mapper.
+        // Closes the drift class where page EMPTY/handleEdit hand-enumerate fields and
+        // silently omit newly-added m3l columns. Generated from stored (writable) fields only,
+        // so Lookup/Rollup/Computed never leak into PATCH bodies.
+        var camel = CamelCase(entityName);
+        sb.AppendLine();
+        sb.Append("export const empty").Append(entityName).Append(": Partial<").Append(entityName).Append("> = { ");
+        sb.Append(string.Join(", ", storedFields.Select(f =>
+            $"{TypeScriptTypeMapper.PascalCase(f.Name)}: {EmptyValue(f, enumNames)}")));
+        sb.AppendLine(" }");
+        sb.AppendLine();
+        sb.Append("export function ").Append(camel).Append("FromEntity(row: ").Append(entityName).Append("): Partial<").Append(entityName).AppendLine("> {");
+        sb.Append("  return { ");
+        sb.Append(string.Join(", ", storedFields.Select(f =>
+            $"{TypeScriptTypeMapper.PascalCase(f.Name)}: {FromEntityValue(f, enumNames)}")));
+        sb.AppendLine(" }");
+        sb.AppendLine("}");
+
         return sb.ToString();
+    }
+
+    private static string CamelCase(string pascal) =>
+        string.IsNullOrEmpty(pascal) ? pascal : char.ToLowerInvariant(pascal[0]) + pascal[1..];
+
+    private static bool IsNumberType(string? t) =>
+        t != null && (t.StartsWith("integer", StringComparison.OrdinalIgnoreCase)
+            || t.StartsWith("decimal", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Literal for the empty/new form state of a field (matches RenderField's coercion).</summary>
+    private static string EmptyValue(FieldNode field, IReadOnlySet<string> enumNames)
+    {
+        var t = field.Type;
+        var def = field.DefaultValue;
+        var isEnum = t != null && enumNames.Contains(t);
+        var isBool = string.Equals(t, "boolean", StringComparison.OrdinalIgnoreCase);
+        if (!string.IsNullOrEmpty(def))
+        {
+            if (isEnum) return $"'{TypeScriptTypeMapper.PascalCase(def!)}'";
+            if (isBool) return def!;            // "true" / "false"
+            if (IsNumberType(t)) return def!;   // numeric literal
+            return $"'{def}'";                  // string default
+        }
+        if (isBool) return "false";
+        if (IsNumberType(t)) return field.Nullable ? "null" : "0";
+        // enum not_null without a default has no valid empty literal ('' breaks the EnumType union);
+        // emit undefined (valid in Partial<T>) so the user must pick. nullable → null.
+        if (isEnum) return field.Nullable ? "null" : "undefined";
+        if (string.Equals(t, "date", StringComparison.OrdinalIgnoreCase)) return field.Nullable ? "null" : "''";
+        return "''";                             // string / text / identifier(FK) / json / phone
+    }
+
+    /// <summary>Expression mapping an entity row field into form state (write fields only).</summary>
+    private static string FromEntityValue(FieldNode field, IReadOnlySet<string> enumNames)
+    {
+        var prop = TypeScriptTypeMapper.PascalCase(field.Name);
+        var t = field.Type;
+        var isEnum = t != null && enumNames.Contains(t);
+        var isBool = string.Equals(t, "boolean", StringComparison.OrdinalIgnoreCase);
+        if (isBool)
+        {
+            var def = !string.IsNullOrEmpty(field.DefaultValue) ? field.DefaultValue! : "false";
+            return $"row.{prop} ?? {def}";
+        }
+        if (IsNumberType(t)) return $"row.{prop}";
+        if (isEnum) return $"row.{prop}";
+        if (string.Equals(t, "date", StringComparison.OrdinalIgnoreCase)) return $"row.{prop}";
+        return field.Nullable ? $"row.{prop} ?? ''" : $"row.{prop}";
     }
 
     private static void RenderSectionRows(
