@@ -77,4 +77,47 @@ public class TsFormRendererTests
         Assert.Contains("from '../types/enum_labels_gen'", content);
         Assert.DoesNotContain("from '../lib/enum_labels_gen'", content);
     }
+
+    [Fact]
+    public void DisplayLabels_override_uses_alt_label_map_but_keeps_storage_type()
+    {
+        var models = LoadFixture("order-with-group.m3l.md");
+        var results = TsFormRenderer.RenderAll(models, new HashSet<string> { "Priority" });
+        var content = results["OrderItem"];
+
+        // priority_alt has @display_labels(AltPriority): display map is overridden...
+        Assert.Contains("options={enumToOptions(AltPriorityLabels)}", content);
+        // ...the override label map is imported alongside the enum's own map...
+        Assert.Contains("AltPriorityLabels", content);
+        // ...but the stored/cast type stays the enum's own type (Priority), not AltPriority.
+        Assert.Contains("as Priority", content);
+        Assert.DoesNotContain("as AltPriority", content);
+    }
+
+    [Fact]
+    public void DisplayLabels_does_not_import_override_as_enum_type()
+    {
+        var models = LoadFixture("order-with-group.m3l.md");
+        var results = TsFormRenderer.RenderAll(models, new HashSet<string> { "Priority" });
+        var content = results["OrderItem"];
+
+        // The override (AltPriority) supplies only a label map — its TYPE must not be imported.
+        Assert.DoesNotContain("import type { AltPriority }", content);
+        Assert.DoesNotContain(", AltPriority }", content);
+    }
+
+    [Fact]
+    public void DisplayLabels_when_all_fields_of_type_overridden_does_not_use_own_label_map()
+    {
+        // Regression: Mode's only field (mode) is overridden → ModeLabels is never used.
+        // Importing it anyway produced TS6133 "declared but never read" in the consumer build.
+        var models = LoadFixture("order-with-group.m3l.md");
+        var results = TsFormRenderer.RenderAll(models, new HashSet<string> { "Priority", "Mode" });
+        var content = results["OrderItem"];
+
+        Assert.Contains("enumToOptions(AltModeLabels)", content);
+        Assert.DoesNotContain("enumToOptions(ModeLabels)", content);
+        // Mode TYPE is still imported for the value cast.
+        Assert.Contains("as Mode", content);
+    }
 }

@@ -83,6 +83,21 @@ public static class TsFormRenderer
             .ToList();
         var allFieldsAreSlots = renderableFields.Count == 0;
 
+        // Label maps actually referenced by USelect — per enum field, the @display_labels(X)
+        // override if present, else the field's own {Type}Labels. This is DISTINCT from the
+        // TYPE imports (enumImports), which always follow f.Type for the value cast.
+        // @display_labels lets one enum carry context-specific labels (e.g. SettlementStatus
+        // shown as "수금" for Order, "지급" for Purchase) without forking the stored enum.
+        // Computing the effective per-field map (not enum-type ∪ overrides) avoids importing
+        // an enum's own {Type}Labels when every field of that type is overridden (would be unused).
+        var labelMapNames = renderableFields
+            .Where(f => f.Type != null && enumNames.Contains(f.Type))
+            .Select(f => GetDisplayLabelsOverride(f) is { Length: > 0 } ov
+                ? TypeScriptTypeMapper.PascalCase(ov)
+                : TypeScriptTypeMapper.PascalCase(f.Type!))
+            .Distinct()
+            .ToList();
+
         var sb = new StringBuilder();
         sb.AppendLine(Header);
 
@@ -112,7 +127,10 @@ public static class TsFormRenderer
         {
             var typeImports = string.Join(", ", enumImports);
             sb.Append("import type { ").Append(typeImports).AppendLine(" } from '../types/enums_gen'");
-            var labelImports = string.Join(", ", enumImports.Select(e => $"{e}Labels"));
+            // Label maps = effective per-field maps (override or own), never an unused {Type}Labels.
+            var labelImports = string.Join(", ", labelMapNames
+                .Select(m => $"{m}Labels")
+                .OrderBy(n => n, StringComparer.Ordinal));
             sb.Append("import { ").Append(labelImports).AppendLine(" } from '../types/enum_labels_gen'");
             sb.AppendLine("import { enumToOptions } from '../lib/select-options'");
         }
@@ -291,13 +309,18 @@ public static class TsFormRenderer
         if (field.Type != null && enumNames.Contains(field.Type))
         {
             var enumTypeName = TypeScriptTypeMapper.PascalCase(field.Type);
+            // Display label map: @display_labels(X) → {X}Labels, else the enum's own {Type}Labels.
+            // The stored/cast type stays enumTypeName regardless — only the displayed text differs.
+            var labelMap = GetDisplayLabelsOverride(field) is { Length: > 0 } ov
+                ? TypeScriptTypeMapper.PascalCase(ov)
+                : enumTypeName;
             // USelect.value is T extends string, it cannot accept null.
             // Use '' as the empty-state sentinel; onChange receives '' for no-selection.
             var placeholder = field.Nullable ? $" placeholder=\"{label} 선택\"" : "";
             var onChangeCast = field.Nullable
                 ? $"v => onChange({{ {prop}: (v || null) as {enumTypeName} | null }})"
                 : $"v => onChange({{ {prop}: v as {enumTypeName} }})";
-            return $"<USelect label=\"{label}\"{requiredAttr}{placeholder} value={{form.{prop} ?? ''}} options={{enumToOptions({enumTypeName}Labels)}} onChange={{{onChangeCast}}} />";
+            return $"<USelect label=\"{label}\"{requiredAttr}{placeholder} value={{form.{prop} ?? ''}} options={{enumToOptions({labelMap}Labels)}} onChange={{{onChangeCast}}} />";
         }
 
         // date → UInput type="date"
@@ -336,6 +359,20 @@ public static class TsFormRenderer
 
     private static bool HasAttribute(FieldNode field, string name) =>
         field.Attributes.Any(a => string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase));
+
+    // @display_labels(EnumName) — first arg is an identifier (like @reference(Target)).
+    // Returns the raw override enum name, or null when the field has no such attribute.
+    private static string? GetDisplayLabelsOverride(FieldNode field)
+    {
+        var attr = field.Attributes.FirstOrDefault(a =>
+            string.Equals(a.Name, "display_labels", StringComparison.OrdinalIgnoreCase));
+        if (attr?.Args is { Count: > 0 } args)
+        {
+            var p = args[0];
+            return p.ValueKind == JsonValueKind.String ? p.GetString() : p.GetRawText();
+        }
+        return null;
+    }
 
     private static bool IsInheritedTimestamp(string fieldName) =>
         string.Equals(fieldName, "created_at", StringComparison.OrdinalIgnoreCase)
