@@ -295,6 +295,10 @@ public static class TsFormRenderer
         var label = field.Description ?? prop;
         var required = !field.Nullable;
         var requiredAttr = required ? " required" : "";
+        // @help("...") → label 아래 도움말(description). 라벨은 짧게 유지하고
+        // 예시·부연 설명은 description footer로 분리한다 (필드 라벨 비대화 방지).
+        var helpText = GetAttributeString(field, "help");
+        var descAttr = !string.IsNullOrEmpty(helpText) ? $" description=\"{helpText}\"" : "";
 
         // FK or @slot → slot placeholder.
         // Uses `!== undefined` check (not ??) so callers can pass null to suppress the field entirely.
@@ -303,7 +307,7 @@ public static class TsFormRenderer
 
         // boolean → UCheckbox
         if (string.Equals(field.Type, "boolean", StringComparison.OrdinalIgnoreCase))
-            return $"<UCheckbox label=\"{label}\" checked={{form.{prop} ?? false}} onChange={{v => onChange({{ {prop}: v }})}} />";
+            return $"<UCheckbox label=\"{label}\"{descAttr} checked={{form.{prop} ?? false}} onChange={{v => onChange({{ {prop}: v }})}} />";
 
         // enum → USelect
         if (field.Type != null && enumNames.Contains(field.Type))
@@ -320,7 +324,7 @@ public static class TsFormRenderer
             var onChangeCast = field.Nullable
                 ? $"v => onChange({{ {prop}: (v || null) as {enumTypeName} | null }})"
                 : $"v => onChange({{ {prop}: v as {enumTypeName} }})";
-            return $"<USelect label=\"{label}\"{requiredAttr}{placeholder} value={{form.{prop} ?? ''}} options={{enumToOptions({labelMap}Labels)}} onChange={{{onChangeCast}}} />";
+            return $"<USelect label=\"{label}\"{requiredAttr}{descAttr}{placeholder} value={{form.{prop} ?? ''}} options={{enumToOptions({labelMap}Labels)}} onChange={{{onChangeCast}}} />";
         }
 
         // date → UInput type="date"
@@ -329,20 +333,20 @@ public static class TsFormRenderer
         if (string.Equals(field.Type, "date", StringComparison.OrdinalIgnoreCase))
         {
             var dateEmpty = field.Nullable ? "null" : "undefined";
-            return $"<UInput label=\"{label}\"{requiredAttr} type=\"date\" value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || {dateEmpty} }})}} />";
+            return $"<UInput label=\"{label}\"{requiredAttr}{descAttr} type=\"date\" value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || {dateEmpty} }})}} />";
         }
 
         // text → UInput (full-width handled by IsFullWidth)
         if (string.Equals(field.Type, "text", StringComparison.OrdinalIgnoreCase))
-            return $"<UInput label=\"{label}\" value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || null }})}} />";
+            return $"<UInput label=\"{label}\"{descAttr} value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || null }})}} />";
 
         // number types — onChange uses undefined (not null) because Partial<T> marks fields as T | undefined.
         if (field.Type != null && (field.Type.StartsWith("integer", StringComparison.OrdinalIgnoreCase)
             || field.Type.StartsWith("decimal", StringComparison.OrdinalIgnoreCase)))
-            return $"<UInput label=\"{label}\"{requiredAttr} type=\"number\" value={{form.{prop} != null ? String(form.{prop}) : ''}} onChange={{v => onChange({{ {prop}: v ? Number(v) : undefined }})}} />";
+            return $"<UInput label=\"{label}\"{requiredAttr}{descAttr} type=\"number\" value={{form.{prop} != null ? String(form.{prop}) : ''}} onChange={{v => onChange({{ {prop}: v ? Number(v) : undefined }})}} />";
 
         // string (default)
-        return $"<UInput label=\"{label}\"{requiredAttr} value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v }})}} />";
+        return $"<UInput label=\"{label}\"{requiredAttr}{descAttr} value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v }})}} />";
     }
 
     private static string? GetAttributeString(FieldNode field, string attrName)
