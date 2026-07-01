@@ -55,6 +55,8 @@ mdd ./mdd  # mdd.json이 있는 디렉터리
 | `@indexed` + rollup → `WITH SCHEMABINDING` | ✅ |
 | `@unique(col1, col2)` 복합 | ⏳ |
 | `### Indexes` 섹션 | ⏳ |
+| `@inherits(FQN)` → C# 베이스클래스 오버라이드 (도메인 중립, verbatim) | ✅ |
+| `@implements(FQN, ...)` → C# 인터페이스 append (도메인 중립, verbatim) | ✅ |
 
 ## 생성물 구조
 

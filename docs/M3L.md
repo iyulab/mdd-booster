@@ -749,6 +749,40 @@ When inheriting conflicting fields:
 - updated_at: timestamp @override  # Explicitly overrides the field from base
 ```
 
+#### 3.4.6 Emitting a C# Base Class / Interfaces (`@inherits` / `@implements`)
+
+The `: Base` syntax above is a **field mixin** — it flattens fields from an M3L
+interface/model into this model. It does **not** control the generated C# type's
+base class or interface list.
+
+To make the generated entity class inherit an **external** base class or implement
+**external** interfaces (e.g. a framework contract the generator does not know
+about), use the domain-neutral model-level knobs `@inherits` / `@implements`. The
+generator treats the argument as an **opaque, verbatim fully-qualified type name**
+and only prefixes `global::` — it knows nothing about the type's meaning or
+namespace.
+
+```markdown
+## User @inherits(Iyu.Core.Identity.IyuUser) @implements(Iyu.Core.Identity.IUser)
+- username: string(100) @not_null
+```
+
+Generates:
+
+```csharp
+public partial class User : global::Iyu.Core.Identity.IyuUser, IUser, global::Iyu.Core.Identity.IUser
+{ ... }
+```
+
+- **`@inherits(FQN)`** — overrides the default base class
+  (`global::Iyu.Core.Entities.IyuEntity`). Single argument (C# single inheritance).
+  Omit to keep the default `IyuEntity`.
+- **`@implements(FQN, ...)`** — appends one or more interfaces verbatim.
+  The generated marker interface `IXxx` is always emitted regardless.
+- Arguments are **fully-qualified**; the generator adds no namespace of its own.
+  This keeps mdd domain-neutral — the consuming app owns the contract types.
+- Applies to both the write entity and the `Ext` read entity.
+
 ### 3.5 Metadata Definition
 
 Metadata provides additional information about the model itself or implementation details.

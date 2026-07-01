@@ -110,16 +110,26 @@ public static class EntityPairRenderer
                 _ => entityName,
             };
 
-        // @implements 어트리뷰트에서 추가 인터페이스 추출
+        // @implements 어트리뷰트에서 추가 인터페이스 추출 (도메인 중립 — 인자는
+        // 완전수식명(FQN)을 verbatim 사용, mdd는 global:: 만 접두).
         var extraInterfaces = (source.Attributes ?? [])
             .Where(a => string.Equals(a.Name, "implements", StringComparison.OrdinalIgnoreCase))
             .SelectMany(a => a.Args ?? [])
-            .Select(arg => arg.ValueKind == System.Text.Json.JsonValueKind.String
-                ? arg.GetString()!
-                : arg.GetRawText().Trim('"'))
+            .Select(AttributeArgString)
             .Where(s => !string.IsNullOrEmpty(s))
-            .Select(iface => $"global::Iyu.Core.Entities.{iface}")
+            .Select(iface => $"global::{iface}")
             .ToList();
+
+        // @inherits(FQN) — 기본 베이스클래스 IyuEntity 오버라이드 (도메인 중립).
+        // 미지정 시 IyuEntity 유지(하위호환). 단일 인자(C# 단일 상속).
+        var inheritsFqn = (source.Attributes ?? [])
+            .Where(a => string.Equals(a.Name, "inherits", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(a => a.Args ?? [])
+            .Select(AttributeArgString)
+            .FirstOrDefault(s => !string.IsNullOrEmpty(s));
+        var baseClass = string.IsNullOrEmpty(inheritsFqn)
+            ? "global::Iyu.Core.Entities.IyuEntity"
+            : $"global::{inheritsFqn}";
 
         var sb = new StringBuilder();
         sb.AppendLine(Header);
@@ -132,7 +142,7 @@ public static class EntityPairRenderer
         sb.AppendLine();
         sb.Append("[Table(\"").Append(tableName).AppendLine("\")]");
         sb.Append("public partial class ").Append(className)
-          .Append(" : global::Iyu.Core.Entities.IyuEntity, I").Append(entityName);
+          .Append(" : ").Append(baseClass).Append(", I").Append(entityName);
         foreach (var iface in extraInterfaces)
             sb.Append(", ").Append(iface);
         sb.AppendLine();
@@ -379,6 +389,17 @@ public static class EntityPairRenderer
         }
         return null;
     }
+
+    /// <summary>
+    /// Extracts a model-attribute argument as a plain string, unwrapping JSON
+    /// string values and stripping quotes from raw tokens. Used by the
+    /// domain-neutral <c>@implements</c>/<c>@inherits</c> knobs where the
+    /// argument is a verbatim fully-qualified type name.
+    /// </summary>
+    private static string AttributeArgString(JsonElement arg) =>
+        arg.ValueKind == JsonValueKind.String
+            ? arg.GetString()!
+            : arg.GetRawText().Trim('"');
 
     private static bool HasAttribute(FieldNode field, string name) =>
         field.Attributes.Any(a => string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase));
