@@ -58,6 +58,14 @@ public static class ApiRegistrationRenderer
 
         foreach (var model in models.OrderBy(m => m.Name, StringComparer.Ordinal))
         {
+            // @internal 엔티티는 데이터 API(OData/GraphQL) 노출에서 제외한다. SQL 테이블·Ext 뷰·
+            // C# 엔티티·EF DbSet 은 그대로 생성되지만 AddEntityPair 를 방출하지 않는다 —
+            // 아이덴티티/인증 같은 인프라 엔티티(전용 엔드포인트로만 관리, 범용 CRUD·시크릿 컬럼
+            // 노출 금지)를 위한 도메인 중립 knob.
+            if ((model.Source.Attributes ?? [])
+                .Any(a => string.Equals(a.Name, "internal", StringComparison.OrdinalIgnoreCase)))
+                continue;
+
             var entity = PascalCase(model.Name);
             var setName = MddBooster.Core.Naming.Pluralizer.Pluralize(entity);
             var queryName = CamelCase(setName);       // e.g. "orders"

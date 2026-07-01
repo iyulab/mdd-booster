@@ -1,3 +1,5 @@
+using System.Text.Json;
+using M3L.Native;
 using MddBooster.Core.Ast;
 using MddBooster.Core.Semantic;
 using MddBooster.Generators.Api;
@@ -129,6 +131,62 @@ public class ApiRegistrationTests
 
         Assert.True(errors.Count == 0,
             $"Syntax errors: {string.Join("; ", errors.Select(d => d.GetMessage()))}\n---\n{src}");
+    }
+
+    // --- @internal 엔티티 제외 (보안: 아이덴티티 인프라를 데이터 API에 노출하지 않음) ---
+
+    private static ResolvedModel ModelWith(string name, params FieldAttribute[] attrs) => new()
+    {
+        Name = name,
+        Fields = [new FieldNode
+        {
+            Name = "key", Type = "string", Kind = FieldKind.Stored,
+            Nullable = false, Loc = new SourceLocation { File = "t.m3l.md", Line = 1 }
+        }],
+        Source = new ModelNode
+        {
+            Name = name, Type = ModelType.Model,
+            Loc = new SourceLocation { File = "t.m3l.md" }, Attributes = [.. attrs],
+        },
+    };
+
+    private static FieldAttribute Attr(string name, params string[] args) => new()
+    {
+        Name = name,
+        Args = [.. args.Select(a => JsonSerializer.SerializeToElement(a))],
+    };
+
+    [Fact]
+    public void ApiRegistration_skips_internal_entity_but_keeps_normal()
+    {
+        var models = new List<ResolvedModel>
+        {
+            ModelWith("Order"),                            // 일반 → 노출
+            ModelWith("ServiceClient", Attr("internal")),  // @internal → 미노출
+        };
+
+        var src = ApiRegistrationRenderer.Render(models, "Test.Api");
+
+        // 일반 엔티티는 OData/GraphQL 모두 등록
+        Assert.Contains("options.ODataModel.AddEntityPair<OrderExt, Order>(\"Orders\");", src);
+        Assert.Contains("options.GraphQL.AddEntityPair<OrderExt, Order>(\"orders\", \"order\");", src);
+        // @internal 엔티티는 어떤 등록 라인도 방출하지 않음
+        Assert.DoesNotContain("ServiceClient", src);
+    }
+
+    [Fact]
+    public void ODataController_skips_internal_entity()
+    {
+        var models = new List<ResolvedModel>
+        {
+            ModelWith("Order"),
+            ModelWith("ServiceClient", Attr("internal")),
+        };
+
+        var src = ODataControllerRenderer.Render(models, "Test.Api", "Test.Entities");
+
+        Assert.Contains("public sealed partial class OrdersController", src);
+        Assert.DoesNotContain("ServiceClient", src);
     }
 
     [Fact]
