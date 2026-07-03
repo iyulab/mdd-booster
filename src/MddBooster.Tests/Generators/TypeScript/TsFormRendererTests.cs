@@ -120,4 +120,24 @@ public class TsFormRendererTests
         // Mode TYPE is still imported for the value cast.
         Assert.Contains("as Mode", content);
     }
+
+    [Theory]
+    [InlineData("byte_size", "ByteSize")]  // long? — Attachment.ByteSize regression (yesung task-8)
+    [InlineData("rank", "Rank")]           // short?
+    [InlineData("flag", "Flag")]           // byte?
+    [InlineData("price", "Price")]         // decimal(12,2)?
+    [InlineData("qty", "Qty")]             // integer, not_null
+    public void Renders_number_UInput_for_every_numeric_primitive(string _, string prop)
+    {
+        // Regression: IsNumberType() used to only match "integer"/"decimal" via StartsWith, so
+        // "long"/"short"/"byte" silently fell through to the default string UInput branch —
+        // producing `value={form.ByteSize ?? ''}` against a `number | null` entity field, a tsc error
+        // in every consumer. All M3lPrimitives numeric types must render the type="number" branch.
+        var models = LoadFixture("numeric-types.m3l.md");
+        var results = TsFormRenderer.RenderAll(models, new HashSet<string>());
+        var content = results["Item"];
+
+        Assert.Contains($"type=\"number\" value={{form.{prop} != null ? String(form.{prop}) : ''}}", content);
+        Assert.Contains($"onChange={{v => onChange({{ {prop}: v ? Number(v) : undefined }})}}", content);
+    }
 }

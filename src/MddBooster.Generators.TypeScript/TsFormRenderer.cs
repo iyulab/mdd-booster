@@ -199,9 +199,18 @@ public static class TsFormRenderer
     private static string CamelCase(string pascal) =>
         string.IsNullOrEmpty(pascal) ? pascal : char.ToLowerInvariant(pascal[0]) + pascal[1..];
 
-    private static bool IsNumberType(string? t) =>
-        t != null && (t.StartsWith("integer", StringComparison.OrdinalIgnoreCase)
-            || t.StartsWith("decimal", StringComparison.OrdinalIgnoreCase));
+    /// <summary>
+    /// M3L numeric primitives that should render as `&lt;UInput type="number"&gt;` in generated forms.
+    /// Mirrors the full numeric subset of <see cref="M3lPrimitives.All"/> — "integer"/"decimal" alone
+    /// missed "long"/"short"/"byte"/"float"/"double", silently falling back to string-typed UInput
+    /// (mismatched against the `number | null` entity field, breaking tsc) for any field using them.
+    /// </summary>
+    private static readonly IReadOnlySet<string> NumericTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "integer", "long", "short", "byte", "float", "double", "decimal",
+    };
+
+    private static bool IsNumberType(string? t) => t != null && NumericTypes.Contains(t);
 
     /// <summary>Literal for the empty/new form state of a field (matches RenderField's coercion).</summary>
     private static string EmptyValue(FieldNode field, IReadOnlySet<string> enumNames)
@@ -341,8 +350,7 @@ public static class TsFormRenderer
             return $"<UInput label=\"{label}\"{descAttr} value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || null }})}} />";
 
         // number types — onChange uses undefined (not null) because Partial<T> marks fields as T | undefined.
-        if (field.Type != null && (field.Type.StartsWith("integer", StringComparison.OrdinalIgnoreCase)
-            || field.Type.StartsWith("decimal", StringComparison.OrdinalIgnoreCase)))
+        if (IsNumberType(field.Type))
             return $"<UInput label=\"{label}\"{requiredAttr}{descAttr} type=\"number\" value={{form.{prop} != null ? String(form.{prop}) : ''}} onChange={{v => onChange({{ {prop}: v ? Number(v) : undefined }})}} />";
 
         // string (default)
