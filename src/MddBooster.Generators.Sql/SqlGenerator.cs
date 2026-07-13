@@ -53,7 +53,7 @@ public sealed class SqlGenerator : IArtifactGenerator
 
             if (plan.NeedsUdView)
             {
-                var sql = UdViewRenderer.Render(plan.Model.Name, _options.Schema);
+                var sql = UdViewRenderer.Render(plan.Model, _options.Schema);
                 var fileName = $"{plan.Model.Name}UdView.sql";
                 File.WriteAllText(Path.Combine(viewsGenDir, fileName), sql);
                 viewFileNames.Add(fileName);

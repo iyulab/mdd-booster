@@ -21,8 +21,9 @@ public static class TableRenderer
 
         // Base tables carry stored columns only. Lookup/Rollup/Computed fields
         // materialize in the _ext view (Phase I, ViewPlanner) — they must never
-        // appear as physical columns here.
-        var storedFields = model.Fields.Where(f => f.Kind == FieldKind.Stored).ToList();
+        // appear as physical columns here. BaseColumns is the shared authority so
+        // the views project exactly the columns this table emits.
+        var storedFields = BaseColumns.StoredFields(model).ToList();
         var columnLines = storedFields.Select(f => ColumnRenderer.Render(f, enumLookup)).ToList();
 
         // Unique 제약 분기: nullable은 filtered unique index(CREATE INDEX ... WHERE IS NOT NULL)로

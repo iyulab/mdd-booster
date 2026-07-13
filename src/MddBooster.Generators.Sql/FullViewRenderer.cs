@@ -56,8 +56,15 @@ public static class FullViewRenderer
         var baseName = plan.Model.Name;
         var viewName = baseName + "FullView";
         // Source: UdView when soft-delete is active (so the filter propagates); base table otherwise.
+        // Either way the source exposes the same physical column set (UdView projects the base
+        // columns 1:1), so the explicit base projection is identical in both cases.
         var sourceTable = plan.NeedsUdView ? baseName + "UdView" : baseName;
         const string baseAlias = "b";
+
+        // Explicit base-column projection instead of `b.*` — makes the generated view text
+        // track the table's columns so declarative schema tools re-define the view when a
+        // column is added, rather than leaving a `SELECT *` view silently stale (see BaseColumns).
+        var baseProjection = BaseColumns.Projection(plan.Model, baseAlias);
 
         var hasIndexed = plan.Rollups.Any(r => r.Attributes.Any(a =>
             string.Equals(a.Name, "indexed", StringComparison.OrdinalIgnoreCase)));
@@ -117,7 +124,7 @@ public static class FullViewRenderer
         {
             // Flat SELECT path: all projected columns in one level.
             var allProjected = lookupColumns.Concat(rollupColumns).ToList();
-            sb.Append("SELECT ").Append(baseAlias).AppendLine(".*,");
+            sb.Append("SELECT ").Append(baseProjection).AppendLine(",");
             for (var i = 0; i < allProjected.Count; i++)
             {
                 var (expr, alias) = allProjected[i];
@@ -138,11 +145,11 @@ public static class FullViewRenderer
         var rProjected = lookupColumns.Concat(rollupColumns).ToList();
         if (rProjected.Count == 0)
         {
-            sb.Append("    SELECT ").Append(baseAlias).AppendLine(".*");
+            sb.Append("    SELECT ").AppendLine(baseProjection);
         }
         else
         {
-            sb.Append("    SELECT ").Append(baseAlias).AppendLine(".*,");
+            sb.Append("    SELECT ").Append(baseProjection).AppendLine(",");
             for (var i = 0; i < rProjected.Count; i++)
             {
                 var (expr, alias) = rProjected[i];

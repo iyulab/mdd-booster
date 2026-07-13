@@ -38,6 +38,9 @@ public class FullViewRendererTests
 
             Assert.Contains("CREATE VIEW [dbo].[OrderFullView]", sql);
             Assert.Contains("FROM [dbo].[Order] AS b", sql);
+            // Base columns projected explicitly (declaration order), never `b.*`.
+            Assert.Contains("SELECT b.[Id], b.[CustomerId],", sql);
+            Assert.DoesNotContain("b.*", sql);
             Assert.Contains("LEFT JOIN [dbo].[Customer] AS j_customer_id ON b.[CustomerId] = j_customer_id.[Id]", sql);
             Assert.Contains("j_customer_id.[Name] AS [CustomerName]", sql);
             Assert.DoesNotContain("WITH", sql);
@@ -172,8 +175,52 @@ public class FullViewRendererTests
 
             Assert.Contains("FROM [dbo].[FooUdView] AS b", sql);
             Assert.DoesNotContain("FROM [dbo].[Foo] AS b", sql);
+            // Base columns from the UdView are projected explicitly (incl. the FK and deleted_at),
+            // never `b.*` — so an added column changes this view's text and re-defines it.
+            Assert.Contains("b.[Id], b.[BarId], b.[DeletedAt]", sql);
+            Assert.DoesNotContain("b.*", sql);
         }
         finally { File.Delete(tmp); }
+    }
+
+    // ── Anti-staleness contract (the reason base columns are explicit) ────────
+
+    [Fact]
+    public void Adding_a_base_column_changes_the_view_text_and_lists_the_new_column()
+    {
+        // The whole point of explicit base columns: an added stored column must change
+        // the generated view text so a declarative diff tool re-defines the view instead
+        // of leaving a `SELECT *` view silently stale. A future refactor that reintroduces
+        // `b.*` would make these two renders identical and fail this test.
+        const string bar =
+            "## Bar\n" +
+            "- id: identifier @pk @generated\n" +
+            "- foo_id: identifier @reference(Foo)\n";
+        var before = WriteInlineM3l(
+            "## Foo\n" +
+            "- id: identifier @pk @generated\n" +
+            "- name: string(50) @not_null\n\n" +
+            "### Rollup\n" +
+            "- cnt: integer @rollup(Bar.foo_id, count)\n\n" + bar);
+        var after = WriteInlineM3l(
+            "## Foo\n" +
+            "- id: identifier @pk @generated\n" +
+            "- name: string(50) @not_null\n" +
+            "- billed_date: date\n\n" +               // ← new base column
+            "### Rollup\n" +
+            "- cnt: integer @rollup(Bar.foo_id, count)\n\n" + bar);
+        try
+        {
+            var sqlBefore = FullViewRenderer.Render(
+                new ViewPlanner().Plan(new InterfaceResolver(new M3lLoader().LoadFile(before)).ResolveAll().Single(m => m.Name == "Foo")), "dbo");
+            var sqlAfter = FullViewRenderer.Render(
+                new ViewPlanner().Plan(new InterfaceResolver(new M3lLoader().LoadFile(after)).ResolveAll().Single(m => m.Name == "Foo")), "dbo");
+
+            Assert.DoesNotContain("[BilledDate]", sqlBefore);
+            Assert.Contains("b.[BilledDate]", sqlAfter);
+            Assert.NotEqual(sqlBefore, sqlAfter); // text tracks schema → declarative tool re-defines
+        }
+        finally { File.Delete(before); File.Delete(after); }
     }
 
     // ── Error guard ──────────────────────────────────────────────────────────
