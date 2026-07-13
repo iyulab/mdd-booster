@@ -11,6 +11,26 @@
     <Version>0.3.0</Version>
   </PropertyGroup>
 
+  <!-- dotnet tool 패키징: 프로젝트가 스스로 `mdd` 툴임을 선언 →
+       `dotnet pack src/MddBooster.Cli`가 추가 플래그 없이 결정적으로 툴 패키지를 생성(로컬·CI 재현). -->
+  <PropertyGroup>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>mdd</ToolCommandName>
+    <PackageId>mdd</PackageId>
+    <Description>M3L(.m3l.md) → SQL / EF Core / API / TypeScript 코드 생성 CLI. mdd-booster 스택의 코드 제너레이터.</Description>
+    <Authors>iyulab</Authors>
+    <PackageProjectUrl>https://github.com/iyulab/mdd-booster</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/iyulab/mdd-booster</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>mdd;m3l;code-generation;sql;ef-core;dotnet-tool</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\MddBooster.Core\MddBooster.Core.csproj" />
     <ProjectReference Include="..\MddBooster.Generators.Sql\MddBooster.Generators.Sql.csproj" />

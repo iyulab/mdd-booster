@@ -1,32 +1,48 @@
 name: nuget publish
 
+# 태그 기반 릴리스: `v0.3.0` 형식 태그를 push하면 `mdd` dotnet tool을 NuGet에 게시.
+# (구 워크플로는 사라진 MDDBooster.ConsoleApp 경로를 참조해 동작 불가였음 — 현 구조로 재작성.)
 on:
   push:
-    paths:
-      - 'src/MDDBooster.ConsoleApp/MDDBooster.ConsoleApp.csproj'
-#    tags:
-#      - 'v[0-9]+\.[0-9]+\.[0-9]+'
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: src/MDDBooster.ConsoleApp
-
     steps:
-    - uses: actions/checkout@v3
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v2
-      with:
-        dotnet-version: 9.0.x
-    - name: Restore dependencies
-      run: dotnet restore
-    - name: Build
-      run: dotnet build --no-restore
-    #- name: Test
-    #  run: dotnet test --no-build --verbosity normal     
-    - name: Package
-      run: dotnet pack -c Release -o . MDDBooster.ConsoleApp.csproj
-    - name: Publish
-      run: dotnet nuget push *.nupkg -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # NuGet 복원 캐시: csproj 해시 키 + OS prefix fallback (CLAUDE.md GitHub Actions 정책).
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore MddBooster.slnx
+
+      - name: Build
+        run: dotnet build MddBooster.slnx -c Release --no-restore
+
+      # 릴리스 게이트: 게시 전 테스트 통과 필수.
+      - name: Test
+        run: dotnet test MddBooster.slnx -c Release --no-build
+
+      # `mdd` 툴 패키징 — PackAsTool/ToolCommandName/PackageId는 csproj가 선언(추가 플래그 불요).
+      - name: Pack
+        run: dotnet pack src/MddBooster.Cli/MddBooster.Cli.csproj -c Release --no-build -o ${{ runner.temp }}/nupkg
+
+      - name: Publish to NuGet
+        run: >
+          dotnet nuget push "${{ runner.temp }}/nupkg/*.nupkg"
+          -k ${{ secrets.NUGET_API_KEY }}
+          -s https://api.nuget.org/v3/index.json
+          --skip-duplicate
