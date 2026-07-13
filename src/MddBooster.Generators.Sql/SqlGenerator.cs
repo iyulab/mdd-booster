@@ -18,7 +18,6 @@ public sealed class SqlGenerator : IArtifactGenerator
         ArgumentNullException.ThrowIfNull(context);
 
         var projectRoot = ResolveProjectRoot(context.WorkingDirectory);
-        var sqlProjPath = FindSqlProj(projectRoot);
         var tablesGenDir = Path.Combine(projectRoot, "dbo", "Tables_gen");
         var viewsGenDir = Path.Combine(projectRoot, "dbo", "Views_gen");
 
@@ -70,33 +69,47 @@ public sealed class SqlGenerator : IArtifactGenerator
 
         // 3. Post-deployment refresh script (Scripts_gen)
         // Scans Views_gen/ and Views/ to emit sp_refreshview for every view in dependency order.
-        var scriptsGenDir = Path.Combine(projectRoot, "dbo", "Scripts_gen");
-        if (!Directory.Exists(scriptsGenDir))
-            Directory.CreateDirectory(scriptsGenDir);
+        if (_options.EmitRefreshScript)
+        {
+            var scriptsGenDir = Path.Combine(projectRoot, "dbo", "Scripts_gen");
+            if (!Directory.Exists(scriptsGenDir))
+                Directory.CreateDirectory(scriptsGenDir);
 
-        var viewsDir = Path.Combine(projectRoot, "dbo", "Views");
-        var refreshScript = PostDeploymentScriptRenderer.Render(viewsGenDir, viewsDir);
-        File.WriteAllText(
-            Path.Combine(scriptsGenDir, "Script.PostDeployment.RefreshViews.sql"),
-            refreshScript);
+            var viewsDir = Path.Combine(projectRoot, "dbo", "Views");
+            var refreshScript = PostDeploymentScriptRenderer.Render(viewsGenDir, viewsDir);
+            File.WriteAllText(
+                Path.Combine(scriptsGenDir, "Script.PostDeployment.RefreshViews.sql"),
+                refreshScript);
+        }
 
         // 4. .sqlproj patch — tables + views + scripts_gen
-        SqlProjPatcher.Patch(
-            sqlProjPath,
-            generatedFolderRelative: Path.Combine("dbo", "Tables_gen"),
-            generatedFileNames: tableFileNames);
-        if (viewFileNames.Count > 0)
+        // When EmitSqlProj is false the consumer drives schema via a desired-state tool
+        // (e.g. Schemorph) and the .sqlproj is being retired, so we neither locate nor patch it.
+        if (_options.EmitSqlProj)
         {
+            var sqlProjPath = FindSqlProj(projectRoot);
             SqlProjPatcher.Patch(
                 sqlProjPath,
-                generatedFolderRelative: Path.Combine("dbo", "Views_gen"),
-                generatedFileNames: viewFileNames);
+                generatedFolderRelative: Path.Combine("dbo", "Tables_gen"),
+                generatedFileNames: tableFileNames);
+            if (viewFileNames.Count > 0)
+            {
+                SqlProjPatcher.Patch(
+                    sqlProjPath,
+                    generatedFolderRelative: Path.Combine("dbo", "Views_gen"),
+                    generatedFileNames: viewFileNames);
+            }
+            // The Scripts_gen reference is only valid when the RefreshViews.sql was actually
+            // emitted; otherwise it would dangle in the .sqlproj.
+            if (_options.EmitRefreshScript)
+            {
+                SqlProjPatcher.Patch(
+                    sqlProjPath,
+                    generatedFolderRelative: Path.Combine("dbo", "Scripts_gen"),
+                    generatedFileNames: ["Script.PostDeployment.RefreshViews.sql"],
+                    itemType: "None");
+            }
         }
-        SqlProjPatcher.Patch(
-            sqlProjPath,
-            generatedFolderRelative: Path.Combine("dbo", "Scripts_gen"),
-            generatedFileNames: ["Script.PostDeployment.RefreshViews.sql"],
-            itemType: "None");
     }
 
     private static void CleanSqlDir(string dir)

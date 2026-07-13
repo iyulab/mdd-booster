@@ -23,6 +23,21 @@ public sealed class MddJsonTarget
     [JsonPropertyName("schema")]
     public string? Schema { get; set; }
 
+    /// <summary>
+    /// Sql target: whether to patch the <c>.sqlproj</c> ItemGroup with generated files.
+    /// Set <c>false</c> when consuming schema via a desired-state tool (e.g. Schemorph) so the
+    /// <c>.sqlproj</c> can be retired. When omitted, defaults to <c>true</c> (current behavior).
+    /// </summary>
+    [JsonPropertyName("emitSqlProj")]
+    public bool? EmitSqlProj { get; set; }
+
+    /// <summary>
+    /// Sql target: whether to emit the post-deployment <c>RefreshViews.sql</c> (sp_refreshview).
+    /// Independent of <see cref="EmitSqlProj"/>. When omitted, defaults to <c>true</c>.
+    /// </summary>
+    [JsonPropertyName("emitRefreshScript")]
+    public bool? EmitRefreshScript { get; set; }
+
     // Model target
     [JsonPropertyName("namespace")]
     public string? Namespace { get; set; }

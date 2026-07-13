@@ -78,6 +78,8 @@ public sealed class BuildCommand
             {
                 ProjectPath = target.ProjectPath,
                 Schema = target.Schema ?? "dbo",
+                EmitSqlProj = target.EmitSqlProj ?? true,
+                EmitRefreshScript = target.EmitRefreshScript ?? true,
             }),
             "Model" => new MddBooster.Generators.Model.ModelGenerator(
                 new MddBooster.Generators.Model.ModelGeneratorOptions
