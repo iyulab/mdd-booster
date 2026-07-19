@@ -60,7 +60,7 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
 
             Directory.CreateDirectory(formsDir);
 
-            var formFiles = TsFormRenderer.RenderAll(context.Models, enumNames);
+            var formFiles = TsFormRenderer.RenderAll(context.Models, context.Enums);
             foreach (var (entityName, content) in formFiles)
             {
                 File.WriteAllText(Path.Combine(formsDir, $"{entityName}Form_gen.tsx"), content);

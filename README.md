@@ -57,6 +57,61 @@ mdd ./mdd  # mdd.json이 있는 디렉터리
 | `### Indexes` 섹션 | ⏳ |
 | `@inherits(FQN)` → C# 베이스클래스 오버라이드 (도메인 중립, verbatim) | ✅ |
 | `@implements(FQN, ...)` → C# 인터페이스 append (도메인 중립, verbatim) | ✅ |
+| enum 값의 `@system` → 생성 폼 선택지에서 제외 (아래) | ✅ |
+
+### 생성기 해석 attribute (TypeScript 타깃)
+
+M3L 파서는 attribute를 **의미 없이 기록만** 한다. 아래는 mdd-booster의 TypeScript 타깃이
+그 기록에 부여하는 의미다. M3L 표준 attribute(`@pk`·`@reference` 등)와 달리 **이 목록은
+mdd-booster 고유**이며, 다른 생성기는 이들을 무시한다.
+
+| attribute | 대상 | 생성 결과 |
+|---|---|---|
+| `@group("이름")` | 필드 | 폼을 `<FormSection title="이름">`으로 묶는다. 없으면 `"기타"` 섹션 |
+| `@help("설명")` | 필드 | 컨트롤에 `description="설명"` — 라벨은 짧게 두고 예시·부연을 아래로 분리 |
+| `@slot` | 필드 | 인라인 컨트롤 대신 **슬롯 자리표시자**로 렌더 (호출부가 내용을 주입). `@reference` FK 필드는 자동으로 슬롯 |
+| `@display_labels(다른Enum)` | enum 필드 | 표시 텍스트만 다른 enum의 라벨맵으로 교체. **저장/캐스트 타입은 그대로** |
+| `@system` | **enum 값** | 생성 폼 선택지에서 제외 (아래) |
+
+### enum 값의 `@system` — 표시 라벨과 입력 선택지의 분리
+
+M3L은 enum **값**에 붙은 attribute를 의미 없이 기록만 한다. 그 의미를 정하는 것은 생성기의 몫이며,
+`@system`은 **"시스템이 쓰는 값, 사람이 고르는 값이 아니다"** 로 해석된다.
+
+```markdown
+## PaymentMethod ::enum
+- cash: "현금"
+- card: "카드"
+- legacy_carryover: "레거시 이관 정리" @system
+```
+
+생성 결과:
+
+```ts
+// enum_labels_gen.ts — 표시 라벨은 전체 유지 (기존 행이 계속 렌더돼야 하므로)
+export const PaymentMethodLabels: Record<PaymentMethod, string> = {
+  Cash: '현금', Card: '카드', LegacyCarryover: '레거시 이관 정리',
+} as const
+
+/** Input choices — excludes values marked @system in the model. */
+export const PaymentMethodSelectableLabels: Record<Exclude<PaymentMethod, 'LegacyCarryover'>, string> = {
+  Cash: '현금', Card: '카드',
+} as const
+```
+
+```tsx
+// {Entity}Form_gen.tsx — 폼은 좁혀진 맵을 쓴다
+options={enumToOptions(PaymentMethodSelectableLabels)}
+```
+
+**`@system`은 저장이 아니라 작성(authoring)을 제한한다.** 값은 SQL CHECK 제약, C# enum,
+표시 라벨 맵에 **그대로 남는다** — 서버·마이그레이션이 쓰는 유효한 저장값이기 때문이다.
+빠지는 것은 생성 폼의 선택지뿐이다.
+
+소비앱의 `enumToOptions` 헬퍼 시그니처는 **바뀌지 않는다**. 좁힘은 별도 맵으로 표현되므로
+헬퍼는 여전히 `Record<string, string>` 하나만 받으면 된다.
+
+> 요구 버전: `M3L.Native` 0.6.0 이상 (enum 값 attribute 파싱 지원).
 
 ## 생성물 구조
 

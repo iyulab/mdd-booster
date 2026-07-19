@@ -135,4 +135,53 @@ public class TsEnumLabelsRendererTests
 
         Assert.Contains("/** * /로 끝나는 설명 */", result);
     }
+
+    // --- @system values: display labels vs input choices -----------------------
+    // The root defect this addresses: a generated form rendered *every* enum value
+    // as a choice, including ones only the system may write. Splitting the two
+    // concerns into two maps is the fix — the label map stays complete so existing
+    // rows still display, and a separate map carries what a person may pick.
+
+    [Fact]
+    public void Keeps_system_value_in_the_label_map()
+    {
+        var ast = LoadFixture("enum-system-value.m3l.md");
+
+        var result = TsEnumLabelsRenderer.RenderAll(ast.Enums);
+
+        // Existing rows holding this value must still render their label.
+        Assert.Contains("export const PaymentMethodLabels: Record<PaymentMethod, string> = {", result);
+        Assert.Contains("  LegacyCarryover: '레거시 이관 정리',", result);
+    }
+
+    [Fact]
+    public void Emits_selectable_map_excluding_system_values()
+    {
+        var ast = LoadFixture("enum-system-value.m3l.md");
+
+        var result = TsEnumLabelsRenderer.RenderAll(ast.Enums);
+
+        Assert.Contains(
+            "export const PaymentMethodSelectableLabels: Record<Exclude<PaymentMethod, 'LegacyCarryover'>, string> = {",
+            result);
+        Assert.Contains("  Cash: '현금',", result);
+        // The system value is absent from the entries — it appears only inside the
+        // Exclude<> type expression, which is what performs the exclusion.
+        var body = result.Replace("\r\n", "\n");
+        var selectableBody = body[body.IndexOf(">, string> = {", body.IndexOf("PaymentMethodSelectableLabels", StringComparison.Ordinal), StringComparison.Ordinal)..];
+        selectableBody = selectableBody[..selectableBody.IndexOf("} as const", StringComparison.Ordinal)];
+        Assert.DoesNotContain("LegacyCarryover", selectableBody);
+        Assert.Contains("Card:", selectableBody);
+    }
+
+    [Fact]
+    public void Does_not_emit_selectable_map_when_no_value_is_system()
+    {
+        var ast = LoadFixture("enum-system-value.m3l.md");
+
+        var result = TsEnumLabelsRenderer.RenderAll(ast.Enums);
+
+        // Priority has no @system value — a second map would be dead weight.
+        Assert.DoesNotContain("PrioritySelectableLabels", result);
+    }
 }

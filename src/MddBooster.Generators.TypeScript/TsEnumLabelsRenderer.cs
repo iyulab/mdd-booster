@@ -68,8 +68,50 @@ public static class TsEnumLabelsRenderer
 
             sb.AppendLine("} as const");
             sb.AppendLine();
+
+            AppendSelectableLabels(sb, enumNode, typeName);
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Emits the input-choice map for enums carrying <c>@system</c> values.
+    /// </summary>
+    /// <remarks>
+    /// Display labels and input choices are different concerns that used to share
+    /// one source, which is why generated forms offered values only the system may
+    /// write. The label map above stays complete (existing rows must still render);
+    /// this narrower map is what a form offers.
+    /// <para>
+    /// Typed as <c>Record&lt;Exclude&lt;T, 'Excluded'&gt;, string&gt;</c> so the exclusion is
+    /// checked by the compiler and the map still satisfies a <c>Record&lt;string, string&gt;</c>
+    /// parameter — no change is required of the consumer's <c>enumToOptions</c> helper.
+    /// </para>
+    /// </remarks>
+    private static void AppendSelectableLabels(StringBuilder sb, EnumNode enumNode, string typeName)
+    {
+        if (!EnumValueVisibility.HasSystemValues(enumNode)) return;
+
+        var excluded = enumNode.Values
+            .Where(EnumValueVisibility.IsSystemValue)
+            .Select(v => "'" + TypeScriptTypeMapper.PascalCase(v.Name ?? string.Empty) + "'")
+            .ToList();
+
+        sb.AppendLine("/** Input choices — excludes values marked @system in the model. */");
+        sb.Append("export const ").Append(EnumValueVisibility.SelectableLabelsName(typeName))
+          .Append(": Record<Exclude<").Append(typeName).Append(", ")
+          .Append(string.Join(" | ", excluded)).AppendLine(">, string> = {");
+
+        foreach (var v in enumNode.Values.Where(v => !EnumValueVisibility.IsSystemValue(v)))
+        {
+            var key = TypeScriptTypeMapper.PascalCase(v.Name ?? string.Empty);
+            var label = !string.IsNullOrWhiteSpace(v.Description) ? v.Description : key;
+            var escaped = label.Replace("\\", "\\\\").Replace("'", "\\'");
+            sb.Append("  ").Append(key).Append(": '").Append(escaped).AppendLine("',");
+        }
+
+        sb.AppendLine("} as const");
+        sb.AppendLine();
     }
 }
