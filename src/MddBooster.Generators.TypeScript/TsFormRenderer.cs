@@ -41,6 +41,55 @@ public static class TsFormRenderer
         return result;
     }
 
+    /// <summary>Which UI control a field renders as.</summary>
+    private enum FormControl
+    {
+        /// <summary>Rendered by the caller through a slot, not by this component.</summary>
+        Slot,
+        Checkbox,
+        Select,
+        /// <summary>Multi-line — <c>text</c>, which m3l defines as length-unbounded.</summary>
+        Textarea,
+        /// <summary>Single-line: date, numbers, and sized strings all land here.</summary>
+        Input,
+    }
+
+    /// <summary>
+    /// Classifies a field to its control. <b>The single source of that decision.</b>
+    /// </summary>
+    /// <remarks>
+    /// Two places need this answer and they must never disagree: the import list at
+    /// the top of the file, and the element rendered further down. When they were
+    /// computed separately, the import list drifted — importing a control nothing
+    /// used, which surfaces in the consumer's build as TS6133
+    /// (<c>declared but never read</c>) rather than anywhere the generator can see.
+    /// Adding a control type is now a change in exactly one predicate.
+    /// </remarks>
+    private static FormControl ControlFor(FieldNode field, IReadOnlySet<string> enumNames)
+    {
+        if (HasAttribute(field, "reference") || HasAttribute(field, "slot"))
+            return FormControl.Slot;
+        if (string.Equals(field.Type, "boolean", StringComparison.OrdinalIgnoreCase))
+            return FormControl.Checkbox;
+        if (field.Type != null && enumNames.Contains(field.Type))
+            return FormControl.Select;
+        if (string.Equals(field.Type, "text", StringComparison.OrdinalIgnoreCase))
+            return FormControl.Textarea;
+        return FormControl.Input;
+    }
+
+    /// <summary>
+    /// Minimum visible rows for a generated textarea.
+    /// </summary>
+    /// <remarks>
+    /// Not optional. <c>&lt;u-textarea&gt;</c> auto-sizes and starts at a single row, so
+    /// omitting this leaves it visually identical to a single-line input — the very
+    /// symptom this rendering exists to fix. The attribute is <c>minRows</c>;
+    /// <c>rows</c> does not exist on the component.
+    /// The model carries no row count, so this stays a generator constant.
+    /// </remarks>
+    private const int TextareaMinRows = 3;
+
     /// <summary>
     /// The label map a field's <c>USelect</c> actually reads from.
     /// </summary>
@@ -141,18 +190,18 @@ public static class TsFormRenderer
 
         sb.AppendLine("import { FormSection, FormRow } from '@iyulab/enterprise'");
 
-        var hasBooleans = renderableFields.Any(f =>
-            string.Equals(f.Type, "boolean", StringComparison.OrdinalIgnoreCase));
-        var hasEnums = enumImports.Count > 0;
-        // UInput is only needed when there are renderable non-enum, non-boolean, non-FK fields.
-        var hasUInput = renderableFields.Any(f =>
-            !string.Equals(f.Type, "boolean", StringComparison.OrdinalIgnoreCase)
-            && (f.Type == null || !enumImports.Any(e =>
-                string.Equals(TypeScriptTypeMapper.PascalCase(f.Type!), e, StringComparison.Ordinal))));
+        // Import exactly the controls the rendered fields actually use — derived from
+        // the same classifier the renderer dispatches on, so the two cannot disagree.
+        // An unused import is not harmless here: it fails the consumer's build with
+        // TS6133, somewhere this generator never runs.
+        var usedControls = renderableFields
+            .Select(f => ControlFor(f, enumNames))
+            .ToHashSet();
         var uiImports = new List<string>();
-        if (hasUInput) uiImports.Add("UInput");
-        if (hasEnums) uiImports.Add("USelect");
-        if (hasBooleans) uiImports.Add("UCheckbox");
+        if (usedControls.Contains(FormControl.Input)) uiImports.Add("UInput");
+        if (usedControls.Contains(FormControl.Textarea)) uiImports.Add("UTextarea");
+        if (usedControls.Contains(FormControl.Select)) uiImports.Add("USelect");
+        if (usedControls.Contains(FormControl.Checkbox)) uiImports.Add("UCheckbox");
         if (uiImports.Count > 0)
             sb.Append("import { ").Append(string.Join(", ", uiImports)).AppendLine(" } from '../components/ui'");
         sb.Append("import type { ").Append(entityName).AppendLine(" } from '../types/entities_gen'");
@@ -347,19 +396,27 @@ public static class TsFormRenderer
         var helpText = GetAttributeString(field, "help");
         var descAttr = !string.IsNullOrEmpty(helpText) ? $" description=\"{helpText}\"" : "";
 
+        // Dispatch on the same classifier the import list uses (see ControlFor).
+        var control = ControlFor(field, enumNames);
+
         // FK or @slot → slot placeholder.
         // Uses `!== undefined` check (not ??) so callers can pass null to suppress the field entirely.
-        if (HasAttribute(field, "reference") || HasAttribute(field, "slot"))
+        if (control == FormControl.Slot)
             return $"{{slots?.{prop} !== undefined ? slots.{prop} : <span className=\"text-gray-400 text-xs\">{label} slot</span>}}";
 
-        // boolean → UCheckbox
-        if (string.Equals(field.Type, "boolean", StringComparison.OrdinalIgnoreCase))
+        if (control == FormControl.Checkbox)
             return $"<UCheckbox label=\"{label}\"{descAttr} checked={{form.{prop} ?? false}} onChange={{v => onChange({{ {prop}: v }})}} />";
 
-        // enum → USelect
-        if (field.Type != null && enumNames.Contains(field.Type))
+        // text → UTextarea. m3l's `text` means length-unbounded (the SQL target emits
+        // NVARCHAR(MAX) for it), so a single-line control contradicts the model.
+        // minRows is load-bearing — see TextareaMinRows.
+        if (control == FormControl.Textarea)
+            return $"<UTextarea label=\"{label}\"{requiredAttr}{descAttr} minRows={{{TextareaMinRows}}} value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || null }})}} />";
+
+        if (control == FormControl.Select)
         {
-            var enumTypeName = TypeScriptTypeMapper.PascalCase(field.Type);
+            // Select is only classified for a field whose Type names a known enum.
+            var enumTypeName = TypeScriptTypeMapper.PascalCase(field.Type!);
             // Which map supplies the choices — see EffectiveLabelMap. The stored/cast
             // type stays enumTypeName regardless: narrowing the choices never narrows
             // what may be stored.
@@ -381,10 +438,6 @@ public static class TsFormRenderer
             var dateEmpty = field.Nullable ? "null" : "undefined";
             return $"<UInput label=\"{label}\"{requiredAttr}{descAttr} type=\"date\" value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || {dateEmpty} }})}} />";
         }
-
-        // text → UInput (full-width handled by IsFullWidth)
-        if (string.Equals(field.Type, "text", StringComparison.OrdinalIgnoreCase))
-            return $"<UInput label=\"{label}\"{descAttr} value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || null }})}} />";
 
         // number types — onChange uses undefined (not null) because Partial<T> marks fields as T | undefined.
         if (IsNumberType(field.Type))

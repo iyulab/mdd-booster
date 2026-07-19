@@ -59,6 +59,60 @@ mdd ./mdd  # mdd.json이 있는 디렉터리
 | `@implements(FQN, ...)` → C# 인터페이스 append (도메인 중립, verbatim) | ✅ |
 | enum 값의 `@system` → 생성 폼 선택지에서 제외 (아래) | ✅ |
 
+### ⚠️ 소비 프로젝트 계약 (TypeScript 타깃)
+
+생성된 `*Form_gen.tsx`는 **소비 프로젝트가 제공해야 하는 모듈**을 import한다.
+**생성되는 모든 import는 소비자에 대한 요구조건이다** — 아래를 갖추지 않으면 생성 코드가
+소비앱 빌드에서 컴파일되지 않는다. (mdd-booster 자체 테스트는 생성된 TS를 컴파일하지 않으므로,
+이 계약의 위반은 **소비앱 빌드에서만** 드러난다.)
+
+#### `../components/ui` — 배럴이 export해야 하는 컴포넌트
+
+| 컴포넌트 | 언제 import되나 | 받는 프롭 |
+|---|---|---|
+| `UInput` | date · 숫자 · 문자열 필드 | `label` `required?` `description?` `type?`(`"date"`/`"number"`) `value: string` `onChange: (v: string) => void` |
+| `UTextarea` | `text` 필드 | `label` `required?` `description?` **`minRows: number`** `value: string` `onChange: (v: string) => void` |
+| `USelect` | enum 필드 | `label` `required?` `description?` `placeholder?` `value: string` `options` `onChange: (v: string) => void` |
+| `UCheckbox` | boolean 필드 | `label` `description?` `checked: boolean` `onChange: (v: boolean) => void` |
+
+- `required` / `description` 은 **모델이 그렇게 말할 때만** 방출된다
+  (`@not_null` → `required`, `@help("...")` → `description`).
+  즉 **네 컴포넌트 모두 `description`을 받을 수 있어야 한다** — 하나라도 빠지면
+  그 타입의 필드에 `@help`를 붙이는 순간 빌드가 깨진다.
+- `value`/`onChange`는 **controlled 패턴**을 전제한다(빈 상태 sentinel은 `''`).
+
+#### `../lib/select-options` — 헬퍼
+
+```ts
+export function enumToOptions(labels: Record<string, string>): /* USelect의 options 타입 */
+```
+생성기가 요구하는 것은 **인자 하나**와 그 결과가 `USelect`의 `options`에 그대로 들어간다는 것뿐이다
+(반환 타입은 소비자가 정한다). 값을 좁힐 때도 **인자를 늘리지 않고** 좁혀진 라벨맵을 따로 생성해
+넘기므로(아래 `@system` 절), 이 시그니처는 안정적이다.
+
+#### `@iyulab/enterprise` — 레이아웃
+
+`FormSection`(`title`) · `FormRow`(`full?`) 를 export해야 한다.
+
+#### 생성기가 제공하는 것 (소비자가 만들 필요 없음)
+
+`../types/entities_gen` · `../types/enums_gen` · `../types/enum_labels_gen` — 전부 생성물이다.
+
+### 타입 → 컨트롤 매핑
+
+| m3l 타입 | 컨트롤 | 비고 |
+|---|---|---|
+| `text` | `UTextarea` (`minRows={3}`) | 길이 무제한 = 여러 줄 의도. SQL 타깃도 `NVARCHAR(MAX)`로 방출하며, 폼에서 **전폭 배치**된다 |
+| `boolean` | `UCheckbox` | |
+| enum 타입명 | `USelect` | |
+| `date` | `UInput type="date"` | |
+| 숫자 타입 (`integer`/`decimal`/`long`/…) | `UInput type="number"` | |
+| 그 외 (`string(n)` 등) | `UInput` | |
+| `@reference` FK · `@slot` | **슬롯 자리표시자** | 호출부가 내용을 주입 |
+
+> `minRows`는 선택 옵션이 아니다. `<u-textarea>`는 자동 높이 조절이라 **1줄에서 시작**하므로,
+> 없으면 단일행 입력과 육안으로 구분되지 않는다. (속성명은 `minRows`이며 `rows`는 존재하지 않는다.)
+
 ### 생성기 해석 attribute (TypeScript 타깃)
 
 M3L 파서는 attribute를 **의미 없이 기록만** 한다. 아래는 mdd-booster의 TypeScript 타깃이

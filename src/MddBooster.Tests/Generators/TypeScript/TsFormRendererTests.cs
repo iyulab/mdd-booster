@@ -180,4 +180,89 @@ public class TsFormRendererTests
         Assert.Contains("options={enumToOptions(PriorityLabels)}", content);
         Assert.DoesNotContain("PrioritySelectableLabels", content);
     }
+
+    // --- text → multiline control ----------------------------------------------
+    // `text` means "no length limit" — the SQL target already honours that with
+    // NVARCHAR(MAX), and IsFullWidth already gives the field full width. Rendering
+    // it as a single-line input threw away a fact the generator already had.
+
+    private static IReadOnlyList<ResolvedModel> LoadTextFixture()
+    {
+        var ast = new M3lLoader().LoadFile(
+            Path.Combine(AppContext.BaseDirectory, "fixtures", "text-fields.m3l.md"));
+        return new InterfaceResolver(ast).ResolveAll();
+    }
+
+    [Fact]
+    public void Renders_UTextarea_for_text_field()
+    {
+        var results = TsFormRenderer.RenderAll(LoadTextFixture(), []);
+        var content = results["Article"];
+
+        Assert.Contains("<UTextarea label=\"내용\"", content);
+        // string(200) stays a single-line input — only `text` changes.
+        Assert.Contains("<UInput label=\"제목\"", content);
+    }
+
+    [Fact]
+    public void Text_field_emits_minRows_not_rows()
+    {
+        // <u-textarea> auto-sizes and STARTS AT ONE ROW, so without minRows it is
+        // visually indistinguishable from a single-line input — the reported symptom
+        // would survive the fix. And `rows` does not exist on the component at all
+        // (only minRows/maxRows), so emitting it is a type error.
+        var results = TsFormRenderer.RenderAll(LoadTextFixture(), []);
+        var content = results["Article"];
+
+        Assert.Contains("minRows={3}", content);
+        // " rows=" cannot match inside "minRows=" — no leading space there.
+        Assert.DoesNotContain(" rows=", content);
+    }
+
+    [Fact]
+    public void Text_field_keeps_help_description()
+    {
+        var results = TsFormRenderer.RenderAll(LoadTextFixture(), []);
+        var content = results["Memo"];
+
+        Assert.Contains("<UTextarea", content);
+        Assert.Contains("description=\"여러 줄로 작성하세요\"", content);
+    }
+
+    [Fact]
+    public void Text_only_entity_does_not_import_unused_UInput()
+    {
+        // Memo's only writable field is `body: text?`. Importing UInput anyway
+        // produces TS6133 "declared but never read" in the consumer build — the
+        // same regression class as the unused label-map import above.
+        var results = TsFormRenderer.RenderAll(LoadTextFixture(), []);
+        var content = results["Memo"];
+
+        Assert.Contains("UTextarea", content);
+        Assert.DoesNotContain("UInput", content);
+    }
+
+    [Fact]
+    public void Text_field_stays_full_width()
+    {
+        // Pre-existing behaviour (IsFullWidth) must survive the control change.
+        var results = TsFormRenderer.RenderAll(LoadTextFixture(), []);
+        var content = results["Article"];
+
+        Assert.Contains("<FormRow full>", content);
+    }
+
+    [Fact]
+    public void Required_text_field_is_marked_required()
+    {
+        // Every other control emits `required` from a non-nullable field. Textarea
+        // omitting it reproduces the shape of the defect that started this work:
+        // the form permits what the database will reject.
+        var results = TsFormRenderer.RenderAll(LoadTextFixture(), []);
+        var content = results["Article"];
+
+        Assert.Contains("<UTextarea label=\"요약\" required", content);
+        // The nullable one stays unmarked.
+        Assert.Contains("<UTextarea label=\"내용\" minRows", content);
+    }
 }
