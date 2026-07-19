@@ -184,4 +184,20 @@ public class TsEnumLabelsRendererTests
         // Priority has no @system value — a second map would be dead weight.
         Assert.DoesNotContain("PrioritySelectableLabels", result);
     }
+
+    [Fact]
+    public void System_value_still_reaches_the_sql_check_constraint()
+    {
+        // @system constrains authoring, never storage. The value must remain a
+        // legal stored value — the server and migrations write it. Asserted on
+        // the same fixture that drives the form exclusion, so the two can never
+        // drift into "excluded from the form AND rejected by the database".
+        var ast = LoadFixture("enum-system-value.m3l.md");
+        var paymentMethod = ast.Enums.Single(e => e.Name == "PaymentMethod");
+
+        var check = MddBooster.Generators.Model.EnumRenderer.RenderSqlCheckValues(paymentMethod);
+
+        Assert.Contains("N'legacy_carryover'", check);
+        Assert.Contains("N'cash'", check);
+    }
 }
