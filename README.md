@@ -2,7 +2,7 @@
 
 M3L → SQL/C#/API 코드 생성기. 단일 `tables.m3l.md` 소스로 SSDT 스키마, EF Core 엔티티 + DbContext, OData/GraphQL 등록 코드를 일괄 생성한다.
 
-> **상태**: 리라이트 중 (2026-04-05). 이전 `MDD-Booster` 전역 도구는 이 저장소의 과거 버전. 현재 구조는 4-저장소 스택 (`m3l` / `mdd-booster` / `iyu-framework-v5` / consumer) 일부로 재설계됨. 자세한 배경: [`claudedocs/plans/2026-04-05-mdd-booster-rewrite-design.md`](claudedocs/plans/2026-04-05-mdd-booster-rewrite-design.md).
+> **상태**: 리라이트 중 (2026-04-05). 이전 `MDD-Booster` 전역 도구는 이 저장소의 과거 버전. 현재 구조는 4-저장소 스택 (`m3l` / `mdd-booster` / `iyu-framework-v5` / consumer) 일부로 재설계됨.
 
 ## 생성 타깃
 
@@ -240,9 +240,3 @@ dotnet test MddBooster.slnx --nologo
 - [m3l](https://github.com/iyulab/m3l) — Rust 기반 M3L 파서 (NuGet `M3L.Native`)
 - [iyu-framework-v5](https://github.com/iyulab/iyu-framework-v5) — 런타임 (EF Core + OData + HotChocolate GraphQL)
 - yesung — 첫 소비 애플리케이션 (예성카렌다 OMS)
-
-## 설계 문서
-
-- [`claudedocs/plans/2026-04-05-mdd-booster-rewrite-design.md`](claudedocs/plans/2026-04-05-mdd-booster-rewrite-design.md) — 정본 설계 스펙
-- [`claudedocs/cycle-logs/`](claudedocs/cycle-logs/) — 사이클별 개발 이력 (local, .gitignore)
-- [`TASKS.md`](TASKS.md) — Plan 단위 완료/잔여 추적
