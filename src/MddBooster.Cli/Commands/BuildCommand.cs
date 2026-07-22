@@ -78,6 +78,20 @@ public sealed class BuildCommand
             .FirstOrDefault(t => t.Type == "Model")?
             .Namespace;
 
+        // 방언 정합 검사 — Sql 타깃이 snake DB를 만드는데 Model 타깃이 기본 매핑이면
+        // (또는 그 역이면) 런타임 DB 오류가 되어서야 드러난다. 빌드 시점 경고로 표면화.
+        var sqlPg = cfg.Targets.Any(t => t.Type == "Sql" && IsPostgresDialect(t));
+        foreach (var modelTarget in cfg.Targets.Where(t => t.Type == "Model"))
+        {
+            if (sqlPg != IsPostgresDialect(modelTarget)
+                && cfg.Targets.Any(t => t.Type == "Sql"))
+            {
+                Console.Error.WriteLine(
+                    "[config] 경고: Sql 타깃과 Model 타깃의 dialect가 다릅니다 — 생성 DDL과 " +
+                    "EF 매핑이 서로 다른 네이밍을 전제하게 됩니다. 두 타깃에 같은 dialect를 지정하세요.");
+            }
+        }
+
         // 2. 타깃별 생성기 실행
         foreach (var target in cfg.Targets)
         {
@@ -92,18 +106,59 @@ public sealed class BuildCommand
         return 0;
     }
 
+    /// <summary>Model·Sql 타깃 공용 dialect 판정. 미지 값은 각 분기에서 오류.</summary>
+    private static bool IsPostgresDialect(MddJsonTarget target)
+        => target.Dialect?.ToLowerInvariant() is "postgres" or "postgresql" or "pg";
+
+    /// <summary>
+    /// Sql 타깃의 방언 분기. 기본(tsql)은 현행 SSDT/T-SQL 경로 그대로 — 기존 소비자 무영향.
+    /// postgres는 SSDT 개념 노브(emitSqlProj/emitRefreshScript)와 양립하지 않으므로
+    /// 명시 설정 시 조용히 무시하지 않고 오류로 알린다.
+    /// </summary>
+    private static IArtifactGenerator CreateSqlGenerator(MddJsonTarget target)
+    {
+        switch (target.Dialect?.ToLowerInvariant())
+        {
+            case null or "tsql":
+                return new SqlGenerator(new SqlGeneratorOptions
+                {
+                    ProjectPath = target.ProjectPath,
+                    Schema = target.Schema ?? "dbo",
+                    EmitSqlProj = target.EmitSqlProj ?? true,
+                    EmitRefreshScript = target.EmitRefreshScript ?? true,
+                    EmitEnumCheckConstraints = target.EmitEnumCheckConstraints ?? false,
+                });
+
+            case "postgres" or "postgresql" or "pg":
+                if (target.EmitSqlProj == true)
+                {
+                    throw new InvalidOperationException(
+                        "dialect 'postgres'는 emitSqlProj를 지원하지 않습니다 (.sqlproj는 SSDT/T-SQL 개념) — 옵션을 제거하세요.");
+                }
+                if (target.EmitRefreshScript == true)
+                {
+                    throw new InvalidOperationException(
+                        "dialect 'postgres'는 emitRefreshScript를 지원하지 않습니다 (sp_refreshview는 T-SQL 개념) — 옵션을 제거하세요.");
+                }
+                return new MddBooster.Generators.Sql.Postgres.PostgresSqlGenerator(
+                    new MddBooster.Generators.Sql.Postgres.PostgresSqlGeneratorOptions
+                    {
+                        ProjectPath = target.ProjectPath,
+                        Schema = target.Schema ?? "public",
+                        EmitEnumCheckConstraints = target.EmitEnumCheckConstraints ?? false,
+                    });
+
+            default:
+                throw new NotSupportedException(
+                    $"지원하지 않는 Sql dialect: '{target.Dialect}' (지원: tsql, postgres)");
+        }
+    }
+
     private IArtifactGenerator ResolveGenerator(MddJsonTarget target, string? modelNamespace)
     {
         return target.Type switch
         {
-            "Sql" => new SqlGenerator(new SqlGeneratorOptions
-            {
-                ProjectPath = target.ProjectPath,
-                Schema = target.Schema ?? "dbo",
-                EmitSqlProj = target.EmitSqlProj ?? true,
-                EmitRefreshScript = target.EmitRefreshScript ?? true,
-                EmitEnumCheckConstraints = target.EmitEnumCheckConstraints ?? false,
-            }),
+            "Sql" => CreateSqlGenerator(target),
             "Model" => new MddBooster.Generators.Model.ModelGenerator(
                 new MddBooster.Generators.Model.ModelGeneratorOptions
                 {
@@ -113,6 +168,7 @@ public sealed class BuildCommand
                     DbContextName = target.DbContextName
                         ?? throw new InvalidOperationException("Model target requires 'dbContextName'."),
                     SqlProjectPath = target.SqlProjectPath,
+                    PostgresNaming = IsPostgresDialect(target),
                 }),
             "Api" => new MddBooster.Generators.Api.ApiRegistrationGenerator(
                 new MddBooster.Generators.Api.ApiRegistrationGeneratorOptions

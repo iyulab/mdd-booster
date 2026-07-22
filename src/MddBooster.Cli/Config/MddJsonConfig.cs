@@ -20,6 +20,14 @@ public sealed class MddJsonTarget
     public string ProjectPath { get; set; } = "";
 
     // Sql target
+    /// <summary>
+    /// Sql target: SQL dialect. <c>"tsql"</c> (default — current SSDT/T-SQL behavior) or
+    /// <c>"postgres"</c> (snake_case identifiers per naming gates, <c>tables_gen/</c> layout,
+    /// scope aligned with Schemorph PG capabilities). Unknown values are a build error.
+    /// </summary>
+    [JsonPropertyName("dialect")]
+    public string? Dialect { get; set; }
+
     [JsonPropertyName("schema")]
     public string? Schema { get; set; }
 

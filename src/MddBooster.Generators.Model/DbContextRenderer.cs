@@ -24,7 +24,8 @@ public static class DbContextRenderer
         IReadOnlyList<ResolvedModel> models,
         string contextName,
         string ns,
-        IReadOnlySet<string>? customExtViewModels = null)
+        IReadOnlySet<string>? customExtViewModels = null,
+        bool postgresNaming = false)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentException.ThrowIfNullOrWhiteSpace(contextName);
@@ -73,6 +74,18 @@ public static class DbContextRenderer
         sb.AppendLine("    protected override void OnModelCreating(ModelBuilder modelBuilder)");
         sb.AppendLine("    {");
         sb.AppendLine("        base.OnModelCreating(modelBuilder);");
+
+        if (postgresNaming)
+        {
+            // ADR-0001 §2.3: 모델 PascalCase ↔ DB snake_case 간극은 생성 코드에 구운
+            // 명시 매핑이 흡수한다 — 런타임 컨벤션 추론 없음. 테이블명은 PG 방언과
+            // 같은 변환(PostgresIdentifiers), 컬럼명은 M3L 필드명 그대로.
+            RenderPostgresMappings(sb, ordered, customExtViewModels);
+            sb.AppendLine("    }");
+            sb.AppendLine("}");
+            return sb.ToString();
+        }
+
         foreach (var m in extMappings)
         {
             var viewName = m.Backing switch
@@ -105,6 +118,70 @@ public static class DbContextRenderer
         sb.AppendLine("}");
         return sb.ToString();
     }
+
+    /// <summary>
+    /// PG 방언의 엔티티별 명시 매핑 블록. 쓰기 엔티티는 snake 테이블로, Ext 읽기 모델은
+    /// 뷰 backing이 없으면 같은 snake 테이블을 뷰로 읽는다(뷰 backing이 있으면 기존
+    /// 뷰 이름을 유지 — PG 방언은 뷰를 방출하지 않으므로 ModelGenerator가 경고한다).
+    /// 컬럼 매핑은 저장 필드 전체: 속성 PascalCase → 컬럼 = M3L 필드명 그대로.
+    /// 공유 PK(필드명 != id)는 상속된 <c>Id</c> 속성이 그 필드의 물리명으로 간다.
+    /// <c>json</c> 필드는 DDL이 jsonb이므로 <c>HasColumnType("jsonb")</c>를 함께 굽는다(D24).
+    /// </summary>
+    private static void RenderPostgresMappings(
+        StringBuilder sb,
+        IReadOnlyList<ResolvedModel> ordered,
+        IReadOnlySet<string>? customExtViewModels)
+    {
+        var tableNames = PostgresIdentifiers.BuildTableNameMap(ordered.Select(m => m.Name));
+
+        foreach (var model in ordered)
+        {
+            var name = PascalCase(model.Name);
+            var table = tableNames[model.Name];
+            var pk = ModelPrimaryKey.Find(model);
+            var backing = ClassifyBacking(model, customExtViewModels);
+            var extView = backing switch
+            {
+                "ext" => name + "ExtView",
+                "full" => name + "FullView",
+                "ud" => name + "UdView",
+                _ => table,   // 뷰 backing 없음 — 같은 snake 테이블을 읽는다
+            };
+
+            sb.AppendLine();
+            sb.Append("        modelBuilder.Entity<").Append(name).AppendLine(">(e =>");
+            sb.AppendLine("        {");
+            sb.Append("            e.ToTable(\"").Append(table).AppendLine("\");");
+            AppendPostgresColumns(sb, model, pk);
+            sb.AppendLine("        });");
+
+            sb.Append("        modelBuilder.Entity<").Append(name).AppendLine("Ext>(e =>");
+            sb.AppendLine("        {");
+            sb.AppendLine("            e.ToTable((string?)null);");
+            sb.Append("            e.ToView(\"").Append(extView).AppendLine("\");");
+            AppendPostgresColumns(sb, model, pk);
+            sb.AppendLine("        });");
+        }
+    }
+
+    private static void AppendPostgresColumns(StringBuilder sb, ResolvedModel model, FieldNode? pk)
+    {
+        foreach (var field in BaseColumnsOf(model))
+        {
+            // 공유/명명 PK 필드는 엔티티에 별도 속성이 없다 — 상속된 Id가 그 컬럼이다.
+            var property = ReferenceEquals(field, pk) ? "Id" : PascalCase(field.Name);
+            sb.Append("            e.Property(x => x.").Append(property)
+              .Append(").HasColumnName(\"").Append(field.Name).Append("\")");
+            if (string.Equals(field.Type, "json", StringComparison.Ordinal))
+            {
+                sb.Append(".HasColumnType(\"jsonb\")");
+            }
+            sb.AppendLine(";");
+        }
+    }
+
+    private static IEnumerable<FieldNode> BaseColumnsOf(ResolvedModel model)
+        => model.Fields.Where(f => f.Kind == FieldKind.Stored);
 
     private static string ClassifyBacking(ResolvedModel model, IReadOnlySet<string>? customExtViewModels)
     {

@@ -127,41 +127,10 @@ public static class ColumnRenderer
         => MddBooster.Core.Ast.FieldAttributes.Has(field, name);
 
     private static string? GetAttributeFirstParam(FieldNode field, string name)
-    {
-        var attr = MddBooster.Core.Ast.FieldAttributes.Find(field, name);
-        if (attr is null) return null;
-        var parameters = ExtractStringParams(attr.Args);
-        return parameters is { Count: > 0 } ? parameters[0] : null;
-    }
+        => MddBooster.Core.Ast.FieldAttributes.FirstArg(field, name);
 
     private static IReadOnlyList<string>? ExtractStringParams(List<JsonElement>? paramsList)
-    {
-        if (paramsList is null || paramsList.Count == 0)
-        {
-            return null;
-        }
-
-        return paramsList
-            .Select(p => p.ValueKind switch
-            {
-                JsonValueKind.Number => NumberToString(p),
-                JsonValueKind.String => p.GetString() ?? string.Empty,
-                _ => p.GetRawText(),
-            })
-            .ToList();
-    }
-
-    private static string NumberToString(JsonElement element)
-    {
-        // M3L.Native serializes integer params as doubles (e.g. 30.0).
-        // Emit as integer string when there is no fractional part.
-        if (element.TryGetDouble(out var d) && d == Math.Floor(d) && !double.IsInfinity(d))
-        {
-            return ((long)d).ToString();
-        }
-
-        return element.GetRawText();
-    }
+        => MddBooster.Core.Ast.FieldAttributes.StringArgs(paramsList);
 
     private static string ToPascalCase(string snake)
     {

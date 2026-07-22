@@ -53,11 +53,27 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
             File.WriteAllText(Path.Combine(entityDir, $"{baseName}Ext.cs"), rendered.Read);
         }
 
+        if (_options.PostgresNaming)
+        {
+            // PG 방언은 뷰를 방출하지 않는다 — 뷰 backing이 필요한 Ext 읽기 모델은
+            // 존재하지 않는 뷰에 매핑되므로 무음 함정이 되기 전에 경고로 표면화한다.
+            foreach (var model in context.Models)
+            {
+                if (DetermineExtBacking(model, customExtViewModels) != EntityPairRenderer.ExtBacking.None)
+                {
+                    Console.Error.WriteLine(
+                        $"[model] 경고: 모델 '{model.Name}'의 Ext 읽기 모델은 뷰 backing이 필요한데 " +
+                        "PG 방언은 뷰를 방출하지 않는다 (Schemorph P3 이후) — 해당 뷰를 직접 만들기 전까지 Ext 질의는 실패한다");
+                }
+            }
+        }
+
         var dbContext = DbContextRenderer.Render(
             context.Models.ToList(),
             _options.DbContextName,
             _options.Namespace,
-            customExtViewModels);
+            customExtViewModels,
+            _options.PostgresNaming);
         File.WriteAllText(Path.Combine(contextDir, $"{_options.DbContextName}.cs"), dbContext);
     }
 
@@ -139,4 +155,11 @@ public sealed class ModelGeneratorOptions
     /// which models have a user-maintained ExtView (highest priority backing).
     /// </summary>
     public string? SqlProjectPath { get; init; }
+
+    /// <summary>
+    /// PG 방언 명시 매핑(ADR-0001 §2.3): DbContext에 <c>ToTable</c>(snake)/
+    /// <c>HasColumnName</c>(M3L 필드명)/json→<c>HasColumnType("jsonb")</c>를 굽는다.
+    /// 기본 false — 현행(T-SQL Pascal 렌더와 일치하는 무매핑) 유지.
+    /// </summary>
+    public bool PostgresNaming { get; init; }
 }

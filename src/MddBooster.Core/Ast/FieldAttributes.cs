@@ -61,6 +61,34 @@ public static class FieldAttributes
     }
 
     /// <summary>
+    /// 속성 인자를 문자열 목록으로 정규화. M3L.Native는 정수 인자를 double로 직렬화하므로
+    /// (예: 30.0) 정수면 정수 표기로 되돌린다. 렌더러들이 각자 사본을 두지 않도록 정본을 여기 둔다.
+    /// </summary>
+    public static IReadOnlyList<string>? StringArgs(List<System.Text.Json.JsonElement>? args)
+    {
+        if (args is null || args.Count == 0) return null;
+
+        return args
+            .Select(p => p.ValueKind switch
+            {
+                System.Text.Json.JsonValueKind.Number when p.TryGetDouble(out var d)
+                    && d == Math.Floor(d) && !double.IsInfinity(d) => ((long)d).ToString(),
+                System.Text.Json.JsonValueKind.String => p.GetString() ?? string.Empty,
+                _ => p.GetRawText(),
+            })
+            .ToList();
+    }
+
+    /// <summary>속성의 첫 문자열 인자 — 예: <c>@reference(Target)</c>의 Target. 없으면 null.</summary>
+    public static string? FirstArg(FieldNode field, string name)
+    {
+        var attr = Find(field, name);
+        if (attr is null) return null;
+        var args = StringArgs(attr.Args);
+        return args is { Count: > 0 } ? args[0] : null;
+    }
+
+    /// <summary>
     /// 알려진 속성 어휘 — 스펙 §10.8 표준 카탈로그 + mdd-booster가 소비하는 확장 속성.
     /// 카탈로그 밖 속성은 스펙상 합법 custom이므로 이 집합은 "오타 의심" 판정
     /// (SemanticAnalyzer MDD006)의 기준으로만 쓰이고, 미포함이 오류를 뜻하지 않는다.
