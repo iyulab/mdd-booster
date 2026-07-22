@@ -66,8 +66,7 @@ public static class FullViewRenderer
         // column is added, rather than leaving a `SELECT *` view silently stale (see BaseColumns).
         var baseProjection = BaseColumns.Projection(plan.Model, baseAlias);
 
-        var hasIndexed = plan.Rollups.Any(r => r.Attributes.Any(a =>
-            string.Equals(a.Name, "indexed", StringComparison.OrdinalIgnoreCase)));
+        var hasIndexed = plan.Rollups.Any(r => MddBooster.Core.Ast.FieldAttributes.Has(r, "indexed"));
 
         // --- Build JOIN list (one per unique FK column) ---
         var joinsByFk = new Dictionary<string, JoinInfo>(StringComparer.Ordinal);
@@ -300,8 +299,7 @@ public static class FullViewRenderer
             throw new InvalidOperationException(
                 $"Model '{model.Name}' has no field '{fkFieldName}' (referenced by a lookup path).");
 
-        var refAttr = field.Attributes.FirstOrDefault(a =>
-            string.Equals(a.Name, "reference", StringComparison.OrdinalIgnoreCase));
+        var refAttr = MddBooster.Core.Ast.FieldAttributes.Find(field, "reference");
         if (refAttr?.Args is null || refAttr.Args.Count == 0)
             throw new InvalidOperationException(
                 $"Lookup FK '{model.Name}.{fkFieldName}' is missing an @reference(Target) attribute.");

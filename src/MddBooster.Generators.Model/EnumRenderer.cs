@@ -7,8 +7,11 @@ namespace MddBooster.Generators.Model;
 /// Renders an M3L top-level enum declaration (<c>## Name ::enum</c>) into a
 /// C# enum type with <c>[EnumMember]</c> attributes that carry the original
 /// snake_case value names. The snake_case form is what EF Core persists via
-/// <c>HasConversion&lt;string&gt;()</c> and what the SQL generator's CHECK
-/// constraint enforces, so the two sides stay in lock-step.
+/// <c>HasConversion&lt;string&gt;()</c> — and, when the SQL target's opt-in
+/// <c>EmitEnumCheckConstraints</c> knob is on, what the generated CHECK
+/// constraint enforces (see <c>EnumSqlConvention</c> in the SQL generator).
+/// DB-level enforcement is otherwise absent by design (SSDT dacpac CHECK diff
+/// instability); EF-level conversion is then the only guard.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -71,30 +74,6 @@ public static class EnumRenderer
 
         sb.AppendLine("}");
         return sb.ToString();
-    }
-
-    /// <summary>
-    /// Concatenates the comma-separated SQL literal list used for the
-    /// <c>CHECK ([Col] IN (N'a', N'b', ...))</c> constraint emitted by the
-    /// SQL generator. Exposed here so both generators share the same value
-    /// serialization convention.
-    /// </summary>
-    public static string RenderSqlCheckValues(EnumNode enumNode)
-    {
-        ArgumentNullException.ThrowIfNull(enumNode);
-        return string.Join(", ",
-            enumNode.Values.Select(v => "N'" + (v.Name?.Replace("'", "''") ?? string.Empty) + "'"));
-    }
-
-    /// <summary>
-    /// Longest enum value name in characters — used to pick an NVARCHAR length
-    /// for enum columns. A small safety margin is added so late-stage value
-    /// additions don't require a column resize.
-    /// </summary>
-    public static int MaxValueLength(EnumNode enumNode)
-    {
-        ArgumentNullException.ThrowIfNull(enumNode);
-        return enumNode.Values.Count == 0 ? 20 : enumNode.Values.Max(v => (v.Name ?? string.Empty).Length);
     }
 
     private static string EscapeString(string? s) => (s ?? string.Empty).Replace("\\", "\\\\").Replace("\"", "\\\"");

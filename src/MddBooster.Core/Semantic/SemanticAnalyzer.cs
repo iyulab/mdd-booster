@@ -45,6 +45,7 @@ public sealed class SemanticAnalyzer
                 CheckLookupPath(model, field, diagnostics);
                 CheckRollupTarget(model, field, diagnostics);
                 CheckBinding(model, field, diagnostics);
+                CheckAttributeTypos(model, field, diagnostics);
             }
         }
 
@@ -80,8 +81,7 @@ public sealed class SemanticAnalyzer
             return;
         }
 
-        var refAttr = fkField.Attributes.FirstOrDefault(a =>
-            string.Equals(a.Name, "reference", StringComparison.OrdinalIgnoreCase));
+        var refAttr = Ast.FieldAttributes.Find(fkField, "reference");
         if (refAttr?.Args is null || refAttr.Args.Count == 0)
         {
             diagnostics.Add(new SemanticDiagnostic(
@@ -193,8 +193,7 @@ public sealed class SemanticAnalyzer
 
     private void CheckReferenceTarget(ResolvedModel model, FieldNode field, List<SemanticDiagnostic> diagnostics)
     {
-        var refAttr = field.Attributes.FirstOrDefault(a =>
-            string.Equals(a.Name, "reference", StringComparison.OrdinalIgnoreCase));
+        var refAttr = Ast.FieldAttributes.Find(field, "reference");
         if (refAttr?.Args is null || refAttr.Args.Count == 0) return;
 
         var target = refAttr.Args[0].ValueKind == System.Text.Json.JsonValueKind.String
@@ -209,9 +208,67 @@ public sealed class SemanticAnalyzer
             $"'{model.Name}.{field.Name}' 필드의 @reference({target}) 대상 엔티티가 존재하지 않습니다.",
             field.Loc));
     }
+
+    /// <summary>
+    /// MDD006 — 오타 의심 속성 경고. 스펙 §10.8은 카탈로그 밖 속성을 custom으로
+    /// 허용하므로, 알려진 어휘(<see cref="Ast.FieldAttributes.KnownNames"/>)와
+    /// 편집거리 ≤2로 가까운 이름만 Warning으로 보고한다 (합법 custom은 침묵).
+    /// </summary>
+    private static void CheckAttributeTypos(ResolvedModel model, FieldNode field, List<SemanticDiagnostic> diagnostics)
+    {
+        foreach (var attr in field.Attributes)
+        {
+            var name = attr.Name;
+            if (string.IsNullOrEmpty(name) || Ast.FieldAttributes.KnownNames.Contains(name)) continue;
+
+            var suggestion = Ast.FieldAttributes.KnownNames
+                .Select(known => (known, distance: Levenshtein(name.ToLowerInvariant(), known.ToLowerInvariant())))
+                .Where(c => c.distance <= 2)
+                .OrderBy(c => c.distance)
+                .Select(c => c.known)
+                .FirstOrDefault();
+            if (suggestion is null) continue;
+
+            diagnostics.Add(new SemanticDiagnostic(
+                "MDD006",
+                $"'{model.Name}.{field.Name}'의 속성 '@{name}'은 알려진 속성이 아닙니다 — '@{suggestion}'의 오타일 수 있습니다. " +
+                "(의도한 custom 속성이라면 무시해도 됩니다)",
+                field.Loc,
+                SemanticSeverity.Warning));
+        }
+    }
+
+    private static int Levenshtein(string a, string b)
+    {
+        if (Math.Abs(a.Length - b.Length) > 2) return int.MaxValue; // 조기 탈락 (거리 하한)
+        var prev = new int[b.Length + 1];
+        var curr = new int[b.Length + 1];
+        for (var j = 0; j <= b.Length; j++) prev[j] = j;
+        for (var i = 1; i <= a.Length; i++)
+        {
+            curr[0] = i;
+            for (var j = 1; j <= b.Length; j++)
+            {
+                var cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                curr[j] = Math.Min(Math.Min(curr[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
+            }
+            (prev, curr) = (curr, prev);
+        }
+        return prev[b.Length];
+    }
 }
 
-public sealed record SemanticDiagnostic(string Code, string Message, SourceLocation? Location)
+public enum SemanticSeverity
+{
+    Warning,
+    Error,
+}
+
+public sealed record SemanticDiagnostic(
+    string Code,
+    string Message,
+    SourceLocation? Location,
+    SemanticSeverity Severity = SemanticSeverity.Error)
 {
     public string Format()
     {

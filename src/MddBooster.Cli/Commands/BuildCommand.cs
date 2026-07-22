@@ -22,11 +22,21 @@ public sealed class BuildCommand
         var allModels = new List<ResolvedModel>();
         var allEnums = new List<M3L.Native.EnumNode>();
 
+        var allUnconsumed = new List<string>();
         foreach (var srcRel in cfg.Sources)
         {
             var srcAbs = Path.GetFullPath(Path.Combine(configDirectory, srcRel));
             Console.WriteLine($"[m3l] 로딩: {srcAbs}");
             var ast = loader.LoadFile(srcAbs);
+
+            // 파서 경고 표면화 — 조용히 삼키지 않는다.
+            foreach (var w in ast.Warnings)
+            {
+                Console.Error.WriteLine($"[m3l] 경고 [{w.Code}] {w.File}:{w.Line}:{w.Col} {w.Message}");
+            }
+
+            allUnconsumed.AddRange(AstAccounting.ListUnconsumed(ast));
+
             var resolver = new InterfaceResolver(ast);
             allModels.AddRange(resolver.ResolveAll());
             allEnums.AddRange(ast.Enums);
@@ -34,12 +44,25 @@ public sealed class BuildCommand
 
         Console.WriteLine($"[m3l] 모델 {allModels.Count}개, enum {allEnums.Count}개 로드됨: {string.Join(", ", allModels.Select(m => m.Name))}");
 
-        // 1.5. 의미 분석
-        var diagnostics = new SemanticAnalyzer(allModels, allEnums).Analyze();
-        if (diagnostics.Count > 0)
+        // 로더 회계 — 파싱은 되지만 생성 파이프라인이 소비하지 않는 요소를 가시화한다.
+        // (standalone ::view / ::flow / extension은 현재 어떤 타깃도 산출하지 않는다.)
+        if (allUnconsumed.Count > 0)
         {
-            Console.Error.WriteLine($"[semantic] 에러 {diagnostics.Count}건:");
-            foreach (var d in diagnostics)
+            Console.Error.WriteLine(
+                $"[m3l] 경고: 소비되지 않는 요소 {allUnconsumed.Count}개 — 어떤 타깃도 산출물을 생성하지 않습니다: " +
+                string.Join(", ", allUnconsumed));
+        }
+
+        // 1.5. 의미 분석 — Warning은 표면화만 하고 진행, Error는 빌드 중단.
+        var diagnostics = new SemanticAnalyzer(allModels, allEnums).Analyze();
+        var warnings = diagnostics.Where(d => d.Severity == SemanticSeverity.Warning).ToList();
+        var errors = diagnostics.Where(d => d.Severity == SemanticSeverity.Error).ToList();
+        foreach (var w in warnings)
+            Console.Error.WriteLine("[semantic] 경고 " + w.Format());
+        if (errors.Count > 0)
+        {
+            Console.Error.WriteLine($"[semantic] 에러 {errors.Count}건:");
+            foreach (var d in errors)
                 Console.Error.WriteLine("  " + d.Format());
             return 3;
         }
@@ -80,6 +103,7 @@ public sealed class BuildCommand
                 Schema = target.Schema ?? "dbo",
                 EmitSqlProj = target.EmitSqlProj ?? true,
                 EmitRefreshScript = target.EmitRefreshScript ?? true,
+                EmitEnumCheckConstraints = target.EmitEnumCheckConstraints ?? false,
             }),
             "Model" => new MddBooster.Generators.Model.ModelGenerator(
                 new MddBooster.Generators.Model.ModelGeneratorOptions

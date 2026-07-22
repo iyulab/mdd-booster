@@ -47,14 +47,15 @@ public static class ColumnRenderer
             parts.Add($"REFERENCES [dbo].[{referenceTarget}]([Id])");
         }
 
-        // Enum CHECK 제약은 table-level로 분리 (BuildCheckConstraint 메서드).
-        // inline CHECK는 SSDT dacpac이 서버 표현식과 매칭하지 못해 매번
-        // Drop→Create 스크립트를 생성하는 문제가 있음.
+        // Enum CHECK 제약은 여기(inline)가 아니라 TableRenderer의 table-level 경로에서
+        // opt-in(EmitEnumCheckConstraints, 기본 off)으로 방출된다. inline CHECK는 SSDT
+        // dacpac이 서버 표현식과 매칭하지 못해 매번 Drop→Create를 유발하므로 금지.
 
-        // 기본값 처리
-        if (!string.IsNullOrEmpty(field.DefaultValue))
+        // 기본값 처리 — `= value` 구문 우선, 없으면 @default(value) 속성 (스펙 §10.8.1).
+        var defaultValue = MddBooster.Core.Ast.FieldAttributes.EffectiveDefault(field);
+        if (!string.IsNullOrEmpty(defaultValue))
         {
-            var def = MapDefaultValue(field.DefaultValue!, m3lType, enumLookup);
+            var def = MapDefaultValue(defaultValue!, m3lType, enumLookup);
             if (def is not null)
             {
                 parts.Add($"DEFAULT {def}");
@@ -123,13 +124,11 @@ public static class ColumnRenderer
     }
 
     private static bool HasAttribute(FieldNode field, string name)
-    {
-        return field.Attributes.Any(a => string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase));
-    }
+        => MddBooster.Core.Ast.FieldAttributes.Has(field, name);
 
     private static string? GetAttributeFirstParam(FieldNode field, string name)
     {
-        var attr = field.Attributes.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase));
+        var attr = MddBooster.Core.Ast.FieldAttributes.Find(field, name);
         if (attr is null) return null;
         var parameters = ExtractStringParams(attr.Args);
         return parameters is { Count: > 0 } ? parameters[0] : null;

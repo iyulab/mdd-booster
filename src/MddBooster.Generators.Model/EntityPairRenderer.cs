@@ -44,7 +44,26 @@ public static class EntityPairRenderer
         ArgumentException.ThrowIfNullOrWhiteSpace(ns);
 
         var entityName = PascalCase(model.Name);
+
+        // PK 지원 게이트 — IyuEntity.Id(Guid 단일 키)와 양립 불가한 모델은 조용히
+        // 삼키지 않고 명시적으로 실패한다. (silent drop 금지 — 2026-07-22 이슈)
+        var pkFields = model.Fields.Where(f => HasAttribute(f, "pk")).ToList();
+        if (pkFields.Count > 1)
+        {
+            throw new InvalidOperationException(
+                $"Model '{model.Name}': 복합 PK({string.Join(", ", pkFields.Select(f => f.Name))})는 " +
+                "Model 타깃이 지원하지 않습니다. 단일 identifier PK로 모델링하세요.");
+        }
+        if (pkFields is [{ } pkField] && pkField.Type != "identifier")
+        {
+            throw new InvalidOperationException(
+                $"Model '{model.Name}.{pkField.Name}': PK 타입 '{pkField.Type}'은 Model 타깃이 지원하지 " +
+                "않습니다. 상속되는 IyuEntity.Id(Guid)와 양립하려면 identifier 타입이어야 합니다.");
+        }
+
         // Stored fields (pk + created_at/updated_at elided — inherited from IyuEntity).
+        // 비-id PK(공유 PK 확장 테이블)도 elide 대상 — 그 필드는 IyuEntity.Id가 표현하며,
+        // DbContextRenderer가 fluent HasColumnName으로 실제 PK 컬럼에 재매핑한다.
         // Kind.Stored is the default; anything else (Lookup/Rollup/Computed) lives
         // on the Ext read model only.
         var storedFields = model.Fields
@@ -335,7 +354,7 @@ public static class EntityPairRenderer
             var fkPart = string.IsNullOrEmpty(f.Rollup.Fk) ? f.Rollup.Target : $"{f.Rollup.Target}.{f.Rollup.Fk}";
             return string.IsNullOrEmpty(f.Rollup.Aggregate) ? fkPart : $"{fkPart}:{f.Rollup.Aggregate}";
         }
-        var attr = f.Attributes.FirstOrDefault(a => string.Equals(a.Name, "rollup", StringComparison.OrdinalIgnoreCase));
+        var attr = MddBooster.Core.Ast.FieldAttributes.Find(f, "rollup");
         if (attr?.Args is { Count: > 0 })
         {
             return string.Join(":", attr.Args.Select(a =>
@@ -370,7 +389,7 @@ public static class EntityPairRenderer
 
     private static string? GetAttributeFirstParam(FieldNode field, string name)
     {
-        var attr = field.Attributes.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase));
+        var attr = MddBooster.Core.Ast.FieldAttributes.Find(field, name);
         if (attr?.Args is null || attr.Args.Count == 0) return null;
         var first = attr.Args[0];
         return first.ValueKind == System.Text.Json.JsonValueKind.String
@@ -380,8 +399,7 @@ public static class EntityPairRenderer
 
     private static string? GetAttributeString(FieldNode field, string attrName)
     {
-        var attr = field.Attributes.FirstOrDefault(a =>
-            string.Equals(a.Name, attrName, StringComparison.OrdinalIgnoreCase));
+        var attr = MddBooster.Core.Ast.FieldAttributes.Find(field, attrName);
         if (attr?.Args is { Count: > 0 }
             && attr.Args[0].ValueKind == System.Text.Json.JsonValueKind.String)
         {
@@ -402,7 +420,7 @@ public static class EntityPairRenderer
             : arg.GetRawText().Trim('"');
 
     private static bool HasAttribute(FieldNode field, string name) =>
-        field.Attributes.Any(a => string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase));
+        MddBooster.Core.Ast.FieldAttributes.Has(field, name);
 
     private static bool IsInheritedTimestamp(string fieldName) =>
         string.Equals(fieldName, "created_at", StringComparison.OrdinalIgnoreCase)

@@ -38,6 +38,15 @@ public sealed class MddJsonTarget
     [JsonPropertyName("emitRefreshScript")]
     public bool? EmitRefreshScript { get; set; }
 
+    /// <summary>
+    /// Sql target: whether to emit table-level <c>CK_{Table}_{Column}</c> CHECK constraints
+    /// for enum columns. Defaults to <c>false</c> (SSDT dacpac represents CHECK as
+    /// Drop→Create on every diff). Declarative-tool consumers (Schemorph) can opt in
+    /// for DB-level enum enforcement.
+    /// </summary>
+    [JsonPropertyName("emitEnumCheckConstraints")]
+    public bool? EmitEnumCheckConstraints { get; set; }
+
     // Model target
     [JsonPropertyName("namespace")]
     public string? Namespace { get; set; }

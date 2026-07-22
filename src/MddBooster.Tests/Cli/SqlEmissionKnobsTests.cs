@@ -109,4 +109,43 @@ public class SqlEmissionKnobsTests
             try { Directory.Delete(Path.GetDirectoryName(Path.GetDirectoryName(dbDir)!)!, recursive: true); } catch { }
         }
     }
+
+    [Fact]
+    public void EmitEnumCheckConstraints_true_emits_table_level_check()
+    {
+        var (mddDir, dbDir) = Scaffold("enumcheck");
+        // enum 컬럼을 가진 전용 모델 — 기본(off) 동작은 BuildCommandFullFixtureTests가
+        // DoesNotContain("CHECK")로 고정하고 있으므로, 여기서는 opt-in 경로만 검증한다.
+        File.WriteAllText(Path.Combine(mddDir, "model.m3l.md"),
+            "# Namespace: X\n\n" +
+            "## DeviceStatus ::enum\n" +
+            "- active: \"활성\"\n" +
+            "- retired: \"퇴역\"\n\n" +
+            "## Device\n" +
+            "- id: identifier @pk @generated\n" +
+            "- status: DeviceStatus @not_null\n");
+        File.WriteAllText(Path.Combine(mddDir, "mdd.json"), """
+{
+  "sources": ["./model.m3l.md"],
+  "targets": [
+    { "type": "Sql", "projectPath": "../src/X.Database", "schema": "dbo", "emitSqlProj": false, "emitEnumCheckConstraints": true }
+  ]
+}
+""");
+
+        try
+        {
+            var exit = new BuildCommand().Run(mddDir);
+            Assert.Equal(0, exit);
+
+            var deviceSql = File.ReadAllText(Path.Combine(dbDir, "dbo", "Tables_gen", "Device.sql"));
+            Assert.Contains(
+                "CONSTRAINT [CK_Device_Status] CHECK ([Status] IN (N'active', N'retired'))",
+                deviceSql);
+        }
+        finally
+        {
+            try { Directory.Delete(Path.GetDirectoryName(Path.GetDirectoryName(dbDir)!)!, recursive: true); } catch { }
+        }
+    }
 }

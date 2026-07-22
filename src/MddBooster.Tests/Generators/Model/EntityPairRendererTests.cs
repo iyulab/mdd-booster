@@ -16,6 +16,23 @@ public class EntityPairRendererTests
         return new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "BankAccount");
     }
 
+    /// <summary>
+    /// 2026-07-22 회귀 — `@primary`(스펙상 `@pk`의 정본 표기)로 선언한 PK 필드가
+    /// elide되지 않고 일반 속성으로 렌더되어 상속된 `IyuEntity.Id`와 충돌함.
+    /// </summary>
+    [Fact]
+    public void Primary_alias_pk_field_is_elided_like_pk()
+    {
+        var ast = new M3lLoader().LoadFile(FixturePath("primary-alias.m3l.md"));
+        var resolved = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Sample");
+
+        var rendered = EntityPairRenderer.Render(resolved, "Test.Entities");
+
+        // PK 필드는 IyuEntity.Id 상속으로 대체 — 중복 Id 속성이 나오면 안 된다.
+        Assert.DoesNotContain("public Guid Id", rendered.Write);
+        Assert.Contains("public string Name { get; set; }", rendered.Write);
+    }
+
     [Fact]
     public void Render_produces_interface_write_read_with_expected_shape()
     {
@@ -112,7 +129,7 @@ public class EntityPairRendererTests
 
         // Generated code must be valid C#
         var tree = CSharpSyntaxTree.ParseText(pair.Write);
-        Assert.Empty(tree.GetDiagnostics()
-            .Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error));
+        Assert.DoesNotContain(tree.GetDiagnostics(),
+            d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error);
     }
 }

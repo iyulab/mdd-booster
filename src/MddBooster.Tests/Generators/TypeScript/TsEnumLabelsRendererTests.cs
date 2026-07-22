@@ -195,7 +195,7 @@ public class TsEnumLabelsRendererTests
         var ast = LoadFixture("enum-system-value.m3l.md");
         var paymentMethod = ast.Enums.Single(e => e.Name == "PaymentMethod");
 
-        var check = MddBooster.Generators.Model.EnumRenderer.RenderSqlCheckValues(paymentMethod);
+        var check = MddBooster.Generators.Sql.EnumSqlConvention.CheckValues(paymentMethod);
 
         Assert.Contains("N'legacy_carryover'", check);
         Assert.Contains("N'cash'", check);

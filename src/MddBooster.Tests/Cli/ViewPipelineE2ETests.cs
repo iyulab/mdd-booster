@@ -100,13 +100,17 @@ public class ViewPipelineE2ETests
 
         File.WriteAllText(Path.Combine(mddDir, "model.m3l.md"),
             "# Namespace: X\n\n" +
-            "## Product\n" +
+            "## Timestampable ::interface\n" +
+            "- created_at: timestamp = now()\n" +
+            "- updated_at: timestamp = now()\n\n" +
+            "---\n\n" +
+            "## Product : Timestampable\n" +
             "- id: identifier @pk @generated\n" +
             "- cat_id: identifier @reference(Category) @not_null\n" +
             "- price: decimal(12,2) @not_null\n" +
             "- deleted_at: timestamp\n" +
             "- cat_name: string @lookup(cat_id.name)\n\n" +
-            "## Category\n" +
+            "## Category : Timestampable\n" +
             "- id: identifier @pk @generated\n" +
             "- name: string(50) @not_null\n");
 

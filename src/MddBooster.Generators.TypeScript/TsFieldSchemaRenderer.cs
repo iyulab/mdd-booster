@@ -104,8 +104,7 @@ public static class TsFieldSchemaRenderer
 
     private static double? GetAttributeNumber(FieldNode field, string attrName)
     {
-        var attr = field.Attributes.FirstOrDefault(a =>
-            string.Equals(a.Name, attrName, StringComparison.OrdinalIgnoreCase));
+        var attr = MddBooster.Core.Ast.FieldAttributes.Find(field, attrName);
         if (attr?.Args is { Count: > 0 }
             && attr.Args[0].ValueKind == JsonValueKind.Number
             && attr.Args[0].TryGetDouble(out var value))
@@ -117,8 +116,7 @@ public static class TsFieldSchemaRenderer
 
     private static string? GetAttributeString(FieldNode field, string attrName)
     {
-        var attr = field.Attributes.FirstOrDefault(a =>
-            string.Equals(a.Name, attrName, StringComparison.OrdinalIgnoreCase));
+        var attr = MddBooster.Core.Ast.FieldAttributes.Find(field, attrName);
         if (attr?.Args is { Count: > 0 }
             && attr.Args[0].ValueKind == JsonValueKind.String)
         {
@@ -128,7 +126,7 @@ public static class TsFieldSchemaRenderer
     }
 
     private static bool HasAttribute(FieldNode field, string name) =>
-        field.Attributes.Any(a => string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase));
+        MddBooster.Core.Ast.FieldAttributes.Has(field, name);
 
     private static bool IsInheritedTimestamp(string fieldName) =>
         string.Equals(fieldName, "created_at", StringComparison.OrdinalIgnoreCase)

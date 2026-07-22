@@ -26,6 +26,22 @@ public class ColumnRendererTests
         Assert.Equal("[Id] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWSEQUENTIALID()", line);
     }
 
+    /// <summary>
+    /// 2026-07-22 회귀 — 스펙 §10.8.1이 `@pk`를 `@primary`의 별칭으로 선언하는데
+    /// 생성기가 `"pk"` 정확 일치만 검사해 `@primary` 모델이 PK 없는 DDL로 조용히 생성됨.
+    /// </summary>
+    [Fact]
+    public void Render_PrimaryAliasIdField_EmitsPrimaryKeyLikePk()
+    {
+        var ast = new M3lLoader().LoadFile(FixturePath("primary-alias.m3l.md"));
+        var model = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Sample");
+        var id = model.Fields.Single(f => f.Name == "id");
+
+        var line = ColumnRenderer.Render(id);
+
+        Assert.Equal("[Id] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWSEQUENTIALID()", line);
+    }
+
     [Fact]
     public void Render_BankName_EmitsNvarchar30NotNull()
     {

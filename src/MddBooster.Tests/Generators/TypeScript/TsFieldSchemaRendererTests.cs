@@ -13,6 +13,20 @@ public class TsFieldSchemaRendererTests
         return new InterfaceResolver(ast).ResolveAll();
     }
 
+    /// <summary>
+    /// 2026-07-22 회귀 — `@primary` 별칭 PK가 elide되지 않아 필드 스키마에 Id가 노출됨.
+    /// </summary>
+    [Fact]
+    public void Primary_alias_pk_field_is_excluded_from_schema()
+    {
+        var models = LoadFixture("primary-alias.m3l.md");
+
+        var result = TsFieldSchemaRenderer.RenderAll(models);
+
+        Assert.DoesNotContain("Id:", result);
+        Assert.Contains("Name:", result);
+    }
+
     [Fact]
     public void Emits_required_true_and_maxLength_for_non_nullable_string_field()
     {

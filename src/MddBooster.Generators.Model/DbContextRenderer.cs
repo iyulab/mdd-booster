@@ -85,6 +85,21 @@ public static class DbContextRenderer
             sb.Append("        modelBuilder.Entity<").Append(m.Name).Append("Ext>().ToTable((string?)null).ToView(\"")
               .Append(viewName).AppendLine("\");");
         }
+
+        // 공유/명명 PK(필드명 != id): 상속된 IyuEntity.Id를 실제 PK 컬럼으로 재매핑.
+        // 예: asset_id @pk @reference(Asset) → SQL 컬럼 [AssetId], 엔티티는 Id로 접근.
+        foreach (var model in ordered)
+        {
+            var pk = ModelPrimaryKey.Find(model);
+            if (pk is null || !ModelPrimaryKey.IsNonIdPk(pk)) continue;
+
+            var name = PascalCase(model.Name);
+            var column = PascalCase(pk.Name);
+            sb.Append("        modelBuilder.Entity<").Append(name)
+              .Append(">().Property(e => e.Id).HasColumnName(\"").Append(column).AppendLine("\");");
+            sb.Append("        modelBuilder.Entity<").Append(name)
+              .Append("Ext>().Property(e => e.Id).HasColumnName(\"").Append(column).AppendLine("\");");
+        }
         sb.AppendLine("    }");
 
         sb.AppendLine("}");

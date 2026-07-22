@@ -40,6 +40,9 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
         // Scan dbo/Views/ in the SQL project for user-maintained {Name}ExtView.sql files.
         var customExtViewModels = ScanCustomExtViews(context.WorkingDirectory);
 
+        // 런타임 계약 게이트 — 생성은 되지만 런타임에 파탄나는 모델을 여기서 명시적으로 거른다.
+        ModelTargetValidator.Validate(context.Models);
+
         foreach (var model in context.Models)
         {
             var backing = DetermineExtBacking(model, customExtViewModels);

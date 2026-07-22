@@ -5,12 +5,18 @@
 - confirmed: "확정"
 - shipped: "배송됨"
 
-## Customer
+## Timestampable ::interface
+- created_at: timestamp = now()
+- updated_at: timestamp = now()
+
+---
+
+## Customer : Timestampable
 - id: identifier @pk @generated
 - name: string(50) @not_null
 - email: string(100) @not_null
 
-## Order
+## Order : Timestampable
 - id: identifier @pk @generated
 - order_number: string(30) @not_null @unique
 - customer_id: identifier @reference(Customer) @not_null
@@ -24,7 +30,7 @@
 - tax_amount: decimal(12,2) @computed(`subtotal * 0.1`)
 - grand_total: decimal(12,2) @computed(`subtotal + tax_amount`)
 
-## OrderItem
+## OrderItem : Timestampable
 - id: identifier @pk @generated
 - order_id: identifier @reference(Order) @not_null
 - line_total: decimal(12,2) @not_null

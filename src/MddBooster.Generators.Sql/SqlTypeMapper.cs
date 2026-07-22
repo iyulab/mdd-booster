@@ -6,11 +6,9 @@ public static class SqlTypeMapper
 {
     /// <summary>
     /// Resolves the SQL column type for a field. If <paramref name="m3lType"/>
-    /// matches a known enum's name, returns an <c>NVARCHAR(n)</c> sized to the
-    /// longest enum value plus a small safety margin; otherwise delegates to
-    /// the primitive map. Callers feed enum definitions via
-    /// <paramref name="enumLookup"/> so that both SQL CHECK generation and
-    /// column sizing read from the same source of truth.
+    /// matches a known enum's name, returns an <c>NVARCHAR(n)</c> sized by
+    /// <see cref="EnumSqlConvention.ColumnLength"/> (최장 멤버, 하한 20);
+    /// otherwise delegates to the primitive map.
     /// </summary>
     public static string MapFieldType(
         string m3lType,
@@ -19,10 +17,7 @@ public static class SqlTypeMapper
     {
         if (enumLookup is not null && enumLookup.TryGetValue(m3lType, out var enumNode))
         {
-            var maxLen = Math.Max(20, enumNode.Values.Count == 0
-                ? 20
-                : enumNode.Values.Max(v => (v.Name ?? string.Empty).Length));
-            return $"NVARCHAR({maxLen})";
+            return $"NVARCHAR({EnumSqlConvention.ColumnLength(enumNode)})";
         }
 
         return Map(m3lType, parameters);

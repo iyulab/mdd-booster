@@ -8,7 +8,7 @@
     <RootNamespace>MddBooster.Cli</RootNamespace>
     <AssemblyName>mdd</AssemblyName>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <Version>0.5.0</Version>
+    <Version>0.6.0</Version>
   </PropertyGroup>
 
   <!-- dotnet tool 패키징: 프로젝트가 스스로 `mdd` 툴임을 선언 →

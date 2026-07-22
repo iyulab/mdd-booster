@@ -299,7 +299,7 @@ public static class TsFormRenderer
     private static string EmptyValue(FieldNode field, IReadOnlySet<string> enumNames)
     {
         var t = field.Type;
-        var def = field.DefaultValue;
+        var def = MddBooster.Core.Ast.FieldAttributes.EffectiveDefault(field);
         var isEnum = t != null && enumNames.Contains(t);
         var isBool = string.Equals(t, "boolean", StringComparison.OrdinalIgnoreCase);
         if (!string.IsNullOrEmpty(def))
@@ -327,7 +327,7 @@ public static class TsFormRenderer
         var isBool = string.Equals(t, "boolean", StringComparison.OrdinalIgnoreCase);
         if (isBool)
         {
-            var def = !string.IsNullOrEmpty(field.DefaultValue) ? field.DefaultValue! : "false";
+            var def = MddBooster.Core.Ast.FieldAttributes.EffectiveDefault(field) is { Length: > 0 } v ? v : "false";
             return $"row.{prop} ?? {def}";
         }
         if (IsNumberType(t)) return $"row.{prop}";
@@ -449,8 +449,7 @@ public static class TsFormRenderer
 
     private static string? GetAttributeString(FieldNode field, string attrName)
     {
-        var attr = field.Attributes.FirstOrDefault(a =>
-            string.Equals(a.Name, attrName, StringComparison.OrdinalIgnoreCase));
+        var attr = MddBooster.Core.Ast.FieldAttributes.Find(field, attrName);
         if (attr?.Args is { Count: > 0 }
             && attr.Args[0].ValueKind == JsonValueKind.String)
         {
@@ -460,14 +459,13 @@ public static class TsFormRenderer
     }
 
     private static bool HasAttribute(FieldNode field, string name) =>
-        field.Attributes.Any(a => string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase));
+        MddBooster.Core.Ast.FieldAttributes.Has(field, name);
 
     // @display_labels(EnumName) — first arg is an identifier (like @reference(Target)).
     // Returns the raw override enum name, or null when the field has no such attribute.
     private static string? GetDisplayLabelsOverride(FieldNode field)
     {
-        var attr = field.Attributes.FirstOrDefault(a =>
-            string.Equals(a.Name, "display_labels", StringComparison.OrdinalIgnoreCase));
+        var attr = MddBooster.Core.Ast.FieldAttributes.Find(field, "display_labels");
         if (attr?.Args is { Count: > 0 } args)
         {
             var p = args[0];

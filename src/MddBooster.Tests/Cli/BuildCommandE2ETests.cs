@@ -12,7 +12,13 @@ public class BuildCommandE2ETests
     private static string FixtureContent() => """
 # Namespace: test.bank
 
-## BankAccount
+## Timestampable ::interface
+- created_at: timestamp = now()
+- updated_at: timestamp = now()
+
+---
+
+## BankAccount : Timestampable
 - id: identifier @pk @generated
 - bank_name: string(50) @not_null "은행명"
 - account_number: string(30) @not_null

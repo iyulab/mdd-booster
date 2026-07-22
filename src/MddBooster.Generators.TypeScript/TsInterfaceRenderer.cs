@@ -151,7 +151,7 @@ public static class TsInterfaceRenderer
     }
 
     private static bool HasAttribute(FieldNode field, string name) =>
-        field.Attributes.Any(a => string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase));
+        MddBooster.Core.Ast.FieldAttributes.Has(field, name);
 
     private static bool IsInheritedTimestamp(string fieldName) =>
         string.Equals(fieldName, "created_at", StringComparison.OrdinalIgnoreCase)
