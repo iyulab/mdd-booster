@@ -17,30 +17,29 @@ public sealed class BuildCommand
         var cfgPath = Path.Combine(configDirectory, "mdd.json");
         var cfg = ConfigLoader.Load(cfgPath);
 
-        // 1. M3L 소스 로드 + 병합
+        // 1. M3L 소스 로드 — 전체 sources를 하나의 resolve 단위로 병합 파싱한다.
+        // 파일별 독립 파싱은 cross-file 상속·인터페이스 참조를 E007로 오탐한다 (스펙 §2.1 Rule 3).
         var loader = new M3lLoader();
-        var allModels = new List<ResolvedModel>();
-        var allEnums = new List<M3L.Native.EnumNode>();
-
-        var allUnconsumed = new List<string>();
-        foreach (var srcRel in cfg.Sources)
+        var sourcePaths = cfg.Sources
+            .Select(srcRel => Path.GetFullPath(Path.Combine(configDirectory, srcRel)))
+            .ToList();
+        foreach (var srcAbs in sourcePaths)
         {
-            var srcAbs = Path.GetFullPath(Path.Combine(configDirectory, srcRel));
             Console.WriteLine($"[m3l] 로딩: {srcAbs}");
-            var ast = loader.LoadFile(srcAbs);
-
-            // 파서 경고 표면화 — 조용히 삼키지 않는다.
-            foreach (var w in ast.Warnings)
-            {
-                Console.Error.WriteLine($"[m3l] 경고 [{w.Code}] {w.File}:{w.Line}:{w.Col} {w.Message}");
-            }
-
-            allUnconsumed.AddRange(AstAccounting.ListUnconsumed(ast));
-
-            var resolver = new InterfaceResolver(ast);
-            allModels.AddRange(resolver.ResolveAll());
-            allEnums.AddRange(ast.Enums);
         }
+
+        var mergedAst = loader.LoadFiles(sourcePaths);
+
+        // 파서 경고 표면화 — 조용히 삼키지 않는다.
+        foreach (var w in mergedAst.Warnings)
+        {
+            Console.Error.WriteLine($"[m3l] 경고 [{w.Code}] {w.File}:{w.Line}:{w.Col} {w.Message}");
+        }
+
+        var allUnconsumed = new List<string>(AstAccounting.ListUnconsumed(mergedAst));
+
+        var allModels = new List<ResolvedModel>(new InterfaceResolver(mergedAst).ResolveAll());
+        var allEnums = new List<M3L.Native.EnumNode>(mergedAst.Enums);
 
         Console.WriteLine($"[m3l] 모델 {allModels.Count}개, enum {allEnums.Count}개 로드됨: {string.Join(", ", allModels.Select(m => m.Name))}");
 
