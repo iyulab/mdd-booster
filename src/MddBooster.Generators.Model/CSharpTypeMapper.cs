@@ -7,10 +7,14 @@ namespace MddBooster.Generators.Model;
 /// <c>NVARCHAR(30)</c> and the C# <c>string</c>.
 /// </summary>
 /// <remarks>
-/// Value objects (<c>phone</c>/<c>email</c>/<c>url</c>) are mapped to the
-/// Iyu.Core value object types. The generator emits the fully-qualified name
-/// so the consumer project doesn't need a <c>using</c> clause, keeping the
-/// generated files trivially relocatable.
+/// The M3L "value object" primitives (<c>phone</c>/<c>email</c>/<c>url</c>) are
+/// intentionally mapped to plain <c>string</c> — <em>not</em> to
+/// <c>Iyu.Core.ValueObjects</c> types. <c>ODataConventionModelBuilder</c> cannot
+/// register value-object structs as EDM complex types, which breaks OData
+/// serialization (connection reset). The field still emits its
+/// <c>NVARCHAR(30/200/500)</c> SQL shape; format validation lives at the
+/// application layer. (<c>Iyu.Data</c> ships value-object <c>ValueConverter</c>s,
+/// so the blocked boundary is specifically the OData serialization layer.)
 /// </remarks>
 public static class CSharpTypeMapper
 {

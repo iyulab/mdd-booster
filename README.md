@@ -90,7 +90,7 @@ mdd ./mdd  # mdd.json이 있는 디렉터리
 |---|---|
 | Primitive 타입 18종 (identifier/string/decimal/phone/email/...) | ✅ |
 | Enum (C# enum + `[EnumMember]`; SQL CHECK는 `emitEnumCheckConstraints` opt-in) | ✅ |
-| Value Object (`phone`/`email`/`url` → `Iyu.Core.ValueObjects.*`) | ✅ |
+| `phone`/`email`/`url` → 검증 문자열 (plain `string`, `NVARCHAR(30/200/500)`). **값객체 매핑 아님** — `ODataConventionModelBuilder`가 값객체 struct를 EDM 복합 타입으로 등록하지 못해 직렬화가 깨지기 때문. 데이터 계층(`Iyu.Data`)엔 값객체 `ValueConverter`가 있으므로 막힌 지점은 OData 직렬화 계층 한정 | ✅ |
 | `@reference(Target)` → SQL FK + C# `[Reference]` 속성 | ✅ |
 | `@unique` (단일 컬럼) | ✅ |
 | `@lookup(fk.col)` → `_full` 뷰 LEFT JOIN + `[Lookup]` 속성 | ✅ |
