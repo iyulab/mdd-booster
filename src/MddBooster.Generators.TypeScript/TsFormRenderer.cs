@@ -295,6 +295,60 @@ public static class TsFormRenderer
 
     private static bool IsNumberType(string? t) => t != null && NumericTypes.Contains(t);
 
+    /// <summary>
+    /// 파라미터 없는 <c>decimal</c>의 소수 자릿수. <c>SqlTypeMapper</c>가 이 경우를
+    /// <c>DECIMAL(18,2)</c>로 정하므로 같은 값을 쓴다 — 폼과 컬럼이 서로 다른 약속을 하면
+    /// 컬럼이 받는 값을 폼이 거부하거나 그 반대가 된다.
+    /// </summary>
+    private const int BareDecimalScale = 2;
+
+    /// <summary>
+    /// <c>decimal(p,s)</c>의 <c>s</c>. 파라미터가 없으면 <see cref="BareDecimalScale"/>,
+    /// <c>decimal(p)</c>는 SQL이 <c>DECIMAL(p,0)</c>이므로 0.
+    /// </summary>
+    private static int DecimalScale(FieldNode field)
+    {
+        var ps = MddBooster.Core.Ast.FieldAttributes.TypeParams(field);
+        if (ps is null || ps.Count == 0) return BareDecimalScale;
+        if (ps.Count == 1) return 0;
+        return int.TryParse(ps[1], System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var s) ? s : BareDecimalScale;
+    }
+
+    /// <summary>
+    /// <c>type="number"</c> 입력의 증분 — 방출할 것이 없으면 null.
+    /// </summary>
+    /// <remarks>
+    /// HTML <c>&lt;input type="number"&gt;</c>의 <c>step</c> 기본값은 1이다. 방출하지 않으면
+    /// 브라우저가 소수를 거부하고("Value must be a multiple of 1") <b>submit이 앱에 아무 신호
+    /// 없이 막힌다</b> — 오류 없이 아무 일도 안 일어나는 것처럼 보이는 실패다.
+    ///
+    /// 스케일은 모델이 이미 들고 있다(<c>decimal(18,4)</c> → <c>Params ["18","4"]</c>). SQL 타깃은
+    /// <c>DECIMAL(p,s)</c>로, EF 타깃은 <c>[Column(TypeName)]</c>으로 같은 값을 이미 소비한다 —
+    /// 폼 타깃만 버리고 있었다.
+    ///
+    /// 반환값은 <b>JSX 중괄호 숫자 리터럴</b>로 방출된다(<c>step={0.0001}</c>). 소비자가 감싸는
+    /// <c>u-input</c>의 선언이 <c>step?: number</c>이므로 문자열 형태(<c>step="0.0001"</c>)는
+    /// 소비자 tsc에서 TS2322로 깨진다 — 이 저장소가 소비자 tsc를 돌리지 않으므로
+    /// 여기서 틀리면 어디에서도 잡히지 않는다.
+    ///
+    /// <c>float</c>/<c>double</c>은 스케일 개념이 없어 <c>step="any"</c>가 유일한 정답이지만
+    /// <c>step?: number</c>가 <c>"any"</c>를 담지 못한다. 표면 확장은 단일 소비자 수요로 밀지
+    /// 않으므로(업스트림 확장 정책) <b>방출하지 않고 알려진 한계로 남긴다</b> — 해당 필드는
+    /// 여전히 소수 입력이 막힌다.
+    /// </remarks>
+    private static string? NumericStep(FieldNode field)
+    {
+        if (!string.Equals(field.Type, "decimal", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var scale = DecimalScale(field);
+        // scale 0 (또는 비정상 음수) → HTML 기본값 1이 정확히 맞다. 방출은 잡음일 뿐이다.
+        if (scale <= 0) return null;
+
+        return "0." + new string('0', scale - 1) + "1";
+    }
+
     /// <summary>Literal for the empty/new form state of a field (matches RenderField's coercion).</summary>
     private static string EmptyValue(FieldNode field, IReadOnlySet<string> enumNames)
     {
@@ -382,6 +436,41 @@ public static class TsFormRenderer
         return false;
     }
 
+    /// <summary>Renders one field to its JSX element.</summary>
+    /// <remarks>
+    /// <b>Why <c>timestamp</c> / <c>datetime</c> / <c>time</c> fall through to a plain text input
+    /// instead of a native picker.</b> Read this before "fixing" it — the obvious fix loses data.
+    ///
+    /// A native picker only helps if the value the API returns is one the control accepts.
+    /// Measured round-trip (System.Text.Json over the CLR types <c>CSharpTypeMapper</c> emits):
+    /// <list type="table">
+    /// <item><term><c>date</c></term><description><c>DateOnly</c> → <c>"2026-07-28"</c>;
+    ///   <c>&lt;input type="date"&gt;</c> takes exactly that. <b>Round-trips — and does today.</b>
+    ///   That is why this one type gets a picker.</description></item>
+    /// <item><term><c>timestamp</c>/<c>datetime</c></term><description><c>DateTimeOffset</c> →
+    ///   <c>"2026-07-28T14:30:00+09:00"</c>. <c>&lt;input type="datetime-local"&gt;</c> accepts
+    ///   <c>YYYY-MM-DDTHH:mm[:ss]</c> and <b>cannot carry a UTC offset</b>. The browser rejects the
+    ///   value, the control renders <b>empty</b>, and submitting writes that empty back —
+    ///   silent data loss. Strictly worse than a text input that at least shows the value.
+    ///   The SQL/EF types are <c>DATETIMEOFFSET</c>/<c>DateTimeOffset</c>, so the offset is real
+    ///   data, not incidental formatting.</description></item>
+    /// <item><term><c>time</c></term><description><c>TimeOnly</c> → <c>"14:30:45"</c>, or
+    ///   <c>"14:30:45.1230000"</c> when the column carries sub-second precision (SQL <c>TIME</c>
+    ///   defaults to <c>TIME(7)</c>). <c>&lt;input type="time"&gt;</c> defaults to
+    ///   <c>step=60</c>, rejecting any value with non-zero seconds, and its fractional form tops
+    ///   out at 3 digits, so 7-digit values do not parse at all. <c>step={1}</c> would fix the
+    ///   seconds half and leave the fractional half silently dropped: <b>some values work and
+    ///   others vanish</b>, which is worse than a uniform text input.</description></item>
+    /// </list>
+    /// This is the opposite direction from the numeric <c>step</c> fix. There, moving model
+    /// information into the control <b>enabled</b> input that was blocked. Here the control cannot
+    /// hold the model's information, so moving it <b>destroys</b> data. Same-looking symptom
+    /// ("the model knows the type but the form ignores it"), opposite remedy.
+    ///
+    /// Making these pickers work needs a value-conversion layer on the consumer contract
+    /// (offset-aware split/recombine) — a new contract surface carrying a real trade-off, so it is
+    /// a human decision, not autonomous scope.
+    /// </remarks>
     private static string RenderField(
         FieldNode field,
         IReadOnlySet<string> enumNames,
@@ -433,6 +522,10 @@ public static class TsFormRenderer
         // date → UInput type="date"
         // Required date fields use || undefined (Partial<T> expects T | undefined, not null).
         // Nullable date fields use || null (entity type is string | null, null is the correct empty value).
+        //
+        // `date` is the ONLY temporal type that gets a native picker, and that is a deliberate
+        // limit, not an oversight — it is the only one whose serialized value the control accepts.
+        // See this method's remarks.
         if (string.Equals(field.Type, "date", StringComparison.OrdinalIgnoreCase))
         {
             var dateEmpty = field.Nullable ? "null" : "undefined";
@@ -440,11 +533,25 @@ public static class TsFormRenderer
         }
 
         // number types — onChange uses undefined (not null) because Partial<T> marks fields as T | undefined.
+        // step is a brace-numeric literal, not a quoted string — see NumericStep.
         if (IsNumberType(field.Type))
-            return $"<UInput label=\"{label}\"{requiredAttr}{descAttr} type=\"number\" value={{form.{prop} != null ? String(form.{prop}) : ''}} onChange={{v => onChange({{ {prop}: v ? Number(v) : undefined }})}} />";
+        {
+            var stepAttr = NumericStep(field) is { } step ? $" step={{{step}}}" : "";
+            return $"<UInput label=\"{label}\"{requiredAttr}{descAttr} type=\"number\"{stepAttr} value={{form.{prop} != null ? String(form.{prop}) : ''}} onChange={{v => onChange({{ {prop}: v ? Number(v) : undefined }})}} />";
+        }
 
-        // string (default)
-        return $"<UInput label=\"{label}\"{requiredAttr}{descAttr} value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v }})}} />";
+        // string (default) — and, deliberately, timestamp / datetime / time. See this method's remarks:
+        // a native picker for those would reject the API's own value and submit empty.
+        //
+        // `string(n)` carries a length ceiling the column already enforces; surfacing it as
+        // maxlength moves the rejection from "the save fails" to "you cannot type past the limit".
+        // Unlike a picker this cannot lose data: every stored value is already within n, so the
+        // attribute never invalidates an existing value. Types without a ceiling
+        // (bare `string`, `text` → NVARCHAR(MAX)) emit nothing.
+        var maxLenAttr = MddBooster.Core.Ast.FieldAttributes.StringMaxLength(field) is { } n
+            ? $" maxlength={{{n}}}"
+            : "";
+        return $"<UInput label=\"{label}\"{requiredAttr}{descAttr}{maxLenAttr} value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v }})}} />";
     }
 
     private static string? GetAttributeString(FieldNode field, string attrName)

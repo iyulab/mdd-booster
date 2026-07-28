@@ -229,7 +229,7 @@ public static class EntityPairRenderer
         // mapping with the SQL DECIMAL(p,s) column the SQL generator emits.
         if (f.Type == "decimal")
         {
-            var decParams = ExtractFieldParams(f);
+            var decParams = MddBooster.Core.Ast.FieldAttributes.TypeParams(f);
             if (decParams is { Count: >= 1 })
             {
                 var scale = decParams.Count >= 2 ? decParams[1] : "0";
@@ -361,27 +361,6 @@ public static class EntityPairRenderer
                 a.ValueKind == System.Text.Json.JsonValueKind.String ? a.GetString() : a.GetRawText()));
         }
         return string.Empty;
-    }
-
-    private static IReadOnlyList<string>? ExtractFieldParams(FieldNode field)
-    {
-        if (field.Params is null || field.Params.Count == 0) return null;
-        var result = new List<string>(field.Params.Count);
-        foreach (var p in field.Params)
-        {
-            if (p.ValueKind == JsonValueKind.Number)
-            {
-                if (p.TryGetDouble(out var d) && d == Math.Floor(d) && !double.IsInfinity(d))
-                    result.Add(((long)d).ToString());
-                else
-                    result.Add(p.GetRawText());
-            }
-            else if (p.ValueKind == JsonValueKind.String)
-                result.Add(p.GetString() ?? string.Empty);
-            else
-                result.Add(p.GetRawText());
-        }
-        return result;
     }
 
     private static string EscapeStringLiteral(string s) =>

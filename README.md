@@ -114,7 +114,7 @@ mdd ./mdd  # mdd.json이 있는 디렉터리
 
 | 컴포넌트 | 언제 import되나 | 받는 프롭 |
 |---|---|---|
-| `UInput` | date · 숫자 · 문자열 필드 | `label` `required?` `description?` `type?`(`"date"`/`"number"`) `value: string` `onChange: (v: string) => void` |
+| `UInput` | date · 숫자 · 문자열 필드 | `label` `required?` `description?` `type?`(`"date"`/`"number"`) **`step?: number`** **`maxlength?: number`** `value: string` `onChange: (v: string) => void` |
 | `UTextarea` | `text` 필드 | `label` `required?` `description?` **`minRows: number`** `value: string` `onChange: (v: string) => void` |
 | `USelect` | enum 필드 | `label` `required?` `description?` `placeholder?` `value: string` `options` `onChange: (v: string) => void` |
 | `UCheckbox` | boolean 필드 | `label` `description?` `checked: boolean` `onChange: (v: boolean) => void` |
@@ -124,6 +124,13 @@ mdd ./mdd  # mdd.json이 있는 디렉터리
   즉 **네 컴포넌트 모두 `description`을 받을 수 있어야 한다** — 하나라도 빠지면
   그 타입의 필드에 `@help`를 붙이는 순간 빌드가 깨진다.
 - `value`/`onChange`는 **controlled 패턴**을 전제한다(빈 상태 sentinel은 `''`).
+- **`step`·`maxlength`는 0.8.0에서 추가된 요구조건이다** — 0.7.0 이하에서 만든 래퍼는
+  갱신해야 한다([CHANGELOG](CHANGELOG.md#080) 참조).
+- **`step`·`maxlength`는 `number`이지 문자열이 아니다** — 생성물은 `step={0.0001}` ·
+  `maxlength={50}`(중괄호 숫자 리터럴)을 방출한다. 래퍼가 이를 그대로 아래 input에 전달해야 한다.
+- ⚠️ **`maxlength`는 소문자다** (React DOM의 `maxLength`가 아니라 `u-input`의 표면 표기).
+  그리고 `string(n)`은 거의 모든 모델에 있으므로 **`step`보다 영향 범위가 훨씬 넓다** —
+  `decimal`을 안 쓰는 소비자도 이 프롭은 거의 확실히 필요하다. 래퍼에 없으면 TS2322로 빌드가 깨진다.
 
 #### `../lib/select-options` — 헬퍼
 
@@ -149,10 +156,44 @@ export function enumToOptions(labels: Record<string, string>): /* USelect의 opt
 | `text` | `UTextarea` (`minRows={3}`) | 길이 무제한 = 여러 줄 의도. SQL 타깃도 `NVARCHAR(MAX)`로 방출하며, 폼에서 **전폭 배치**된다 |
 | `boolean` | `UCheckbox` | |
 | enum 타입명 | `USelect` | |
-| `date` | `UInput type="date"` | |
-| 숫자 타입 (`integer`/`decimal`/`long`/…) | `UInput type="number"` | |
-| 그 외 (`string(n)` 등) | `UInput` | |
+| `date` | `UInput type="date"` | `DateOnly` → `"2026-07-28"`, 컨트롤이 받는 형식과 일치 |
+| `timestamp` · `datetime` · `time` | `UInput` (**자유 텍스트, 의도적**) | 네이티브 피커가 **값을 파괴한다** — 아래 |
+| `decimal(p,s)` | `UInput type="number" step={10^-s}` | 스케일에서 유도. `decimal(18,4)`→`step={0.0001}`. 파라미터 없는 `decimal`은 SQL 기본값 `DECIMAL(18,2)`에 맞춰 `step={0.01}` |
+| 정수 타입 (`integer`/`long`/`short`/`byte`), `decimal(p,0)` | `UInput type="number"` | `step` 미방출 — HTML 기본값 1이 정확히 맞다 |
+| `float` / `double` | `UInput type="number"` | **알려진 한계**: `step` 미방출이라 **소수 입력이 막힌다**. 정답인 `step="any"`를 `step?: number` 계약이 담지 못한다(아래) |
+| `string(n)` | `UInput maxlength={n}` | SQL `NVARCHAR(n)`의 상한을 UI로 앞당긴다. 저장된 값은 이미 n 이내이므로 기존 값을 무효화하지 않는다 |
+| `string`(무파라미터) · `phone`·`email`·`url` | `UInput` | 무파라미터 `string`은 `NVARCHAR(MAX)`라 상한이 없다. `phone`/`email`/`url`의 상한(30/200/500)은 **모델이 아니라 생성기 관례**라 UI로 방출하지 않는다 |
 | `@reference` FK · `@slot` | **슬롯 자리표시자** | 호출부가 내용을 주입 |
+
+> **`step`은 선택 옵션이 아니다.** `<input type="number">`의 `step` 기본값은 1이라, 없으면
+> 브라우저가 소수를 거부하고("Value must be a multiple of 1") **submit이 앱에 아무 신호 없이
+> 막힌다** — 오류 없이 아무 일도 안 일어나는 것처럼 보인다. 스케일은 모델이 이미 갖고 있고
+> (SQL 타깃의 `DECIMAL(p,s)`, Model 타깃의 `[Column(TypeName)]`이 같은 값을 쓴다) 폼도 그것을 따른다.
+>
+> **`float`/`double`은 아직 이 혜택을 못 받는다.** 스케일 개념이 없어 `step="any"`가 유일한
+> 정답인데, 계약상 `step`이 `number`라 `"any"`를 실을 수 없다. 소수가 필요한 필드는
+> **`float`/`double` 대신 `decimal(p,s)`로 모델링할 것** — 정밀도가 명시되므로 SQL·EF·폼이
+> 모두 같은 약속을 하게 된다.
+
+> **`timestamp`/`datetime`/`time`이 자유 텍스트인 것은 미구현이 아니라 결정이다.**
+> 피커는 API가 돌려주는 값을 컨트롤이 받아들일 때만 도움이 된다. 실측 결과:
+>
+> | m3l | CLR | JSON 직렬화 | 컨트롤이 받는 형식 | 왕복 |
+> |---|---|---|---|---|
+> | `date` | `DateOnly` | `"2026-07-28"` | `type="date"` = `YYYY-MM-DD` | ✅ |
+> | `timestamp`·`datetime` | `DateTimeOffset` | `"2026-07-28T14:30:00+09:00"` | `datetime-local` = `YYYY-MM-DDTHH:mm[:ss]` — **오프셋 불가** | ❌ |
+> | `time` | `TimeOnly` | `"14:30:45"` · `"14:30:45.1230000"` | `type="time"` — 기본 `step=60`(초 거부), 소수 초 3자리 한계 | ❌ |
+>
+> SQL 타입이 `DATETIMEOFFSET`·`TIME(7)`이므로 오프셋과 소수 초는 **실제 데이터**다.
+> 피커를 붙이면 브라우저가 그 값을 거부해 컨트롤이 **빈 칸으로 렌더**되고, 그대로 저장하면
+> **기존 값이 지워진다** — 값을 보여주기라도 하는 자유 텍스트보다 나쁘다.
+> `type="time" step={1}`은 초 문제만 풀고 소수 초는 조용히 버려서 **어떤 값은 되고 어떤 값은
+> 사라지는** 더 나쁜 상태를 만든다.
+>
+> 숫자 `step`과 방향이 반대라는 점에 주의: 거기서는 모델 정보를 컨트롤로 옮기면 막혔던 입력이
+> **가능해지지만**, 여기서는 컨트롤이 모델 정보를 담지 못해 옮기면 데이터가 **사라진다**.
+> 증상("모델은 타입을 아는데 폼이 안 쓴다")이 같아 보여도 처방이 반대다.
+> 피커를 쓰려면 오프셋 인지 변환 계층이 소비자 계약에 추가돼야 한다 — 사람이 결정할 사안이다.
 
 > `minRows`는 선택 옵션이 아니다. `<u-textarea>`는 자동 높이 조절이라 **1줄에서 시작**하므로,
 > 없으면 단일행 입력과 육안으로 구분되지 않는다. (속성명은 `minRows`이며 `rows`는 존재하지 않는다.)

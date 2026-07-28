@@ -142,8 +142,170 @@ public class TsFormRendererTests
         var results = TsFormRenderer.RenderAll(models, []);
         var content = results["Item"];
 
-        Assert.Contains($"type=\"number\" value={{form.{prop} != null ? String(form.{prop}) : ''}}", content);
+        // `type="number"` and the value coercion are asserted separately: `step` sits between
+        // them for scaled decimals, so an adjacency-based assertion would encode attribute
+        // ordering that this test does not care about.
+        Assert.Contains($"type=\"number\"", content);
+        Assert.Contains($"value={{form.{prop} != null ? String(form.{prop}) : ''}}", content);
         Assert.Contains($"onChange={{v => onChange({{ {prop}: v ? Number(v) : undefined }})}}", content);
+    }
+
+    // --- decimal step (scale → input affordance) ---------------------------------
+
+    /// <summary>
+    /// The rendered control line for one property. Matches on the onChange payload, which is the
+    /// one part of the line every control shape shares — so a single helper serves numeric,
+    /// temporal, and string fields alike. Throws if the property is absent or not unique, which
+    /// is itself the assertion that the field rendered at all.
+    /// </summary>
+    private static string FieldLine(string content, string prop) =>
+        content.Split('\n').Single(l => l.Contains($"onChange({{ {prop}:"));
+
+    [Theory]
+    [InlineData("Precise", "step={0.0001}")]  // decimal(18,4)
+    [InlineData("Price", "step={0.01}")]      // decimal(12,2)
+    [InlineData("Bare", "step={0.01}")]       // decimal — SqlTypeMapper defaults it to DECIMAL(18,2)
+    public void Decimal_emits_scale_derived_step(string prop, string expected)
+    {
+        // Without step, the browser's default of 1 rejects every non-integer and the form
+        // silently fails to submit. The scale is already in the AST — SQL and EF targets
+        // both consume it; only the form target was discarding it.
+        var models = LoadFixture("numeric-types.m3l.md");
+        var content = TsFormRenderer.RenderAll(models, [])["Item"];
+
+        Assert.Contains(expected, FieldLine(content, prop));
+    }
+
+    [Theory]
+    [InlineData("Qty")]       // integer
+    [InlineData("ByteSize")]  // long
+    [InlineData("Rank")]      // short
+    [InlineData("Flag")]      // byte
+    [InlineData("Whole")]     // decimal(10,0) — scale 0, HTML's default of 1 is exactly right
+    public void Integral_scale_emits_no_step(string prop)
+    {
+        var models = LoadFixture("numeric-types.m3l.md");
+        var content = TsFormRenderer.RenderAll(models, [])["Item"];
+
+        Assert.DoesNotContain("step=", FieldLine(content, prop));
+    }
+
+    [Fact]
+    public void Float_and_double_emit_no_step_known_limitation()
+    {
+        // `step="any"` is the only correct answer for a scale-less float, but u-input declares
+        // `step?: number`, which cannot carry "any". Widening that surface for a single consumer
+        // is exactly what the upstream-extension policy forbids, so float/double deliberately
+        // emit nothing and stay unable to take decimal input — a known, documented limitation.
+        // If u-input ever accepts `number | 'any'`, this test fails and forces the re-decision.
+        var models = LoadFixture("numeric-types.m3l.md");
+        var content = TsFormRenderer.RenderAll(models, [])["Item"];
+
+        Assert.DoesNotContain("step=", FieldLine(content, "Ratio"));
+    }
+
+    [Fact]
+    public void Step_is_a_brace_numeric_literal_not_a_quoted_string()
+    {
+        // u-input's `step` is `number`. A quoted `step="0.0001"` type-checks nowhere in this
+        // repo but breaks the consumer's tsc with TS2322 — the same failure class the import
+        // list already guards against. Pin the literal form.
+        var models = LoadFixture("numeric-types.m3l.md");
+        var content = TsFormRenderer.RenderAll(models, [])["Item"];
+
+        Assert.Contains("step={0.0001}", content);
+        Assert.DoesNotContain("step=\"", content);
+    }
+
+    // --- string(n) → maxlength -----------------------------------------------------
+
+    [Fact]
+    public void Sized_string_emits_maxlength()
+    {
+        // string(n) → NVARCHAR(n). Surfacing the ceiling moves rejection from "the save fails"
+        // to "you cannot type past the limit". Safe in a way a picker is not: every stored value
+        // is already within n, so the attribute never invalidates an existing value.
+        var models = LoadFixture("string-types.m3l.md");
+        var content = TsFormRenderer.RenderAll(models, [])["Doc"];
+
+        Assert.Contains("maxlength={50}", FieldLine(content, "Title"));
+    }
+
+    [Theory]
+    [InlineData("Body")]   // text → NVARCHAR(MAX), and renders as UTextarea besides
+    [InlineData("Blob")]   // bare string → NVARCHAR(MAX)
+    public void Unbounded_string_emits_no_maxlength(string prop)
+    {
+        var models = LoadFixture("string-types.m3l.md");
+        var content = TsFormRenderer.RenderAll(models, [])["Doc"];
+
+        Assert.DoesNotContain("maxlength=", FieldLine(content, prop));
+    }
+
+    [Fact]
+    public void Maxlength_is_lowercase_and_brace_numeric()
+    {
+        // u-input declares `maxlength?: number` — lowercase, and a number. `maxLength="50"`
+        // (React's camelCase DOM spelling, quoted) type-checks nowhere here but breaks the
+        // consumer's tsc. Pin both the casing and the literal form.
+        var models = LoadFixture("string-types.m3l.md");
+        var content = TsFormRenderer.RenderAll(models, [])["Doc"];
+
+        Assert.Contains("maxlength={50}", content);
+        Assert.DoesNotContain("maxLength", content);
+        Assert.DoesNotContain("maxlength=\"", content);
+    }
+
+    [Fact]
+    public void Form_maxlength_agrees_with_FieldSchema_maxLength()
+    {
+        // Both read FieldAttributes.StringMaxLength. If someone re-derives either one locally,
+        // a consumer would see two different ceilings for the same column.
+        var models = LoadFixture("string-types.m3l.md");
+        var form = TsFormRenderer.RenderAll(models, [])["Doc"];
+        var schema = TsFieldSchemaRenderer.RenderAll(models);
+
+        Assert.Contains("maxlength={50}", form);
+        Assert.Contains("maxLength: 50", schema);
+    }
+
+    // --- temporal types: which get a native picker, and why the others must not ---
+
+    [Fact]
+    public void Date_gets_a_native_picker()
+    {
+        // DateOnly serializes to "2026-07-28" and <input type="date"> accepts exactly that.
+        // It is the only temporal type whose wire value round-trips through its control.
+        var models = LoadFixture("temporal-types.m3l.md");
+        var content = TsFormRenderer.RenderAll(models, [])["Event"];
+
+        Assert.Contains("type=\"date\"", FieldLine(content, "HappenedOn"));
+    }
+
+    [Theory]
+    [InlineData("HappenedAt")]   // timestamp  → DateTimeOffset → "2026-07-28T14:30:00+09:00"
+    [InlineData("ScheduledAt")]  // datetime   → DateTimeOffset → same
+    [InlineData("OpensAt")]      // time       → TimeOnly → "14:30:45" / "14:30:45.1230000"
+    public void Timestamp_datetime_and_time_deliberately_get_no_native_picker(string prop)
+    {
+        // TRIPWIRE — this asserts an intentional NON-implementation. If you are here because you
+        // added `type="datetime-local"` or `type="time"`, read RenderField's remarks first:
+        //
+        //   datetime-local cannot carry the UTC offset that DATETIMEOFFSET/DateTimeOffset holds.
+        //   type=time defaults to step=60 (rejects non-zero seconds) and caps fractional seconds
+        //   at 3 digits, while SQL TIME defaults to TIME(7).
+        //
+        // In both cases the browser rejects the API's own value, renders the control EMPTY, and
+        // submitting writes that empty back — silent data loss. That is strictly worse than the
+        // plain text input, which at least shows the value. Making these work needs an
+        // offset-aware conversion layer on the consumer contract: a human decision, not a fix.
+        var models = LoadFixture("temporal-types.m3l.md");
+        var content = TsFormRenderer.RenderAll(models, [])["Event"];
+        var line = FieldLine(content, prop);
+
+        Assert.DoesNotContain("type=", line);
+        // The value must reach the input unconverted — no truncation of offset or sub-second part.
+        Assert.Contains($"value={{form.{prop} ?? ''}}", line);
     }
 
     // --- @system values ---------------------------------------------------------

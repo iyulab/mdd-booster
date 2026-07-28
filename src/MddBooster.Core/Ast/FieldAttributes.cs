@@ -79,6 +79,45 @@ public static class FieldAttributes
             .ToList();
     }
 
+    /// <summary>
+    /// 필드의 <b>타입</b> 파라미터 — <c>decimal(18,4)</c>의 <c>["18","4"]</c>,
+    /// <c>string(200)</c>의 <c>["200"]</c>. 파라미터가 없으면 null.
+    /// </summary>
+    /// <remarks>
+    /// 정규화 규칙(M3L.Native가 정수 인자도 double로 직렬화하는 문제)은 속성 인자와
+    /// 완전히 같으므로 <see cref="StringArgs"/>에 위임한다 — 사본을 두지 않는다.
+    /// 이름을 따로 두는 이유는 호출부에서 "타입 파라미터"와 "속성 인자"가 서로 다른
+    /// 개념이라는 점이 드러나야 하기 때문이다.
+    /// </remarks>
+    public static IReadOnlyList<string>? TypeParams(FieldNode field)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        return StringArgs(field.Params);
+    }
+
+    /// <summary>
+    /// <c>string(n)</c>이 선언한 길이 상한 <c>n</c>. 상한이 없으면 null —
+    /// 파라미터 없는 <c>string</c>과 <c>text</c>는 SQL이 <c>NVARCHAR(MAX)</c>로 방출하므로
+    /// 상한이 존재하지 않는다. 정수가 아닌 파라미터도 null(상한으로 쓸 수 없다).
+    /// </summary>
+    /// <remarks>
+    /// TypeScript 타깃의 <c>FieldSchema</c>와 생성 폼의 <c>maxlength</c>가 같은 값을 써야 하므로
+    /// 정본을 여기 둔다 — 각자 뽑으면 한쪽만 고쳐질 때 소비자에게 서로 다른 상한이 보인다.
+    /// </remarks>
+    public static int? StringMaxLength(FieldNode field)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        if (!string.Equals(field.Type, "string", StringComparison.OrdinalIgnoreCase)) return null;
+
+        var ps = TypeParams(field);
+        if (ps is not { Count: > 0 }) return null;
+
+        return int.TryParse(ps[0], System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var n) && n > 0
+            ? n
+            : null;
+    }
+
     /// <summary>속성의 첫 문자열 인자 — 예: <c>@reference(Target)</c>의 Target. 없으면 null.</summary>
     public static string? FirstArg(FieldNode field, string name)
     {

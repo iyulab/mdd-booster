@@ -82,17 +82,10 @@ public static class TsFieldSchemaRenderer
     {
         var required = !field.Nullable;
 
-        int? maxLength = null;
-        if (field.Type is not null && field.Type.StartsWith("string", StringComparison.OrdinalIgnoreCase)
-            && field.Params is { Count: > 0 })
-        {
-            if (field.Params[0].ValueKind == JsonValueKind.Number
-                && field.Params[0].TryGetDouble(out var lenD)
-                && lenD == Math.Floor(lenD))
-            {
-                maxLength = (int)lenD;
-            }
-        }
+        // Shared with the generated form's `maxlength` — see FieldAttributes.StringMaxLength.
+        // Extracting it separately here is how the two would drift into disagreeing about the
+        // same column's limit.
+        int? maxLength = MddBooster.Core.Ast.FieldAttributes.StringMaxLength(field);
 
         double? min = GetAttributeNumber(field, "min");
         double? max = GetAttributeNumber(field, "max");
