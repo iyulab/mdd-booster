@@ -125,7 +125,7 @@ mdd ./mdd  # mdd.json이 있는 디렉터리
   그 타입의 필드에 `@help`를 붙이는 순간 빌드가 깨진다.
 - `value`/`onChange`는 **controlled 패턴**을 전제한다(빈 상태 sentinel은 `''`).
 - **`step`·`maxlength`는 0.8.0에서 추가된 요구조건이다** — 0.7.0 이하에서 만든 래퍼는
-  갱신해야 한다([CHANGELOG](CHANGELOG.md#080) 참조).
+  갱신해야 한다([CHANGELOG 0.8.0](https://github.com/iyulab/mdd-booster/blob/main/CHANGELOG.md#080) 참조).
 - **`step`·`maxlength`는 `number`이지 문자열이 아니다** — 생성물은 `step={0.0001}` ·
   `maxlength={50}`(중괄호 숫자 리터럴)을 방출한다. 래퍼가 이를 그대로 아래 input에 전달해야 한다.
 - ⚠️ **`maxlength`는 소문자다** (React DOM의 `maxLength`가 아니라 `u-input`의 표면 표기).

@@ -142,12 +142,14 @@ public class TsFormRendererTests
         var results = TsFormRenderer.RenderAll(models, []);
         var content = results["Item"];
 
-        // `type="number"` and the value coercion are asserted separately: `step` sits between
-        // them for scaled decimals, so an adjacency-based assertion would encode attribute
-        // ordering that this test does not care about.
-        Assert.Contains($"type=\"number\"", content);
-        Assert.Contains($"value={{form.{prop} != null ? String(form.{prop}) : ''}}", content);
-        Assert.Contains($"onChange={{v => onChange({{ {prop}: v ? Number(v) : undefined }})}}", content);
+        // Asserted against THIS field's line, not the whole file: `step` sits between `type` and
+        // `value` for scaled decimals, so an adjacency assertion would encode attribute ordering
+        // this test does not care about — while a whole-file `type="number"` check would pass on
+        // any other numeric field and stop proving anything about this one.
+        var line = FieldLine(content, prop);
+        Assert.Contains("type=\"number\"", line);
+        Assert.Contains($"value={{form.{prop} != null ? String(form.{prop}) : ''}}", line);
+        Assert.Contains($"onChange={{v => onChange({{ {prop}: v ? Number(v) : undefined }})}}", line);
     }
 
     // --- decimal step (scale → input affordance) ---------------------------------

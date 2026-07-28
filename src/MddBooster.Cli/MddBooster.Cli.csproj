@@ -27,8 +27,12 @@
     <PackageTags>mdd;m3l;code-generation;sql;ef-core;dotnet-tool</PackageTags>
   </PropertyGroup>
 
+  <!-- README는 nuget.org가 렌더하는 패키지 설명이고, CHANGELOG는 업그레이드 전 소비자가
+       해야 할 조치(래퍼 프롭 추가 등)를 담는다. 후자를 빼면 `dotnet tool install/update`로만
+       접하는 소비자는 빌드가 깨진 뒤에야 이유를 찾게 된다 — 0.8.0에서 실제로 그럴 뻔했다. -->
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\CHANGELOG.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>
