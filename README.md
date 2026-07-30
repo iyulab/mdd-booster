@@ -54,6 +54,13 @@ SSDT dacpac은 CHECK diff가 불안정하므로 선언형 도구(Schemorph) 소�
 
 필터가 걸린 타깃은 빌드마다 커버리지를 출력한다(`포함 N개 / 제외 M개 — 이름…`).
 
+**Api 타깃만 좁히면 경고가 뜬다.** `entity_names_gen.ts` 의 `EntitySetName` 은 OData entity set
+이름의 미러이므로, Api 표면을 좁혔는데 TypeScript 를 그대로 두면 **어떤 서버도 등록하지 않는
+이름**을 계속 광고한다. 빌드가 그 이름들을 열거해 경고하며, 같은 필터를 TypeScript 타깃에도
+지정하면 사라진다. 판정은 **전 Api 타깃의 합집합** 기준이므로, 공유 UI 하나가 여러 서버를
+담당하는 구성(각 서버가 서로 다른 부분집합)은 경고 대상이 아니다. Api 타깃이 없는 설정
+(서버를 다른 `mdd.json` 에서 생성)은 판정 근거가 없어 검사하지 않는다.
+
 > ⚠️ **`includeEntities` 는 drift 한다.** 정본에 새 엔티티가 추가돼도 이 타깃에는 **조용히**
 > 나타나지 않는다. 신규 엔티티가 기본 노출되기를 원하면 `excludeEntities` 를 쓸 것.
 > (커버리지 출력이 무엇이 빠졌는지는 매 빌드에서 보여준다.)
@@ -369,7 +376,7 @@ src/
 ├── MddBooster.Generators.Model/  CSharpTypeMapper, EnumRenderer, EntityPairRenderer, DbContextRenderer
 ├── MddBooster.Generators.Api/    ApiRegistrationRenderer (OData + GraphQL)
 ├── MddBooster.Cli/               BuildCommand (mdd.json 소비)
-└── MddBooster.Tests/             420 xUnit tests (Roslyn 구문 검증 포함)
+└── MddBooster.Tests/             424 xUnit tests (Roslyn 구문 검증 포함)
 ```
 
 ## 테스트 실행

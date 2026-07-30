@@ -166,6 +166,88 @@ public class EntityFilterBuildTests
         finally { Cleanup(root); }
     }
 
+    // ---- Api 와 TypeScript 범위 어긋남 (cross-target) ----
+
+    [Fact]
+    public void Filtered_api_with_unfiltered_typescript_warns_about_unregistered_set_names()
+    {
+        // `entity_names_gen.ts` 는 OData entity set 이름의 미러로 계약돼 있다. Api 타깃만 좁히면
+        // 그 미러가 **어떤 서버도 등록하지 않는** 이름을 계속 광고한다 — @internal 을 목록에서 빼서
+        // 없앤 것과 같은 결함 계열이므로, 조용히 두지 않고 경고로 표면화한다.
+        var mddDir = Scaffold(
+            """{ "type": "Api", "projectPath": "../api", "namespace": "T.Server", "includeEntities": ["ProductionWork"] }, { "type": "TypeScript", "outputPath": "../ts" }""",
+            out var root);
+        var stderr = new StringWriter();
+        var prev = Console.Error;
+        try
+        {
+            Console.SetError(stderr);
+            Assert.Equal(0, new BuildCommand().Run(mddDir));   // 경고이지 오류가 아니다
+        }
+        finally { Console.SetError(prev); Cleanup(root); }
+
+        var text = stderr.ToString();
+        Assert.Contains("어떤 Api 타깃도 등록하지 않는", text);
+        Assert.Contains("Order", text);            // 좁혀진 표면 밖의 이름이 열거된다
+        Assert.DoesNotContain("ServiceClient", text);   // @internal 은 애초에 양쪽에서 빠지므로 잡음이 아니다
+    }
+
+    [Fact]
+    public void Matching_filters_on_api_and_typescript_produce_no_warning()
+    {
+        var mddDir = Scaffold(
+            """{ "type": "Api", "projectPath": "../api", "namespace": "T.Server", "includeEntities": ["ProductionWork"] }, { "type": "TypeScript", "outputPath": "../ts", "includeEntities": ["ProductionWork"] }""",
+            out var root);
+        var stderr = new StringWriter();
+        var prev = Console.Error;
+        try
+        {
+            Console.SetError(stderr);
+            Assert.Equal(0, new BuildCommand().Run(mddDir));
+        }
+        finally { Console.SetError(prev); Cleanup(root); }
+
+        Assert.DoesNotContain("어떤 Api 타깃도 등록하지 않는", stderr.ToString());
+    }
+
+    [Fact]
+    public void Union_of_api_targets_is_used_so_a_shared_ui_serving_two_servers_is_not_flagged()
+    {
+        // 공유 UI 하나가 여러 서버를 담당하는 구성은 정상이다 — 어느 한 서버가 등록하면 그 이름은 유효하다.
+        var mddDir = Scaffold(
+            """{ "type": "Api", "projectPath": "../api", "namespace": "T.Server", "includeEntities": ["ProductionWork"] }, { "type": "Api", "projectPath": "../api2", "namespace": "T.Server2", "excludeEntities": ["ProductionWork"] }, { "type": "TypeScript", "outputPath": "../ts" }""",
+            out var root);
+        var stderr = new StringWriter();
+        var prev = Console.Error;
+        try
+        {
+            Console.SetError(stderr);
+            Assert.Equal(0, new BuildCommand().Run(mddDir));
+        }
+        finally { Console.SetError(prev); Cleanup(root); }
+
+        Assert.DoesNotContain("어떤 Api 타깃도 등록하지 않는", stderr.ToString());
+    }
+
+    [Fact]
+    public void Typescript_only_config_is_not_flagged()
+    {
+        // Api 타깃이 없으면 판정 근거가 없다 — 서버가 다른 mdd.json 에 설정돼 있을 수 있다.
+        var mddDir = Scaffold(
+            """{ "type": "TypeScript", "outputPath": "../ts" }""",
+            out var root);
+        var stderr = new StringWriter();
+        var prev = Console.Error;
+        try
+        {
+            Console.SetError(stderr);
+            Assert.Equal(0, new BuildCommand().Run(mddDir));
+        }
+        finally { Console.SetError(prev); Cleanup(root); }
+
+        Assert.DoesNotContain("어떤 Api 타깃도 등록하지 않는", stderr.ToString());
+    }
+
     [Theory]
     // 둘 다 지정
     [InlineData("""{ "type": "Api", "projectPath": "../api", "namespace": "T.Server", "includeEntities": ["Order"], "excludeEntities": ["OrderItem"] }""")]

@@ -146,6 +146,45 @@ public sealed class BuildCommand
             configViolations.AddRange(violations);
         }
 
+        // 1.8. TypeScript 타깃의 EntitySetName 이 **어떤 Api 타깃도 등록하지 않는** 셋을 광고하는지.
+        // `entity_names_gen.ts` 는 OData entity set 이름의 미러로 계약돼 있고 소비자가 이걸로 URL 을
+        // 만든다. 타깃별 필터가 도입되면서 Api 와 TypeScript 의 범위가 어긋날 수 있게 됐는데,
+        // 어긋나도 아무 신호가 없다 — @internal 을 목록에서 빼서 없앤 것과 같은 결함 계열이다.
+        //
+        // 판정은 **전 Api 타깃의 합집합**과 비교한다. 공유 UI 하나가 여러 서버를 담당하는 구성이
+        // 정상이기 때문이다(어떤 셋이든 어느 한 서버가 등록하면 그 이름은 유효하다).
+        // Api 타깃이 아예 없는 설정에서는 판정 근거가 없으므로 검사하지 않는다.
+        // 오류가 아니라 경고다 — 서버가 다른 mdd.json 에 설정돼 있을 수 있다.
+        var apiTargets = cfg.Targets.Where(t => t.Type == "Api").ToList();
+        if (apiTargets.Count > 0 && configViolations.Count == 0)
+        {
+            var registered = apiTargets
+                .SelectMany(t => (filters.TryGetValue(t, out var af) ? af : EntitySurfaceFilter.PassAll)
+                    .Apply(allModels))
+                .Where(m => !EntitySurface.IsInternal(m))
+                .Select(m => m.Name)
+                .ToHashSet(StringComparer.Ordinal);
+
+            foreach (var ts in cfg.Targets.Where(t => t.Type == "TypeScript"))
+            {
+                var extras = (filters.TryGetValue(ts, out var tf) ? tf : EntitySurfaceFilter.PassAll)
+                    .Apply(allModels)
+                    .Where(m => !EntitySurface.IsInternal(m) && !registered.Contains(m.Name))
+                    .Select(m => m.Name)
+                    .ToList();
+
+                if (extras.Count > 0)
+                {
+                    Console.Error.WriteLine(
+                        $"[config] 경고: TypeScript 타깃({TargetPathOf(ts)})의 EntitySetName 이 "
+                        + $"어떤 Api 타깃도 등록하지 않는 엔티티 {extras.Count}개를 포함합니다 — "
+                        + $"소비자가 그 이름으로 OData URL 을 만들면 존재하지 않는 경로가 됩니다. "
+                        + $"이 TypeScript 타깃에 같은 필터를 지정하세요: {string.Join(", ", extras.Take(10))}"
+                        + (extras.Count > 10 ? $" … (+{extras.Count - 10})" : ""));
+                }
+            }
+        }
+
         if (configViolations.Count > 0)
         {
             Console.Error.WriteLine($"[config] 설정 오류 {configViolations.Count}건:");
