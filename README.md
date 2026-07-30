@@ -173,6 +173,33 @@ mdd ./mdd  # mdd.json이 있는 디렉터리
 | `@inherits(FQN)` → C# 베이스클래스 오버라이드 (도메인 중립, verbatim) | ✅ |
 | `@implements(FQN, ...)` → C# 인터페이스 append (도메인 중립, verbatim) | ✅ |
 | enum 값의 `@system` → 생성 폼 선택지에서 제외 (아래) | ✅ |
+| 널 허용 여부 · `string(n)` · `= <value>` → C# 검증 어트리뷰트 + 초기화자 (아래) | ✅ |
+
+### 선언된 제약 → C# 엔티티 (Model 타깃)
+
+모델이 선언한 제약은 SQL 컬럼뿐 아니라 생성 엔티티에도 방출된다. API 표면이 모델이 금지한 값을
+받아 데이터베이스까지 내려보내지 않도록 하기 위한 것이다.
+
+| 선언 | 방출 | 비고 |
+|---|---|---|
+| 널 허용하지 않는 참조형 필드 | `[Required]` | `string`/`text`/`json`/`phone`/`email`/`url`/`binary`. 값형(숫자·시간·`Guid`·enum)은 CLR이 이미 널을 허용하지 않으므로 제외 |
+| `string(n)` | `[StringLength(n)]` | **널 허용 여부와 무관** — `string(50)?` 도 상한 50을 갖는다 |
+| `= <value>` | 속성 초기화자 | `= true;` · `= 3;` · `= "NEW";` · `= 0.5m;` · `= Status.Draft;` |
+
+기준은 `@not_null` 을 적었는지가 **아니라 필드가 실제로 널을 허용하는지**다. `- name: string(50)`
+처럼 속성 없이 선언한 필드도 컬럼이 `NOT NULL` 이므로 동일하게 방출된다.
+
+**`[Required]` 는 `NOT NULL` 보다 좁다.** SQL `NOT NULL` 컬럼은 빈 문자열을 허용하지만
+`[Required]` 는 거부하고, 판정 전에 trim 하므로 공백만 있는 값도 거부한다. 널 허용하지 않는
+문자열 필드는 API 표면에서 "값이 있어야 한다"를 뜻하게 된다.
+
+파생 필드(`@lookup`/`@rollup`/`@computed`)에는 `[Required]` 가 붙지 않는다 — 뷰가 채우는 값이라
+호출자가 보낼 수 없고, 붙이면 생성 요청이 전부 거부된다. `[StringLength]` 역시 저장 필드에만 붙는다.
+
+기본값은 **C# 리터럴로 표현할 수 있는 타입에만** 방출된다. 시간 타입 · `identifier` · `binary` 는
+기본값 표기가 무엇이든 초기화자를 만들지 않으므로 `= now()` 같은 서버 측 기본값이 코드로 새지 않는다.
+널 허용 필드는 선언된 기본값이 있어도 초기화자를 받지 않는다 — 선택 속성을 채우면 "미설정"의
+의미가 바뀌기 때문이다.
 
 ### ⚠️ 소비 프로젝트 계약 (TypeScript 타깃)
 
@@ -376,7 +403,7 @@ src/
 ├── MddBooster.Generators.Model/  CSharpTypeMapper, EnumRenderer, EntityPairRenderer, DbContextRenderer
 ├── MddBooster.Generators.Api/    ApiRegistrationRenderer (OData + GraphQL)
 ├── MddBooster.Cli/               BuildCommand (mdd.json 소비)
-└── MddBooster.Tests/             424 xUnit tests (Roslyn 구문 검증 포함)
+└── MddBooster.Tests/             442 xUnit tests (Roslyn 구문/의미 검증 포함)
 ```
 
 ## 테스트 실행
@@ -389,10 +416,9 @@ dotnet test MddBooster.slnx --nologo
 - Renderer 단위 (E2E Roslyn 구문 검증)
 - Semantic analyzer cross-entity 검증
 - CLI 3-타깃 통합 E2E (임시 디렉터리에서 전체 파이프라인 실행)
-- **Yesung 실제 14엔티티 + 13 enum acceptance test**
+- 대규모 실모델 acceptance 게이트 (14 엔티티 + 13 enum) — 외부 모델 경로가 있을 때만 실행
 
 ## 관련 저장소
 
 - [m3l](https://github.com/iyulab/m3l) — Rust 기반 M3L 파서 (NuGet `M3L.Native`)
 - [iyu-framework-v5](https://github.com/iyulab/iyu-framework-v5) — 런타임 (EF Core + OData + HotChocolate GraphQL)
-- yesung — 첫 소비 애플리케이션 (예성카렌다 OMS)

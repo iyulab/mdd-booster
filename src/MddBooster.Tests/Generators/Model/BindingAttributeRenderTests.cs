@@ -27,7 +27,7 @@ public class BindingAttributeRenderTests
             Loc = new SourceLocation { File = "test.m3l.md", Line = 1 }
         });
 
-        var result = EntityPairRenderer.Render(model, "Yesung", extBacking: EntityPairRenderer.ExtBacking.None);
+        var result = EntityPairRenderer.Render(model, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
 
         Assert.Contains("[global::Iyu.Core.Attributes.Binding(\"UserMasterItem\", \"Key\")]", result.Write);
     }
@@ -45,7 +45,7 @@ public class BindingAttributeRenderTests
             Loc = new SourceLocation { File = "test.m3l.md", Line = 1 }
         });
 
-        var result = EntityPairRenderer.Render(model, "Yesung", extBacking: EntityPairRenderer.ExtBacking.None);
+        var result = EntityPairRenderer.Render(model, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
 
         Assert.DoesNotContain("Binding(", result.Write);
     }

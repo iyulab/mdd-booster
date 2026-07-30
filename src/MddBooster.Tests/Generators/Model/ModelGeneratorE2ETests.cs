@@ -29,14 +29,14 @@ public class ModelGeneratorE2ETests
 
         foreach (var model in models)
         {
-            var pair = EntityPairRenderer.Render(model, "Yesung.Entities");
+            var pair = EntityPairRenderer.Render(model, "Sample.Entities");
             outputs.Add(($"I{model.Name}.cs", pair.Interface));
             outputs.Add(($"{model.Name}.cs", pair.Write));
             outputs.Add(($"{model.Name}Ext.cs", pair.Read));
         }
 
-        var dbContextSource = DbContextRenderer.Render(models, "YesungDbContext", "Yesung.Entities");
-        outputs.Add(("YesungDbContext.cs", dbContextSource));
+        var dbContextSource = DbContextRenderer.Render(models, "SampleDbContext", "Sample.Entities");
+        outputs.Add(("SampleDbContext.cs", dbContextSource));
 
         // Parse each generated file as C#. We verify syntactic validity only —
         // full semantic compilation would require binding Iyu.Core / Iyu.Data /

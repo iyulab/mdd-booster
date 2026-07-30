@@ -46,7 +46,7 @@ public class InheritsImplementsRenderTests
     {
         var model = ModelWith("UserMasterItem", Attr("implements", "Iyu.Core.Entities.IUserMasterList"));
 
-        var result = EntityPairRenderer.Render(model, "Yesung", extBacking: EntityPairRenderer.ExtBacking.None);
+        var result = EntityPairRenderer.Render(model, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
 
         Assert.Contains("global::Iyu.Core.Entities.IUserMasterList", result.Write);
         // Must NOT double-prefix (the old hardcoded behavior would produce
@@ -59,7 +59,7 @@ public class InheritsImplementsRenderTests
     {
         var model = ModelWith("Account", Attr("implements", "Iyu.Core.Identity.IUser"));
 
-        var result = EntityPairRenderer.Render(model, "Yesung", extBacking: EntityPairRenderer.ExtBacking.None);
+        var result = EntityPairRenderer.Render(model, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
 
         Assert.Contains("global::Iyu.Core.Identity.IUser", result.Write);
         Assert.DoesNotContain("Iyu.Core.Entities.IUser", result.Write);
@@ -71,7 +71,7 @@ public class InheritsImplementsRenderTests
         var model = ModelWith("Account",
             Attr("implements", "Iyu.Core.Identity.IUser", "Ns.IAudited"));
 
-        var result = EntityPairRenderer.Render(model, "Yesung", extBacking: EntityPairRenderer.ExtBacking.None);
+        var result = EntityPairRenderer.Render(model, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
 
         Assert.Contains("global::Iyu.Core.Identity.IUser", result.Write);
         Assert.Contains("global::Ns.IAudited", result.Write);
@@ -82,7 +82,7 @@ public class InheritsImplementsRenderTests
     {
         var model = ModelWith("Order");
 
-        var result = EntityPairRenderer.Render(model, "Yesung", extBacking: EntityPairRenderer.ExtBacking.None);
+        var result = EntityPairRenderer.Render(model, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
 
         Assert.Contains(": global::Iyu.Core.Entities.IyuEntity, IOrder", result.Write);
         Assert.DoesNotContain("IUserMasterList", result.Write);
@@ -93,7 +93,7 @@ public class InheritsImplementsRenderTests
     {
         var model = ModelWith("User", Attr("inherits", "Iyu.Core.Identity.IyuUser"));
 
-        var result = EntityPairRenderer.Render(model, "Yesung", extBacking: EntityPairRenderer.ExtBacking.None);
+        var result = EntityPairRenderer.Render(model, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
 
         // Base class replaced; default IyuEntity no longer present as base.
         Assert.Contains("public partial class User : global::Iyu.Core.Identity.IyuUser, IUser", result.Write);
@@ -105,7 +105,7 @@ public class InheritsImplementsRenderTests
     {
         var model = ModelWith("Order");
 
-        var result = EntityPairRenderer.Render(model, "Yesung", extBacking: EntityPairRenderer.ExtBacking.None);
+        var result = EntityPairRenderer.Render(model, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
 
         Assert.Contains("public partial class Order : global::Iyu.Core.Entities.IyuEntity, IOrder", result.Write);
     }
@@ -117,7 +117,7 @@ public class InheritsImplementsRenderTests
             Attr("inherits", "Iyu.Core.Identity.IyuUser"),
             Attr("implements", "Iyu.Core.Identity.IUser"));
 
-        var result = EntityPairRenderer.Render(model, "Yesung", extBacking: EntityPairRenderer.ExtBacking.None);
+        var result = EntityPairRenderer.Render(model, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
 
         Assert.Contains(
             "public partial class User : global::Iyu.Core.Identity.IyuUser, IUser, global::Iyu.Core.Identity.IUser",
@@ -129,7 +129,7 @@ public class InheritsImplementsRenderTests
     {
         var model = ModelWith("User", Attr("inherits", "Iyu.Core.Identity.IyuUser"));
 
-        var result = EntityPairRenderer.Render(model, "Yesung", extBacking: EntityPairRenderer.ExtBacking.None);
+        var result = EntityPairRenderer.Render(model, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
 
         Assert.Contains("public partial class UserExt : global::Iyu.Core.Identity.IyuUser, IUser", result.Read);
     }

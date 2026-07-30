@@ -78,12 +78,12 @@ public class ApiRegistrationTests
         var ast = new M3lLoader().LoadFile(FixturePath("order-with-derived.m3l.md"));
         var models = new InterfaceResolver(ast).ResolveAll().ToList();
 
-        var src = ApiRegistrationRenderer.Render(models, "Yesung.Server", entitiesNamespace: "Yesung.Entities");
+        var src = ApiRegistrationRenderer.Render(models, "Sample.Server", entitiesNamespace: "Sample.Entities");
 
-        Assert.Contains("using Yesung.Entities;", src);
+        Assert.Contains("using Sample.Entities;", src);
         // using 이 namespace 선언보다 먼저 나와야 함
-        var usingIndex = src.IndexOf("using Yesung.Entities;");
-        var nsIndex = src.IndexOf("namespace Yesung.Server;");
+        var usingIndex = src.IndexOf("using Sample.Entities;");
+        var nsIndex = src.IndexOf("namespace Sample.Server;");
         Assert.True(usingIndex < nsIndex);
     }
 
@@ -93,9 +93,9 @@ public class ApiRegistrationTests
         var ast = new M3lLoader().LoadFile(FixturePath("order-with-derived.m3l.md"));
         var models = new InterfaceResolver(ast).ResolveAll().ToList();
 
-        var src = ApiRegistrationRenderer.Render(models, "Yesung.Entities", entitiesNamespace: "Yesung.Entities");
+        var src = ApiRegistrationRenderer.Render(models, "Sample.Entities", entitiesNamespace: "Sample.Entities");
 
-        Assert.DoesNotContain("using Yesung.Entities;", src);
+        Assert.DoesNotContain("using Sample.Entities;", src);
     }
 
     [Fact]
@@ -104,7 +104,7 @@ public class ApiRegistrationTests
         var ast = new M3lLoader().LoadFile(FixturePath("order-with-derived.m3l.md"));
         var models = new InterfaceResolver(ast).ResolveAll().ToList();
 
-        var src = ODataControllerRenderer.Render(models, "Yesung.Server", "Yesung.Entities");
+        var src = ODataControllerRenderer.Render(models, "Sample.Server", "Sample.Entities");
 
         // 반드시 포함: Orders/OrderItems/Customers 각 controller
         Assert.Contains("public sealed partial class OrdersController", src);
@@ -112,9 +112,9 @@ public class ApiRegistrationTests
         Assert.Contains("public sealed partial class OrderItemsController", src);
         Assert.Contains("public sealed partial class CustomersController", src);
         // using 지시자
-        Assert.Contains("using Yesung.Entities;", src);
+        Assert.Contains("using Sample.Entities;", src);
         // Controllers 서브네임스페이스
-        Assert.Contains("namespace Yesung.Server.Controllers;", src);
+        Assert.Contains("namespace Sample.Server.Controllers;", src);
     }
 
     [Fact]

@@ -7,6 +7,7 @@ namespace MddBooster.Tests.Cli;
 /// 검증한다. 단위 테스트(<c>EntitySurfaceFilterTests</c>)가 술어를 고정하고, 여기서는
 /// **빌드가 실제로 실패하는지**와 **산출물이 실제로 좁혀지는지**를 본다.
 /// </summary>
+[Collection(ConsoleCaptureCollection.Name)]
 public class EntityFilterBuildTests
 {
     private const string Canon = """
@@ -177,16 +178,14 @@ public class EntityFilterBuildTests
         var mddDir = Scaffold(
             """{ "type": "Api", "projectPath": "../api", "namespace": "T.Server", "includeEntities": ["ProductionWork"] }, { "type": "TypeScript", "outputPath": "../ts" }""",
             out var root);
-        var stderr = new StringWriter();
-        var prev = Console.Error;
+        using var stderr = new ConsoleErrorCapture(this);
         try
         {
-            Console.SetError(stderr);
             Assert.Equal(0, new BuildCommand().Run(mddDir));   // 경고이지 오류가 아니다
         }
-        finally { Console.SetError(prev); Cleanup(root); }
+        finally { Cleanup(root); }
 
-        var text = stderr.ToString();
+        var text = stderr.Text;
         Assert.Contains("어떤 Api 타깃도 등록하지 않는", text);
         Assert.Contains("Order", text);            // 좁혀진 표면 밖의 이름이 열거된다
         Assert.DoesNotContain("ServiceClient", text);   // @internal 은 애초에 양쪽에서 빠지므로 잡음이 아니다
@@ -198,16 +197,14 @@ public class EntityFilterBuildTests
         var mddDir = Scaffold(
             """{ "type": "Api", "projectPath": "../api", "namespace": "T.Server", "includeEntities": ["ProductionWork"] }, { "type": "TypeScript", "outputPath": "../ts", "includeEntities": ["ProductionWork"] }""",
             out var root);
-        var stderr = new StringWriter();
-        var prev = Console.Error;
+        using var stderr = new ConsoleErrorCapture(this);
         try
         {
-            Console.SetError(stderr);
             Assert.Equal(0, new BuildCommand().Run(mddDir));
         }
-        finally { Console.SetError(prev); Cleanup(root); }
+        finally { Cleanup(root); }
 
-        Assert.DoesNotContain("어떤 Api 타깃도 등록하지 않는", stderr.ToString());
+        Assert.DoesNotContain("어떤 Api 타깃도 등록하지 않는", stderr.Text);
     }
 
     [Fact]
@@ -217,16 +214,14 @@ public class EntityFilterBuildTests
         var mddDir = Scaffold(
             """{ "type": "Api", "projectPath": "../api", "namespace": "T.Server", "includeEntities": ["ProductionWork"] }, { "type": "Api", "projectPath": "../api2", "namespace": "T.Server2", "excludeEntities": ["ProductionWork"] }, { "type": "TypeScript", "outputPath": "../ts" }""",
             out var root);
-        var stderr = new StringWriter();
-        var prev = Console.Error;
+        using var stderr = new ConsoleErrorCapture(this);
         try
         {
-            Console.SetError(stderr);
             Assert.Equal(0, new BuildCommand().Run(mddDir));
         }
-        finally { Console.SetError(prev); Cleanup(root); }
+        finally { Cleanup(root); }
 
-        Assert.DoesNotContain("어떤 Api 타깃도 등록하지 않는", stderr.ToString());
+        Assert.DoesNotContain("어떤 Api 타깃도 등록하지 않는", stderr.Text);
     }
 
     [Fact]
@@ -236,16 +231,14 @@ public class EntityFilterBuildTests
         var mddDir = Scaffold(
             """{ "type": "TypeScript", "outputPath": "../ts" }""",
             out var root);
-        var stderr = new StringWriter();
-        var prev = Console.Error;
+        using var stderr = new ConsoleErrorCapture(this);
         try
         {
-            Console.SetError(stderr);
             Assert.Equal(0, new BuildCommand().Run(mddDir));
         }
-        finally { Console.SetError(prev); Cleanup(root); }
+        finally { Cleanup(root); }
 
-        Assert.DoesNotContain("어떤 Api 타깃도 등록하지 않는", stderr.ToString());
+        Assert.DoesNotContain("어떤 Api 타깃도 등록하지 않는", stderr.Text);
     }
 
     [Theory]

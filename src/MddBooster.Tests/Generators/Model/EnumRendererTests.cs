@@ -83,7 +83,8 @@ public class EnumRendererTests
     public void Multiline_description_emits_xmldoc_prefix_per_line()
     {
         // 2026-04-27 회귀 차단 — 멀티라인 description의 둘째 줄 이후에 ///가 누락되면
-        // "v3+: ..." 같은 텍스트가 C# 코드로 해석되어 컴파일 에러 33건 발생한 yesung 사례.
+        // 그 줄이 C# 코드로 해석된다. 설명문에 흔한 `v3+: ...` 같은 텍스트가 그대로
+        // 식별자·연산자로 파싱되어, 한 enum이 수십 건의 컴파일 오류를 만든다.
         var ast = new M3lLoader().LoadFile(FixturePath("enum-multiline-desc.m3l.md"));
         var status = ast.Enums.Single(e => e.Name == "Status");
 

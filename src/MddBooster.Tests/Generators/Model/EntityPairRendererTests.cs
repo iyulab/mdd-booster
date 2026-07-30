@@ -37,7 +37,7 @@ public class EntityPairRendererTests
     public void Render_produces_interface_write_read_with_expected_shape()
     {
         var resolved = LoadBankAccount();
-        var rendered = EntityPairRenderer.Render(resolved, "Yesung.Entities");
+        var rendered = EntityPairRenderer.Render(resolved, "Sample.Entities");
 
         // Interface — read-only contract
         Assert.Contains("public interface IBankAccount", rendered.Interface);
@@ -67,14 +67,14 @@ public class EntityPairRendererTests
     public void Ext_class_points_at_underscore_ext_view_only_when_model_has_derived_fields()
     {
         var resolved = LoadBankAccount();
-        var bankRendered = EntityPairRenderer.Render(resolved, "Yesung.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
+        var bankRendered = EntityPairRenderer.Render(resolved, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
         // No derived fields → Ext model maps to base table
         Assert.Contains("[Table(\"BankAccount\")]", bankRendered.Read);
 
-        var withFull = EntityPairRenderer.Render(resolved, "Yesung.Entities", extBacking: EntityPairRenderer.ExtBacking.Full);
+        var withFull = EntityPairRenderer.Render(resolved, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.Full);
         Assert.Contains("[Table(\"BankAccountFullView\")]", withFull.Read);
 
-        var withExt = EntityPairRenderer.Render(resolved, "Yesung.Entities", extBacking: EntityPairRenderer.ExtBacking.Ext);
+        var withExt = EntityPairRenderer.Render(resolved, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.Ext);
         Assert.Contains("[Table(\"BankAccountExtView\")]", withExt.Read);
     }
 
@@ -82,7 +82,7 @@ public class EntityPairRendererTests
     public void Render_elides_pk_id_and_inherited_timestamps()
     {
         var resolved = LoadBankAccount();
-        var rendered = EntityPairRenderer.Render(resolved, "Yesung.Entities");
+        var rendered = EntityPairRenderer.Render(resolved, "Sample.Entities");
 
         // Id comes from IyuEntity — must NOT be redeclared on the classes.
         Assert.DoesNotContain("public global::System.Guid Id { get; set; }", rendered.Write);

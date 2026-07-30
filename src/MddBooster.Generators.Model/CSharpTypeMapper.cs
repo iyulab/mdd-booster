@@ -102,9 +102,28 @@ public static class CSharpTypeMapper
     /// </summary>
     public static string DefaultInitializer(string m3lType) => m3lType switch
     {
-        "string" or "text" or "json" or "phone" or "email" or "url" => " = string.Empty;",
         "binary" => " = Array.Empty<byte>();",
+        _ when IsReferenceType(m3lType) => " = string.Empty;",
         _ => string.Empty,
+    };
+
+    /// <summary>
+    /// Whether the M3L type maps to a C# <em>reference</em> type. This is the set
+    /// for which a non-nullable declaration needs an explicit initializer — and,
+    /// identically, the set for which <c>[Required]</c> carries meaning: value
+    /// types (numbers, temporals, <c>Guid</c>, enums) are already non-null in the
+    /// CLR, so <c>RequiredAttribute</c> always passes and adds only noise.
+    /// Both consumers read this one definition rather than keeping copies.
+    /// </summary>
+    /// <remarks>
+    /// Not the inverse of <see cref="IsValueType"/>: that predicate answers a
+    /// narrower question (M3L primitives that are structs) and returns
+    /// <c>false</c> for unknown names such as enum types.
+    /// </remarks>
+    public static bool IsReferenceType(string m3lType) => m3lType switch
+    {
+        "string" or "text" or "json" or "phone" or "email" or "url" or "binary" => true,
+        _ => false,
     };
 
     private static string PascalCase(string snake)

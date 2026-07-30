@@ -216,13 +216,24 @@ public static class EntityPairRenderer
 
         var isEnumField = knownEnumNames is not null && knownEnumNames.Contains(f.Type!);
 
-        // Nullable reference/value types default to null — no initializer needed.
-        // Non-nullable types: non-null reference types get an explicit default
-        // (for nullable-reference analysis); value types (including enums)
-        // auto-default to 0/false.
-        var initializer = effectiveNullable || isEnumField
-            ? string.Empty
-            : CSharpTypeMapper.DefaultInitializer(f.Type!);
+        // A declared default (`= value`) is the property's initializer when the
+        // field has one. Without this the CLR default is stored silently: EF
+        // writes the zero value explicitly, so the column's DDL DEFAULT never
+        // gets the chance to fire and `boolean = true` lands as false.
+        // Nullable fields are excluded on purpose — seeding an optional property
+        // changes what "unset" means, which is a separate trade-off.
+        var declaredInitializer = !effectiveNullable && f.Kind == FieldKind.Stored
+            ? DeclaredDefaultInitializer(f, knownEnumNames)
+            : null;
+
+        // Otherwise: nullable reference/value types default to null — no
+        // initializer needed. Non-nullable types: non-null reference types get an
+        // explicit default (for nullable-reference analysis); value types
+        // (including enums) auto-default to 0/false.
+        var initializer = declaredInitializer
+            ?? (effectiveNullable || isEnumField
+                ? string.Empty
+                : CSharpTypeMapper.DefaultInitializer(f.Type!));
 
         // [Column(TypeName = "decimal(p,s)")] for decimal fields with explicit precision.
         // Suppresses EF Core's "No store type specified" warning and aligns the CLR
@@ -286,6 +297,32 @@ public static class EntityPairRenderer
                 break;
         }
 
+        // Validation attributes — the constraints the model already declares,
+        // carried to the C# entity so the API surface enforces them instead of
+        // letting a violation reach the database and come back as a raw provider
+        // error. They read the same sources the SQL column does (field
+        // nullability and the `string(n)` bound), so the two targets cannot drift.
+        //
+        // Stored fields only: Lookup/Rollup/Computed properties are populated by
+        // the view and a caller never supplies them. `[Required]` on one would
+        // reject every create request, because a non-nullable derived string
+        // carries the `string.Empty` initializer that RequiredAttribute rejects.
+        if (f.Kind == FieldKind.Stored)
+        {
+            // [Required] — non-nullable reference types only. Nullability comes
+            // from the parsed flag, not from the `@not_null` attribute: a plain
+            // `- name: string(50)` is already non-nullable, and the SQL column's
+            // NOT NULL is derived the same way.
+            if (!f.Nullable && CSharpTypeMapper.IsReferenceType(f.Type!))
+                sb.AppendLine("    [Required]");
+
+            // [StringLength(n)] — the bound declared by `string(n)`, the same
+            // value the SQL column's varchar(n) uses. Independent of nullability:
+            // an optional `string(50)?` is still bounded at 50.
+            if (MddBooster.Core.Ast.FieldAttributes.StringMaxLength(f) is { } maxLength)
+                sb.Append("    [StringLength(").Append(maxLength).AppendLine(")]");
+        }
+
         // [Display(Name, GroupName)] — field label and/or group from M3L declaration
         var displayLabel = f.Description;
         var displayGroup = GetAttributeString(f, "group");
@@ -332,6 +369,57 @@ public static class EntityPairRenderer
             : fkFieldName;
         return PascalCase(name);
     }
+
+    /// <summary>
+    /// Turns a declared default (<c>= value</c>, or the <c>@default(value)</c>
+    /// spelling) into a C# property initializer, or <c>null</c> when the default
+    /// cannot be expressed as a literal.
+    /// </summary>
+    /// <remarks>
+    /// The gate is the <em>target type</em>, not the shape of the default text.
+    /// Only types with a C# literal form are emitted; temporals,
+    /// <c>identifier</c> and <c>binary</c> are skipped whatever their default
+    /// says. Server-side defaults such as <c>now()</c> therefore fall out as a
+    /// consequence rather than as named exceptions — a list of function names
+    /// would let the next one through and emit code that does not compile.
+    /// </remarks>
+    private static string? DeclaredDefaultInitializer(FieldNode f, IReadOnlySet<string>? knownEnumNames)
+    {
+        var raw = MddBooster.Core.Ast.FieldAttributes.EffectiveDefault(f);
+        if (string.IsNullOrEmpty(raw)) return null;
+
+        var type = f.Type!;
+
+        // Enum defaults arrive as the bare snake_case member name (the parser
+        // strips the quotes). The member expression has to use the same
+        // PascalCase conversion EnumRenderer applies, or it names a member that
+        // was never generated.
+        if (knownEnumNames is not null && knownEnumNames.Contains(type))
+            return $" = {PascalCase(type)}.{PascalCase(raw)};";
+
+        return type switch
+        {
+            "boolean" => raw is "true" or "false" ? $" = {raw};" : null,
+            "integer" or "long" or "short" or "byte" => IsIntegerLiteral(raw) ? $" = {raw};" : null,
+            // An unsuffixed literal is a double: assigning it to float or decimal
+            // is CS0664, so both need their suffix.
+            "float" => IsNumericLiteral(raw) ? $" = {raw}f;" : null,
+            "double" => IsNumericLiteral(raw) ? $" = {raw};" : null,
+            "decimal" => IsNumericLiteral(raw) ? $" = {raw}m;" : null,
+            "string" or "text" or "json" or "phone" or "email" or "url"
+                => $" = \"{EscapeStringLiteral(raw)}\";",
+            // date/time/timestamp/datetime/identifier/binary have no literal form.
+            _ => null,
+        };
+    }
+
+    private static bool IsIntegerLiteral(string s) =>
+        long.TryParse(s, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out _);
+
+    private static bool IsNumericLiteral(string s) =>
+        double.TryParse(s, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out _);
 
     private static IReadOnlyDictionary<string, bool> BuildStoredNullabilityMap(IReadOnlyList<FieldNode> storedFields)
     {

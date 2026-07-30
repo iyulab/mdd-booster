@@ -17,8 +17,8 @@ public class TableSectionsIndexesTests
     public void Directive_unique_with_nullable_columns_emits_filtered_index()
     {
         // SQL Server UNIQUE 제약은 NULL 다중을 허용하지 않으므로, nullable 컬럼이
-        // 하나라도 끼면 filtered unique index로 emit해야 함. yesung Order
-        // (part?, season?, original_order_number?) 사례에서 발견된 결함 회귀 차단.
+        // 하나라도 끼면 filtered unique index로 emit해야 한다. 널 허용 컬럼을 포함한
+        // 복합 유니크 선언은 그러지 않으면 두 번째 NULL 행에서 실패한다 — 회귀 차단.
         var ast = new M3lLoader().LoadFile(FixturePath("table-with-indexes.m3l.md"));
         var resolved = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Order");
 

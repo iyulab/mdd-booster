@@ -8,6 +8,8 @@ namespace MddBooster.Tests.Cli;
 /// `tables_gen/{snake}.sql`. 게이트 위반·비호환 노브는 빌드 오류로 전파되고,
 /// 방출 불가 항목(derived 필드·@index)은 stderr 경고로 표면화된다.
 /// </summary>
+
+[Collection(ConsoleCaptureCollection.Name)]
 public class PostgresDialectE2ETests
 {
     private const string ChainModel =
@@ -142,9 +144,7 @@ public class PostgresDialectE2ETests
             "- name: string(50) @not_null\n");
         WriteConfig(mddDir, "{ \"type\": \"Sql\", \"dialect\": \"postgres\", \"projectPath\": \"../db\" }");
 
-        var originalError = Console.Error;
-        var captured = new StringWriter();
-        Console.SetError(captured);
+        using var captured = new ConsoleErrorCapture(this);
         try
         {
             var exit = new BuildCommand().Run(mddDir);
@@ -153,13 +153,12 @@ public class PostgresDialectE2ETests
             var productSql = File.ReadAllText(Path.Combine(dbDir, "tables_gen", "product.sql"));
             Assert.DoesNotContain("cat_name", productSql); // derived — 물리 컬럼 아님
 
-            var stderr = captured.ToString();
+            var stderr = captured.Text;
             Assert.Contains("[sql-pg]", stderr);
             Assert.Contains("Product", stderr);
         }
         finally
         {
-            Console.SetError(originalError);
             Cleanup(mddDir);
         }
     }
@@ -201,18 +200,15 @@ public class PostgresDialectE2ETests
 ] }
 """);
 
-        var originalError = Console.Error;
-        var captured = new StringWriter();
-        Console.SetError(captured);
+        using var captured = new ConsoleErrorCapture(this);
         try
         {
             var exit = new BuildCommand().Run(mddDir);
             Assert.Equal(0, exit);
-            Assert.Contains("dialect", captured.ToString());
+            Assert.Contains("dialect", captured.Text);
         }
         finally
         {
-            Console.SetError(originalError);
             Cleanup(mddDir);
         }
     }

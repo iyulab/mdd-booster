@@ -13,7 +13,7 @@ public class ConfigLoaderTests
   "targets": [
     {
       "type": "Sql",
-      "projectPath": "../src/Yesung.Database",
+      "projectPath": "../src/Sample.Database",
       "schema": "dbo"
     }
   ]
@@ -32,7 +32,7 @@ public class ConfigLoaderTests
             Assert.Equal("./tables.m3l.md", cfg.Sources[0]);
             Assert.Single(cfg.Targets);
             Assert.Equal("Sql", cfg.Targets[0].Type);
-            Assert.Equal("../src/Yesung.Database", cfg.Targets[0].ProjectPath);
+            Assert.Equal("../src/Sample.Database", cfg.Targets[0].ProjectPath);
             Assert.Equal("dbo", cfg.Targets[0].Schema);
         }
         finally

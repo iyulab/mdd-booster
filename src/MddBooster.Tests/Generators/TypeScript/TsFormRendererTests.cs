@@ -127,7 +127,7 @@ public class TsFormRendererTests
     }
 
     [Theory]
-    [InlineData("byte_size", "ByteSize")]  // long? — Attachment.ByteSize regression (yesung task-8)
+    [InlineData("byte_size", "ByteSize")]  // long? — nullable 64-bit regression
     [InlineData("rank", "Rank")]           // short?
     [InlineData("flag", "Flag")]           // byte?
     [InlineData("price", "Price")]         // decimal(12,2)?

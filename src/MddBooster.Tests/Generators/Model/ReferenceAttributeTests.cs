@@ -15,7 +15,7 @@ public class ReferenceAttributeTests
         var ast = new M3lLoader().LoadFile(FixturePath("order-with-ref.m3l.md"));
         var resolved = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Order");
 
-        var rendered = EntityPairRenderer.Render(resolved, "Test.Yesung");
+        var rendered = EntityPairRenderer.Render(resolved, "Test.Entities");
 
         Assert.Contains("[global::Iyu.Core.Attributes.Reference(\"Customer\")]", rendered.Write);
         Assert.Contains("public Guid CustomerId", rendered.Write);
@@ -30,7 +30,7 @@ public class ReferenceAttributeTests
         var ast = new M3lLoader().LoadFile(FixturePath("order-with-ref.m3l.md"));
         var resolved = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Order");
 
-        var rendered = EntityPairRenderer.Render(resolved, "Test.Yesung");
+        var rendered = EntityPairRenderer.Render(resolved, "Test.Entities");
 
         // Nav property on Write class: type = reference target, name = field without _id
         Assert.Contains("public Customer Customer { get; set; } = null!;", rendered.Write);
@@ -48,7 +48,7 @@ public class ReferenceAttributeTests
         var ast = new M3lLoader().LoadFile(FixturePath("order-with-nullable-ref.m3l.md"));
         var resolved = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Order");
 
-        var rendered = EntityPairRenderer.Render(resolved, "Test.Yesung");
+        var rendered = EntityPairRenderer.Render(resolved, "Test.Entities");
 
         // Nullable FK → nullable nav property, no null! initializer
         Assert.Contains("public Customer? Customer { get; set; }", rendered.Write);
