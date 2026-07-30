@@ -31,7 +31,7 @@ public sealed class SqlGenerator : IArtifactGenerator
         var tableFileNames = new List<string>();
         foreach (var model in context.Models)
         {
-            var sql = TableRenderer.Render(model, _options.Schema, enumLookup, _options.EmitEnumCheckConstraints);
+            var sql = TableRenderer.Render(model, _options.Schema, enumLookup, _options.EmitEnumCheckConstraints, _options.EmitForeignKeyIndexes);
             var fileName = $"{model.Name}.sql";
             File.WriteAllText(Path.Combine(tablesGenDir, fileName), sql);
             tableFileNames.Add(fileName);

@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using M3L.Native;
 using MddBooster.Core.Semantic;
+using MddBooster.Core.Naming;
 
 namespace MddBooster.Generators.TypeScript;
 
@@ -29,7 +30,7 @@ public static class TsFieldSchemaRenderer
 
         foreach (var model in models)
         {
-            var entityName = TypeScriptTypeMapper.PascalCase(model.Name);
+            var entityName = NameCasing.ToPascalCase(model.Name);
             var storedFields = model.Fields
                 .Where(f => f.Kind == FieldKind.Stored)
                 .Where(f => !HasAttribute(f, "pk"))
@@ -47,7 +48,7 @@ public static class TsFieldSchemaRenderer
 
             foreach (var (field, constraints) in constrainedFields)
             {
-                var prop = TypeScriptTypeMapper.PascalCase(field.Name);
+                var prop = NameCasing.ToPascalCase(field.Name);
                 sb.Append("    ").Append(prop).Append(": {");
 
                 var parts = new List<string>();

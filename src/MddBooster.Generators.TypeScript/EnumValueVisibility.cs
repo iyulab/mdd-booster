@@ -1,4 +1,5 @@
 using M3L.Native;
+using MddBooster.Core.Naming;
 
 namespace MddBooster.Generators.TypeScript;
 
@@ -53,7 +54,7 @@ internal static class EnumValueVisibility
     {
         ArgumentNullException.ThrowIfNull(enums);
         return new HashSet<string>(
-            enums.Where(HasSystemValues).Select(e => TypeScriptTypeMapper.PascalCase(e.Name)),
+            enums.Where(HasSystemValues).Select(e => NameCasing.ToPascalCase(e.Name)),
             StringComparer.Ordinal);
     }
 }

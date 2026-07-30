@@ -1,5 +1,6 @@
 using System.Text.Json;
 using M3L.Native;
+using MddBooster.Core.Naming;
 
 namespace MddBooster.Generators.Sql;
 
@@ -9,7 +10,7 @@ public static class ColumnRenderer
     {
         ArgumentNullException.ThrowIfNull(field);
 
-        var columnName = ToPascalCase(field.Name);
+        var columnName = NameCasing.ToPascalCase(field.Name);
         var m3lType = field.Type ?? throw new InvalidOperationException(
             $"필드 '{field.Name}'에 타입이 없습니다.");
         var parameters = ExtractStringParams(field.Params);
@@ -131,15 +132,4 @@ public static class ColumnRenderer
 
     private static IReadOnlyList<string>? ExtractStringParams(List<JsonElement>? paramsList)
         => MddBooster.Core.Ast.FieldAttributes.StringArgs(paramsList);
-
-    private static string ToPascalCase(string snake)
-    {
-        if (string.IsNullOrEmpty(snake))
-        {
-            return snake;
-        }
-
-        var parts = snake.Split('_', StringSplitOptions.RemoveEmptyEntries);
-        return string.Concat(parts.Select(p => char.ToUpperInvariant(p[0]) + p.Substring(1)));
-    }
 }

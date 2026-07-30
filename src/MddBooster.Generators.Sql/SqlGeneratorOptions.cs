@@ -36,4 +36,14 @@ public sealed class SqlGeneratorOptions
     /// 선언형 도구(Schemorph 등) 소비자는 <c>true</c>로 DB 레벨 enum 강제를 켤 수 있다.
     /// </summary>
     public bool EmitEnumCheckConstraints { get; init; }
+
+    /// <summary>
+    /// 외래 키 컬럼에 인덱스를 자동 생성할지. 기본값 <c>false</c>.
+    /// 엔진은 FK를 자동 인덱싱하지 않으므로 조인·삭제 검사가 자식 테이블을 훑는다.
+    /// 켜면 <b>선언되지 않은 FK마다 인덱스 하나</b>가 늘어난다 — 읽기 이득과 쓰기·저장 비용의
+    /// 교환이며, 기존 스키마에 조용히 적용할 판단이 아니므로 opt-in이다.
+    /// 모델이 이미 덮은 컬럼(<c>@pk</c>·<c>@unique</c>·<c>@index</c>, 또는 복합 인덱스의 선두
+    /// 컬럼)은 <see cref="ForeignKeyIndexPlanner"/>가 걸러낸다.
+    /// </summary>
+    public bool EmitForeignKeyIndexes { get; init; }
 }

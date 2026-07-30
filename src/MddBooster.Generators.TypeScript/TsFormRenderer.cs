@@ -37,7 +37,7 @@ public static class TsFormRenderer
         {
             var content = RenderOne(model, enumNames, withSystemValues);
             if (content != null)
-                result[TypeScriptTypeMapper.PascalCase(model.Name)] = content;
+                result[NameCasing.ToPascalCase(model.Name)] = content;
         }
         return result;
     }
@@ -108,8 +108,8 @@ public static class TsFormRenderer
     private static string EffectiveLabelMap(FieldNode field, IReadOnlySet<string> withSystemValues)
     {
         var baseName = GetDisplayLabelsOverride(field) is { Length: > 0 } ov
-            ? TypeScriptTypeMapper.PascalCase(ov)
-            : TypeScriptTypeMapper.PascalCase(field.Type!);
+            ? NameCasing.ToPascalCase(ov)
+            : NameCasing.ToPascalCase(field.Type!);
 
         return withSystemValues.Contains(baseName)
             ? EnumValueVisibility.SelectableLabelsName(baseName)
@@ -129,7 +129,7 @@ public static class TsFormRenderer
 
         if (storedFields.Count == 0) return null;
 
-        var entityName = TypeScriptTypeMapper.PascalCase(model.Name);
+        var entityName = NameCasing.ToPascalCase(model.Name);
 
         // Group fields by @group attribute (preserve insertion order).
         // "기타" is the default fallback — note explicit @group("기타") merges into the same bucket.
@@ -147,7 +147,7 @@ public static class TsFormRenderer
         // rendered as slot placeholders rather than as inline form controls.
         var slotFields = storedFields
             .Where(f => HasAttribute(f, "reference") || HasAttribute(f, "slot"))
-            .Select(f => TypeScriptTypeMapper.PascalCase(f.Name))
+            .Select(f => NameCasing.ToPascalCase(f.Name))
             .ToList();
         // Keep fkFields as alias for backwards-compat with downstream code.
         var fkFields = slotFields;
@@ -159,7 +159,7 @@ public static class TsFormRenderer
             .Where(f => !HasAttribute(f, "reference") && !HasAttribute(f, "slot"))
             .Select(f => f.Type!)
             .Distinct()
-            .Select(TypeScriptTypeMapper.PascalCase)
+            .Select(NameCasing.ToPascalCase)
             .OrderBy(e => e)
             .ToList();
 
@@ -267,13 +267,13 @@ public static class TsFormRenderer
         sb.AppendLine();
         sb.Append("export const empty").Append(entityName).Append(": Partial<").Append(entityName).Append("> = { ");
         sb.Append(string.Join(", ", storedFields.Select(f =>
-            $"{TypeScriptTypeMapper.PascalCase(f.Name)}: {EmptyValue(f, enumNames)}")));
+            $"{NameCasing.ToPascalCase(f.Name)}: {EmptyValue(f, enumNames)}")));
         sb.AppendLine(" }");
         sb.AppendLine();
         sb.Append("export function ").Append(camel).Append("FromEntity(row: ").Append(entityName).Append("): Partial<").Append(entityName).AppendLine("> {");
         sb.Append("  return { ");
         sb.Append(string.Join(", ", storedFields.Select(f =>
-            $"{TypeScriptTypeMapper.PascalCase(f.Name)}: {FromEntityValue(f, enumNames)}")));
+            $"{NameCasing.ToPascalCase(f.Name)}: {FromEntityValue(f, enumNames)}")));
         sb.AppendLine(" }");
         sb.AppendLine("}");
 
@@ -356,7 +356,7 @@ public static class TsFormRenderer
         var isBool = string.Equals(t, "boolean", StringComparison.OrdinalIgnoreCase);
         if (!string.IsNullOrEmpty(def))
         {
-            if (isEnum) return $"'{TypeScriptTypeMapper.PascalCase(def!)}'";
+            if (isEnum) return $"'{NameCasing.ToPascalCase(def!)}'";
             if (isBool) return def!;            // "true" / "false"
             if (IsNumberType(t)) return def!;   // numeric literal
             return $"'{def}'";                  // string default
@@ -373,7 +373,7 @@ public static class TsFormRenderer
     /// <summary>Expression mapping an entity row field into form state (write fields only).</summary>
     private static string FromEntityValue(FieldNode field, IReadOnlySet<string> enumNames)
     {
-        var prop = TypeScriptTypeMapper.PascalCase(field.Name);
+        var prop = NameCasing.ToPascalCase(field.Name);
         var t = field.Type;
         var isEnum = t != null && enumNames.Contains(t);
         var isBool = string.Equals(t, "boolean", StringComparison.OrdinalIgnoreCase);
@@ -474,7 +474,7 @@ public static class TsFormRenderer
         IReadOnlySet<string> enumNames,
         IReadOnlySet<string> withSystemValues)
     {
-        var prop = TypeScriptTypeMapper.PascalCase(field.Name);
+        var prop = NameCasing.ToPascalCase(field.Name);
         var label = field.Description ?? prop;
         var required = !field.Nullable;
         var requiredAttr = required ? " required" : "";
@@ -503,7 +503,7 @@ public static class TsFormRenderer
         if (control == FormControl.Select)
         {
             // Select is only classified for a field whose Type names a known enum.
-            var enumTypeName = TypeScriptTypeMapper.PascalCase(field.Type!);
+            var enumTypeName = NameCasing.ToPascalCase(field.Type!);
             // Which map supplies the choices — see EffectiveLabelMap. The stored/cast
             // type stays enumTypeName regardless: narrowing the choices never narrows
             // what may be stored.

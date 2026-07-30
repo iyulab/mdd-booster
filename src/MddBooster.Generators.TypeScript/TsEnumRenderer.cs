@@ -1,5 +1,6 @@
 using System.Text;
 using M3L.Native;
+using MddBooster.Core.Naming;
 
 namespace MddBooster.Generators.TypeScript;
 
@@ -33,7 +34,7 @@ public static class TsEnumRenderer
 
         foreach (var enumNode in enums)
         {
-            var typeName = TypeScriptTypeMapper.PascalCase(enumNode.Name);
+            var typeName = NameCasing.ToPascalCase(enumNode.Name);
 
             if (!string.IsNullOrWhiteSpace(enumNode.Description))
             {
@@ -57,7 +58,7 @@ public static class TsEnumRenderer
                     else sb.Append("  ");
                     // API serializes enum members as PascalCase C# member names (not snake_case DB values).
                     // m3l "supplier" → C# EnumType.Supplier → JSON "Supplier"
-                    sb.Append("'").Append(TypeScriptTypeMapper.PascalCase(v.Name ?? string.Empty)).Append("'");
+                    sb.Append("'").Append(NameCasing.ToPascalCase(v.Name ?? string.Empty)).Append("'");
                 }
                 sb.AppendLine();
             }

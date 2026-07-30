@@ -2,7 +2,7 @@
 #
 # 동작:
 #   1. MddBooster.Cli 를 dotnet publish (Debug, net10.0) → bin/publish/
-#   2. bin/publish/ 내용을 전역 설치 경로(기본 D:\lib\mdd-booster\)로 복사
+#   2. bin/publish/ 내용을 설치 경로(기본 %LOCALAPPDATA%\Programs\mdd-booster)로 복사
 #   3. mdd --version 으로 설치 확인
 #
 # 사용:
@@ -12,7 +12,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$InstallPath = "D:\lib\mdd-booster",
+    [string]$InstallPath = (Join-Path $env:LOCALAPPDATA 'Programs\mdd-booster'),
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Debug'
 )
@@ -53,4 +53,4 @@ Write-Host "==> 설치 완료" -ForegroundColor Green
 Write-Host ""
 & $mddExe version
 Write-Host ""
-Write-Host "PATH에 '$InstallPath' 를 추가하거나, 기존 wrapper ('D:\lib\mdd.cmd' 등)가 최신 경로를 가리키는지 확인하세요." -ForegroundColor Yellow
+Write-Host "PATH에 '$InstallPath' 를 추가하거나, 기존 wrapper 스크립트가 이 경로를 가리키는지 확인하세요." -ForegroundColor Yellow

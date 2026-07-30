@@ -1,6 +1,7 @@
 using M3L.Native;
 using MddBooster.Core.Generation;
 using MddBooster.Core.Semantic;
+using MddBooster.Core.Naming;
 
 namespace MddBooster.Generators.Model;
 
@@ -104,7 +105,7 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
         ResolvedModel model,
         HashSet<string> customExtViewModels)
     {
-        var pascalName = PascalCase(model.Name);
+        var pascalName = NameCasing.ToPascalCase(model.Name);
         if (customExtViewModels.Contains(pascalName))
             return EntityPairRenderer.ExtBacking.Ext;
         if (model.Fields.Any(f => f.Kind is FieldKind.Lookup or FieldKind.Rollup or FieldKind.Computed))
@@ -135,12 +136,6 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
         }
     }
 
-    private static string PascalCase(string snake)
-    {
-        if (string.IsNullOrEmpty(snake)) return snake;
-        var parts = snake.Split('_', StringSplitOptions.RemoveEmptyEntries);
-        return string.Concat(parts.Select(p => char.ToUpperInvariant(p[0]) + p.Substring(1)));
-    }
 }
 
 public sealed class ModelGeneratorOptions

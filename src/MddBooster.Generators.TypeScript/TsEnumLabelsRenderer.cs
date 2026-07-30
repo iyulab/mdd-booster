@@ -1,5 +1,6 @@
 using System.Text;
 using M3L.Native;
+using MddBooster.Core.Naming;
 
 namespace MddBooster.Generators.TypeScript;
 
@@ -31,7 +32,7 @@ public static class TsEnumLabelsRenderer
 
         // Import all enum types from enums_gen
         var enumTypeNames = enums
-            .Select(e => TypeScriptTypeMapper.PascalCase(e.Name))
+            .Select(e => NameCasing.ToPascalCase(e.Name))
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToList();
 
@@ -45,7 +46,7 @@ public static class TsEnumLabelsRenderer
 
         foreach (var enumNode in enums)
         {
-            var typeName = TypeScriptTypeMapper.PascalCase(enumNode.Name);
+            var typeName = NameCasing.ToPascalCase(enumNode.Name);
 
             if (!string.IsNullOrWhiteSpace(enumNode.Description))
             {
@@ -57,7 +58,7 @@ public static class TsEnumLabelsRenderer
 
             foreach (var v in enumNode.Values)
             {
-                var key = TypeScriptTypeMapper.PascalCase(v.Name ?? string.Empty);
+                var key = NameCasing.ToPascalCase(v.Name ?? string.Empty);
                 var label = !string.IsNullOrWhiteSpace(v.Description)
                     ? v.Description
                     : key;
@@ -95,7 +96,7 @@ public static class TsEnumLabelsRenderer
 
         var excluded = enumNode.Values
             .Where(EnumValueVisibility.IsSystemValue)
-            .Select(v => "'" + TypeScriptTypeMapper.PascalCase(v.Name ?? string.Empty) + "'")
+            .Select(v => "'" + NameCasing.ToPascalCase(v.Name ?? string.Empty) + "'")
             .ToList();
 
         sb.AppendLine("/** Input choices — excludes values marked @system in the model. */");
@@ -105,7 +106,7 @@ public static class TsEnumLabelsRenderer
 
         foreach (var v in enumNode.Values.Where(v => !EnumValueVisibility.IsSystemValue(v)))
         {
-            var key = TypeScriptTypeMapper.PascalCase(v.Name ?? string.Empty);
+            var key = NameCasing.ToPascalCase(v.Name ?? string.Empty);
             var label = !string.IsNullOrWhiteSpace(v.Description) ? v.Description : key;
             var escaped = label.Replace("\\", "\\\\").Replace("'", "\\'");
             sb.Append("  ").Append(key).Append(": '").Append(escaped).AppendLine("',");

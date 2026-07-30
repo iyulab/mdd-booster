@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using M3L.Native;
 using MddBooster.Core.Semantic;
+using MddBooster.Core.Naming;
 
 namespace MddBooster.Generators.Sql;
 
@@ -13,7 +14,8 @@ public static class TableRenderer
         ResolvedModel model,
         string schema,
         IReadOnlyDictionary<string, EnumNode>? enumLookup = null,
-        bool emitEnumCheckConstraints = false)
+        bool emitEnumCheckConstraints = false,
+        bool emitForeignKeyIndexes = false)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentException.ThrowIfNullOrWhiteSpace(schema);
@@ -41,7 +43,7 @@ public static class TableRenderer
             if (!HasAttribute(field, "unique")) continue;
             if (HasAttribute(field, "pk")) continue; // PK는 이미 유일
 
-            var column = ToPascalCase(field.Name);
+            var column = NameCasing.ToPascalCase(field.Name);
             if (field.Nullable)
             {
                 postTableStatements.Add(
@@ -62,7 +64,7 @@ public static class TableRenderer
             if (!HasAttribute(field, "index")) continue;
             if (HasAttribute(field, "pk") || HasAttribute(field, "unique")) continue;
 
-            var column = ToPascalCase(field.Name);
+            var column = NameCasing.ToPascalCase(field.Name);
             postTableStatements.Add(
                 $"CREATE NONCLUSTERED INDEX [IX_{model.Name}_{column}] " +
                 $"ON [{schema}].[{model.Name}] ([{column}]);");
@@ -72,6 +74,18 @@ public static class TableRenderer
         // 각각 UNIQUE 제약 / NONCLUSTERED INDEX로 emit. M3L.Native가 directive 형식만 args를 보존하므로
         // `idx_name: @index(col)` 형식은 args 없이 들어와 정보 부족(skip).
         AppendSectionIndexes(model, schema, storedFields, inlineConstraints, postTableStatements);
+
+        // FK 자동 인덱스 — opt-in. 모델이 이미 덮은 컬럼은 판정기가 걸러낸다.
+        if (emitForeignKeyIndexes)
+        {
+            foreach (var field in ForeignKeyIndexPlanner.Plan(model))
+            {
+                var column = NameCasing.ToPascalCase(field.Name);
+                postTableStatements.Add(
+                    $"CREATE NONCLUSTERED INDEX [IX_{model.Name}_{column}] " +
+                    $"ON [{schema}].[{model.Name}] ([{column}]);");
+            }
+        }
 
         // enum CHECK 제약은 opt-in (기본 off) — SSDT dacpac이 CHECK를 매번 Drop→Create로
         // 재현해 diff가 불안정하므로(정책: cycle 27) SSDT 소비자는 EF Core string converter
@@ -84,7 +98,7 @@ public static class TableRenderer
                 if (field.Type is null || !enumLookup.TryGetValue(field.Type, out var enumNode)) continue;
                 if (enumNode.Values.Count == 0) continue;
 
-                var column = ToPascalCase(field.Name);
+                var column = NameCasing.ToPascalCase(field.Name);
                 inlineConstraints.Add(
                     $"CONSTRAINT [CK_{model.Name}_{column}] CHECK ([{column}] IN ({EnumSqlConvention.CheckValues(enumNode)}))");
             }
@@ -137,7 +151,7 @@ public static class TableRenderer
         // SQL Server UNIQUE 제약은 NULL을 값으로 취급(다중 NULL 허용 안 됨)하므로
         // filtered unique index로 변환해 NULL 행을 제약 평가에서 제외해야 한다.
         var columnNullability = storedFields.ToDictionary(
-            f => ToPascalCase(f.Name),
+            f => NameCasing.ToPascalCase(f.Name),
             f => f.Nullable,
             StringComparer.Ordinal);
 
@@ -158,14 +172,14 @@ public static class TableRenderer
             if (argsEl.ValueKind == JsonValueKind.String)
             {
                 var s = argsEl.GetString();
-                if (!string.IsNullOrWhiteSpace(s)) cols.Add(ToPascalCase(s!));
+                if (!string.IsNullOrWhiteSpace(s)) cols.Add(NameCasing.ToPascalCase(s!));
             }
             else if (argsEl.ValueKind == JsonValueKind.Array)
             {
                 foreach (var a in argsEl.EnumerateArray())
                 {
                     var s = a.ValueKind == JsonValueKind.String ? a.GetString() : a.GetRawText();
-                    if (!string.IsNullOrWhiteSpace(s)) cols.Add(ToPascalCase(s!));
+                    if (!string.IsNullOrWhiteSpace(s)) cols.Add(NameCasing.ToPascalCase(s!));
                 }
             }
             if (cols.Count == 0) continue;
@@ -208,9 +222,4 @@ public static class TableRenderer
     private static bool HasAttribute(FieldNode field, string name) =>
         MddBooster.Core.Ast.FieldAttributes.Has(field, name);
 
-    private static string ToPascalCase(string snake)
-    {
-        var parts = snake.Split('_', StringSplitOptions.RemoveEmptyEntries);
-        return string.Concat(parts.Select(p => char.ToUpperInvariant(p[0]) + p.Substring(1)));
-    }
 }

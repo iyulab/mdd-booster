@@ -50,7 +50,7 @@ public static class DbContextRenderer
 
         foreach (var model in ordered)
         {
-            var name = PascalCase(model.Name);
+            var name = NameCasing.ToPascalCase(model.Name);
             var plural = Pluralizer.Pluralize(name);
 
             sb.AppendLine();
@@ -65,7 +65,7 @@ public static class DbContextRenderer
         var extMappings = ordered
             .Select(m => new
             {
-                Name = PascalCase(m.Name),
+                Name = NameCasing.ToPascalCase(m.Name),
                 Backing = ClassifyBacking(m, customExtViewModels)
             })
             .ToList();
@@ -106,8 +106,8 @@ public static class DbContextRenderer
             var pk = ModelPrimaryKey.Find(model);
             if (pk is null || !ModelPrimaryKey.IsNonIdPk(pk)) continue;
 
-            var name = PascalCase(model.Name);
-            var column = PascalCase(pk.Name);
+            var name = NameCasing.ToPascalCase(model.Name);
+            var column = NameCasing.ToPascalCase(pk.Name);
             sb.Append("        modelBuilder.Entity<").Append(name)
               .Append(">().Property(e => e.Id).HasColumnName(\"").Append(column).AppendLine("\");");
             sb.Append("        modelBuilder.Entity<").Append(name)
@@ -136,7 +136,7 @@ public static class DbContextRenderer
 
         foreach (var model in ordered)
         {
-            var name = PascalCase(model.Name);
+            var name = NameCasing.ToPascalCase(model.Name);
             var table = tableNames[model.Name];
             var pk = ModelPrimaryKey.Find(model);
             var backing = ClassifyBacking(model, customExtViewModels);
@@ -169,7 +169,7 @@ public static class DbContextRenderer
         foreach (var field in BaseColumnsOf(model))
         {
             // 공유/명명 PK 필드는 엔티티에 별도 속성이 없다 — 상속된 Id가 그 컬럼이다.
-            var property = ReferenceEquals(field, pk) ? "Id" : PascalCase(field.Name);
+            var property = ReferenceEquals(field, pk) ? "Id" : NameCasing.ToPascalCase(field.Name);
             sb.Append("            e.Property(x => x.").Append(property)
               .Append(").HasColumnName(\"").Append(field.Name).Append("\")");
             if (string.Equals(field.Type, "json", StringComparison.Ordinal))
@@ -185,7 +185,7 @@ public static class DbContextRenderer
 
     private static string ClassifyBacking(ResolvedModel model, IReadOnlySet<string>? customExtViewModels)
     {
-        var name = PascalCase(model.Name);
+        var name = NameCasing.ToPascalCase(model.Name);
         if (customExtViewModels != null && customExtViewModels.Contains(name)) return "ext";
         if (model.Fields.Any(f => f.Kind is FieldKind.Lookup or FieldKind.Rollup or FieldKind.Computed)) return "full";
         if (model.Fields.Any(f => f.Kind == FieldKind.Stored &&
@@ -193,10 +193,4 @@ public static class DbContextRenderer
         return "none";
     }
 
-    private static string PascalCase(string snake)
-    {
-        if (string.IsNullOrEmpty(snake)) return snake;
-        var parts = snake.Split('_', StringSplitOptions.RemoveEmptyEntries);
-        return string.Concat(parts.Select(p => char.ToUpperInvariant(p[0]) + p.Substring(1)));
-    }
 }

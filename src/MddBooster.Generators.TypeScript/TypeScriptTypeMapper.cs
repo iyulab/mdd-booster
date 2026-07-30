@@ -1,3 +1,4 @@
+using MddBooster.Core.Naming;
 namespace MddBooster.Generators.TypeScript;
 
 /// <summary>
@@ -19,7 +20,7 @@ public static class TypeScriptTypeMapper
             throw new ArgumentException("m3lType is empty.", nameof(m3lType));
 
         if (knownEnumNames is not null && knownEnumNames.Contains(m3lType))
-            return PascalCase(m3lType);
+            return NameCasing.ToPascalCase(m3lType);
 
         return Map(m3lType);
     }
@@ -58,10 +59,4 @@ public static class TypeScriptTypeMapper
         };
     }
 
-    internal static string PascalCase(string snake)
-    {
-        if (string.IsNullOrEmpty(snake)) return snake;
-        var parts = snake.Split('_', StringSplitOptions.RemoveEmptyEntries);
-        return string.Concat(parts.Select(p => char.ToUpperInvariant(p[0]) + p.Substring(1)));
-    }
 }

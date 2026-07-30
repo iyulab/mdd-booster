@@ -1,6 +1,7 @@
 using System.Text;
 using M3L.Native;
 using MddBooster.Core.Semantic;
+using MddBooster.Core.Naming;
 
 namespace MddBooster.Generators.TypeScript;
 
@@ -49,7 +50,7 @@ public static class TsInterfaceRenderer
                     && !string.IsNullOrWhiteSpace(f.Type)
                     && knownEnumNames.Contains(f.Type))
                 {
-                    usedEnums.Add(TypeScriptTypeMapper.PascalCase(f.Type));
+                    usedEnums.Add(NameCasing.ToPascalCase(f.Type));
                 }
             }
         }
@@ -83,7 +84,7 @@ public static class TsInterfaceRenderer
         ResolvedModel model,
         IReadOnlySet<string>? knownEnumNames)
     {
-        var entityName = TypeScriptTypeMapper.PascalCase(model.Name);
+        var entityName = NameCasing.ToPascalCase(model.Name);
 
         var storedFields = model.Fields
             .Where(f => f.Kind == FieldKind.Stored)
@@ -107,7 +108,7 @@ public static class TsInterfaceRenderer
         {
             var tsType = TypeScriptTypeMapper.MapFieldType(f.Type!, knownEnumNames);
             var nullable = f.Nullable ? " | null" : string.Empty;
-            var prop = TypeScriptTypeMapper.PascalCase(f.Name);
+            var prop = NameCasing.ToPascalCase(f.Name);
             sb.Append("  ").Append(prop).Append(": ").Append(tsType).AppendLine(nullable);
         }
 
@@ -123,7 +124,7 @@ public static class TsInterfaceRenderer
                 var tsType = TypeScriptTypeMapper.MapFieldType(f.Type!, knownEnumNames);
                 var effectiveNullable = ResolveExtNullable(f, storedNullability);
                 var nullSuffix = effectiveNullable ? " | null" : string.Empty;
-                var prop = TypeScriptTypeMapper.PascalCase(f.Name);
+                var prop = NameCasing.ToPascalCase(f.Name);
                 // Ext fields are always optional (may not be returned in write contexts)
                 sb.Append("  ").Append(prop).Append("?: ").Append(tsType).AppendLine(nullSuffix);
             }

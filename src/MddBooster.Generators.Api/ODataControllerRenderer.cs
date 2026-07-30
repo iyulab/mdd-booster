@@ -46,7 +46,7 @@ public static class ODataControllerRenderer
             // @internal 엔티티는 OData 컨트롤러를 생성하지 않는다(ApiRegistration 등록 제외와 짝).
             if (EntitySurface.IsInternal(model)) continue;
 
-            var entity = PascalCase(model.Name);
+            var entity = NameCasing.ToPascalCase(model.Name);
             var setName = Pluralizer.Pluralize(entity);
 
             sb.Append("public sealed partial class ").Append(setName).AppendLine("Controller");
@@ -62,10 +62,4 @@ public static class ODataControllerRenderer
         return sb.ToString();
     }
 
-    private static string PascalCase(string snake)
-    {
-        if (string.IsNullOrEmpty(snake)) return snake;
-        var parts = snake.Split('_', StringSplitOptions.RemoveEmptyEntries);
-        return string.Concat(parts.Select(p => char.ToUpperInvariant(p[0]) + p.Substring(1)));
-    }
 }

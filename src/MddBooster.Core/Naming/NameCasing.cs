@@ -70,4 +70,31 @@ public static class NameCasing
         return string.Concat(
             words.Select((w, idx) => idx == 0 ? w.ToLowerInvariant() : w));
     }
+
+    /// <summary>
+    /// snake_case → PascalCase. Underscores separate the words and each word's
+    /// first character is upper-cased; every other character is left alone, so
+    /// a name that already carries capitals keeps them (<c>qr_code</c> →
+    /// <c>QrCode</c>, <c>QR_code</c> → <c>QRCode</c>).
+    /// </summary>
+    /// <remarks>
+    /// This is the opposite direction from <see cref="SplitWords"/> and
+    /// <see cref="ToCamelCase"/>, which read a PascalCase name. Field, column
+    /// and enum member names arrive from the model in snake_case and every
+    /// target has to raise them; the conversion lives here so the targets agree
+    /// by construction rather than by twelve identical private copies staying
+    /// in step. They did stay in step — but agreement had become a correctness
+    /// precondition rather than a tidiness question, because an enum member
+    /// name is raised once for the enum declaration and again for a property
+    /// initializer that has to reference it, and the two are emitted by
+    /// different renderers. A divergence there produces code that does not
+    /// compile.
+    /// </remarks>
+    public static string ToPascalCase(string snakeName)
+    {
+        if (string.IsNullOrEmpty(snakeName)) return snakeName;
+
+        var parts = snakeName.Split('_', StringSplitOptions.RemoveEmptyEntries);
+        return string.Concat(parts.Select(p => char.ToUpperInvariant(p[0]) + p[1..]));
+    }
 }

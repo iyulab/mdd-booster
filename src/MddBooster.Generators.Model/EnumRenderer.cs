@@ -1,5 +1,6 @@
 using System.Text;
 using M3L.Native;
+using MddBooster.Core.Naming;
 
 namespace MddBooster.Generators.Model;
 
@@ -36,7 +37,7 @@ public static class EnumRenderer
         ArgumentNullException.ThrowIfNull(enumNode);
         ArgumentException.ThrowIfNullOrWhiteSpace(ns);
 
-        var typeName = PascalCase(enumNode.Name);
+        var typeName = NameCasing.ToPascalCase(enumNode.Name);
         var sb = new StringBuilder();
         sb.AppendLine(Header);
         sb.AppendLine("#nullable enable");
@@ -59,7 +60,7 @@ public static class EnumRenderer
         for (var i = 0; i < enumNode.Values.Count; i++)
         {
             var v = enumNode.Values[i];
-            var memberName = PascalCase(v.Name);
+            var memberName = NameCasing.ToPascalCase(v.Name);
 
             if (!string.IsNullOrWhiteSpace(v.Description))
             {
@@ -95,10 +96,4 @@ public static class EnumRenderer
         }
     }
 
-    private static string PascalCase(string snake)
-    {
-        if (string.IsNullOrEmpty(snake)) return snake;
-        var parts = snake.Split('_', StringSplitOptions.RemoveEmptyEntries);
-        return string.Concat(parts.Select(p => char.ToUpperInvariant(p[0]) + p.Substring(1)));
-    }
 }

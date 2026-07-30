@@ -12,6 +12,12 @@ public sealed class PostgresSqlGeneratorOptions
 
     /// <summary>enum 컬럼 CHECK 제약(<c>ck_{table}_{column}</c>) 방출 여부.</summary>
     public bool EmitEnumCheckConstraints { get; init; }
+
+    /// <summary>
+    /// 외래 키 컬럼에 인덱스(<c>ix_{table}_{column}</c>)를 자동 생성할지. 기본값 <c>false</c>.
+    /// 판정은 <see cref="ForeignKeyIndexPlanner"/>가 방언과 무관하게 내린다.
+    /// </summary>
+    public bool EmitForeignKeyIndexes { get; init; }
 }
 
 /// <summary>
@@ -63,7 +69,8 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
             {
                 var artifact = PgTableRenderer.Render(
                     model, _options.Schema, tableNames, modelLookup, enumLookup,
-                    _options.EmitEnumCheckConstraints);
+                    _options.EmitEnumCheckConstraints,
+                    _options.EmitForeignKeyIndexes);
                 foreach (var warning in artifact.Warnings)
                 {
                     Console.Error.WriteLine($"[sql-pg] 경고 ({model.Name}): {warning}");

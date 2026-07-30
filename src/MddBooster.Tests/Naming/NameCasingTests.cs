@@ -61,6 +61,47 @@ public class NameCasingTests
         Assert.Equal("", NameCasing.ToCamelCase(""));
     }
 
+    // ---- ToPascalCase: snake_case 를 올린다 (입력 알파벳이 반대 방향) ----
+
+    [Theory]
+    [InlineData("work_order", "WorkOrder")]
+    [InlineData("id", "Id")]
+    [InlineData("byte_size", "ByteSize")]
+    [InlineData("in_review", "InReview")]
+    [InlineData("qr_code", "QrCode")]          // 이미 소문자인 약어는 되살리지 않는다
+    [InlineData("QR_code", "QRCode")]          // 첫 글자 외에는 원본 유지
+    [InlineData("a", "A")]
+    [InlineData("__leading", "Leading")]       // 빈 조각은 버린다
+    [InlineData("double__underscore", "DoubleUnderscore")]
+    [InlineData("trailing_", "Trailing")]
+    public void ToPascalCase_RaisesEachUnderscoreSeparatedWord(string snake, string expected)
+    {
+        Assert.Equal(expected, NameCasing.ToPascalCase(snake));
+    }
+
+    [Fact]
+    public void ToPascalCase_EmptyInput_ReturnsInput()
+    {
+        Assert.Equal("", NameCasing.ToPascalCase(""));
+    }
+
+    [Fact]
+    public void Enum_type_and_member_are_raised_by_the_same_conversion()
+    {
+        // An enum member name is raised twice by different renderers — once for the
+        // member declaration and once for a property initializer that references it.
+        // If those two conversions were separate implementations that drifted, the
+        // initializer would name a member that does not exist and the generated code
+        // would not compile. One implementation is what makes that impossible; this
+        // pins the property rather than trusting that nobody re-adds a private copy.
+        const string enumType = "asset_status";
+        const string member = "in_review";
+
+        var declaration = $"{NameCasing.ToPascalCase(enumType)}.{NameCasing.ToPascalCase(member)}";
+
+        Assert.Equal("AssetStatus.InReview", declaration);
+    }
+
     // ---- 두 경로가 같은 분리기를 쓴다는 것 자체를 고정 ----
 
     [Theory]

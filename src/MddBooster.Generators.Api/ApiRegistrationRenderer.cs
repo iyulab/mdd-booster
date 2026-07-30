@@ -74,7 +74,7 @@ public static class ApiRegistrationRenderer
             //     타입이 input 타입으로 들어가 이 보장이 약해진다. 그때 재검토 필요.
             if (EntitySurface.IsInternal(model)) continue;
 
-            var entity = PascalCase(model.Name);
+            var entity = NameCasing.ToPascalCase(model.Name);
             var setName = Pluralizer.Pluralize(entity);            // OData: PascalCase 복수 — DbSet 이름과 맞춘다
             var mutationPrefix = NameCasing.ToCamelCase(entity);    // e.g. "order"
             // camelCase 를 **먼저** 적용하고 복수화한다. 순서를 뒤집으면 두 글자 약어가 깨진다 —
@@ -96,10 +96,4 @@ public static class ApiRegistrationRenderer
         return sb.ToString();
     }
 
-    private static string PascalCase(string snake)
-    {
-        if (string.IsNullOrEmpty(snake)) return snake;
-        var parts = snake.Split('_', StringSplitOptions.RemoveEmptyEntries);
-        return string.Concat(parts.Select(p => char.ToUpperInvariant(p[0]) + p.Substring(1)));
-    }
 }

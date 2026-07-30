@@ -24,7 +24,7 @@ public static class TsEntityNamesRenderer
         ArgumentNullException.ThrowIfNull(models);
 
         var names = models
-            .Select(m => Pluralizer.Pluralize(TypeScriptTypeMapper.PascalCase(m.Name)))
+            .Select(m => Pluralizer.Pluralize(NameCasing.ToPascalCase(m.Name)))
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToList();
 

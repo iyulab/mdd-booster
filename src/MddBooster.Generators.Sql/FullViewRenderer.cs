@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using M3L.Native;
 using MddBooster.Core.Semantic;
+using MddBooster.Core.Naming;
 
 namespace MddBooster.Generators.Sql;
 
@@ -82,10 +83,10 @@ public static class FullViewRenderer
             {
                 var target = ResolveReferenceTarget(plan.Model, fkField);
                 var alias = "j_" + fkField;
-                join = new JoinInfo(TargetTable: target, FkColumn: ToPascalCase(fkField), Alias: alias);
+                join = new JoinInfo(TargetTable: target, FkColumn: NameCasing.ToPascalCase(fkField), Alias: alias);
                 joinsByFk[fkField] = join;
             }
-            lookupColumns.Add(($"{join.Alias}.[{ToPascalCase(targetColumn)}]", ToPascalCase(lookup.Name)));
+            lookupColumns.Add(($"{join.Alias}.[{NameCasing.ToPascalCase(targetColumn)}]", NameCasing.ToPascalCase(lookup.Name)));
         }
 
         // --- Build rollup subquery list ---
@@ -97,7 +98,7 @@ public static class FullViewRenderer
                     $"Rollup field '{plan.Model.Name}.{rollup.Name}' has no parsed RollupDef.");
             rollupColumns.Add((
                 expr: RenderRollupSubquery(def, schema, baseAlias, fullViewModels),
-                alias: ToPascalCase(rollup.Name)));
+                alias: NameCasing.ToPascalCase(rollup.Name)));
         }
 
         // --- Build computed expression list ---
@@ -109,7 +110,7 @@ public static class FullViewRenderer
                     $"Computed field '{plan.Model.Name}.{computed.Name}' has no parsed ComputedDef.");
             computedColumns.Add((
                 expr: NormalizeComputedExpression(def.Expression ?? string.Empty),
-                alias: ToPascalCase(computed.Name)));
+                alias: NameCasing.ToPascalCase(computed.Name)));
         }
 
         var sb = new StringBuilder();
@@ -199,7 +200,7 @@ public static class FullViewRenderer
         IReadOnlySet<string>? fullViewModels)
     {
         var target = def.Target;
-        var fkColumn = ToPascalCase(def.Fk);
+        var fkColumn = NameCasing.ToPascalCase(def.Fk);
         var aggregate = (def.Aggregate ?? "count").Trim().ToLowerInvariant();
         var field = def.Field;
 
@@ -211,10 +212,10 @@ public static class FullViewRenderer
         var innerExpr = aggregate switch
         {
             "count" => "COUNT(*)",
-            "sum" when !string.IsNullOrEmpty(field) => $"ISNULL(SUM([{ToPascalCase(field)}]), 0)",
-            "avg" when !string.IsNullOrEmpty(field) => $"AVG([{ToPascalCase(field)}])",
-            "min" when !string.IsNullOrEmpty(field) => $"MIN([{ToPascalCase(field)}])",
-            "max" when !string.IsNullOrEmpty(field) => $"MAX([{ToPascalCase(field)}])",
+            "sum" when !string.IsNullOrEmpty(field) => $"ISNULL(SUM([{NameCasing.ToPascalCase(field)}]), 0)",
+            "avg" when !string.IsNullOrEmpty(field) => $"AVG([{NameCasing.ToPascalCase(field)}])",
+            "min" when !string.IsNullOrEmpty(field) => $"MIN([{NameCasing.ToPascalCase(field)}])",
+            "max" when !string.IsNullOrEmpty(field) => $"MAX([{NameCasing.ToPascalCase(field)}])",
             _ => throw new NotSupportedException(
                 $"Unsupported rollup: aggregate='{aggregate}' field='{field}'."),
         };
@@ -270,7 +271,7 @@ public static class FullViewRenderer
             {
                 var ident = m.Value;
                 if (IsSqlKeyword(ident)) return ident;
-                return "[" + ToPascalCase(ident) + "]";
+                return "[" + NameCasing.ToPascalCase(ident) + "]";
             }));
         }
         return sb.ToString();
@@ -310,12 +311,6 @@ public static class FullViewRenderer
             : first.GetRawText();
     }
 
-    private static string ToPascalCase(string snake)
-    {
-        if (string.IsNullOrEmpty(snake)) return snake;
-        var parts = snake.Split('_', StringSplitOptions.RemoveEmptyEntries);
-        return string.Concat(parts.Select(p => char.ToUpperInvariant(p[0]) + p.Substring(1)));
-    }
 
     private sealed record JoinInfo(string TargetTable, string FkColumn, string Alias);
 }

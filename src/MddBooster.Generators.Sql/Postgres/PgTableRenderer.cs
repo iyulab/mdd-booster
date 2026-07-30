@@ -13,10 +13,11 @@ public sealed record PgTableArtifact(
     IReadOnlyList<string> Warnings);
 
 /// <summary>
-/// M3L 모델 → PostgreSQL CREATE TABLE 렌더러. 범위는 Schemorph PG P1 능력과 정렬 —
-/// 테이블·컬럼·제약(PK/FK/UNIQUE/CHECK)까지만 방출하고, 인덱스는 방출하지 않는다
-/// (Schemorph P1이 인덱스를 명시 거부 — 무음 탈락 대신 <see cref="PgTableArtifact.Warnings"/>로
-/// 표면화). 식별자는 전부 비인용 snake_case이며(ADR-0001), 컬럼명·제약명도
+/// M3L 모델 → PostgreSQL CREATE TABLE 렌더러. 테이블·컬럼·제약(PK/FK/UNIQUE/CHECK)과
+/// `@index` 인덱스를 방출한다. 인덱스는 <c>CREATE TABLE</c> 뒤의 독립 문으로 나가며
+/// <c>CONCURRENTLY</c> 는 쓰지 않는다 — 적용이 단일 트랜잭션이고 concurrent 빌드는 그 안에서
+/// 실행될 수 없다. PK/UNIQUE 제약이 소유하는 인덱스는 중복 방출하지 않는다.
+/// 식별자는 전부 비인용 snake_case이며(ADR-0001), 컬럼명·제약명·인덱스명도
 /// <see cref="PostgresIdentifiers.Check"/> 게이트를 통과해야 한다.
 /// 참조 PK는 대상 모델의 <b>PK 물리명</b>으로 렌더한다 — T-SQL 경로의
 /// <c>[dbo]</c>·<c>[Id]</c> 하드코딩이 막던 공유 PK 확장 테이블 재참조가 여기선 성립한다.
@@ -31,7 +32,8 @@ public static class PgTableRenderer
         IReadOnlyDictionary<string, string> tableNameMap,
         IReadOnlyDictionary<string, ResolvedModel> modelLookup,
         IReadOnlyDictionary<string, EnumNode>? enumLookup = null,
-        bool emitEnumCheckConstraints = false)
+        bool emitEnumCheckConstraints = false,
+        bool emitForeignKeyIndexes = false)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentException.ThrowIfNullOrWhiteSpace(schema);
@@ -59,6 +61,7 @@ public static class PgTableRenderer
 
         var warnings = new List<string>();
         var constraints = new List<(string Name, string Body)>();
+        var indexes = new List<(string Name, string Columns)>();
 
         // PK — 물리명은 필드명 그대로 (공유 PK 확장 테이블이면 `{parent}_id`)
         var pkField = ModelPrimaryKey.Find(model);
@@ -100,15 +103,23 @@ public static class PgTableRenderer
             constraints.Add(($"uq_{tableName}_{field.Name}", $"UNIQUE ({field.Name})"));
         }
 
-        // field-level @index — Schemorph PG P1이 인덱스를 거부하므로 방출 금지, 경고로 표면화
+        // field-level @index — PK/UNIQUE 는 제약이 인덱스를 소유하므로 중복 방출하지 않는다
         foreach (var field in storedFields)
         {
             if (!Has(field, "index") || Has(field, "pk") || Has(field, "unique")) continue;
-            warnings.Add(
-                $"@index({field.Name})는 방출하지 않음 — Schemorph PG P1은 인덱스를 거부한다 (P2 지원 시 재개)");
+            indexes.Add(($"ix_{tableName}_{field.Name}", field.Name));
         }
 
-        AppendSectionIndexes(model, tableName, constraints, warnings);
+        AppendSectionIndexes(model, tableName, constraints, indexes);
+
+        // FK 자동 인덱스 — opt-in. 모델이 이미 덮은 컬럼은 판정기가 걸러낸다.
+        if (emitForeignKeyIndexes)
+        {
+            foreach (var field in ForeignKeyIndexPlanner.Plan(model))
+            {
+                indexes.Add(($"ix_{tableName}_{field.Name}", field.Name));
+            }
+        }
 
         // enum CHECK opt-in — 리터럴은 ANSI 표기('value'), T-SQL의 N'..'와 저장값은 동일
         if (emitEnumCheckConstraints && enumLookup is not null)
@@ -126,12 +137,14 @@ public static class PgTableRenderer
 
         // 제약명 게이트 — 테이블명·컬럼명이 각각 통과해도 조합(fk_{t}_{c})은 63바이트를
         // 넘을 수 있고, PG는 NOTICE만 내고 조용히 절단한다. 절단 대신 오류.
-        foreach (var (name, _) in constraints)
+        // 인덱스명도 같은 네임스페이스를 쓰므로 같은 게이트를 통과해야 한다 — 다중 컬럼
+        // 인덱스명(ix_{t}_{c1}_{c2}_…)은 제약명보다 쉽게 63바이트를 넘는다.
+        foreach (var (name, _) in constraints.Concat(indexes))
         {
             var violation = PostgresIdentifiers.Check(name);
             if (violation is not null)
             {
-                violations.Add($"모델 '{model.Name}' 제약명: {violation}");
+                violations.Add($"모델 '{model.Name}' 제약·인덱스명: {violation}");
             }
         }
 
@@ -161,6 +174,17 @@ public static class PgTableRenderer
         }
 
         sb.AppendLine(");");
+
+        // 인덱스는 CREATE TABLE 뒤의 독립 문이다. CONCURRENTLY 는 쓰지 않는다 — 적용은
+        // 하나의 트랜잭션으로 이뤄지고 concurrent 빌드는 트랜잭션 안에서 실행할 수 없다.
+        foreach (var (name, columns) in indexes)
+        {
+            sb.AppendLine();
+            sb.Append("CREATE INDEX ").Append(name)
+              .Append(" ON ").Append(schema).Append('.').Append(tableName)
+              .Append(" (").Append(columns).AppendLine(");");
+        }
+
         return new PgTableArtifact(tableName, sb.ToString(), warnings);
     }
 
@@ -242,17 +266,17 @@ public static class PgTableRenderer
     }
 
     /// <summary>
-    /// `### Indexes` 섹션 — `@unique(...)`는 UNIQUE 제약으로 방출(PG NULL-distinct 의미가
-    /// 그대로 정확), `@index(...)`는 방출하지 않고 경고 (Schemorph PG P1 인덱스 거부).
+    /// `### Indexes` 섹션 — `@unique(...)`는 UNIQUE 제약으로 방출한다(PG는 NULL을 distinct로
+    /// 취급하므로 널 허용 컬럼이 섞여도 제약 하나로 정확하다). `@index(...)`는 인덱스로 방출한다.
     /// </summary>
     private static void AppendSectionIndexes(
         ResolvedModel model, string tableName,
-        List<(string Name, string Body)> constraints, List<string> warnings)
+        List<(string Name, string Body)> constraints, List<(string Name, string Columns)> indexes)
     {
-        var indexes = model.Source.Sections?.Indexes;
-        if (indexes is null || indexes.Count == 0) return;
+        var entries = model.Source.Sections?.Indexes;
+        if (entries is null || entries.Count == 0) return;
 
-        foreach (var idxEl in indexes)
+        foreach (var idxEl in entries)
         {
             if (idxEl.ValueKind != JsonValueKind.Object) continue;
             if (!idxEl.TryGetProperty("type", out var typeProp)) continue;
@@ -286,8 +310,9 @@ public static class PgTableRenderer
             }
             else
             {
-                warnings.Add(
-                    $"@index({string.Join(", ", cols)})는 방출하지 않음 — Schemorph PG P1은 인덱스를 거부한다 (P2 지원 시 재개)");
+                indexes.Add((
+                    $"ix_{tableName}_{string.Join("_", cols)}",
+                    string.Join(", ", cols)));
             }
         }
     }

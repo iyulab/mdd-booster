@@ -55,6 +55,15 @@ public sealed class MddJsonTarget
     [JsonPropertyName("emitEnumCheckConstraints")]
     public bool? EmitEnumCheckConstraints { get; set; }
 
+    /// <summary>
+    /// Sql target: whether to create an index on every foreign-key column the model has
+    /// not already covered. Defaults to <c>false</c>. Neither engine indexes a foreign key
+    /// on its own, so joins and delete-time referencing checks scan the child table;
+    /// turning this on trades write and storage cost for those reads.
+    /// </summary>
+    [JsonPropertyName("emitForeignKeyIndexes")]
+    public bool? EmitForeignKeyIndexes { get; set; }
+
     // Model target
     [JsonPropertyName("namespace")]
     public string? Namespace { get; set; }

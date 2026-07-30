@@ -97,18 +97,58 @@ CREATE TABLE public.asset_maintenance_profile
     }
 
     [Fact]
-    public void Render_IndexAttributes_AreSkippedWithWarnings()
+    public void Render_IndexDeclarations_AreEmittedAsSeparateStatements()
     {
-        // Schemorph PG P1은 인덱스를 명시 거부 — CREATE INDEX 방출 금지, 무음 탈락도 금지
+        // 인덱스는 두 자리에서 선언될 수 있다 — 필드에 붙은 @index 와 `### Indexes` 섹션.
+        // 둘 다 CREATE TABLE 뒤의 독립 문으로 나가야 한다.
         var (_, lookup, tableNames, enums) = Load("pg-reference-chain.m3l.md");
         var model = lookup["FacilityInspection"];
 
         var artifact = PgTableRenderer.Render(model, "public", tableNames, lookup, enums);
 
-        Assert.DoesNotContain("CREATE INDEX", artifact.Sql);
-        Assert.Equal(2, artifact.Warnings.Count); // field-level @index(status) + section @index(facility_profile_id)
-        Assert.Contains(artifact.Warnings, w => w.Contains("status"));
-        Assert.Contains(artifact.Warnings, w => w.Contains("facility_profile_id"));
+        Assert.Contains(
+            "CREATE INDEX ix_facility_inspection_status ON public.facility_inspection (status);",
+            artifact.Sql);
+        Assert.Contains(
+            "CREATE INDEX ix_facility_inspection_facility_profile_id ON public.facility_inspection (facility_profile_id);",
+            artifact.Sql);
+
+        // 인덱스 문은 테이블 정의가 닫힌 뒤에 온다 — CREATE TABLE 본문 안에 들어가면 문법 오류다.
+        Assert.True(artifact.Sql.IndexOf(");", StringComparison.Ordinal)
+                    < artifact.Sql.IndexOf("CREATE INDEX", StringComparison.Ordinal));
+
+        // 방출로 돌아섰으므로 경고 경로도 함께 걷혀야 한다 — 남아 있으면 방출과 경고가
+        // 동시에 나가 소비자가 같은 선언을 두 번 통보받는다.
+        Assert.Empty(artifact.Warnings);
+    }
+
+    [Fact]
+    public void Render_DoesNotEmitConcurrentIndexBuilds()
+    {
+        // 적용은 단일 트랜잭션이고 CONCURRENTLY 는 트랜잭션 안에서 실행될 수 없다 —
+        // 방출하면 적용 단계에서 거절된다.
+        var (_, lookup, tableNames, enums) = Load("pg-reference-chain.m3l.md");
+        var model = lookup["FacilityInspection"];
+
+        var artifact = PgTableRenderer.Render(model, "public", tableNames, lookup, enums);
+
+        Assert.DoesNotContain("CONCURRENTLY", artifact.Sql);
+    }
+
+    [Fact]
+    public void Render_DoesNotDuplicateIndexesOwnedByConstraints()
+    {
+        // PK·UNIQUE 제약은 인덱스를 스스로 소유한다. 같은 컬럼에 인덱스를 또 내면
+        // 중복 인덱스가 되고, 선언 상태 비교에서는 제약이 소유한 인덱스가 제외되므로
+        // 이 중복은 매 적용마다 살아남는다.
+        var (_, lookup, tableNames, enums) = Load("pg-reference-chain.m3l.md");
+        var model = lookup["FacilityInspection"];
+
+        var artifact = PgTableRenderer.Render(model, "public", tableNames, lookup, enums);
+
+        var pkColumn = artifact.Sql.Contains("PRIMARY KEY (id)", StringComparison.Ordinal);
+        Assert.True(pkColumn, "이 픽스처의 PK 컬럼 가정이 바뀌었다 — 아래 단정이 무의미해진다");
+        Assert.DoesNotContain("ix_facility_inspection_id ", artifact.Sql);
     }
 
     [Fact]

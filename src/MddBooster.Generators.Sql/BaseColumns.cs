@@ -1,5 +1,6 @@
 using M3L.Native;
 using MddBooster.Core.Semantic;
+using MddBooster.Core.Naming;
 
 namespace MddBooster.Generators.Sql;
 
@@ -35,7 +36,7 @@ internal static class BaseColumns
 
     /// <summary>PascalCase column names in declaration order.</summary>
     public static IReadOnlyList<string> Names(ResolvedModel model) =>
-        StoredFields(model).Select(f => ToPascalCase(f.Name)).ToList();
+        StoredFields(model).Select(f => NameCasing.ToPascalCase(f.Name)).ToList();
 
     /// <summary>
     /// Explicit projection replacing <c>alias.*</c>:
@@ -48,10 +49,4 @@ internal static class BaseColumns
         return string.Join(", ", Names(model).Select(c => prefix + "[" + c + "]"));
     }
 
-    internal static string ToPascalCase(string snake)
-    {
-        if (string.IsNullOrEmpty(snake)) return snake;
-        var parts = snake.Split('_', StringSplitOptions.RemoveEmptyEntries);
-        return string.Concat(parts.Select(p => char.ToUpperInvariant(p[0]) + p.Substring(1)));
-    }
 }

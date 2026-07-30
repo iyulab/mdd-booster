@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using M3L.Native;
 using MddBooster.Core.Semantic;
+using MddBooster.Core.Naming;
 
 namespace MddBooster.Generators.Model;
 
@@ -43,7 +44,7 @@ public static class EntityPairRenderer
         ArgumentNullException.ThrowIfNull(model);
         ArgumentException.ThrowIfNullOrWhiteSpace(ns);
 
-        var entityName = PascalCase(model.Name);
+        var entityName = NameCasing.ToPascalCase(model.Name);
 
         // PK 지원 게이트 — IyuEntity.Id(Guid 단일 키)와 양립 불가한 모델은 조용히
         // 삼키지 않고 명시적으로 실패한다. (silent drop 금지 — 2026-07-22 이슈)
@@ -98,7 +99,7 @@ public static class EntityPairRenderer
             var cs = CSharpTypeMapper.MapFieldType(f.Type!, knownEnumNames);
             var nullable = f.Nullable ? "?" : string.Empty;
             sb.Append("    ").Append(cs).Append(nullable).Append(' ')
-              .Append(PascalCase(f.Name)).AppendLine(" { get; }");
+              .Append(NameCasing.ToPascalCase(f.Name)).AppendLine(" { get; }");
         }
         sb.AppendLine("}");
         return sb.ToString();
@@ -212,7 +213,7 @@ public static class EntityPairRenderer
         }
 
         var nullable = effectiveNullable ? "?" : string.Empty;
-        var prop = PascalCase(f.Name);
+        var prop = NameCasing.ToPascalCase(f.Name);
 
         var isEnumField = knownEnumNames is not null && knownEnumNames.Contains(f.Type!);
 
@@ -367,7 +368,7 @@ public static class EntityPairRenderer
         var name = fkFieldName.EndsWith("_id", StringComparison.OrdinalIgnoreCase)
             ? fkFieldName[..^3]
             : fkFieldName;
-        return PascalCase(name);
+        return NameCasing.ToPascalCase(name);
     }
 
     /// <summary>
@@ -395,7 +396,7 @@ public static class EntityPairRenderer
         // PascalCase conversion EnumRenderer applies, or it names a member that
         // was never generated.
         if (knownEnumNames is not null && knownEnumNames.Contains(type))
-            return $" = {PascalCase(type)}.{PascalCase(raw)};";
+            return $" = {NameCasing.ToPascalCase(type)}.{NameCasing.ToPascalCase(raw)};";
 
         return type switch
         {
@@ -493,10 +494,4 @@ public static class EntityPairRenderer
         string.Equals(fieldName, "created_at", StringComparison.OrdinalIgnoreCase)
         || string.Equals(fieldName, "updated_at", StringComparison.OrdinalIgnoreCase);
 
-    private static string PascalCase(string snake)
-    {
-        if (string.IsNullOrEmpty(snake)) return snake;
-        var parts = snake.Split('_', StringSplitOptions.RemoveEmptyEntries);
-        return string.Concat(parts.Select(p => char.ToUpperInvariant(p[0]) + p.Substring(1)));
-    }
 }

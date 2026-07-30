@@ -30,7 +30,25 @@ M3L → SQL/C#/API 코드 생성기. 단일 `tables.m3l.md` 소스로 SSDT 스�
 Sql 타깃 선택 노브(모두 생략 가능): `emitSqlProj`(기본 true — SSDT `.sqlproj` 패치),
 `emitRefreshScript`(기본 true — post-deployment `sp_refreshview` 스크립트),
 `emitEnumCheckConstraints`(기본 false — enum 컬럼 table-level `CK_{Table}_{Column}` CHECK.
-SSDT dacpac은 CHECK diff가 불안정하므로 선언형 도구(Schemorph) 소비자용 opt-in).
+SSDT dacpac은 CHECK diff가 불안정하므로 선언형 도구(Schemorph) 소비자용 opt-in),
+`emitForeignKeyIndexes`(기본 false — 아래).
+
+#### 외래 키 인덱스 (`emitForeignKeyIndexes`)
+
+어느 엔진도 외래 키를 자동 인덱싱하지 않는다. FK 로 하는 조인과, 삭제 시 참조 행을 확인하는
+검사가 자식 테이블을 훑는다. 켜면 **모델이 덮지 않은 FK 컬럼마다** 인덱스를 만든다 —
+T-SQL `IX_{Model}_{Column}` · PostgreSQL `ix_{table}_{column}`. 대상 판정은 방언과 무관하게
+한 곳에서 내린다.
+
+| 상황 | 자동 인덱스 |
+|---|---|
+| `@reference` 만 붙은 컬럼 | ✅ 생성 |
+| `@pk` · `@unique` · `@index` 가 이미 붙음 | ❌ 제약·선언이 인덱스를 소유한다 |
+| 복합 인덱스/유니크의 **선두** 컬럼 | ❌ `(a, b)` 인덱스가 `a` 조회를 처리한다 |
+| 복합 인덱스/유니크의 **둘째 이후** 컬럼 | ✅ 그 인덱스로는 조회되지 않는다 |
+
+**기본값은 `false`다.** 켜는 것은 읽기 이득과 쓰기·저장 비용의 교환이며, 기존 스키마에 조용히
+적용할 판단이 아니다. 끈 상태의 산출물은 이전과 동일하다.
 
 #### 타깃별 엔티티 부분집합 (`includeEntities` / `excludeEntities`)
 
@@ -126,10 +144,15 @@ DDL과 EF 매핑이 서로 다른 네이밍을 전제하게 된다).
 - **제약은 이름 있는 제약**으로: `pk_{t}` · `fk_{t}_{col}` · `uq_{t}_{cols}` · `ck_{t}_{col}`.
   FK는 대상 모델의 **PK 물리명**을 참조하므로 공유 PK 확장 테이블 재참조가 성립
   (`REFERENCES facility_profile (facility_id)`).
-- **범위는 Schemorph PG P1과 정렬** (테이블·컬럼·제약): `@index`/`### Indexes`의 인덱스와
-  뷰(derived 필드의 `_full`/`_ud`)는 **방출하지 않고 stderr 경고**로 표면화 —
-  Schemorph가 인덱스·뷰를 지원하는 슬라이스(P2/P3)에서 재개. nullable `@unique`는 PG가
-  NULL을 distinct로 취급하므로 filtered index 없이 UNIQUE 제약 하나로 정확하다.
+- **인덱스**: `@index`/`### Indexes` 선언은 `CREATE TABLE` 뒤의 독립 문
+  (`CREATE INDEX ix_{table}_{cols} ON {schema}.{table} (...)`)으로 방출한다.
+  PK·UNIQUE 제약이 소유하는 인덱스는 중복 방출하지 않고, `CONCURRENTLY` 는 쓰지 않는다
+  (적용이 단일 트랜잭션이라 concurrent 빌드가 참여할 수 없다). 인덱스명도 제약명과 같은
+  63바이트 게이트를 통과해야 한다 — 다중 컬럼 인덱스명이 제약명보다 쉽게 넘긴다.
+- **뷰는 아직 방출하지 않는다** (derived 필드의 `_full`/`_ud`) — 무음 탈락 대신 **stderr 경고**로
+  표면화한다.
+- 널 허용 `@unique`는 PG가 NULL을 distinct로 취급하므로 filtered index 없이 UNIQUE 제약 하나로
+  정확하다 (T-SQL 경로는 filtered unique index가 필요하다).
 - `emitSqlProj`/`emitRefreshScript`는 SSDT 개념 — postgres와 함께 명시하면 오류.
 - 타입 매핑 주의점: `timestamp/datetime→timestamptz` · `string→text`(길이 지정 시
   `varchar(n)`) · `json→jsonb` · `byte→smallint`(PG에 1바이트 정수 없음 — 승격) ·
@@ -145,14 +168,13 @@ Ext 읽기 모델은 뷰 backing이 없으면 같은 테이블을 읽고, 뷰 ba
 ### 빌드 실행
 
 ```bash
-cd path/to/mdd
-dotnet run --project D:/data/mdd-booster/src/MddBooster.Cli -- .
+dotnet run --project src/MddBooster.Cli -- build path/to/mdd
 ```
 
-또는 배포된 `mdd.exe`:
+또는 설치된 CLI:
 
 ```bash
-mdd ./mdd  # mdd.json이 있는 디렉터리
+mdd build ./mdd   # mdd.json 이 있는 디렉터리 — 생략하면 현재 디렉터리
 ```
 
 ## M3L 기능 지원 (현재)
@@ -168,8 +190,8 @@ mdd ./mdd  # mdd.json이 있는 디렉터리
 | `@rollup(Target.fk, aggregate)` → `_ext` 뷰 서브쿼리 + `[Rollup]` | ✅ |
 | `@computed("expr")` → `_ext` 뷰 표현식 컬럼 + `[Computed]` | ✅ |
 | `@indexed` + rollup → `WITH SCHEMABINDING` | ✅ |
-| `@unique(col1, col2)` 복합 | ⏳ |
-| `### Indexes` 섹션 | ⏳ |
+| `@unique(col1, col2)` 복합 | ✅ — 널 허용 컬럼이 섞이면 filtered unique index (`WHERE … IS NOT NULL`)로 방출한다. 그러지 않으면 두 번째 전체-NULL 행이 거부된다 |
+| `### Indexes` 섹션 (`- @unique(...)` / `- @index(...)`) | ✅ |
 | `@inherits(FQN)` → C# 베이스클래스 오버라이드 (도메인 중립, verbatim) | ✅ |
 | `@implements(FQN, ...)` → C# 인터페이스 append (도메인 중립, verbatim) | ✅ |
 | enum 값의 `@system` → 생성 폼 선택지에서 제외 (아래) | ✅ |
@@ -403,7 +425,7 @@ src/
 ├── MddBooster.Generators.Model/  CSharpTypeMapper, EnumRenderer, EntityPairRenderer, DbContextRenderer
 ├── MddBooster.Generators.Api/    ApiRegistrationRenderer (OData + GraphQL)
 ├── MddBooster.Cli/               BuildCommand (mdd.json 소비)
-└── MddBooster.Tests/             442 xUnit tests (Roslyn 구문/의미 검증 포함)
+└── MddBooster.Tests/             465 xUnit tests (Roslyn 구문/의미 검증 포함)
 ```
 
 ## 테스트 실행
@@ -416,7 +438,14 @@ dotnet test MddBooster.slnx --nologo
 - Renderer 단위 (E2E Roslyn 구문 검증)
 - Semantic analyzer cross-entity 검증
 - CLI 3-타깃 통합 E2E (임시 디렉터리에서 전체 파이프라인 실행)
-- 대규모 실모델 acceptance 게이트 (14 엔티티 + 13 enum) — 외부 모델 경로가 있을 때만 실행
+- **acceptance 게이트** — 기능 행렬을 한 번에 교차하는 대규모 모델(24 엔티티 + 15 enum)로
+  4-타깃 빌드를 돌리고, 산출물을 **모델이 선언한 것과 이름 단위로 대조**한다.
+  기대값은 파싱한 모델에서 도출되므로 엔티티를 늘려도 테스트의 숫자를 고칠 필요가 없고,
+  산출물이 빠진 선언은 개수 차이가 아니라 이름으로 보고된다.
+
+  모델은 리포에 체크인돼 있어 CI·신규 클론에서도 그대로 돈다.
+  `MDDBOOSTER_ACCEPTANCE_MODEL` 에 다른 `.m3l.md` 경로를 넣으면 같은 게이트를 그 모델로
+  돌린다(릴리스 전 대규모 모델 점검용). 경로가 잘못되면 **건너뛰지 않고 실패**한다.
 
 ## 관련 저장소
 
