@@ -73,10 +73,42 @@ public sealed class BuildCommand
             Enums = allEnums,
         };
 
-        // Api 타깃이 entity 타입을 참조할 수 있도록 Model 타깃의 namespace를 탐지.
-        var modelNamespace = cfg.Targets
-            .FirstOrDefault(t => t.Type == "Model")?
-            .Namespace;
+        // 1.6. 설정 위반 수집 — 전부 모아 한 번에 실패시킨다(한 건씩 고쳐가며 재실행하게 만들지 않는다).
+        var configViolations = new List<string>();
+
+        // 같은 종류·같은 경로의 타깃이 둘이면 둘째가 첫째를 **조용히 덮어쓴다**.
+        // 같은 종류라도 경로가 다르면 정상(복수 서버 시나리오) — 경로까지 같을 때만 오류다.
+        foreach (var dup in cfg.Targets
+            .GroupBy(t => (t.Type, Path: ResolveTargetPath(configDirectory, t)))
+            .Where(g => g.Count() > 1))
+        {
+            configViolations.Add(
+                $"{dup.Key.Type} 타깃이 같은 경로({dup.Key.Path})에 {dup.Count()}개 있습니다 "
+                + "— 나중 것이 앞선 것의 산출물을 덮어씁니다. 경로를 분리하거나 중복을 제거하세요.");
+        }
+
+        // Api 타깃이 entity 타입을 참조할 수 있도록 entity namespace를 결정한다.
+        // 과거에는 `FirstOrDefault(Model)?.Namespace` 였다 — Model 타깃이 둘이면 둘째의 namespace가
+        // **조용히 무시**되고 Api 타깃이 잘못된 `using`을 방출해 소비자 빌드가 깨졌다.
+        // 이제: Api 타깃의 명시 `entitiesNamespace`가 최우선, 없으면 Model 타깃이 유일할 때만 추론,
+        // 후보가 둘 이상이면 추론하지 않고 **오류로 명시를 요구**한다.
+        var modelNamespaces = cfg.Targets
+            .Where(t => t.Type == "Model" && !string.IsNullOrWhiteSpace(t.Namespace))
+            .Select(t => t.Namespace!)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        foreach (var api in cfg.Targets.Where(t => t.Type == "Api"
+                                                  && string.IsNullOrWhiteSpace(t.EntitiesNamespace)))
+        {
+            if (modelNamespaces.Count > 1)
+            {
+                configViolations.Add(
+                    $"Api 타깃({TargetPathOf(api)}): Model 타깃의 namespace 후보가 {modelNamespaces.Count}개입니다 "
+                    + $"({string.Join(", ", modelNamespaces)}) — 어느 것을 참조할지 추론하지 않습니다. "
+                    + "이 Api 타깃에 entitiesNamespace 를 명시하세요.");
+            }
+        }
 
         // 방언 정합 검사 — Sql 타깃이 snake DB를 만드는데 Model 타깃이 기본 매핑이면
         // (또는 그 역이면) 런타임 DB 오류가 되어서야 드러난다. 빌드 시점 경고로 표면화.
@@ -92,18 +124,70 @@ public sealed class BuildCommand
             }
         }
 
+        // 1.7. 타깃별 엔티티 부분집합 검증 — 조용한 드롭·조용한 무시 금지:
+        // 오타로 표면이 텅 비는 것이 가장 나쁜 실패다.
+        var filters = new Dictionary<MddJsonTarget, EntitySurfaceFilter>();
+        foreach (var target in cfg.Targets)
+        {
+            var label = $"{target.Type} 타깃({TargetPathOf(target)})";
+            var hasFilter = target.IncludeEntities?.Count > 0 || target.ExcludeEntities?.Count > 0;
+
+            // 표면 타깃 전용 — Sql·Model 에 걸면 FK/상속 무결성이 깨진다. 조용히 무시하지 않는다.
+            if (hasFilter && target.Type is not ("Api" or "TypeScript"))
+            {
+                configViolations.Add(
+                    $"{label}: includeEntities/excludeEntities 는 표면 타깃(Api·TypeScript)에만 지정할 수 있습니다 "
+                    + "— Sql·Model 을 부분집합으로 만들면 FK/상속 무결성이 깨집니다.");
+                continue;
+            }
+
+            filters[target] = EntitySurfaceFilter.Validate(
+                target.IncludeEntities, target.ExcludeEntities, allModels, label, out var violations);
+            configViolations.AddRange(violations);
+        }
+
+        if (configViolations.Count > 0)
+        {
+            Console.Error.WriteLine($"[config] 설정 오류 {configViolations.Count}건:");
+            foreach (var v in configViolations)
+                Console.Error.WriteLine("  " + v);
+            return 4;
+        }
+
         // 2. 타깃별 생성기 실행
         foreach (var target in cfg.Targets)
         {
-            var generator = ResolveGenerator(target, modelNamespace);
-            var targetPath = !string.IsNullOrEmpty(target.OutputPath) ? target.OutputPath : target.ProjectPath;
+            var filter = filters.TryGetValue(target, out var f) ? f : EntitySurfaceFilter.PassAll;
+            // 명시 > 유일 추론 > null. 후보가 둘 이상인 경우는 위에서 이미 오류로 걸렀다.
+            var entitiesNamespace = target.EntitiesNamespace
+                ?? (modelNamespaces.Count == 1 ? modelNamespaces[0] : null);
+            var generator = ResolveGenerator(target, entitiesNamespace, filter);
+            var targetPath = TargetPathOf(target);
             Console.WriteLine($"[{generator.Name}] 생성 시작 (target: {targetPath})");
+            // 커버리지 회계 — 화이트리스트는 정본에 새 엔티티가 들어와도 조용히 빠지므로
+            // 무엇이 제외됐는지 매 빌드에서 보이게 한다.
+            if (!filter.IsPassAll)
+                Console.WriteLine($"[{generator.Name}] {filter.DescribeCoverage(allModels)}");
             generator.Generate(context);
             Console.WriteLine($"[{generator.Name}] 완료");
         }
 
         Console.WriteLine("build 완료.");
         return 0;
+    }
+
+    /// <summary>로그·오류 메시지에 쓰는 타깃 경로 (TypeScript 는 outputPath, 그 외는 projectPath).</summary>
+    private static string TargetPathOf(MddJsonTarget target)
+        => !string.IsNullOrEmpty(target.OutputPath) ? target.OutputPath : target.ProjectPath;
+
+    /// <summary>중복 타깃 판정용 정규화 경로. 상대 경로는 mdd.json 위치 기준으로 절대화한다.</summary>
+    private static string ResolveTargetPath(string configDirectory, MddJsonTarget target)
+    {
+        var raw = TargetPathOf(target);
+        if (string.IsNullOrWhiteSpace(raw)) return "";
+        return Path.IsPathRooted(raw)
+            ? Path.GetFullPath(raw)
+            : Path.GetFullPath(Path.Combine(configDirectory, raw));
     }
 
     /// <summary>Model·Sql 타깃 공용 dialect 판정. 미지 값은 각 분기에서 오류.</summary>
@@ -154,7 +238,8 @@ public sealed class BuildCommand
         }
     }
 
-    private IArtifactGenerator ResolveGenerator(MddJsonTarget target, string? modelNamespace)
+    private IArtifactGenerator ResolveGenerator(
+        MddJsonTarget target, string? modelNamespace, EntitySurfaceFilter surfaceFilter)
     {
         return target.Type switch
         {
@@ -177,6 +262,7 @@ public sealed class BuildCommand
                     Namespace = target.Namespace
                         ?? throw new InvalidOperationException("Api target requires 'namespace'."),
                     EntitiesNamespace = modelNamespace,
+                    SurfaceFilter = surfaceFilter,
                 }),
             "TypeScript" => new TypeScriptGenerator(
                 new TypeScriptGeneratorOptions
@@ -184,6 +270,7 @@ public sealed class BuildCommand
                     OutputPath = target.OutputPath
                         ?? throw new InvalidOperationException("TypeScript target requires 'outputPath'."),
                     FormsOutputPath = target.FormsOutputPath,
+                    SurfaceFilter = surfaceFilter,
                 }),
             _ => throw new NotSupportedException(
                 $"지원하지 않는 target type: '{target.Type}' (지원: Sql, Model, Api, TypeScript)"),

@@ -189,6 +189,53 @@ public class ApiRegistrationTests
         Assert.DoesNotContain("ServiceClient", src);
     }
 
+    // --- 선행 약어 엔티티의 camelCase (GraphQL 필드명) ---
+
+    [Theory]
+    // 엔티티 → (OData set, GraphQL query, GraphQL mutation prefix)
+    [InlineData("QRScanLog", "QRScanLogs", "qrScanLogs", "qrScanLog")]
+    [InlineData("QRCode", "QRCodes", "qrCodes", "qrCode")]
+    [InlineData("OrderQR", "OrderQRs", "orderQRs", "orderQR")]  // 후행 약어 보존
+    [InlineData("Order", "Orders", "orders", "order")]           // 회귀
+    public void ApiRegistration_camelCases_leading_acronyms(
+        string entity, string odataSet, string queryName, string mutationPrefix)
+    {
+        var src = ApiRegistrationRenderer.Render([ModelWith(entity)], "Test.Api");
+
+        // OData set 이름은 PascalCase 복수 — DbSet 이름과 맞춰야 하므로 이 변경의 영향 밖이다.
+        Assert.Contains($"options.ODataModel.AddEntityPair<{entity}Ext, {entity}>(\"{odataSet}\");", src);
+        Assert.Contains(
+            $"options.GraphQL.AddEntityPair<{entity}Ext, {entity}>(\"{queryName}\", \"{mutationPrefix}\");", src);
+    }
+
+    [Fact]
+    public void ApiRegistration_pluralizes_after_camelCasing_not_before()
+    {
+        // 순서 반전을 고정하는 케이스. 복수화를 먼저 하면 Pluralize("QR")="QRs" 의 'R' 뒤에
+        // 소문자 's' 가 붙어 약어 연쇄가 끊기고 camelCase 가 "qRs" 를 낸다.
+        var src = ApiRegistrationRenderer.Render([ModelWith("QR")], "Test.Api");
+
+        Assert.Contains("options.GraphQL.AddEntityPair<QRExt, QR>(\"qrs\", \"qr\");", src);
+        Assert.DoesNotContain("qRs", src);
+    }
+
+    [Fact]
+    public void ApiRegistration_allcaps_acronym_ending_in_S_keeps_bare_plural()
+    {
+        // Pluralizer 의 bare trailing "s" 검사는 Ordinal 이다 — camelCase 를 먼저 적용하면
+        // "SMS" → "sms" 가 그 분기에 걸려 복수형이 붙지 않는다. **의도된 동작**이며
+        // Status·News 가 이미 같은 성질을 갖는다. query 와 mutation prefix 가 같아지지만
+        // 둘은 서로 다른 루트 타입이라 스키마 충돌이 아니다.
+        //
+        // 같은 Ordinal 검사 때문에 **OData set 은 대문자 'S' 라서 그 분기를 타지 않고** "SMSs" 가
+        // 된다. 그 비대칭은 의도다 — PascalCase 복수는 DbSet 이름과 맞춰야 하므로 이 변경의
+        // 영향 밖이며, 두 표면이 서로 다른 규칙을 쓴다는 사실 자체를 여기서 고정한다.
+        var src = ApiRegistrationRenderer.Render([ModelWith("SMS")], "Test.Api");
+
+        Assert.Contains("options.GraphQL.AddEntityPair<SMSExt, SMS>(\"sms\", \"sms\");", src);
+        Assert.Contains("options.ODataModel.AddEntityPair<SMSExt, SMS>(\"SMSs\");", src);
+    }
+
     [Fact]
     public void ApiRegistration_contains_method_signature_with_IyuMainServerOptions()
     {

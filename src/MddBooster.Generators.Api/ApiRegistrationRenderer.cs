@@ -1,4 +1,5 @@
 using System.Text;
+using MddBooster.Core.Generation;
 using MddBooster.Core.Naming;
 using MddBooster.Core.Semantic;
 
@@ -8,8 +9,8 @@ namespace MddBooster.Generators.Api;
 /// Renders a single <c>ApiRegistration_gen.cs</c> file that wires every
 /// generated entity pair into OData (EDM model) and GraphQL (HotChocolate
 /// schema). The consumer project calls the generated static method once in
-/// its composition root — <c>Yesung.MainServer</c> already expects a helper
-/// of this shape via the iyu-framework-v5 API surface.
+/// its composition root; the method shape matches the host framework's
+/// <c>IyuMainServerOptions</c> API surface.
 /// </summary>
 /// <remarks>
 /// The generated method signature is:
@@ -62,14 +63,25 @@ public static class ApiRegistrationRenderer
             // C# 엔티티·EF DbSet 은 그대로 생성되지만 AddEntityPair 를 방출하지 않는다 —
             // 아이덴티티/인증 같은 인프라 엔티티(전용 엔드포인트로만 관리, 범용 CRUD·시크릿 컬럼
             // 노출 금지)를 위한 도메인 중립 knob.
-            if ((model.Source.Attributes ?? [])
-                .Any(a => string.Equals(a.Name, "internal", StringComparison.OrdinalIgnoreCase)))
-                continue;
+            //
+            // 이 제외가 **타입 도달성까지** 없앤다는 근거(2026-07-30 실측): 런타임은 read 타입만
+            // 스키마에 등록하고(OData `EntitySet<TRead>` · GraphQL `ObjectType<TRead>`), write 타입은
+            // 어느 스키마에도 넣지 않는다. 그리고 read(Ext) 타입은 평면이다 — FK 를 스칼라로만
+            // 들고 내비게이션 프로퍼티가 없다. 두 조건이 함께 성립해서 제외된 엔티티 타입이
+            // 컨벤션 기반 타입 발견으로 되살아나지 않는다.
+            //   · 조건 1(우리 것): Ext 평면성 — `ReferenceAttributeTests.Ext_read_type_stays_flat_…` tripwire.
+            //   · 조건 2(런타임 것): mutation 미배선. 런타임이 mutation 을 배선하면 nav 를 가진 write
+            //     타입이 input 타입으로 들어가 이 보장이 약해진다. 그때 재검토 필요.
+            if (EntitySurface.IsInternal(model)) continue;
 
             var entity = PascalCase(model.Name);
-            var setName = MddBooster.Core.Naming.Pluralizer.Pluralize(entity);
-            var queryName = CamelCase(setName);       // e.g. "orders"
-            var mutationPrefix = CamelCase(entity);    // e.g. "order"
+            var setName = Pluralizer.Pluralize(entity);            // OData: PascalCase 복수 — DbSet 이름과 맞춘다
+            var mutationPrefix = NameCasing.ToCamelCase(entity);    // e.g. "order"
+            // camelCase 를 **먼저** 적용하고 복수화한다. 순서를 뒤집으면 두 글자 약어가 깨진다 —
+            // Pluralize("QR")="QRs" 의 'R' 은 뒤에 소문자 's' 가 붙어 약어 연쇄가 끊기므로
+            // camelCase 가 'R' 을 보존해 "qRs" 가 된다. 반대 순서는 "qr" → "qrs".
+            // Pluralizer 는 접미 규칙만 쓰고 불규칙 복수 사전이 없어 camelCase 입력에도 안전하다.
+            var queryName = Pluralizer.Pluralize(mutationPrefix);   // e.g. "orders"
 
             sb.Append("        options.ODataModel.AddEntityPair<")
               .Append(entity).Append("Ext, ").Append(entity).Append(">(\"")
@@ -89,11 +101,5 @@ public static class ApiRegistrationRenderer
         if (string.IsNullOrEmpty(snake)) return snake;
         var parts = snake.Split('_', StringSplitOptions.RemoveEmptyEntries);
         return string.Concat(parts.Select(p => char.ToUpperInvariant(p[0]) + p.Substring(1)));
-    }
-
-    private static string CamelCase(string pascal)
-    {
-        if (string.IsNullOrEmpty(pascal)) return pascal;
-        return char.ToLowerInvariant(pascal[0]) + pascal[1..];
     }
 }

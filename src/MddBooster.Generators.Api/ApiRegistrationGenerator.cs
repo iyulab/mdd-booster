@@ -23,7 +23,9 @@ public sealed class ApiRegistrationGenerator(ApiRegistrationGeneratorOptions opt
         var apiDir = Path.Combine(projectRoot, "Api_gen");
         CleanDir(apiDir);
 
-        var models = context.Models.ToList();
+        // 타깃별 방출 범위. context.Models 는 해상도 범위(전 sources)이며 두 축은 별개다 —
+        // 여기서 좁혀야 다른 타깃의 산출물이 영향받지 않는다.
+        var models = _options.SurfaceFilter.Apply(context.Models).ToList();
 
         var rendered = ApiRegistrationRenderer.Render(
             models,
@@ -72,4 +74,10 @@ public sealed class ApiRegistrationGeneratorOptions
     /// the registration class can reference entities by short name.
     /// </summary>
     public string? EntitiesNamespace { get; init; }
+
+    /// <summary>
+    /// 이 타깃의 엔티티 부분집합 필터 (<c>includeEntities</c>/<c>excludeEntities</c>).
+    /// 기본값은 전량 통과 — 미지정 소비자는 현행 동작 그대로다.
+    /// </summary>
+    public EntitySurfaceFilter SurfaceFilter { get; init; } = EntitySurfaceFilter.PassAll;
 }

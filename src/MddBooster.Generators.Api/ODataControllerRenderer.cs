@@ -1,4 +1,5 @@
 using System.Text;
+using MddBooster.Core.Generation;
 using MddBooster.Core.Naming;
 using MddBooster.Core.Semantic;
 
@@ -43,9 +44,7 @@ public static class ODataControllerRenderer
         foreach (var model in models.OrderBy(m => m.Name, StringComparer.Ordinal))
         {
             // @internal 엔티티는 OData 컨트롤러를 생성하지 않는다(ApiRegistration 등록 제외와 짝).
-            if ((model.Source.Attributes ?? [])
-                .Any(a => string.Equals(a.Name, "internal", StringComparison.OrdinalIgnoreCase)))
-                continue;
+            if (EntitySurface.IsInternal(model)) continue;
 
             var entity = PascalCase(model.Name);
             var setName = Pluralizer.Pluralize(entity);

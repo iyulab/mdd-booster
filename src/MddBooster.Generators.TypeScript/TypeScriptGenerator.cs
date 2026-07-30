@@ -31,24 +31,32 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
 
         var enumNames = new HashSet<string>(context.Enums.Select(e => e.Name), StringComparer.Ordinal);
 
-        // enums_gen.ts
+        // 타깃별 방출 범위 — 엔티티 파생 산출물에만 적용한다.
+        var models = _options.SurfaceFilter.Apply(context.Models);
+
+        // enums_gen.ts — 필터하지 않는다. enum 은 엔티티 파생물이 아니고, 가지치기하면
+        // 남은 인터페이스/폼의 임포트가 깨진다.
         var enumsContent = TsEnumRenderer.RenderAll(context.Enums);
         File.WriteAllText(Path.Combine(outDir, "enums_gen.ts"), enumsContent);
 
-        // entities_gen.ts
-        var entitiesContent = TsInterfaceRenderer.RenderAll(context.Models, enumNames);
+        // entities_gen.ts — @internal 은 존중하지 않는다. 타입은 데이터 API 전용이 아니며
+        // 전용 엔드포인트로 관리되는 인프라 엔티티에도 타입은 유용하다.
+        var entitiesContent = TsInterfaceRenderer.RenderAll(models, enumNames);
         File.WriteAllText(Path.Combine(outDir, "entities_gen.ts"), entitiesContent);
 
-        // entity_names_gen.ts
-        var namesContent = TsEntityNamesRenderer.RenderAll(context.Models);
+        // entity_names_gen.ts — @internal 을 **존중한다**. 이 목록은 OData entity set 이름의
+        // 미러이고 소비자가 이걸로 OData URL 을 만든다. @internal 엔티티는 AddEntityPair 가
+        // 등록하지 않으므로, 목록에 남겨 두면 타입세이프하게 404 경로를 광고하는 셈이 된다.
+        var namesContent = TsEntityNamesRenderer.RenderAll(
+            [.. models.Where(m => !EntitySurface.IsInternal(m))]);
         File.WriteAllText(Path.Combine(outDir, "entity_names_gen.ts"), namesContent);
 
-        // enum_labels_gen.ts
+        // enum_labels_gen.ts — enums_gen.ts 와 같은 이유로 필터하지 않는다.
         var enumLabelsContent = TsEnumLabelsRenderer.RenderAll(context.Enums);
         File.WriteAllText(Path.Combine(outDir, "enum_labels_gen.ts"), enumLabelsContent);
 
         // field_schema_gen.ts
-        var fieldSchemaContent = TsFieldSchemaRenderer.RenderAll(context.Models);
+        var fieldSchemaContent = TsFieldSchemaRenderer.RenderAll(models);
         File.WriteAllText(Path.Combine(outDir, "field_schema_gen.ts"), fieldSchemaContent);
 
         // {Entity}Form_gen.tsx (optional)
@@ -60,7 +68,7 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
 
             Directory.CreateDirectory(formsDir);
 
-            var formFiles = TsFormRenderer.RenderAll(context.Models, context.Enums);
+            var formFiles = TsFormRenderer.RenderAll(models, context.Enums);
             foreach (var (entityName, content) in formFiles)
             {
                 File.WriteAllText(Path.Combine(formsDir, $"{entityName}Form_gen.tsx"), content);

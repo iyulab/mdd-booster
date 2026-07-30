@@ -32,6 +32,70 @@ Sql 타깃 선택 노브(모두 생략 가능): `emitSqlProj`(기본 true — SS
 `emitEnumCheckConstraints`(기본 false — enum 컬럼 table-level `CK_{Table}_{Column}` CHECK.
 SSDT dacpac은 CHECK diff가 불안정하므로 선언형 도구(Schemorph) 소비자용 opt-in).
 
+#### 타깃별 엔티티 부분집합 (`includeEntities` / `excludeEntities`)
+
+한 모델 정본을 **여러 서버가 공유**할 때, 각 서버가 노출할 엔티티를 타깃별로 좁힌다.
+**표면 타깃(Api·TypeScript) 전용**이며 둘 다 생략하면 전량(현행)이다.
+
+```json
+{ "type": "Api", "projectPath": "../src/MyApp.MesServer", "namespace": "MyApp.MesServer",
+  "includeEntities": ["ProductionWork", "QRScanLog"] }
+```
+
+| 규칙 | 동작 |
+|---|---|
+| 둘 다 생략 / 빈 목록 | 전량 (완전 하위호환) |
+| `includeEntities` | 화이트리스트 |
+| `excludeEntities` | 블랙리스트 |
+| 둘 다 지정 | **빌드 오류** |
+| 없는 엔티티명 | **빌드 오류** + 가장 가까운 이름 제안 |
+| `includeEntities` 에 `@internal` 엔티티 | **빌드 오류** (데이터 API 노출 대상이 아니다) |
+| `Sql`·`Model` 타깃에 지정 | **빌드 오류** — 부분집합은 FK/상속 무결성을 깬다 |
+
+필터가 걸린 타깃은 빌드마다 커버리지를 출력한다(`포함 N개 / 제외 M개 — 이름…`).
+
+> ⚠️ **`includeEntities` 는 drift 한다.** 정본에 새 엔티티가 추가돼도 이 타깃에는 **조용히**
+> 나타나지 않는다. 신규 엔티티가 기본 노출되기를 원하면 `excludeEntities` 를 쓸 것.
+> (커버리지 출력이 무엇이 빠졌는지는 매 빌드에서 보여준다.)
+
+#### 복수 타깃 게이트
+
+같은 종류의 타깃을 **여러 개** 둘 수 있다(한 정본 → 여러 서버). 다만 조용한 오출력이 되는 두 경우는 오류다.
+
+| 상황 | 동작 |
+|---|---|
+| 같은 종류·**다른** 경로 타깃 2개 | 정상 — 복수 서버 시나리오 |
+| 같은 종류·**같은** 경로 타깃 2개 | **빌드 오류** (나중 것이 앞선 것의 산출물을 덮어쓴다. 경로는 정규화해 비교) |
+| `Model` 타깃 1개 + `Api` 타깃 | 정상 — Api 가 그 namespace 를 추론 |
+| `Model` 타깃 **2개 이상** + `entitiesNamespace` 미지정 `Api` 타깃 | **빌드 오류** — 어느 것을 참조할지 추론하지 않는다. 해당 Api 타깃에 `entitiesNamespace` 를 명시 |
+
+```json
+{ "type": "Api", "projectPath": "../src/MyApp.MesServer", "namespace": "MyApp.MesServer",
+  "entitiesNamespace": "MyApp.Entities", "includeEntities": ["ProductionWork"] }
+```
+
+#### 생성 이름 규약
+
+| 표면 | 규칙 | 예 (`QRScanLog`) |
+|---|---|---|
+| OData entity set | PascalCase 복수 (DbSet 이름과 일치) | `QRScanLogs` |
+| GraphQL query / mutation prefix | camelCase (선행 약어를 묶어 소문자화 — .NET `JsonNamingPolicy.CamelCase` 와 동일) | `qrScanLogs` / `qrScanLog` |
+| TypeScript 폼 헬퍼 | camelCase | `qrScanLogFromEntity` |
+| PostgreSQL 식별자 | snake_case (같은 단어분리 규칙) | `qr_scan_log` |
+
+후행 약어는 보존한다: `OrderQR` → `orderQR`.
+
+#### `@internal` 이 영향하는 산출물
+
+`@internal` 모델은 **데이터 API 표면에서만** 제외된다 — 테이블·뷰·C# 엔티티·EF `DbSet` 은 그대로 생성된다.
+
+| 산출물 | `@internal` 존중 | 이유 |
+|---|---|---|
+| `ApiRegistration_gen.cs` · `Controllers_gen.cs` | ✅ 제외 | 범용 CRUD·시크릿 컬럼을 데이터 API에 노출하지 않는다 |
+| `entity_names_gen.ts` (`EntitySetName`) | ✅ 제외 | OData entity set 이름의 미러다. 남겨 두면 존재하지 않는 경로를 타입세이프하게 광고한다 |
+| `entities_gen.ts` · `field_schema_gen.ts` · `*Form_gen.tsx` | ❌ 유지 | 타입은 데이터 API 전용이 아니다 — 전용 엔드포인트로 관리되는 엔티티에도 유용하다 |
+| Sql · Model 타깃 전체 | ❌ 유지 | 스토리지·EF 매핑은 노출과 무관하다 |
+
 ### PostgreSQL 방언 (`dialect: "postgres"`)
 
 Sql·Model 타깃은 `dialect` 노브를 받는다 — 기본 `"tsql"`(위 현행 동작), `"postgres"`는
@@ -305,7 +369,7 @@ src/
 ├── MddBooster.Generators.Model/  CSharpTypeMapper, EnumRenderer, EntityPairRenderer, DbContextRenderer
 ├── MddBooster.Generators.Api/    ApiRegistrationRenderer (OData + GraphQL)
 ├── MddBooster.Cli/               BuildCommand (mdd.json 소비)
-└── MddBooster.Tests/             126+ xUnit tests (Roslyn 구문 검증 포함)
+└── MddBooster.Tests/             420 xUnit tests (Roslyn 구문 검증 포함)
 ```
 
 ## 테스트 실행

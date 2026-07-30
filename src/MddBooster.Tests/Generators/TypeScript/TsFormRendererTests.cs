@@ -429,4 +429,38 @@ public class TsFormRendererTests
         // The nullable one stays unmarked.
         Assert.Contains("<UTextarea label=\"내용\" minRows", content);
     }
+
+    // --- 선행 약어 엔티티의 camelCase 헬퍼 이름 ---
+
+    /// <summary>Minimal single-stored-field model with an arbitrary name.</summary>
+    private static IReadOnlyList<ResolvedModel> ModelNamed(string name) =>
+    [
+        new ResolvedModel
+        {
+            Name = name,
+            Fields = [new FieldNode
+            {
+                Name = "name", Type = "string", Kind = FieldKind.Stored, Nullable = false,
+                Loc = new SourceLocation { File = "t.m3l.md", Line = 1 },
+            }],
+            Source = new ModelNode
+            {
+                Name = name, Type = ModelType.Model,
+                Loc = new SourceLocation { File = "t.m3l.md" }, Attributes = [],
+            },
+        },
+    ];
+
+    [Theory]
+    [InlineData("QRScanLog", "qrScanLogFromEntity")]
+    [InlineData("OrderQR", "orderQRFromEntity")]   // 후행 약어 보존
+    [InlineData("OrderItem", "orderItemFromEntity")]  // 회귀
+    public void FromEntity_helper_camelCases_leading_acronyms(string entity, string expectedFn)
+    {
+        // 이 이름은 소비자가 import 하는 **export 식별자**다. 손구현 첫글자 소문자화는
+        // QRScanLog 를 qRScanLogFromEntity 로 만들었다 — 고치면 breaking 이므로 CHANGELOG 대상.
+        var content = TsFormRenderer.RenderAll(ModelNamed(entity), [])[entity];
+
+        Assert.Contains($"export function {expectedFn}(", content);
+    }
 }

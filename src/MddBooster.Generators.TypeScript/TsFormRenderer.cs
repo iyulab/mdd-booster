@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using M3L.Native;
+using MddBooster.Core.Naming;
 using MddBooster.Core.Semantic;
 
 namespace MddBooster.Generators.TypeScript;
@@ -262,7 +263,7 @@ public static class TsFormRenderer
         // Closes the drift class where page EMPTY/handleEdit hand-enumerate fields and
         // silently omit newly-added m3l columns. Generated from stored (writable) fields only,
         // so Lookup/Rollup/Computed never leak into PATCH bodies.
-        var camel = CamelCase(entityName);
+        var camel = NameCasing.ToCamelCase(entityName);
         sb.AppendLine();
         sb.Append("export const empty").Append(entityName).Append(": Partial<").Append(entityName).Append("> = { ");
         sb.Append(string.Join(", ", storedFields.Select(f =>
@@ -278,9 +279,6 @@ public static class TsFormRenderer
 
         return sb.ToString();
     }
-
-    private static string CamelCase(string pascal) =>
-        string.IsNullOrEmpty(pascal) ? pascal : char.ToLowerInvariant(pascal[0]) + pascal[1..];
 
     /// <summary>
     /// M3L numeric primitives that should render as `&lt;UInput type="number"&gt;` in generated forms.

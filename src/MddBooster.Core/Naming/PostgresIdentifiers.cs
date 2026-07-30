@@ -48,33 +48,17 @@ public static partial class PostgresIdentifiers
     /// 소문자/숫자→대문자 전이에서 분리, 대문자 연속(약어)은 한 단어로 두되
     /// 뒤에 소문자가 이어지면 마지막 대문자 앞에서 분리, 숫자는 직전 단어에 붙는다.
     /// </summary>
+    /// <remarks>
+    /// 분리 규칙 자체는 <see cref="NameCasing.SplitWords"/>가 정본이다 — camelCase 경로
+    /// (<see cref="NameCasing.ToCamelCase"/>)가 같은 규칙을 필요로 하는데 손구현 사본을 갖고 있어
+    /// <c>QRScanLog</c>가 여기서는 <c>qr_scan_log</c>로 맞고 그쪽에서는 <c>qRScanLog</c>로 틀렸다.
+    /// 이 메서드는 그 분리 결과를 소문자화해 <c>_</c>로 잇는 얇은 층이다 (동작 불변).
+    /// </remarks>
     public static string ToSnakeCase(string pascalName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(pascalName);
 
-        var sb = new StringBuilder(pascalName.Length + 8);
-        for (var i = 0; i < pascalName.Length; i++)
-        {
-            var c = pascalName[i];
-            if (char.IsUpper(c))
-            {
-                var startsNewWord =
-                    i > 0 &&
-                    (char.IsLower(pascalName[i - 1]) || char.IsDigit(pascalName[i - 1])
-                     || (char.IsUpper(pascalName[i - 1])
-                         && i + 1 < pascalName.Length && char.IsLower(pascalName[i + 1])));
-                if (startsNewWord)
-                {
-                    sb.Append('_');
-                }
-                sb.Append(char.ToLowerInvariant(c));
-            }
-            else
-            {
-                sb.Append(c);
-            }
-        }
-        return sb.ToString();
+        return string.Join('_', NameCasing.SplitWords(pascalName).Select(w => w.ToLowerInvariant()));
     }
 
     /// <summary>

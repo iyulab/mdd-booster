@@ -21,6 +21,7 @@ public class PostgresIdentifiersTests
     [InlineData("FMS", "fms")]                          // 전체 약어
     [InlineData("Iso14224Class", "iso14224_class")]     // 숫자는 직전 단어에 붙고, 숫자→대문자에서 분리
     [InlineData("Sha256Hash", "sha256_hash")]
+    [InlineData("QRScanLog", "qr_scan_log")]            // 선행 약어 — 분리기를 NameCasing 으로 올린 뒤 회귀 방지
     [InlineData("A", "a")]
     public void ToSnakeCase_ConvertsDeterministically(string pascal, string expected)
     {

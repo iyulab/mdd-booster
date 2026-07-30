@@ -132,8 +132,14 @@ public class SemanticAnalyzerTests
     [Fact]
     public void Yesung_full_fixture_passes_semantic_analysis()
     {
-        var yesung = @"D:\data\yesung\mdd\tables.m3l.md";
-        if (!File.Exists(yesung)) return;
+        // 경로 후보 목록 — 단일 상수는 소비자 리포 재구성 때 조용히 무력화된다
+        // (`mdd/` → `shared/mdd/` 이동을 2026-07-30까지 따라가지 못했다).
+        var yesung = new[]
+        {
+            @"D:\data\yesung\shared\mdd\tables.m3l.md",
+            @"D:\data\yesung\mdd\tables.m3l.md",
+        }.FirstOrDefault(File.Exists);
+        if (yesung is null) return;
 
         var ast = new M3lLoader().LoadFile(yesung);
         var models = new InterfaceResolver(ast).ResolveAll().ToList();

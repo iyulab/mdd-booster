@@ -12,13 +12,24 @@ namespace MddBooster.Tests.Cli;
 /// </summary>
 public class YesungFullFixtureTests
 {
-    private static readonly string YesungTablesPath =
-        @"D:\data\yesung\mdd\tables.m3l.md";
+    // ⚠️ 이 게이트는 로컬 절대 경로에 의존하며, 경로가 틀리면 아래 File.Exists 분기가
+    // **조용히 통과**한다 — 2026-07-30까지 실제로 그 상태였다(소비자 리포가 재구성되며
+    // `mdd/` → `shared/mdd/` 로 이동한 것을 이 상수가 따라가지 않았다).
+    // 경로 목록으로 만들어 이동에 한 번은 견디게 했으나, 근본 해결(체크인 픽스처 또는
+    // 환경변수 주입)은 별건 제안으로 남긴다.
+    private static readonly string[] CanonCandidates =
+    [
+        @"D:\data\yesung\shared\mdd\tables.m3l.md",
+        @"D:\data\yesung\mdd\tables.m3l.md",
+    ];
+
+    private static string? YesungTablesPath => CanonCandidates.FirstOrDefault(File.Exists);
 
     [Fact]
     public void Yesung_tables_m3l_md_generates_without_errors()
     {
-        if (!File.Exists(YesungTablesPath))
+        var canon = YesungTablesPath;
+        if (canon is null)
             return; // Skip if fixture not present (CI / fresh clone)
 
         var root = Path.Combine(Path.GetTempPath(), $"yesung-full-{Guid.NewGuid():N}");
@@ -31,7 +42,7 @@ public class YesungFullFixtureTests
         Directory.CreateDirectory(modelDir);
         Directory.CreateDirectory(apiDir);
 
-        File.Copy(YesungTablesPath, Path.Combine(mddDir, "tables.m3l.md"));
+        File.Copy(canon, Path.Combine(mddDir, "tables.m3l.md"));
         File.WriteAllText(Path.Combine(dbDir, "Y.sqlproj"),
             """
             <Project Sdk="Microsoft.Build.Sql/0.2.5-preview">
