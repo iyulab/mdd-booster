@@ -2,7 +2,10 @@
 
 M3L → SQL/C#/API 코드 생성기. 단일 `tables.m3l.md` 소스로 SSDT 스키마, EF Core 엔티티 + DbContext, OData/GraphQL 등록 코드를 일괄 생성한다.
 
-> **상태**: 리라이트 중 (2026-04-05). 이전 `MDD-Booster` 전역 도구는 이 저장소의 과거 버전. 현재 구조는 4-저장소 스택 (`m3l` / `mdd-booster` / `iyu-framework-v5` / consumer) 일부로 재설계됨.
+> **상태**: 0.x — 표면이 아직 정착 중이며, 마이너 버전이 잘못된 동작을 고칠 수 있다.
+> `dotnet tool install -g mdd` 로 설치한다([NuGet](https://www.nuget.org/packages/mdd)).
+> 릴리스별 변경은 [CHANGELOG](./CHANGELOG.md) 를 볼 것.
+> 이전 `MDD-Booster` 전역 도구는 이 저장소의 과거 버전이며, 현재 입력 형식·설정과 호환되지 않는다.
 
 ## 생성 타깃
 
@@ -10,7 +13,7 @@ M3L → SQL/C#/API 코드 생성기. 단일 `tables.m3l.md` 소스로 SSDT 스�
 |---|---|---|
 | **Sql** | tsql(기본): `dbo/Tables_gen/{Entity}.sql`, `dbo/Views_gen/{Entity}_{full,ext}.sql`, `.sqlproj` ItemGroup 패치 · postgres: `tables_gen/{table}.sql` (snake_case, 아래 방언 절) | SSDT 프로젝트 · Schemorph |
 | **Model** | `Entity_gen/{I,}{Entity}{,Ext}.cs`, `Enum_gen/{Enum}.cs`, `DbContext_gen/{Name}.cs` (with auto-`ToView` 매핑) | C# classlib (EF Core + Iyu.Core) |
-| **Api** | `Api_gen/ApiRegistration_gen.cs` (OData + GraphQL 엔티티 페어 등록) | ASP.NET Core MainServer (iyu-framework-v5) |
+| **Api** | `Api_gen/ApiRegistration_gen.cs` (OData + GraphQL 엔티티 페어 등록) | ASP.NET Core 서버 (iyu-framework-v5 런타임) |
 
 ## 사용법
 
@@ -60,7 +63,7 @@ T-SQL `IX_{Model}_{Column}` · PostgreSQL `ix_{table}_{column}`. 대상 판정�
 **표면 타깃(Api·TypeScript) 전용**이며 둘 다 생략하면 전량(현행)이다.
 
 ```json
-{ "type": "Api", "projectPath": "../src/MyApp.MesServer", "namespace": "MyApp.MesServer",
+{ "type": "Api", "projectPath": "../src/MyApp.OpsServer", "namespace": "MyApp.OpsServer",
   "includeEntities": ["ProductionWork", "QRScanLog"] }
 ```
 
@@ -99,7 +102,7 @@ T-SQL `IX_{Model}_{Column}` · PostgreSQL `ix_{table}_{column}`. 대상 판정�
 | `Model` 타깃 **2개 이상** + `entitiesNamespace` 미지정 `Api` 타깃 | **빌드 오류** — 어느 것을 참조할지 추론하지 않는다. 해당 Api 타깃에 `entitiesNamespace` 를 명시 |
 
 ```json
-{ "type": "Api", "projectPath": "../src/MyApp.MesServer", "namespace": "MyApp.MesServer",
+{ "type": "Api", "projectPath": "../src/MyApp.OpsServer", "namespace": "MyApp.OpsServer",
   "entitiesNamespace": "MyApp.Entities", "includeEntities": ["ProductionWork"] }
 ```
 
