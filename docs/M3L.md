@@ -56,7 +56,7 @@ M3L (Meta Model Markup Language) is a markdown-based language for defining data 
 - **Flexibility**: Offering various expression styles for different contexts while maintaining consistency
 - **Extensibility**: Flexible structure accommodating various data modeling requirements
 - **Compatibility**: Compatible with standard markdown for easy rendering in existing tools
-- **AI-Friendly**: Structured format that AI agents can easily interpret and process
+- **Machine-Readable**: Structured enough that tools can interpret and process it mechanically, not only render it
 
 ### 1.2 Document Structure
 
