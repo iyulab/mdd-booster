@@ -9,9 +9,18 @@ namespace MddBooster.Generators.Sql;
 /// </summary>
 /// <remarks>
 /// Neither engine indexes a foreign key on its own, so a join or a delete that checks
-/// referencing rows scans the child table. The gap is identical on both, which is why
-/// the decision lives here rather than in either renderer — the two dialects differ in
-/// how an index is written, not in which columns need one.
+/// referencing rows scans the child table. The gap is the same on both, which is why the
+/// decision lives here rather than in either renderer.
+/// <para>
+/// One case is not quite dialect-neutral. A nullable column declared unique becomes a
+/// filtered unique index on SQL Server (<c>WHERE [col] IS NOT NULL</c>), and the engine
+/// can only use a filtered index where the query predicate implies the filter — so it
+/// does not serve a general join the way PostgreSQL's plain unique index does. This
+/// planner treats both as covered. The shape is narrow (a nullable unique foreign key
+/// is an optional one-to-one) and the correction would be to make the planner
+/// dialect-aware, which costs the single-decision property that keeps the two renderers
+/// from drifting. Stated rather than silently assumed away.
+/// </para>
 /// <para>
 /// Opt-in. Turning it on adds one index per un-covered foreign key, and on a model of
 /// any size that is a lot of indexes to pay for on every write; the reader can be worth

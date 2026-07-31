@@ -139,6 +139,30 @@ public class ForeignKeyIndexTests
         Assert.DoesNotContain("site_id", Planned(partStock));   // @index(site_id) 로도 덮여 있다
     }
 
+    // ---- 제약이 소유하는 인덱스는 선언이 겹쳐도 한 번만 ----
+
+    [Theory]
+    [InlineData("Vendor", "code", "Code")]          // @unique + @index
+    [InlineData("ShiftPattern", "id", "Id")]        // @pk + @index
+    public void An_index_a_constraint_already_owns_is_not_emitted_a_second_time(
+        string modelName, string column, string pascalColumn)
+    {
+        // 제약(PK·UNIQUE)은 인덱스를 스스로 소유한다. 같은 컬럼에 `@index` 를 겹쳐 적었다고
+        // 인덱스를 또 내면 중복이 되고, 선언 상태 비교에서 제약이 소유한 인덱스는 제외되므로
+        // 그 중복은 **어떤 적용으로도 사라지지 않는다.**
+        //
+        // 이 단정이 의미를 가지려면 모델이 실제로 그 겹침을 선언하고 있어야 한다 — 선언이 없으면
+        // `@index` 가 없다는 이유로 이미 걸러져서, 가드를 지워도 테스트가 통과한다(실측된 공백).
+        var model = Model.Value.Lookup[modelName];
+        var field = model.Fields.Single(f => f.Name == column);
+        Assert.True(FieldAttributes.Has(field, "index"),
+            $"{modelName}.{column} 이 `@index` 를 잃었다 — 이 테스트는 겹침이 있을 때만 무엇인가를 잰다");
+
+        var table = Model.Value.TableNames[modelName];
+        Assert.DoesNotContain($"CREATE INDEX ix_{table}_{column} ", Pg(model, on: false));
+        Assert.DoesNotContain($"[IX_{modelName}_{pascalColumn}]", Tsql(model, on: false));
+    }
+
     [Fact]
     public void A_foreign_key_that_is_not_the_leading_column_still_gets_its_own_index()
     {

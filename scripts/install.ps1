@@ -7,7 +7,7 @@
 #
 # 사용:
 #   PS> ./scripts/install.ps1                                    # 기본 경로
-#   PS> ./scripts/install.ps1 -InstallPath C:\tools\mdd-booster  # 커스텀 경로
+#   PS> ./scripts/install.ps1 -InstallPath $HOME\tools\mdd-booster  # 커스텀 경로
 #   PS> ./scripts/install.ps1 -Configuration Release             # Release 빌드
 
 [CmdletBinding()]

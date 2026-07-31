@@ -196,7 +196,7 @@
 
 ## ShiftPattern : Timestampable
 
-- id: identifier @pk @generated
+- id: identifier @pk @generated @index "PK 위에 인덱스를 겹쳐 선언 — 위와 같은 계열"
 - shift: ShiftName @not_null "근무조"
 - starts_at: time @not_null "시작시각"
 - ends_at: time @not_null "종료시각"
@@ -254,7 +254,7 @@
 ## Vendor : Timestampable
 
 - id: identifier @pk @generated
-- code: string(20) @not_null @unique
+- code: string(20) @not_null @unique @index "유니크와 인덱스를 함께 선언 — 제약이 이미 인덱스를 소유한다"
 - name: string(80) @not_null
 - contract: ContractType = "spot" "계약 형태"
 - contact_email: email? "담당자 메일"

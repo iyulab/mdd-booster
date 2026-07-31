@@ -50,6 +50,10 @@ T-SQL `IX_{Model}_{Column}` · PostgreSQL `ix_{table}_{column}`. 대상 판정�
 **기본값은 `false`다.** 켜는 것은 읽기 이득과 쓰기·저장 비용의 교환이며, 기존 스키마에 조용히
 적용할 판단이 아니다. 끈 상태의 산출물은 이전과 동일하다.
 
+> 알려진 예외: **널 허용 유니크** 컬럼은 T-SQL 에서 filtered unique index 가 되어 일반 조인에는
+> 쓰이지 않지만(PG 의 plain unique index 와 다르다), 판정기는 양쪽 모두 덮인 것으로 본다.
+> 좁은 형태(널 허용 유니크 FK = 선택적 1:1)이고, 고치려면 판정기가 방언을 알아야 하므로 유지했다.
+
 #### 타깃별 엔티티 부분집합 (`includeEntities` / `excludeEntities`)
 
 한 모델 정본을 **여러 서버가 공유**할 때, 각 서버가 노출할 엔티티를 타깃별로 좁힌다.
@@ -425,7 +429,7 @@ src/
 ├── MddBooster.Generators.Model/  CSharpTypeMapper, EnumRenderer, EntityPairRenderer, DbContextRenderer
 ├── MddBooster.Generators.Api/    ApiRegistrationRenderer (OData + GraphQL)
 ├── MddBooster.Cli/               BuildCommand (mdd.json 소비)
-└── MddBooster.Tests/             465 xUnit tests (Roslyn 구문/의미 검증 포함)
+└── MddBooster.Tests/             467 xUnit tests (Roslyn 구문/의미 검증 포함)
 ```
 
 ## 테스트 실행
