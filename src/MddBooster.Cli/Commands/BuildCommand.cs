@@ -279,6 +279,30 @@ public sealed class BuildCommand
         }
     }
 
+    /// <summary>
+    /// Applies whichever form-import overrides the target declared, leaving the
+    /// rest at the record's defaults.
+    /// </summary>
+    /// <remarks>
+    /// Written as overrides onto a default instance rather than as
+    /// <c>value ?? "literal"</c> so the defaults live in exactly one place. A
+    /// second copy here would be free to drift from the one the generated files
+    /// are actually compared against.
+    /// </remarks>
+    private static TsFormModuleImports FormModulesFor(MddJsonTarget target)
+    {
+        var modules = new TsFormModuleImports();
+
+        if (!string.IsNullOrWhiteSpace(target.FormLayoutImport))
+            modules = modules with { Layout = target.FormLayoutImport };
+        if (!string.IsNullOrWhiteSpace(target.FormControlsImport))
+            modules = modules with { Controls = target.FormControlsImport };
+        if (!string.IsNullOrWhiteSpace(target.FormSelectOptionsImport))
+            modules = modules with { SelectOptions = target.FormSelectOptionsImport };
+
+        return modules;
+    }
+
     private IArtifactGenerator ResolveGenerator(
         MddJsonTarget target, string? modelNamespace, EntitySurfaceFilter surfaceFilter)
     {
@@ -311,6 +335,7 @@ public sealed class BuildCommand
                     OutputPath = target.OutputPath
                         ?? throw new InvalidOperationException("TypeScript target requires 'outputPath'."),
                     FormsOutputPath = target.FormsOutputPath,
+                    FormModules = FormModulesFor(target),
                     SurfaceFilter = surfaceFilter,
                 }),
             _ => throw new NotSupportedException(

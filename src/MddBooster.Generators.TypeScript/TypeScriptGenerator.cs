@@ -68,7 +68,18 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
 
             Directory.CreateDirectory(formsDir);
 
-            var formFiles = TsFormRenderer.RenderAll(models, context.Enums);
+            // The forms import the five files written above. Both directories are
+            // independent user input, so the specifier between them is derived —
+            // assuming a layout is what made a wrong pair emit files that this
+            // generator reported as written and the consumer's compiler rejected.
+            var imports = new TsFormImports
+            {
+                GeneratedTypesBase = TsModuleSpecifier.RelativeBase(
+                    formsDir, outDir, "formsOutputPath", "outputPath"),
+                Modules = _options.FormModules,
+            };
+
+            var formFiles = TsFormRenderer.RenderAll(models, context.Enums, imports);
             foreach (var (entityName, content) in formFiles)
             {
                 File.WriteAllText(Path.Combine(formsDir, $"{entityName}Form_gen.tsx"), content);

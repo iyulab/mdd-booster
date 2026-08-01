@@ -36,6 +36,37 @@ Sql 타깃 선택 노브(모두 생략 가능): `emitSqlProj`(기본 true — SS
 SSDT dacpac은 CHECK diff가 불안정하므로 선언형 도구(Schemorph) 소비자용 opt-in),
 `emitForeignKeyIndexes`(기본 false — 아래).
 
+#### TypeScript 타깃 옵션
+
+```json
+{
+  "type": "TypeScript",
+  "outputPath": "../ui/src/types",
+  "formsOutputPath": "../ui/src/forms",
+  "formLayoutImport": "@iyulab/enterprise",
+  "formControlsImport": "../components/ui",
+  "formSelectOptionsImport": "../lib/select-options"
+}
+```
+
+| 키 | 필수 | 기본값 | 의미 |
+|---|---|---|---|
+| `outputPath` | ✅ | — | 생성 `*_gen.ts` 5개가 나갈 디렉터리 |
+| `formsOutputPath` | | 없음 | `{Entity}Form_gen.tsx` 가 나갈 디렉터리. **생략하면 폼을 생성하지 않는다** |
+| `formLayoutImport` | | `@iyulab/enterprise` | `FormSection`·`FormRow` 의 출처 |
+| `formControlsImport` | | `../components/ui` | 폼 컨트롤의 출처 |
+| `formSelectOptionsImport` | | `../lib/select-options` | `enumToOptions` 의 출처 |
+
+**세 `*Import` 의 기본값은 추천이 아니라 호환을 위한 역사적 값이다.** 어느 컴포넌트
+라이브러리를 가리킬지는 소비자 결정이며, 생성기는 *어떤 export 가 필요한지*까지만 규정한다
+(아래 「소비 프로젝트 계약」). 새 프로젝트라면 자신의 배럴이나 라이브러리를 직접 지정하면 되고,
+그러면 기본 경로에 래퍼를 만들 필요가 없다.
+
+> **생성 타입(`entities_gen` 등)의 import 경로는 설정 항목이 아니다** — `outputPath` 와
+> `formsOutputPath` 에서 **계산**된다. 두 경로를 어떻게 두든 폼은 생성된 타입을 찾는다.
+> 상대경로가 성립하지 않는 조합(서로 다른 드라이브·루트)이면 **생성이 실패**하며, 컴파일되지
+> 않는 파일을 써 놓고 성공을 보고하지 않는다.
+
 #### 외래 키 인덱스 (`emitForeignKeyIndexes`)
 
 어느 엔진도 외래 키를 자동 인덱싱하지 않는다. FK 로 하는 조인과, 삭제 시 참조 행을 확인하는
@@ -238,7 +269,12 @@ mdd build ./mdd   # mdd.json 이 있는 디렉터리 — 생략하면 현재 디
 소비앱 빌드에서 컴파일되지 않는다. (mdd-booster 자체 테스트는 생성된 TS를 컴파일하지 않으므로,
 이 계약의 위반은 **소비앱 빌드에서만** 드러난다.)
 
-#### `../components/ui` — 배럴이 export해야 하는 컴포넌트
+> **계약은 "무엇을 export 하는가"이지 "어디에 두는가"가 아니다.** 아래 소제목의 경로는
+> `formControlsImport`·`formSelectOptionsImport`·`formLayoutImport` 의 **기본값**이며
+> (0.12.0부터 설정 가능 — 위 「TypeScript 타깃 옵션」), 그 경로에 파일을 두지 않아도 된다.
+> 어디를 가리키든 **그 모듈이 아래 표면을 export 해야 한다는 요구는 그대로다.**
+
+#### `../components/ui`(기본값) — 배럴이 export해야 하는 컴포넌트
 
 | 컴포넌트 | 언제 import되나 | 받는 프롭 |
 |---|---|---|
@@ -260,7 +296,7 @@ mdd build ./mdd   # mdd.json 이 있는 디렉터리 — 생략하면 현재 디
   그리고 `string(n)`은 거의 모든 모델에 있으므로 **`step`보다 영향 범위가 훨씬 넓다** —
   `decimal`을 안 쓰는 소비자도 이 프롭은 거의 확실히 필요하다. 래퍼에 없으면 TS2322로 빌드가 깨진다.
 
-#### `../lib/select-options` — 헬퍼
+#### `../lib/select-options`(기본값) — 헬퍼
 
 ```ts
 export function enumToOptions(labels: Record<string, string>): /* USelect의 options 타입 */
@@ -269,7 +305,7 @@ export function enumToOptions(labels: Record<string, string>): /* USelect의 opt
 (반환 타입은 소비자가 정한다). 값을 좁힐 때도 **인자를 늘리지 않고** 좁혀진 라벨맵을 따로 생성해
 넘기므로(아래 `@system` 절), 이 시그니처는 안정적이다.
 
-#### `@iyulab/enterprise` — 레이아웃
+#### `@iyulab/enterprise`(기본값) — 레이아웃
 
 `FormSection`(`title`) · `FormRow`(`full?`) 를 export해야 한다.
 

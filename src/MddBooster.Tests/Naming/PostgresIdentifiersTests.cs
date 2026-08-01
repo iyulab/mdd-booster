@@ -3,7 +3,7 @@ using MddBooster.Core.Naming;
 namespace MddBooster.Tests.Naming;
 
 /// <summary>
-/// ADR-0001 §2.1 (U-Platform, 2026-07-22 소비자 확정) 변환 규칙·오류 게이트의 계약 테스트.
+/// ADR-0001 §2.1 변환 규칙·오류 게이트의 계약 테스트.
 /// 규칙: 소문자→대문자 전이 분리 · 대문자 연속(약어)은 한 단어, 뒤에 소문자가 이어지면
 /// 마지막 대문자 앞에서 분리 · 숫자는 직전 단어에 붙음. 게이트: `^[a-z][a-z0-9_]*$` ·
 /// 63바이트(PG NAMEDATALEN) · fold 충돌 — 전부 오류이며 조용한 보정(절단·치환) 금지.

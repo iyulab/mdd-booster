@@ -7,6 +7,7 @@ using MddBooster.Core.Types;
 using MddBooster.Generators.Model;
 using MddBooster.Generators.Sql;
 using MddBooster.Generators.TypeScript;
+using static MddBooster.Tests.Generators.TypeScript.FormImportFixtures;
 
 namespace MddBooster.Tests.Generators;
 
@@ -93,7 +94,7 @@ public class CrossTargetLengthAgreementTests
 
         var entityAttrs = AttributesByProperty(EntityPairRenderer.Render(model, "Test.Entities", enumNames).Write);
         var schema = TsFieldSchemaRenderer.RenderAll(models);
-        var form = TsFormRenderer.RenderAll(models, ast.Enums)["Sample"];
+        var form = TsFormRenderer.RenderAll(models, ast.Enums, TestImports)["Sample"];
 
         foreach (var (property, m3lType) in ImpliedBoundFields)
         {

@@ -5,7 +5,7 @@ using MddBooster.Generators.Model;
 namespace MddBooster.Tests.Generators.Model;
 
 /// <summary>
-/// ADR-0001 §2.3 (U-Platform): 모델 PascalCase ↔ DB snake_case 간극은 **생성 코드에 구운
+/// ADR-0001 §2.3: 모델 PascalCase ↔ DB snake_case 간극은 **생성 코드에 구운
 /// 명시 매핑**이 흡수한다 — 런타임 컨벤션 라이브러리 추론 금지. PG 방언에서 DbContext는
 /// 엔티티마다 `ToTable`/`HasColumnName`(+ json → `HasColumnType("jsonb")`, D24)을 방출한다.
 /// 기본(tsql) 렌더는 바이트 단위로 무변경 — 기존 소비자 무영향.

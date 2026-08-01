@@ -8,9 +8,15 @@ namespace MddBooster.Generators.TypeScript;
 
 /// <summary>
 /// Renders per-entity React form base components ({Entity}Form_gen.tsx).
-/// Generated forms use FormSection/FormRow from @iyulab/enterprise.
 /// FK fields (@reference) become slot placeholders.
 /// </summary>
+/// <remarks>
+/// Which modules the rendered file imports from — its layout components, its
+/// controls, and the option-list helper — is not decided here; see
+/// <see cref="TsFormImports"/>. The rendered file is <c>DO NOT EDIT</c>, so a
+/// specifier chosen in this class is a folder layout the consumer would be
+/// required to build rather than a default they could override.
+/// </remarks>
 public static class TsFormRenderer
 {
     // Match the convention used by all other TS renderers in this project.
@@ -22,12 +28,19 @@ public static class TsFormRenderer
     /// (which values are <c>@system</c>) are read from here, so there is one source
     /// of enum information rather than a name set that can drift from the nodes.
     /// </param>
+    /// <param name="imports">
+    /// Where the rendered file imports from. Required rather than defaulted: the
+    /// specifier for this generator's own output depends on where the caller
+    /// writes both file sets, so only the caller can know it.
+    /// </param>
     public static IReadOnlyDictionary<string, string> RenderAll(
         IReadOnlyList<ResolvedModel> models,
-        IReadOnlyList<EnumNode> enums)
+        IReadOnlyList<EnumNode> enums,
+        TsFormImports imports)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentNullException.ThrowIfNull(enums);
+        ArgumentNullException.ThrowIfNull(imports);
 
         var enumNames = new HashSet<string>(enums.Select(e => e.Name), StringComparer.Ordinal);
         var withSystemValues = EnumValueVisibility.TypeNamesWithSystemValues(enums);
@@ -35,7 +48,7 @@ public static class TsFormRenderer
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var model in models)
         {
-            var content = RenderOne(model, enumNames, withSystemValues);
+            var content = RenderOne(model, enumNames, withSystemValues, imports);
             if (content != null)
                 result[NameCasing.ToPascalCase(model.Name)] = content;
         }
@@ -119,7 +132,8 @@ public static class TsFormRenderer
     private static string? RenderOne(
         ResolvedModel model,
         IReadOnlySet<string> enumNames,
-        IReadOnlySet<string> withSystemValues)
+        IReadOnlySet<string> withSystemValues,
+        TsFormImports imports)
     {
         var storedFields = model.Fields
             .Where(f => f.Kind == FieldKind.Stored)
@@ -189,7 +203,8 @@ public static class TsFormRenderer
         if (fkFields.Count > 0)
             sb.AppendLine("import type { ReactNode } from 'react'");
 
-        sb.AppendLine("import { FormSection, FormRow } from '@iyulab/enterprise'");
+        sb.Append("import { FormSection, FormRow } from '")
+          .Append(imports.Modules.Layout).AppendLine("'");
 
         // Import exactly the controls the rendered fields actually use — derived from
         // the same classifier the renderer dispatches on, so the two cannot disagree.
@@ -204,19 +219,27 @@ public static class TsFormRenderer
         if (usedControls.Contains(FormControl.Select)) uiImports.Add("USelect");
         if (usedControls.Contains(FormControl.Checkbox)) uiImports.Add("UCheckbox");
         if (uiImports.Count > 0)
-            sb.Append("import { ").Append(string.Join(", ", uiImports)).AppendLine(" } from '../components/ui'");
-        sb.Append("import type { ").Append(entityName).AppendLine(" } from '../types/entities_gen'");
+            sb.Append("import { ").Append(string.Join(", ", uiImports))
+              .Append(" } from '").Append(imports.Modules.Controls).AppendLine("'");
+        // The generator's own output — the specifier is derived from where both
+        // file sets are written, never assumed (see TsFormImports).
+        var typesBase = imports.GeneratedTypesBase;
+        sb.Append("import type { ").Append(entityName)
+          .Append(" } from '").Append(typesBase).AppendLine("/entities_gen'");
 
         if (enumImports.Count > 0)
         {
             var typeImports = string.Join(", ", enumImports);
-            sb.Append("import type { ").Append(typeImports).AppendLine(" } from '../types/enums_gen'");
+            sb.Append("import type { ").Append(typeImports)
+              .Append(" } from '").Append(typesBase).AppendLine("/enums_gen'");
             // Label maps = effective per-field maps (override / selectable / own),
             // never an unused one.
             var labelImports = string.Join(", ", labelMapNames
                 .OrderBy(n => n, StringComparer.Ordinal));
-            sb.Append("import { ").Append(labelImports).AppendLine(" } from '../types/enum_labels_gen'");
-            sb.AppendLine("import { enumToOptions } from '../lib/select-options'");
+            sb.Append("import { ").Append(labelImports)
+              .Append(" } from '").Append(typesBase).AppendLine("/enum_labels_gen'");
+            sb.Append("import { enumToOptions } from '")
+              .Append(imports.Modules.SelectOptions).AppendLine("'");
         }
 
         sb.AppendLine();

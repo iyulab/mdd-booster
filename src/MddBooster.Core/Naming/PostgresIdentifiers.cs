@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 namespace MddBooster.Core.Naming;
 
 /// <summary>
-/// PostgreSQL 방언의 식별자 정책 (ADR-0001 §2.1, U-Platform 소비자 확정).
+/// PostgreSQL 방언의 식별자 정책 (ADR-0001 §2.1).
 /// 모델명 PascalCase → 테이블명 snake_case 결정적 변환과 오류 게이트 3종
 /// (패턴 · 63바이트 NAMEDATALEN · fold 충돌)의 정본. 조용한 보정(절단·치환)은 하지 않는다 —
 /// 게이트 위반은 전부 모아 한 번에 <see cref="PostgresNamingException"/>으로 실패시킨다.

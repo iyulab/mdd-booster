@@ -90,6 +90,38 @@ public sealed class MddJsonTarget
     [JsonPropertyName("formsOutputPath")]
     public string? FormsOutputPath { get; set; }
 
+    /// <summary>
+    /// Optional: module a generated form imports <c>FormSection</c>/<c>FormRow</c> from.
+    /// Omit to keep the historical value.
+    /// </summary>
+    /// <remarks>
+    /// These three settings exist because the generated file says
+    /// <c>DO NOT EDIT</c>: a hard-coded specifier is not a default the consumer
+    /// can override, it is a folder layout the consumer is required to build.
+    /// The specifiers for this generator's <em>own</em> output are deliberately
+    /// not settings — they are derived from <see cref="OutputPath"/> and
+    /// <see cref="FormsOutputPath"/>, which the tool already knows.
+    /// </remarks>
+    [JsonPropertyName("formLayoutImport")]
+    public string? FormLayoutImport { get; set; }
+
+    /// <summary>
+    /// Optional: module a generated form imports its controls
+    /// (<c>UInput</c>·<c>UTextarea</c>·<c>USelect</c>·<c>UCheckbox</c>) from.
+    /// Omit to keep the historical value.
+    /// </summary>
+    [JsonPropertyName("formControlsImport")]
+    public string? FormControlsImport { get; set; }
+
+    /// <summary>
+    /// Optional: module supplying <c>enumToOptions</c>. This generator writes the
+    /// <c>{Enum}Labels</c> maps that function consumes but not the function
+    /// itself, so the module is the consumer's to provide.
+    /// Omit to keep the historical value.
+    /// </summary>
+    [JsonPropertyName("formSelectOptionsImport")]
+    public string? FormSelectOptionsImport { get; set; }
+
     // Api target
     /// <summary>
     /// Api 타깃이 참조할 엔티티 타입의 namespace (생성 코드의 <c>using</c>). 생략하면
