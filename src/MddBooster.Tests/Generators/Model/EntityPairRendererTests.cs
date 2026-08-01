@@ -51,7 +51,7 @@ public class EntityPairRendererTests
         // Write class — base table
         Assert.Contains("[Table(\"BankAccount\")]", rendered.Write);
         Assert.Contains("public partial class BankAccount", rendered.Write);
-        Assert.Contains(": global::Iyu.Core.Entities.IyuEntity, IBankAccount", rendered.Write);
+        Assert.Contains(": IyuEntity, IBankAccount", rendered.Write);
         Assert.Contains("public string BankName { get; set; } = string.Empty;", rendered.Write);
         Assert.Contains("public string? Note { get; set; }", rendered.Write);
         Assert.Contains("public bool IsActive { get; set; }", rendered.Write);
@@ -60,7 +60,7 @@ public class EntityPairRendererTests
         // model maps back to the base table (no _ext view exists).
         Assert.Contains("[Table(\"BankAccount\")]", rendered.Read);
         Assert.Contains("public partial class BankAccountExt", rendered.Read);
-        Assert.Contains(": global::Iyu.Core.Entities.IyuEntity, IBankAccount", rendered.Read);
+        Assert.Contains(": IyuEntity, IBankAccount", rendered.Read);
     }
 
     [Fact]

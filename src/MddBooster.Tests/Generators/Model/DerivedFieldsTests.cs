@@ -66,7 +66,7 @@ public class DerivedFieldsTests
 
         // Ext has the lookup property
         Assert.Contains("public string CustomerName", pair.Read);
-        Assert.Contains("[global::Iyu.Core.Attributes.Lookup(\"customer_id.name\")]", pair.Read);
+        Assert.Contains("[Lookup(\"customer_id.name\")]", pair.Read);
         Assert.Contains("public string CustomerEmail", pair.Read);
 
         // Write class does NOT include lookup fields
@@ -83,7 +83,7 @@ public class DerivedFieldsTests
         var (_, order, enumNames) = LoadOrder();
         var pair = EntityPairRenderer.Render(order, "Test.Orders", enumNames);
 
-        Assert.Contains("[global::Iyu.Core.Attributes.Rollup(", pair.Read);
+        Assert.Contains("[Rollup(", pair.Read);
         Assert.Contains("public int ItemCount", pair.Read);
         Assert.Contains("public decimal TotalSum", pair.Read);
 
@@ -102,8 +102,8 @@ public class DerivedFieldsTests
         var pair = EntityPairRenderer.Render(order, "Test.Orders", enumNames);
 
         // Backticks from M3L are stripped; the raw expression is inside the attribute.
-        Assert.Contains("[global::Iyu.Core.Attributes.Computed(\"subtotal * 0.1\")]", pair.Read);
-        Assert.Contains("[global::Iyu.Core.Attributes.Computed(\"subtotal + tax_amount\")]", pair.Read);
+        Assert.Contains("[Computed(\"subtotal * 0.1\")]", pair.Read);
+        Assert.Contains("[Computed(\"subtotal + tax_amount\")]", pair.Read);
         Assert.Contains("public decimal TaxAmount", pair.Read);
         Assert.Contains("public decimal GrandTotal", pair.Read);
 

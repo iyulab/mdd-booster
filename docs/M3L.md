@@ -763,19 +763,19 @@ and only prefixes `global::` — it knows nothing about the type's meaning or
 namespace.
 
 ```markdown
-## User @inherits(Iyu.Core.Identity.IyuUser) @implements(Iyu.Core.Identity.IUser)
+## User @inherits(Sample.Contracts.PrincipalBase) @implements(Sample.Contracts.IPrincipal)
 - username: string(100) @not_null
 ```
 
 Generates:
 
 ```csharp
-public partial class User : global::Iyu.Core.Identity.IyuUser, IUser, global::Iyu.Core.Identity.IUser
+public partial class User : global::Sample.Contracts.PrincipalBase, IUser, global::Sample.Contracts.IPrincipal
 { ... }
 ```
 
 - **`@inherits(FQN)`** — overrides the default base class
-  (`global::Iyu.Core.Entities.IyuEntity`). Single argument (C# single inheritance).
+  (`IyuEntity`, emitted as a simple name). Single argument (C# single inheritance).
   Omit to keep the default `IyuEntity`.
 - **`@implements(FQN, ...)`** — appends one or more interfaces verbatim.
   The generated marker interface `IXxx` is always emitted regardless.

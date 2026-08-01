@@ -348,6 +348,8 @@ public class FieldConstraintRenderTests
 
         var expectedRequired = new SortedSet<string>(StringComparer.Ordinal);
         var expectedLengths = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        var expectedBinaryBounds = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        var unclassified = new SortedSet<string>(StringComparer.Ordinal);
 
         foreach (var f in model.Fields.Where(f => f.Kind == FieldKind.Stored))
         {
@@ -367,14 +369,39 @@ public class FieldConstraintRenderTests
                 expectedRequired.Add(property);
             }
 
-            // Only columns whose C# side is actually a string can carry the
-            // attribute. An enum column is NVARCHAR too, but that width is how
-            // the SQL target stores enum values — not a bound the model declared,
-            // and [StringLength] on a `Grade` property would mean nothing.
-            // The number still comes from the SQL column, so this is not circular.
-            var bound = Regex.Match(column, @"NVARCHAR\((\d+)\)", RegexOptions.IgnoreCase);
-            if (bound.Success && CSharpTypeMapper.MapFieldType(f.Type!, enums) == "string")
-                expectedLengths[property] = int.Parse(bound.Groups[1].Value);
+            // Every bounded column, whatever its storage kind. Matching only
+            // NVARCHAR was itself a blind spot: a VARBINARY(n) column is bounded
+            // in the same sense, and reading past it made this guard silent
+            // about a whole axis while reading as a total comparison.
+            var bound = Regex.Match(column, @"(?:NVARCHAR|VARBINARY)\((\d+)\)", RegexOptions.IgnoreCase);
+            if (!bound.Success)
+                continue;
+
+            var n = int.Parse(bound.Groups[1].Value);
+            switch (CSharpTypeMapper.MapFieldType(f.Type!, enums))
+            {
+                case "string":
+                    expectedLengths[property] = n;
+                    break;
+
+                case "byte[]":
+                    // [MaxLength] would be the counterpart. It is not emitted —
+                    // see the recorded-gap test below, which is where that fact
+                    // lives so this comparison does not quietly absorb it.
+                    expectedBinaryBounds[property] = n;
+                    break;
+
+                default:
+                    // An enum column is NVARCHAR too, but that width is how the
+                    // SQL target stores enum values — not a bound the model
+                    // declared, and [StringLength] on a `Grade` property would
+                    // mean nothing. Anything else reaching here is a bounded
+                    // column whose C# side nobody has decided about, which the
+                    // final assertion refuses rather than skips.
+                    if (!enums.Contains(f.Type!))
+                        unclassified.Add($"{property}: {f.Type} → {column}");
+                    break;
+            }
         }
 
         var actualRequired = new SortedSet<string>(
@@ -392,7 +419,50 @@ public class FieldConstraintRenderTests
         Assert.NotEmpty(expectedRequired);
         Assert.NotEmpty(expectedLengths);
 
+        // A bounded column whose C# counterpart nobody has decided about is the
+        // shape every defect in this family has taken. Failing here forces the
+        // decision instead of letting the case fall out of the comparison.
+        Assert.Empty(unclassified);
+
         Assert.Equal(expectedRequired, actualRequired);
         Assert.Equal(expectedLengths, actualLengths);
+    }
+
+    /// <summary>
+    /// A bound on a non-string column reaches the column and stops there:
+    /// <c>binary(n)</c> becomes <c>VARBINARY(n)</c> and the entity carries no
+    /// <c>[MaxLength]</c>. Recorded rather than emitted — emitting it would
+    /// start rejecting requests that pass today, which is a decision, not a
+    /// tidy-up, and no consumer has asked for it.
+    /// </summary>
+    /// <remarks>
+    /// This asserts the gap so that closing it fails here. Somebody adding
+    /// <c>[MaxLength]</c> has to come to this test and delete the record,
+    /// which is the point: the alternative is filtering binary columns out of
+    /// the comparison above, and a filter would make the guard silent about
+    /// the axis again — the very thing that let it stay hidden.
+    /// </remarks>
+    [Fact]
+    public void A_binary_bound_reaches_the_column_and_is_recorded_as_not_reaching_the_entity()
+    {
+        var (model, enums, enumLookup) = LoadSample();
+        var attrs = AttributesByProperty(EntityPairRenderer.Render(model, "Test.Entities", enums).Write);
+
+        var boundedBinary = model.Fields
+            .Where(f => f.Kind == FieldKind.Stored)
+            .Where(f => CSharpTypeMapper.MapFieldType(f.Type!, enums) == "byte[]")
+            .Where(f => Regex.IsMatch(ColumnRenderer.Render(f, enumLookup), @"VARBINARY\(\d+\)", RegexOptions.IgnoreCase))
+            .ToList();
+
+        // Without this the test would pass on a fixture that declares no
+        // bounded binary field at all, recording a gap nothing exercises.
+        Assert.NotEmpty(boundedBinary);
+
+        var emitted = attrs
+            .Where(kv => kv.Value.Any(a => a.StartsWith("[MaxLength", StringComparison.Ordinal)))
+            .Select(kv => kv.Key)
+            .ToList();
+
+        Assert.Empty(emitted);
     }
 }

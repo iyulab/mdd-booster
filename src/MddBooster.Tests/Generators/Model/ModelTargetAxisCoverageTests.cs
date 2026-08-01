@@ -1,4 +1,5 @@
 using MddBooster.Core.Ast;
+using MddBooster.Core.Types;
 
 namespace MddBooster.Tests.Generators.Model;
 
@@ -21,12 +22,15 @@ namespace MddBooster.Tests.Generators.Model;
 /// but that not carrying one has to be a stated choice rather than an oversight.
 /// </para>
 /// <para>
-/// <b>What this does not cover.</b> Type parameters (<c>string(n)</c>,
-/// <c>decimal(p,s)</c>) are not attributes and so are absent from
-/// <c>KnownNames</c>; the ratchet cannot see a new one. Those two axes are held
-/// by the field-for-field correspondence in
-/// <see cref="FieldConstraintRenderTests"/> instead. A third type parameter
-/// would need its own guard.
+/// <b>A second ratchet, over types.</b> A declaration is not the only thing
+/// that can carry a constraint — a type can too, without anything appearing in
+/// the text of the field. <c>email</c> is bounded; nothing about the
+/// declaration says so. That axis sat outside this ratchet (it is not an
+/// attribute) and outside the field-for-field correspondence in
+/// <c>FieldConstraintRenderTests</c> (which needed a fixture declaring such a
+/// field, and none did), so it reached the column and nowhere else for as long
+/// as it existed. The type dispositions below close that, and type parameters
+/// (<c>string(n)</c>, <c>decimal(p,s)</c>) are recorded there too.
 /// </para>
 /// </remarks>
 public class ModelTargetAxisCoverageTests
@@ -147,5 +151,115 @@ public class ModelTargetAxisCoverageTests
     public void Every_disposition_states_a_reason()
     {
         Assert.All(Dispositions, kv => Assert.False(string.IsNullOrWhiteSpace(kv.Value.Note), kv.Key));
+    }
+
+    // ---------------------------------------------------------------- types
+    //
+    // The same question asked of the type vocabulary: what does this type imply
+    // beyond the C# type it maps to, and does the implication reach the entity?
+    // The mappers already throw on a type they do not know, so absence of a
+    // mapping is loud; what is silent is a type that maps fine while the
+    // constraint it carries reaches only some targets.
+
+    private enum TypeDisposition
+    {
+        /// <summary>The type implies no constraint beyond the C# type it maps to.</summary>
+        NoImpliedConstraint,
+
+        /// <summary>It implies one, and the Model target carries it.</summary>
+        Carried,
+
+        /// <summary>It implies one that reaches another target and not this one.</summary>
+        AsymmetricGap,
+    }
+
+    private static readonly IReadOnlyDictionary<string, (TypeDisposition Disposition, string Note)> TypeDispositions =
+        new Dictionary<string, (TypeDisposition, string)>(StringComparer.Ordinal)
+        {
+            // ---- constraint-bearing, carried ----
+            ["string"] = (TypeDisposition.Carried, "the (n) parameter becomes [StringLength(n)]"),
+            ["decimal"] = (TypeDisposition.Carried, "the (p,s) parameters become [Column(TypeName)]"),
+            ["email"] = (TypeDisposition.Carried, "bounded by the type rather than a parameter; the bound becomes [StringLength(n)]"),
+            ["phone"] = (TypeDisposition.Carried, "as email"),
+            ["url"] = (TypeDisposition.Carried, "as email"),
+
+            // ---- constraint-bearing, not carried ----
+            ["binary"] = (TypeDisposition.AsymmetricGap, "the (n) parameter sizes the column as VARBINARY(n); [MaxLength(n)] would be the counterpart, and its absence is asserted in FieldConstraintRenderTests"),
+
+            // ---- no implied constraint ----
+            ["identifier"] = (TypeDisposition.NoImpliedConstraint, "a key type; the property it names is elided"),
+            ["boolean"] = (TypeDisposition.NoImpliedConstraint, "the CLR type is the whole of it"),
+            ["integer"] = (TypeDisposition.NoImpliedConstraint, "range is the CLR type's"),
+            ["long"] = (TypeDisposition.NoImpliedConstraint, "as integer"),
+            ["short"] = (TypeDisposition.NoImpliedConstraint, "as integer"),
+            ["byte"] = (TypeDisposition.NoImpliedConstraint, "as integer"),
+            ["float"] = (TypeDisposition.NoImpliedConstraint, "as integer"),
+            ["double"] = (TypeDisposition.NoImpliedConstraint, "as integer"),
+            ["text"] = (TypeDisposition.NoImpliedConstraint, "explicitly unbounded — the column is NVARCHAR(MAX)"),
+            ["json"] = (TypeDisposition.NoImpliedConstraint, "unbounded; the shape inside is not modelled"),
+            ["date"] = (TypeDisposition.NoImpliedConstraint, "the CLR type is the whole of it"),
+            ["time"] = (TypeDisposition.NoImpliedConstraint, "as date"),
+            ["timestamp"] = (TypeDisposition.NoImpliedConstraint, "as date"),
+            ["datetime"] = (TypeDisposition.NoImpliedConstraint, "deprecated spelling of timestamp"),
+        };
+
+    /// <summary>
+    /// New primitives fail here until what they imply is recorded; removed ones
+    /// fail here until their entry goes.
+    /// </summary>
+    [Fact]
+    public void Every_primitive_has_a_recorded_type_disposition()
+    {
+        var undocumented = M3lPrimitives.All
+            .Where(t => !TypeDispositions.ContainsKey(t))
+            .OrderBy(t => t, StringComparer.Ordinal)
+            .ToList();
+
+        var stale = TypeDispositions.Keys
+            .Where(t => !M3lPrimitives.All.Contains(t))
+            .OrderBy(t => t, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Empty(undocumented);
+        Assert.Empty(stale);
+    }
+
+    /// <summary>
+    /// Pins the type-axis gaps, so carrying one — or introducing another — is a
+    /// deliberate edit rather than a state nobody notices.
+    /// </summary>
+    [Fact]
+    public void Known_type_axis_gaps_are_the_ones_recorded()
+    {
+        var gaps = TypeDispositions
+            .Where(kv => kv.Value.Disposition == TypeDisposition.AsymmetricGap)
+            .Select(kv => kv.Key)
+            .OrderBy(k => k, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal(["binary"], gaps);
+    }
+
+    /// <summary>
+    /// The bridge between this record and the table the generators actually
+    /// read. Giving a type an implicit bound without carrying it to the entity
+    /// recreates the defect this ratchet was added for, so it cannot be done
+    /// without the record disagreeing.
+    /// </summary>
+    [Fact]
+    public void Every_type_with_an_implicit_bound_is_recorded_as_carried()
+    {
+        var notCarried = M3lPrimitives.ImplicitMaxLength.Keys
+            .Where(t => TypeDispositions[t].Disposition != TypeDisposition.Carried)
+            .OrderBy(t => t, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Empty(notCarried);
+    }
+
+    [Fact]
+    public void Every_type_disposition_states_a_reason()
+    {
+        Assert.All(TypeDispositions, kv => Assert.False(string.IsNullOrWhiteSpace(kv.Value.Note), kv.Key));
     }
 }

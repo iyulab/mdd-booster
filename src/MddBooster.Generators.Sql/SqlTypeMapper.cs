@@ -30,6 +30,16 @@ public static class SqlTypeMapper
             throw new ArgumentException("m3lType이 비어 있습니다.", nameof(m3lType));
         }
 
+        // A semantic type carries a length ceiling the declaration never spells
+        // out. The number belongs to the language, not to this mapper, so it is
+        // read from the one table that also feeds the other targets — a column
+        // and the entity attribute validating writes to it cannot be allowed to
+        // disagree about the same limit.
+        if (MddBooster.Core.Types.M3lPrimitives.ImplicitMaxLengthOf(m3lType) is { } implicitMax)
+        {
+            return $"NVARCHAR({implicitMax})";
+        }
+
         var p0 = parameters is { Count: > 0 } ? parameters[0] : null;
         var p1 = parameters is { Count: > 1 } ? parameters[1] : null;
 
@@ -53,9 +63,7 @@ public static class SqlTypeMapper
             "time" => "TIME",
             "timestamp" => "DATETIMEOFFSET",
             "datetime" => "DATETIMEOFFSET",
-            "phone" => "NVARCHAR(30)",
-            "email" => "NVARCHAR(200)",
-            "url" => "NVARCHAR(500)",
+            // phone / email / url are handled above — their bound is implicit.
             "json" => "NVARCHAR(MAX)",
             "binary" when p0 is not null => $"VARBINARY({p0})",
             "binary" => "VARBINARY(MAX)",

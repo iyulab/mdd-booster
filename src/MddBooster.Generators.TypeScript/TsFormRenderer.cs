@@ -541,12 +541,17 @@ public static class TsFormRenderer
         // string (default) — and, deliberately, timestamp / datetime / time. See this method's remarks:
         // a native picker for those would reject the API's own value and submit empty.
         //
-        // `string(n)` carries a length ceiling the column already enforces; surfacing it as
+        // A bounded field carries a length ceiling the column already enforces; surfacing it as
         // maxlength moves the rejection from "the save fails" to "you cannot type past the limit".
         // Unlike a picker this cannot lose data: every stored value is already within n, so the
         // attribute never invalidates an existing value. Types without a ceiling
         // (bare `string`, `text` → NVARCHAR(MAX)) emit nothing.
-        var maxLenAttr = MddBooster.Core.Ast.FieldAttributes.StringMaxLength(field) is { } n
+        //
+        // The ceiling can come from the declaration (`string(n)`) or from the type itself
+        // (`email`, `phone`, `url`). This is the length axis only — it says nothing about
+        // format, which stays with the application layer and is why the control is still a
+        // plain text input rather than `type="email"`.
+        var maxLenAttr = MddBooster.Core.Ast.FieldAttributes.EffectiveMaxLength(field) is { } n
             ? $" maxlength={{{n}}}"
             : "";
         return $"<UInput label=\"{label}\"{requiredAttr}{descAttr}{maxLenAttr} value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v }})}} />";

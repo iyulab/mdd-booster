@@ -1,4 +1,5 @@
 using M3L.Native;
+using MddBooster.Core.Types;
 using MddBooster.Generators.Sql;
 
 namespace MddBooster.Tests.Generators.Sql;
@@ -39,16 +40,23 @@ public class SqlTypeMapperTests
         Assert.Equal("DECIMAL(12,2)", actual);
     }
 
-    [Fact]
-    public void Map_Phone_EmitsNvarchar30()
+    /// <summary>
+    /// The column's width for a semantic type is not written in this mapper. It
+    /// is read from the shared table, so that the entity attribute guarding
+    /// writes to the column cannot be sized from a different number. Hard-coding
+    /// the width here again would restore exactly the divergence the table
+    /// exists to prevent, which is why this asserts the wiring rather than a
+    /// literal — the literals are pinned once, in M3lPrimitivesTests.
+    /// </summary>
+    [Theory]
+    [InlineData("phone")]
+    [InlineData("email")]
+    [InlineData("url")]
+    public void Map_SemanticType_TakesItsBoundFromTheSharedTable(string m3lType)
     {
-        Assert.Equal("NVARCHAR(30)", SqlTypeMapper.Map("phone", null));
-    }
+        var expected = M3lPrimitives.ImplicitMaxLength[m3lType];
 
-    [Fact]
-    public void Map_Email_EmitsNvarchar200()
-    {
-        Assert.Equal("NVARCHAR(200)", SqlTypeMapper.Map("email", null));
+        Assert.Equal($"NVARCHAR({expected})", SqlTypeMapper.Map(m3lType, null));
     }
 
     [Fact]

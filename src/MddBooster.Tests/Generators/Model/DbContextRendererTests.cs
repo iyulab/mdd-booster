@@ -18,7 +18,7 @@ public class DbContextRendererTests
         var output = DbContextRenderer.Render(models, "TestDbContext", "Test.Ns");
 
         Assert.Contains("namespace Test.Ns;", output);
-        Assert.Contains("public partial class TestDbContext : global::Iyu.Data.IyuDbContext", output);
+        Assert.Contains("public partial class TestDbContext : IyuDbContext", output);
         Assert.Contains("public TestDbContext(DbContextOptions<TestDbContext> options)", output);
         Assert.Contains("public DbSet<Customer> Customers => Set<Customer>();", output);
         Assert.Contains("public DbSet<CustomerExt> CustomersExt => Set<CustomerExt>();", output);

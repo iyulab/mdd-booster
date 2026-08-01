@@ -22,6 +22,11 @@
 - memo: text "text 는 상한을 갖지 않는다"
 - payload: json "참조형"
 - blob: binary "참조형 — 문자열이 아니다"
+- thumbnail: binary(1048576) "문자열이 아닌 길이 상한 — 컬럼은 VARBINARY(n)"
+
+- contact_email: email "선언에 (n)이 없지만 타입이 상한을 갖는다"
+- contact_phone: phone? "널 허용 + 암묵 상한"
+- home_page: url? "암묵 상한 — 가장 넓은 축"
 
 - code: string(10) = "NEW" "비-널 + 선언된 기본값"
 - opt_code: string(10)? = "OPT" "널 허용 + 선언된 기본값"

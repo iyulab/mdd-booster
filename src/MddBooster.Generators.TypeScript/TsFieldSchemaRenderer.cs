@@ -83,10 +83,11 @@ public static class TsFieldSchemaRenderer
     {
         var required = !field.Nullable;
 
-        // Shared with the generated form's `maxlength` — see FieldAttributes.StringMaxLength.
+        // Shared with the generated form's `maxlength` — see FieldAttributes.EffectiveMaxLength.
         // Extracting it separately here is how the two would drift into disagreeing about the
-        // same column's limit.
-        int? maxLength = MddBooster.Core.Ast.FieldAttributes.StringMaxLength(field);
+        // same column's limit. The effective bound, not the declared one: a field can be
+        // bounded by its type without the declaration saying so.
+        int? maxLength = MddBooster.Core.Ast.FieldAttributes.EffectiveMaxLength(field);
 
         double? min = GetAttributeNumber(field, "min");
         double? max = GetAttributeNumber(field, "max");

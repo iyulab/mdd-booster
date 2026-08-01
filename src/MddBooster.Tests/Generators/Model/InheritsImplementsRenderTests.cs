@@ -44,36 +44,37 @@ public class InheritsImplementsRenderTests
     [Fact]
     public void Implements_Uses_Verbatim_Fqn_Not_Hardcoded_Namespace()
     {
-        var model = ModelWith("UserMasterItem", Attr("implements", "Iyu.Core.Entities.IUserMasterList"));
+        var model = ModelWith("UserMasterItem", Attr("implements", "Sample.Contracts.IMasterListItem"));
 
         var result = EntityPairRenderer.Render(model, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
 
-        Assert.Contains("global::Iyu.Core.Entities.IUserMasterList", result.Write);
+        Assert.Contains("global::Sample.Contracts.IMasterListItem", result.Write);
         // Must NOT double-prefix (the old hardcoded behavior would produce
-        // global::Iyu.Core.Entities.Iyu.Core.Entities.IUserMasterList).
-        Assert.DoesNotContain("Iyu.Core.Entities.Iyu.Core.Entities", result.Write);
+        // global::Sample.Contracts.Sample.Contracts.IMasterListItem).
+        Assert.DoesNotContain("Sample.Contracts.Sample.Contracts", result.Write);
     }
 
     [Fact]
     public void Implements_Foreign_Namespace_Interface_Is_Verbatim()
     {
-        var model = ModelWith("Account", Attr("implements", "Iyu.Core.Identity.IUser"));
+        var model = ModelWith("Account", Attr("implements", "Sample.Contracts.IPrincipal"));
 
         var result = EntityPairRenderer.Render(model, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
 
-        Assert.Contains("global::Iyu.Core.Identity.IUser", result.Write);
-        Assert.DoesNotContain("Iyu.Core.Entities.IUser", result.Write);
+        Assert.Contains("global::Sample.Contracts.IPrincipal", result.Write);
+        // The renderer must not substitute a namespace of its own choosing.
+        Assert.DoesNotContain("Sample.Entities.IPrincipal", result.Write);
     }
 
     [Fact]
     public void Implements_Multiple_Interfaces_All_Appended()
     {
         var model = ModelWith("Account",
-            Attr("implements", "Iyu.Core.Identity.IUser", "Ns.IAudited"));
+            Attr("implements", "Sample.Contracts.IPrincipal", "Ns.IAudited"));
 
         var result = EntityPairRenderer.Render(model, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
 
-        Assert.Contains("global::Iyu.Core.Identity.IUser", result.Write);
+        Assert.Contains("global::Sample.Contracts.IPrincipal", result.Write);
         Assert.Contains("global::Ns.IAudited", result.Write);
     }
 
@@ -84,20 +85,20 @@ public class InheritsImplementsRenderTests
 
         var result = EntityPairRenderer.Render(model, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
 
-        Assert.Contains(": global::Iyu.Core.Entities.IyuEntity, IOrder", result.Write);
+        Assert.Contains(": IyuEntity, IOrder", result.Write);
         Assert.DoesNotContain("IUserMasterList", result.Write);
     }
 
     [Fact]
     public void Inherits_Overrides_Default_Base_Class()
     {
-        var model = ModelWith("User", Attr("inherits", "Iyu.Core.Identity.IyuUser"));
+        var model = ModelWith("User", Attr("inherits", "Sample.Contracts.PrincipalBase"));
 
         var result = EntityPairRenderer.Render(model, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
 
         // Base class replaced; default IyuEntity no longer present as base.
-        Assert.Contains("public partial class User : global::Iyu.Core.Identity.IyuUser, IUser", result.Write);
-        Assert.DoesNotContain("Iyu.Core.Entities.IyuEntity", result.Write);
+        Assert.Contains("public partial class User : global::Sample.Contracts.PrincipalBase, IUser", result.Write);
+        Assert.DoesNotContain(": IyuEntity,", result.Write);
     }
 
     [Fact]
@@ -107,30 +108,30 @@ public class InheritsImplementsRenderTests
 
         var result = EntityPairRenderer.Render(model, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
 
-        Assert.Contains("public partial class Order : global::Iyu.Core.Entities.IyuEntity, IOrder", result.Write);
+        Assert.Contains("public partial class Order : IyuEntity, IOrder", result.Write);
     }
 
     [Fact]
     public void Inherits_And_Implements_Combined()
     {
         var model = ModelWith("User",
-            Attr("inherits", "Iyu.Core.Identity.IyuUser"),
-            Attr("implements", "Iyu.Core.Identity.IUser"));
+            Attr("inherits", "Sample.Contracts.PrincipalBase"),
+            Attr("implements", "Sample.Contracts.IPrincipal"));
 
         var result = EntityPairRenderer.Render(model, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
 
         Assert.Contains(
-            "public partial class User : global::Iyu.Core.Identity.IyuUser, IUser, global::Iyu.Core.Identity.IUser",
+            "public partial class User : global::Sample.Contracts.PrincipalBase, IUser, global::Sample.Contracts.IPrincipal",
             result.Write);
     }
 
     [Fact]
     public void Inherits_Applies_To_Ext_Read_Class_Too()
     {
-        var model = ModelWith("User", Attr("inherits", "Iyu.Core.Identity.IyuUser"));
+        var model = ModelWith("User", Attr("inherits", "Sample.Contracts.PrincipalBase"));
 
         var result = EntityPairRenderer.Render(model, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
 
-        Assert.Contains("public partial class UserExt : global::Iyu.Core.Identity.IyuUser, IUser", result.Read);
+        Assert.Contains("public partial class UserExt : global::Sample.Contracts.PrincipalBase, IUser", result.Read);
     }
 }

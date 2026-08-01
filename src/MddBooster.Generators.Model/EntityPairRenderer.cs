@@ -14,7 +14,7 @@ namespace MddBooster.Generators.Model;
 /// </summary>
 /// <remarks>
 /// The <c>id</c> field (attributed <c>@pk</c>) is elided because
-/// <see cref="global::Iyu.Core.Entities.IyuEntity"/> already provides it. All
+/// <see cref="IyuEntity"/> already provides it. All
 /// other stored fields are rendered on both classes and declared in the
 /// interface — read-only for the interface contract, get/set for the classes.
 /// <para>
@@ -148,7 +148,7 @@ public static class EntityPairRenderer
             .Select(AttributeArgString)
             .FirstOrDefault(s => !string.IsNullOrEmpty(s));
         var baseClass = string.IsNullOrEmpty(inheritsFqn)
-            ? "global::Iyu.Core.Entities.IyuEntity"
+            ? "IyuEntity"
             : $"global::{inheritsFqn}";
 
         var sb = new StringBuilder();
@@ -255,14 +255,14 @@ public static class EntityPairRenderer
         var referenceTarget = GetAttributeFirstParam(f, "reference");
         if (!string.IsNullOrEmpty(referenceTarget))
         {
-            sb.Append("    [global::Iyu.Core.Attributes.Reference(\"")
+            sb.Append("    [Reference(\"")
               .Append(referenceTarget).AppendLine("\")]");
         }
 
         // [Binding("Entity", "Column")] — # Entity.Column 바인딩
         if (f.Binding is not null)
         {
-            sb.Append("    [global::Iyu.Core.Attributes.Binding(\"")
+            sb.Append("    [Binding(\"")
               .Append(f.Binding.Entity).Append("\", \"")
               .Append(f.Binding.Column).AppendLine("\")]");
         }
@@ -275,12 +275,12 @@ public static class EntityPairRenderer
                 var lookupArg = GetAttributeFirstParam(f, "lookup")
                     ?? f.Lookup?.Path
                     ?? string.Empty;
-                sb.Append("    [global::Iyu.Core.Attributes.Lookup(\"")
+                sb.Append("    [Lookup(\"")
                   .Append(EscapeStringLiteral(lookupArg)).AppendLine("\")]");
                 break;
             case FieldKind.Rollup:
                 var rollupExpr = GetRollupExpression(f);
-                sb.Append("    [global::Iyu.Core.Attributes.Rollup(\"")
+                sb.Append("    [Rollup(\"")
                   .Append(EscapeStringLiteral(rollupExpr)).Append('"');
                 if (HasAttribute(f, "indexed"))
                     sb.Append(", Indexed = true");
@@ -293,7 +293,7 @@ public static class EntityPairRenderer
                 // Strip surrounding backticks that M3L uses to fence expressions
                 if (computedExpr.Length >= 2 && computedExpr.StartsWith('`') && computedExpr.EndsWith('`'))
                     computedExpr = computedExpr[1..^1];
-                sb.Append("    [global::Iyu.Core.Attributes.Computed(\"")
+                sb.Append("    [Computed(\"")
                   .Append(EscapeStringLiteral(computedExpr)).AppendLine("\")]");
                 break;
         }
@@ -301,8 +301,9 @@ public static class EntityPairRenderer
         // Validation attributes — the constraints the model already declares,
         // carried to the C# entity so the API surface enforces them instead of
         // letting a violation reach the database and come back as a raw provider
-        // error. They read the same sources the SQL column does (field
-        // nullability and the `string(n)` bound), so the two targets cannot drift.
+        // error. They read the same sources the SQL column does — field
+        // nullability, and the field's effective length bound — so the two
+        // targets cannot drift.
         //
         // Stored fields only: Lookup/Rollup/Computed properties are populated by
         // the view and a caller never supplies them. `[Required]` on one would
@@ -317,10 +318,13 @@ public static class EntityPairRenderer
             if (!f.Nullable && CSharpTypeMapper.IsReferenceType(f.Type!))
                 sb.AppendLine("    [Required]");
 
-            // [StringLength(n)] — the bound declared by `string(n)`, the same
-            // value the SQL column's varchar(n) uses. Independent of nullability:
-            // an optional `string(50)?` is still bounded at 50.
-            if (MddBooster.Core.Ast.FieldAttributes.StringMaxLength(f) is { } maxLength)
+            // [StringLength(n)] — the bound the field actually carries, which is
+            // the number the SQL column is sized with. A bound can be written
+            // down (`string(50)`) or implied by the type (`email`); reading only
+            // the written one is how a column came to be narrower than the
+            // attribute guarding writes to it. Independent of nullability: an
+            // optional `string(50)?` is still bounded at 50.
+            if (MddBooster.Core.Ast.FieldAttributes.EffectiveMaxLength(f) is { } maxLength)
                 sb.Append("    [StringLength(").Append(maxLength).AppendLine(")]");
         }
 

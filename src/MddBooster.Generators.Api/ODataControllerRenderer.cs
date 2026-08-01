@@ -50,10 +50,10 @@ public static class ODataControllerRenderer
             var setName = Pluralizer.Pluralize(entity);
 
             sb.Append("public sealed partial class ").Append(setName).AppendLine("Controller");
-            sb.Append("    : global::Iyu.Server.OData.IyuODataController<")
+            sb.Append("    : IyuODataController<")
               .Append(entity).Append("Ext, ").Append(entity).AppendLine(">");
             sb.AppendLine("{");
-            sb.Append("    public ").Append(setName).AppendLine("Controller(global::Iyu.Data.IyuDbContext context)");
+            sb.Append("    public ").Append(setName).AppendLine("Controller(IyuDbContext context)");
             sb.AppendLine("        : base(context) { }");
             sb.AppendLine("}");
             sb.AppendLine();

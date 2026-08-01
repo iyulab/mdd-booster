@@ -33,6 +33,14 @@ public static class PgTypeMapper
             throw new ArgumentException("m3lType이 비어 있습니다.", nameof(m3lType));
         }
 
+        // Same table the other dialect reads — the implicit bound is a property
+        // of the language, so a dialect only decides how to spell it, never how
+        // wide it is.
+        if (MddBooster.Core.Types.M3lPrimitives.ImplicitMaxLengthOf(m3lType) is { } implicitMax)
+        {
+            return $"varchar({implicitMax})";
+        }
+
         var p0 = parameters is { Count: > 0 } ? parameters[0] : null;
         var p1 = parameters is { Count: > 1 } ? parameters[1] : null;
 
@@ -57,9 +65,7 @@ public static class PgTypeMapper
             "time" => "time",
             "timestamp" => "timestamptz",
             "datetime" => "timestamptz",
-            "phone" => "varchar(30)",
-            "email" => "varchar(200)",
-            "url" => "varchar(500)",
+            // phone / email / url are handled above — their bound is implicit.
             "json" => "jsonb",
             // bytea는 길이 상한 개념이 없다 — binary(n)의 길이 인자는 DDL에서 소실 (문서화된 완화)
             "binary" => "bytea",

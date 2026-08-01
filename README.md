@@ -12,8 +12,8 @@ M3L → SQL/C#/API 코드 생성기. 단일 `tables.m3l.md` 소스로 SSDT 스�
 | 타입 | 출력 | 소비자 |
 |---|---|---|
 | **Sql** | tsql(기본): `dbo/Tables_gen/{Entity}.sql`, `dbo/Views_gen/{Entity}_{full,ext}.sql`, `.sqlproj` ItemGroup 패치 · postgres: `tables_gen/{table}.sql` (snake_case, 아래 방언 절) | SSDT 프로젝트 · Schemorph |
-| **Model** | `Entity_gen/{I,}{Entity}{,Ext}.cs`, `Enum_gen/{Enum}.cs`, `DbContext_gen/{Name}.cs` (with auto-`ToView` 매핑) | C# classlib (EF Core + Iyu.Core) |
-| **Api** | `Api_gen/ApiRegistration_gen.cs` (OData + GraphQL 엔티티 페어 등록) | ASP.NET Core 서버 (iyu-framework-v5 런타임) |
+| **Model** | `Entity_gen/{I,}{Entity}{,Ext}.cs`, `Enum_gen/{Enum}.cs`, `DbContext_gen/{Name}.cs` (with auto-`ToView` 매핑) | C# classlib (EF Core + 소비앱의 런타임 패키지) |
+| **Api** | `Api_gen/ApiRegistration_gen.cs` (OData + GraphQL 엔티티 페어 등록) | ASP.NET Core 서버 (OData/GraphQL 런타임) |
 
 ## 사용법
 
@@ -190,7 +190,7 @@ mdd build ./mdd   # mdd.json 이 있는 디렉터리 — 생략하면 현재 디
 |---|---|
 | Primitive 타입 18종 (identifier/string/decimal/phone/email/...) | ✅ |
 | Enum (C# enum + `[EnumMember]`; SQL CHECK는 `emitEnumCheckConstraints` opt-in) | ✅ |
-| `phone`/`email`/`url` → 검증 문자열 (plain `string`, `NVARCHAR(30/200/500)`). **값객체 매핑 아님** — `ODataConventionModelBuilder`가 값객체 struct를 EDM 복합 타입으로 등록하지 못해 직렬화가 깨지기 때문. 데이터 계층(`Iyu.Data`)엔 값객체 `ValueConverter`가 있으므로 막힌 지점은 OData 직렬화 계층 한정 | ✅ |
+| `phone`/`email`/`url` → 검증 문자열 (plain `string`, `NVARCHAR(30/320/2048)` — 상한은 언어 명세 §10.4.2가 정한다. `phone`만 명세의 20 대신 30을 쓰며 그 이탈은 코드에 기록돼 있다). **값객체 struct 매핑 아님** — `ODataConventionModelBuilder`가 값객체 struct를 EDM 복합 타입으로 등록하지 못해 직렬화가 깨지기 때문. 막힌 지점은 OData 직렬화 계층 한정이라 데이터 계층에서의 변환은 자유롭다 | ✅ |
 | `@reference(Target)` → SQL FK + C# `[Reference]` 속성 | ✅ |
 | `@unique` (단일 컬럼) | ✅ |
 | `@lookup(fk.col)` → `_full` 뷰 LEFT JOIN + `[Lookup]` 속성 | ✅ |
@@ -213,6 +213,7 @@ mdd build ./mdd   # mdd.json 이 있는 디렉터리 — 생략하면 현재 디
 |---|---|---|
 | 널 허용하지 않는 참조형 필드 | `[Required]` | `string`/`text`/`json`/`phone`/`email`/`url`/`binary`. 값형(숫자·시간·`Guid`·enum)은 CLR이 이미 널을 허용하지 않으므로 제외 |
 | `string(n)` | `[StringLength(n)]` | **널 허용 여부와 무관** — `string(50)?` 도 상한 50을 갖는다 |
+| `phone`·`email`·`url` | `[StringLength(n)]` | 상한이 **선언이 아니라 타입**에서 온다(명세 §10.4.2 — 30/320/2048). 컬럼·엔티티·필드 스키마·생성 폼이 같은 `n` 을 쓴다 |
 | `= <value>` | 속성 초기화자 | `= true;` · `= 3;` · `= "NEW";` · `= 0.5m;` · `= Status.Draft;` |
 
 기준은 `@not_null` 을 적었는지가 **아니라 필드가 실제로 널을 허용하는지**다. `- name: string(50)`
@@ -289,7 +290,8 @@ export function enumToOptions(labels: Record<string, string>): /* USelect의 opt
 | 정수 타입 (`integer`/`long`/`short`/`byte`), `decimal(p,0)` | `UInput type="number"` | `step` 미방출 — HTML 기본값 1이 정확히 맞다 |
 | `float` / `double` | `UInput type="number"` | **알려진 한계**: `step` 미방출이라 **소수 입력이 막힌다**. 정답인 `step="any"`를 `step?: number` 계약이 담지 못한다(아래) |
 | `string(n)` | `UInput maxlength={n}` | SQL `NVARCHAR(n)`의 상한을 UI로 앞당긴다. 저장된 값은 이미 n 이내이므로 기존 값을 무효화하지 않는다 |
-| `string`(무파라미터) · `phone`·`email`·`url` | `UInput` | 무파라미터 `string`은 `NVARCHAR(MAX)`라 상한이 없다. `phone`/`email`/`url`의 상한(30/200/500)은 **모델이 아니라 생성기 관례**라 UI로 방출하지 않는다 |
+| `phone`·`email`·`url` | `UInput maxlength={n}` | 상한이 **선언이 아니라 타입**에서 온다(명세 §10.4.2 — 30/320/2048). `string(n)`과 같은 자리에 같은 값으로 방출된다. **길이 축 한정** — 형식 검증(`type="email"` 등)은 앱 계층 몫이라 컨트롤은 평문 입력 그대로다 |
+| `string`(무파라미터) | `UInput` | `NVARCHAR(MAX)`라 상한이 없다 — 방출할 것이 없다 |
 | `@reference` FK · `@slot` | **슬롯 자리표시자** | 호출부가 내용을 주입 |
 
 > **`step`은 선택 옵션이 아니다.** `<input type="number">`의 `step` 기본값은 1이라, 없으면

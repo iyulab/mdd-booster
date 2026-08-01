@@ -8,14 +8,16 @@ namespace MddBooster.Generators.Model;
 /// <c>NVARCHAR(30)</c> and the C# <c>string</c>.
 /// </summary>
 /// <remarks>
-/// The M3L "value object" primitives (<c>phone</c>/<c>email</c>/<c>url</c>) are
-/// intentionally mapped to plain <c>string</c> — <em>not</em> to
-/// <c>Iyu.Core.ValueObjects</c> types. <c>ODataConventionModelBuilder</c> cannot
-/// register value-object structs as EDM complex types, which breaks OData
-/// serialization (connection reset). The field still emits its
-/// <c>NVARCHAR(30/200/500)</c> SQL shape; format validation lives at the
-/// application layer. (<c>Iyu.Data</c> ships value-object <c>ValueConverter</c>s,
-/// so the blocked boundary is specifically the OData serialization layer.)
+/// The semantic string types (<c>phone</c>/<c>email</c>/<c>url</c>) are
+/// intentionally mapped to plain <c>string</c> rather than to a dedicated
+/// value-object struct. A struct would be the more expressive C# type, but
+/// <c>ODataConventionModelBuilder</c> cannot register one as an EDM complex
+/// type, and an entity carrying one fails to serialize — the connection resets
+/// rather than returning an error, which is a poor thing to hand a consumer.
+/// The bound each type carries still reaches the column and the entity's
+/// validation attribute; format validation is left to the application layer.
+/// The obstacle is specific to the OData serialization boundary, so a data
+/// layer is free to convert these values on the way to storage.
 /// </remarks>
 public static class CSharpTypeMapper
 {

@@ -15,7 +15,7 @@ namespace MddBooster.Generators.Api;
 /// <remarks>
 /// The generated method signature is:
 /// <code>
-/// public static void RegisterGeneratedEntities(global::Iyu.MainServer.IyuMainServerOptions options)
+/// public static void RegisterGeneratedEntities(IyuMainServerOptions options)
 /// </code>
 /// For every model <c>Order</c>, the method body emits two lines:
 /// <code>
@@ -54,7 +54,7 @@ public static class ApiRegistrationRenderer
         sb.AppendLine("public static partial class ApiRegistration");
         sb.AppendLine("{");
         sb.Append("    public static void ").Append(methodName)
-          .AppendLine("(global::Iyu.MainServer.IyuMainServerOptions options)");
+          .AppendLine("(IyuMainServerOptions options)");
         sb.AppendLine("    {");
 
         foreach (var model in models.OrderBy(m => m.Name, StringComparer.Ordinal))

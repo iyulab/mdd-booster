@@ -21,9 +21,6 @@ public class PgTypeMapperTests
     [InlineData("time", null, "time")]
     [InlineData("timestamp", null, "timestamptz")]
     [InlineData("datetime", null, "timestamptz")]
-    [InlineData("phone", null, "varchar(30)")]
-    [InlineData("email", null, "varchar(200)")]
-    [InlineData("url", null, "varchar(500)")]
     [InlineData("json", null, "jsonb")]
     [InlineData("binary", null, "bytea")]
     [InlineData("string", "30", "varchar(30)")]
@@ -31,6 +28,23 @@ public class PgTypeMapperTests
     {
         var actual = PgTypeMapper.Map(m3lType, param is null ? null : new List<string> { param });
         Assert.Equal(expected, actual);
+    }
+
+    /// <summary>
+    /// A dialect chooses how to spell the bound, never how wide it is — the
+    /// width belongs to the language and reaches both dialects, and the entity,
+    /// from one table. See the SQL Server counterpart for why this asserts the
+    /// wiring instead of a literal.
+    /// </summary>
+    [Theory]
+    [InlineData("phone")]
+    [InlineData("email")]
+    [InlineData("url")]
+    public void Map_SemanticType_TakesItsBoundFromTheSharedTable(string m3lType)
+    {
+        var expected = MddBooster.Core.Types.M3lPrimitives.ImplicitMaxLength[m3lType];
+
+        Assert.Equal($"varchar({expected})", PgTypeMapper.Map(m3lType, null));
     }
 
     [Fact]

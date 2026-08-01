@@ -17,7 +17,7 @@ public class ReferenceAttributeTests
 
         var rendered = EntityPairRenderer.Render(resolved, "Test.Entities");
 
-        Assert.Contains("[global::Iyu.Core.Attributes.Reference(\"Customer\")]", rendered.Write);
+        Assert.Contains("[Reference(\"Customer\")]", rendered.Write);
         Assert.Contains("public Guid CustomerId", rendered.Write);
     }
 

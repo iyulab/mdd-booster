@@ -79,9 +79,9 @@ public class BuildCommandFullFixtureTests
             // OrderExt.cs contains all derived fields with their attributes
             var orderExt = File.ReadAllText(Path.Combine(modelDir, "Entity_gen", "OrderExt.cs"));
             Assert.Contains("public string CustomerName", orderExt);
-            Assert.Contains("[global::Iyu.Core.Attributes.Lookup", orderExt);
-            Assert.Contains("[global::Iyu.Core.Attributes.Rollup", orderExt);
-            Assert.Contains("[global::Iyu.Core.Attributes.Computed", orderExt);
+            Assert.Contains("[Lookup", orderExt);
+            Assert.Contains("[Rollup", orderExt);
+            Assert.Contains("[Computed", orderExt);
             Assert.Contains("Indexed = true", orderExt);
 
             // ApiRegistration emits a line for every entity
@@ -104,6 +104,22 @@ public class BuildCommandFullFixtureTests
                     .Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error).ToList();
                 Assert.True(errors.Count == 0,
                     $"Syntax errors in {Path.GetFileName(cs)}: {string.Join("; ", errors.Select(d => d.GetMessage()))}\n---\n{src}");
+
+                // Generated code names the types it uses and leaves resolving
+                // them to the consuming project. Writing a namespace into the
+                // output would put knowledge of somebody else's package layout
+                // into this generator, and would survive a rename there as a
+                // build break here. The model can still supply a fully
+                // qualified name of its own (@implements / @inherits) — this
+                // fixture declares none, so anything left is the generator's.
+                var selfQualified = src.Split('\n')
+                    .Select(l => l.Trim())
+                    .Where(l => l.Contains("global::", StringComparison.Ordinal))
+                    .Where(l => !l.Contains("global::System.", StringComparison.Ordinal))
+                    .ToList();
+                Assert.True(selfQualified.Count == 0,
+                    $"{Path.GetFileName(cs)} qualifies a name the generator should have left simple: "
+                    + string.Join(" | ", selfQualified));
             }
         }
         finally

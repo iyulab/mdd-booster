@@ -245,6 +245,6 @@ public class ApiRegistrationTests
         var src = ApiRegistrationRenderer.Render(models, "Test.Api");
 
         Assert.Contains("public static partial class ApiRegistration", src);
-        Assert.Contains("public static void RegisterGeneratedEntities(global::Iyu.MainServer.IyuMainServerOptions options)", src);
+        Assert.Contains("public static void RegisterGeneratedEntities(IyuMainServerOptions options)", src);
     }
 }

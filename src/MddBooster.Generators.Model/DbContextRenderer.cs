@@ -40,7 +40,7 @@ public static class DbContextRenderer
         sb.Append("namespace ").Append(ns).AppendLine(";");
         sb.AppendLine();
         sb.Append("public partial class ").Append(contextName)
-          .AppendLine(" : global::Iyu.Data.IyuDbContext");
+          .AppendLine(" : IyuDbContext");
         sb.AppendLine("{");
         sb.Append("    public ").Append(contextName)
           .Append("(DbContextOptions<").Append(contextName).AppendLine("> options)");

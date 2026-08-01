@@ -29,7 +29,7 @@ public class BindingAttributeRenderTests
 
         var result = EntityPairRenderer.Render(model, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
 
-        Assert.Contains("[global::Iyu.Core.Attributes.Binding(\"UserMasterItem\", \"Key\")]", result.Write);
+        Assert.Contains("[Binding(\"UserMasterItem\", \"Key\")]", result.Write);
     }
 
     [Fact]

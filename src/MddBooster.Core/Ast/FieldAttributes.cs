@@ -118,6 +118,32 @@ public static class FieldAttributes
             : null;
     }
 
+    /// <summary>
+    /// 필드가 실제로 지는 길이 상한 — 선언된 <c>string(n)</c>이 있으면 그것,
+    /// 없으면 타입 자체가 함의하는 상한(<c>email</c>·<c>phone</c>·<c>url</c>).
+    /// 둘 다 없으면 null.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="StringMaxLength"/>와 <b>의미가 다르므로 분리해 둔다</b>.
+    /// 전자는 "선언에 적힌 상한"이고 이것은 "필드에 실제로 걸리는 상한"이다.
+    /// 컬럼 폭과 맞춰야 하는 쪽은 언제나 후자다 — 컬럼은 <c>email</c>에도 폭을 준다.
+    /// 전자를 넓히지 않고 새로 두는 이유는, 명시 상한만 물어야 하는 자리가 생겼을 때
+    /// 되돌아갈 곳이 남아 있어야 하고, 이름이 말하는 것과 하는 일이 어긋난 판별자는
+    /// 다음 사람에게 같은 실수를 시키기 때문이다.
+    /// </para>
+    /// <para>
+    /// 이 함수가 도입되기 전에는 세 타깃이 전부 <see cref="StringMaxLength"/>를 읽었고,
+    /// 그래서 <c>(n)</c>이 적히지 않은 필드의 상한이 컬럼에만 존재했다 — API 표면과
+    /// 생성 폼은 컬럼이 거부할 값을 받아들였다.
+    /// </para>
+    /// </remarks>
+    public static int? EffectiveMaxLength(FieldNode field)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        return StringMaxLength(field) ?? Types.M3lPrimitives.ImplicitMaxLengthOf(field.Type);
+    }
+
     /// <summary>속성의 첫 문자열 인자 — 예: <c>@reference(Target)</c>의 Target. 없으면 null.</summary>
     public static string? FirstArg(FieldNode field, string name)
     {
