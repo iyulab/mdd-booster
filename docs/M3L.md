@@ -248,9 +248,32 @@ For common data patterns, M3L provides convenient shorthand types:
 - email: email @unique           # Equivalent to: string(320) with email validation
 - phone: phone                   # Equivalent to: string(20) with phone validation
 - url: url                       # Equivalent to: string(2048) with URL validation
-- money: money                   # Equivalent to: decimal(10,2)
+- money: money                   # Equivalent to: decimal(19,4), non-negative
 - percentage: percentage         # Equivalent to: decimal(5,2) with 0-100 range
 ```
+
+Each equivalence has two halves — a bound and a validation — and the language
+specification derives the bound from the *validated* form. For `email`, `url`, `money`,
+and `percentage` the bound also covers the value as written, so adopting it alone
+rejects nothing well-formed. `phone` is the exception: `string(20)` is sized for an
+E.164 value, not for the same number written with separators, a spelled-out
+international prefix, or an extension.
+
+**What this generator emits** differs from the table above in two places, and both are
+deliberate:
+
+- `phone` maps to a **30**-character bound, not 20. Narrowing an existing column is not
+  a change a generator can make on a consumer's behalf — stored values longer than the
+  new bound make a migration fail or truncate, and the generator cannot see the stored
+  data. The deviation is recorded in code and fixed by a test, and it is *wider* than
+  the specification, so no value the specification permits is refused.
+- `money` and `percentage` are **not implemented**. The SQL type mapper has no case for
+  them and raises an unsupported-type error, so a model declaring either fails the build
+  rather than generating something approximate. Write `decimal(19,4)` or `decimal(5,2)`
+  explicitly.
+
+No format validation is emitted for any of these types — the bound is the length axis
+only. A 321-character value is refused; `not-an-email` is not.
 
 #### 2.3.2 Extended Field Format (For Complex Cases Only)
 
