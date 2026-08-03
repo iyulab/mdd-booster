@@ -31,4 +31,17 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      FormControlContractRatchetTests asserts against the published consumer contract,
+      so it reads the README itself rather than a copy kept in test code. A copy would
+      reintroduce the drift the ratchet exists to prevent: the two could disagree and
+      the tests would still pass. Failing the build outright if the file moves is the
+      point — a ratchet that silently stops finding its subject asserts nothing.
+    -->
+    <None Include="..\..\README.md" Link="contract\README.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
