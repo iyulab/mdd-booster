@@ -38,9 +38,13 @@ public class ModelGeneratorE2ETests
         var dbContextSource = DbContextRenderer.Render(models, "SampleDbContext", "Sample.Entities");
         outputs.Add(("SampleDbContext.cs", dbContextSource));
 
-        // Parse each generated file as C#. We verify syntactic validity only —
-        // full semantic compilation would require binding Iyu.Core / Iyu.Data /
-        // EF Core metadata and belongs in an integration harness.
+        // Parse each generated file as C#. Syntactic validity is all this suite can
+        // assert: generated code carries simple names, so compiling it means resolving
+        // them against the runtime packages it is written for — and referencing those
+        // here would restore the very coupling the simple names removed. The check
+        // therefore belongs downstream, in a harness that already depends on that
+        // runtime and can hold the namespace declarations alongside a sample of this
+        // generator's output. Consumers hit the gap as a plain CS0246.
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);
         foreach (var (name, source) in outputs)
         {

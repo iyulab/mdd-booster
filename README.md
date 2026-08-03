@@ -269,12 +269,21 @@ mdd build ./mdd   # mdd.json 이 있는 디렉터리 — 생략하면 현재 디
 소비앱 빌드에서 컴파일되지 않는다. (mdd-booster 자체 테스트는 생성된 TS를 컴파일하지 않으므로,
 이 계약의 위반은 **소비앱 빌드에서만** 드러난다.)
 
-> **계약은 "무엇을 export 하는가"이지 "어디에 두는가"가 아니다.** 아래 소제목의 경로는
-> `formControlsImport`·`formSelectOptionsImport`·`formLayoutImport` 의 **기본값**이며
-> (0.12.0부터 설정 가능 — 위 「TypeScript 타깃 옵션」), 그 경로에 파일을 두지 않아도 된다.
+> **계약은 "무엇을 export 하는가"이지 "어디에 두는가"가 아니다.** 아래 각 절은
+> `formControlsImport`·`formSelectOptionsImport`·`formLayoutImport` 가 **가리키는 모듈**을
+> 규정한다(0.12.0부터 설정 가능 — 위 「TypeScript 타깃 옵션」). 괄호 안 경로는 그 옵션의
+> **기본값**일 뿐이며, 그 경로에 파일을 두지 않아도 된다.
 > 어디를 가리키든 **그 모듈이 아래 표면을 export 해야 한다는 요구는 그대로다.**
 
-#### `../components/ui`(기본값) — 배럴이 export해야 하는 컴포넌트
+> 🔴 **이 계약은 이름 목록이 아니라 동작 계약이다.** export 이름이 맞는 것만으로는 충족되지
+> 않는다 — 예컨대 `onChange` 로 **값이 아니라 이벤트 객체를 넘기는** 바인딩은 이름이 같아도
+> 이 계약을 만족하지 않는다. 그런 모듈을 가리키면 TS strict 에서는 컴파일이 깨지고, 느슨한
+> 설정에서는 **이벤트 객체가 폼 모델에 저장된다**(무음 데이터 오염). 그 경우 필요한 것은
+> 이름을 바꾸는 재수출이 아니라 **어댑터** — 이벤트→값 변환, 배열 `options`→자식 요소 투영,
+> 프롭 이름 번역처럼 실제 동작을 옮기는 계층이다. 웹 컴포넌트를 감싸는 통과형 바인딩
+> (`@lit/react` 계열 등)이 대표적으로 이 경우에 해당한다.
+
+#### `formControlsImport` 가 가리킬 모듈 — 폼 컨트롤 (기본값 `../components/ui`)
 
 | 컴포넌트 | 언제 import되나 | 받는 프롭 |
 |---|---|---|
@@ -296,7 +305,7 @@ mdd build ./mdd   # mdd.json 이 있는 디렉터리 — 생략하면 현재 디
   그리고 `string(n)`은 거의 모든 모델에 있으므로 **`step`보다 영향 범위가 훨씬 넓다** —
   `decimal`을 안 쓰는 소비자도 이 프롭은 거의 확실히 필요하다. 래퍼에 없으면 TS2322로 빌드가 깨진다.
 
-#### `../lib/select-options`(기본값) — 헬퍼
+#### `formSelectOptionsImport` 가 가리킬 모듈 — 헬퍼 (기본값 `../lib/select-options`)
 
 ```ts
 export function enumToOptions(labels: Record<string, string>): /* USelect의 options 타입 */
@@ -305,7 +314,7 @@ export function enumToOptions(labels: Record<string, string>): /* USelect의 opt
 (반환 타입은 소비자가 정한다). 값을 좁힐 때도 **인자를 늘리지 않고** 좁혀진 라벨맵을 따로 생성해
 넘기므로(아래 `@system` 절), 이 시그니처는 안정적이다.
 
-#### `@iyulab/enterprise`(기본값) — 레이아웃
+#### `formLayoutImport` 가 가리킬 모듈 — 레이아웃 (기본값 `@iyulab/enterprise`)
 
 `FormSection`(`title`) · `FormRow`(`full?`) 를 export해야 한다.
 

@@ -49,7 +49,11 @@ public class ValueObjectMappingTests
         Assert.Contains("string PhoneNumber { get; }", rendered.Interface);
         Assert.Contains("string? Homepage { get; }", rendered.Interface);
 
-        // Value object types must NOT appear anywhere in generated output
+        // Value object types must NOT appear anywhere in generated output.
+        // These three assertions name a runtime namespace on purpose, and naming it
+        // here is not the coupling this generator avoids elsewhere: the claim is that
+        // the string is never emitted. A rename downstream cannot break them, and
+        // deleting them would remove the guard that keeps the string out.
         Assert.DoesNotContain("Iyu.Core.ValueObjects", rendered.Write);
         Assert.DoesNotContain("Iyu.Core.ValueObjects", rendered.Read);
         Assert.DoesNotContain("Iyu.Core.ValueObjects", rendered.Interface);
