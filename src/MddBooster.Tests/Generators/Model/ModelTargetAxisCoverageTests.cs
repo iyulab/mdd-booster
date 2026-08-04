@@ -94,7 +94,7 @@ public class ModelTargetAxisCoverageTests
             ["computed_raw"] = (Disposition.UnimplementedEverywhere, "raw-expression variant of computed; only the parsed computed form is read"),
             ["label"] = (Disposition.UnimplementedEverywhere, "[Display(Name)] is taken from the field description instead"),
             ["searchable"] = (Disposition.UnimplementedEverywhere, "query-surface hint with no entity-level counterpart"),
-            ["visibility"] = (Disposition.UnimplementedEverywhere, "presentation hint with no entity-level counterpart"),
+            ["visibility"] = (Disposition.UnimplementedEverywhere, "a surface axis rather than a presentation one — it decides whether a field is emitted at all, not how it is shown. @internal records the same decision one grain coarser, over a whole entity; no target reads a per-field spelling of it. Carrying it would not be a Model-target edit on its own: the FullView SELECT list and the Ext class it backs have to drop the field in the same pass, or the mapping fails at run time"),
 
             // ---- layers the entity does not model ----
             ["generated"] = (Disposition.NotApplicable, "database-side value generation; the key it qualifies is elided"),
