@@ -82,8 +82,17 @@ public static class FullViewRenderer
             if (!joinsByFk.TryGetValue(fkField, out var join))
             {
                 var target = ResolveReferenceTarget(plan.Model, fkField);
+                // When the target model itself has derived fields (Lookup/Rollup/Computed),
+                // a chained lookup path (e.g. `fk.some_lookup_field`) can only resolve against
+                // {target}FullView — the base table doesn't carry that column. FullView is a
+                // strict superset of the base table's columns (see baseProjection above), so
+                // joining there is always safe even when every requested column is a raw one.
+                // Mirrors the same fallback RenderRollupSubquery already uses below.
+                var targetTable = (fullViewModels != null && fullViewModels.Contains(target))
+                    ? target + "FullView"
+                    : target;
                 var alias = "j_" + fkField;
-                join = new JoinInfo(TargetTable: target, FkColumn: NameCasing.ToPascalCase(fkField), Alias: alias);
+                join = new JoinInfo(TargetTable: targetTable, FkColumn: NameCasing.ToPascalCase(fkField), Alias: alias);
                 joinsByFk[fkField] = join;
             }
             lookupColumns.Add(($"{join.Alias}.[{NameCasing.ToPascalCase(targetColumn)}]", NameCasing.ToPascalCase(lookup.Name)));

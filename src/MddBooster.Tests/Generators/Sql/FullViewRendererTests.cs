@@ -49,6 +49,47 @@ public class FullViewRendererTests
     }
 
     [Fact]
+    public void Chained_lookup_through_a_lookup_field_joins_the_targets_full_view()
+    {
+        // `Order.customer_id.name` is a raw column on Customer, so the join targets the base
+        // table. But when the chained path's second hop is itself a Lookup field (only
+        // projected on {Target}FullView, not the base table), joining to the base table
+        // produces a column reference SSDT cannot resolve. The join must target the target
+        // model's FullView instead — the same fallback rollup subqueries already use.
+        var tmp = WriteInlineM3l(
+            "## Region\n" +
+            "- id: identifier @pk @generated\n" +
+            "- name: string(50) @not_null\n\n" +
+            "## Customer\n" +
+            "- id: identifier @pk @generated\n" +
+            "- region_id: identifier @reference(Region) @not_null\n\n" +
+            "### Lookup\n" +
+            "- region_name: string @lookup(region_id.name)\n\n" +
+            "## Order\n" +
+            "- id: identifier @pk @generated\n" +
+            "- customer_id: identifier @reference(Customer) @not_null\n\n" +
+            "### Lookup\n" +
+            "- region_name: string @lookup(customer_id.region_name)\n");
+        try
+        {
+            var ast = new M3lLoader().LoadFile(tmp);
+            var models = new InterfaceResolver(ast).ResolveAll();
+            var order = models.Single(m => m.Name == "Order");
+            var planner = new ViewPlanner();
+            var fullViewModels = new HashSet<string>(
+                models.Select(planner.Plan).Where(p => p.NeedsFullView).Select(p => p.Model.Name));
+            var plan = planner.Plan(order);
+
+            var sql = FullViewRenderer.Render(plan, "dbo", fullViewModels);
+
+            Assert.Contains("LEFT JOIN [dbo].[CustomerFullView] AS j_customer_id", sql);
+            Assert.DoesNotContain("LEFT JOIN [dbo].[Customer] AS j_customer_id", sql);
+            Assert.Contains("j_customer_id.[RegionName] AS [RegionName]", sql);
+        }
+        finally { File.Delete(tmp); }
+    }
+
+    [Fact]
     public void Two_lookups_on_same_fk_produce_one_join()
     {
         var ast = new M3lLoader().LoadFile(FixturePath("order-with-derived.m3l.md"));
