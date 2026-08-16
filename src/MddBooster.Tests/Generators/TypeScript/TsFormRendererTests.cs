@@ -464,4 +464,19 @@ public class TsFormRendererTests
 
         Assert.Contains($"export function {expectedFn}(", content);
     }
+
+    // --- slot placeholder label — JSX text-node safety --------------------------
+
+    [Fact]
+    public void Slot_placeholder_label_containing_braces_does_not_break_out_of_jsx_text()
+    {
+        // A label with `{`/`}` used to land unescaped in JSX text position, so the generated
+        // .tsx failed to parse (the braces were read as a JSX expression container). The label
+        // must render as a JS string literal instead, which is safe in that position.
+        var models = LoadFixture("slot-label-with-braces.m3l.md");
+        var content = TsFormRenderer.RenderAll(models, [], TestImports)["Item"];
+
+        Assert.Contains("\"분류 목록 [{a, b}] slot\"", content);
+        Assert.DoesNotContain("{a, b}] slot</span>", content);
+    }
 }
