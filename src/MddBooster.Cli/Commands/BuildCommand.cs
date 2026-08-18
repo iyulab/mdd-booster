@@ -250,7 +250,7 @@ public sealed class BuildCommand
                     EmitSqlProj = target.EmitSqlProj ?? true,
                     EmitRefreshScript = target.EmitRefreshScript ?? true,
                     EmitEnumCheckConstraints = target.EmitEnumCheckConstraints ?? false,
-                    EmitForeignKeyIndexes = target.EmitForeignKeyIndexes ?? false,
+                    EmitForeignKeyIndexes = target.EmitForeignKeyIndexes ?? true,
                 });
 
             case "postgres" or "postgresql" or "pg":
@@ -270,7 +270,7 @@ public sealed class BuildCommand
                         ProjectPath = target.ProjectPath,
                         Schema = target.Schema ?? "public",
                         EmitEnumCheckConstraints = target.EmitEnumCheckConstraints ?? false,
-                        EmitForeignKeyIndexes = target.EmitForeignKeyIndexes ?? false,
+                        EmitForeignKeyIndexes = target.EmitForeignKeyIndexes ?? true,
                     });
 
             default:
