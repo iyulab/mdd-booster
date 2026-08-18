@@ -479,4 +479,21 @@ public class TsFormRendererTests
         Assert.Contains("\"분류 목록 [{a, b}] slot\"", content);
         Assert.DoesNotContain("{a, b}] slot</span>", content);
     }
+
+    // --- enum field default — must stay a member of the (wire-form) union type --
+
+    [Fact]
+    public void Empty_state_literal_for_a_defaulted_enum_field_uses_the_wire_form_not_PascalCase()
+    {
+        // TsEnumRenderer's union type is `type Status = 'draft' | 'in_production'` (the wire
+        // form, matching [EnumMember(Value=...)] on the C# side). A default's empty-state
+        // literal has to stay a member of that same union -- 'Draft' is not assignable to it,
+        // even though EntityPairRenderer legitimately uses the PascalCase *member expression*
+        // (Status.Draft) for the same default on the C# side, a different literal form entirely.
+        var models = LoadFixture("enum-field-default.m3l.md");
+        var content = TsFormRenderer.RenderAll(models, NamedEnums("Status"), TestImports)["Widget"];
+
+        Assert.Contains("Status: 'draft'", content);
+        Assert.DoesNotContain("Status: 'Draft'", content);
+    }
 }

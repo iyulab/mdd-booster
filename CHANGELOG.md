@@ -24,13 +24,20 @@ PascalCase로 변환해 방출하고 있었다 — C# 생성기(`Enum_gen/*.cs`)
 TS 생성기가 C#과 같은 wire-이름 해석(멤버 선언 그대로)을 쓰도록 고쳤다 — 두 산출물이 같은
 enum 선언에서 항상 같은 wire 계약을 가리킨다.
 
+같은 원인이 폼 생성기에도 있었다: `@default(...)`가 붙은 enum 필드의 빈 상태 초기값
+(`empty{Entity}` 상수)이 default 값을 PascalCase로 바꿔 넣고 있었다 — union 타입 자체가
+wire 이름으로 바뀌면 그 리터럴은 더 이상 타입의 멤버가 아니게 되어 `tsc` 오류가 난다. 같은
+default가 C# 쪽에서 PascalCase 멤버 표현식(`Status.Draft`)으로 옳게 렌더링되는 것과는 다른
+자리 — TS 쪽은 멤버 표현식이 아니라 리터럴이므로 wire 이름 그대로 써야 한다.
+
 ### 파괴적 변경 — 재생성 시 TS 산출물 값이 바뀐다
 
-`enums_gen.ts`의 union 리터럴과 `enum_labels_gen.ts`의 객체 키·`Exclude<>` 타입 인자가 CLR
-스타일(`'InProduction'`)에서 M3L 원문(`'in_production'`)으로 바뀐다. 라벨 텍스트 자체(사람이
-읽는 문자열)는 바뀌지 않는다 — description이 없는 값의 표시 폴백만 그대로 PascalCase를 쓴다.
-이 값을 문자열 비교하는 소비앱 코드(예: `status === 'InProduction'`)는 재생성 후 갱신이
-필요하다 — 서버가 `[EnumMember]`를 따르는 한, 새 값이 실제 wire 계약과 일치한다.
+`enums_gen.ts`의 union 리터럴, `enum_labels_gen.ts`의 객체 키·`Exclude<>` 타입 인자, 그리고
+`@default(...)`가 붙은 enum 필드의 폼 빈 상태 초기값이 CLR 스타일(`'InProduction'`)에서
+M3L 원문(`'in_production'`)으로 바뀐다. 라벨 텍스트 자체(사람이 읽는 문자열)는 바뀌지 않는다
+— description이 없는 값의 표시 폴백만 그대로 PascalCase를 쓴다. 이 값을 문자열 비교하는
+소비앱 코드(예: `status === 'InProduction'`)는 재생성 후 갱신이 필요하다 — 서버가
+`[EnumMember]`를 따르는 한, 새 값이 실제 wire 계약과 일치한다.
 
 ## 0.13.1
 

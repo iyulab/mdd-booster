@@ -389,7 +389,11 @@ public static class TsFormRenderer
         var isBool = string.Equals(t, "boolean", StringComparison.OrdinalIgnoreCase);
         if (!string.IsNullOrEmpty(def))
         {
-            if (isEnum) return $"'{NameCasing.ToPascalCase(def!)}'";
+            // Enum defaults arrive as the bare wire-form member name (the parser strips the
+            // quotes) — the same spelling TsEnumRenderer now uses for the union's own literal
+            // members, so this must stay a member of that type, not the PascalCase C# member
+            // expression EntityPairRenderer emits for the same default on the model side.
+            if (isEnum) return $"'{def}'";
             if (isBool) return def!;            // "true" / "false"
             if (IsNumberType(t)) return def!;   // numeric literal
             return $"'{def}'";                  // string default
