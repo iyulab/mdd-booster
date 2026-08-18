@@ -17,15 +17,29 @@ public class TsEnumLabelsRendererTests
         var result = TsEnumLabelsRenderer.RenderAll(ast.Enums);
 
         Assert.Contains("export const OrderStatusLabels: Record<OrderStatus, string> = {", result);
-        Assert.Contains("  Draft: '작성중',", result);
-        Assert.Contains("  Confirmed: '확정',", result);
-        Assert.Contains("  InProduction: '생산중',", result);
-        Assert.Contains("  Shipped: '배송됨',", result);
-        Assert.Contains("  Cancelled: '취소됨',", result);
+        Assert.Contains("  draft: '작성중',", result);
+        Assert.Contains("  confirmed: '확정',", result);
+        Assert.Contains("  in_production: '생산중',", result);
+        Assert.Contains("  shipped: '배송됨',", result);
+        Assert.Contains("  cancelled: '취소됨',", result);
     }
 
     [Fact]
-    public void Renders_pascalcase_key_as_fallback_when_value_has_no_description()
+    public void Keys_the_map_by_the_wire_name_not_the_CLR_member_name()
+    {
+        // The wire name is what a server that honors [EnumMember(Value=...)] actually
+        // serializes/deserializes — the map must index by that, not by the PascalCase
+        // C# member name (`EnumRenderer` renders the latter separately in Enum_gen).
+        var ast = LoadFixture("order-with-enum.m3l.md");
+
+        var result = TsEnumLabelsRenderer.RenderAll(ast.Enums);
+
+        Assert.DoesNotContain("Draft:", result);
+        Assert.DoesNotContain("InProduction:", result);
+    }
+
+    [Fact]
+    public void Renders_pascalcase_label_as_fallback_when_value_has_no_description()
     {
         var ast = new M3lAst
         {
@@ -45,8 +59,10 @@ public class TsEnumLabelsRendererTests
 
         var result = TsEnumLabelsRenderer.RenderAll(ast.Enums);
 
-        Assert.Contains("  Up: 'Up',", result);
-        Assert.Contains("  Down: 'Down',", result);
+        // Key is the wire name (matches the OrderStatus-style union member); only the
+        // display label falls back to a PascalCase rendering when no description exists.
+        Assert.Contains("  up: 'Up',", result);
+        Assert.Contains("  down: 'Down',", result);
     }
 
     [Fact]
@@ -112,7 +128,7 @@ public class TsEnumLabelsRendererTests
 
         var result = TsEnumLabelsRenderer.RenderAll(ast.Enums);
 
-        Assert.Contains("  Special: '고객\\'s 주문',", result);
+        Assert.Contains("  special: '고객\\'s 주문',", result);
     }
 
     [Fact]
@@ -151,7 +167,7 @@ public class TsEnumLabelsRendererTests
 
         // Existing rows holding this value must still render their label.
         Assert.Contains("export const PaymentMethodLabels: Record<PaymentMethod, string> = {", result);
-        Assert.Contains("  LegacyCarryover: '레거시 이관 정리',", result);
+        Assert.Contains("  legacy_carryover: '레거시 이관 정리',", result);
     }
 
     [Fact]
@@ -162,16 +178,16 @@ public class TsEnumLabelsRendererTests
         var result = TsEnumLabelsRenderer.RenderAll(ast.Enums);
 
         Assert.Contains(
-            "export const PaymentMethodSelectableLabels: Record<Exclude<PaymentMethod, 'LegacyCarryover'>, string> = {",
+            "export const PaymentMethodSelectableLabels: Record<Exclude<PaymentMethod, 'legacy_carryover'>, string> = {",
             result);
-        Assert.Contains("  Cash: '현금',", result);
+        Assert.Contains("  cash: '현금',", result);
         // The system value is absent from the entries — it appears only inside the
         // Exclude<> type expression, which is what performs the exclusion.
         var body = result.Replace("\r\n", "\n");
         var selectableBody = body[body.IndexOf(">, string> = {", body.IndexOf("PaymentMethodSelectableLabels", StringComparison.Ordinal), StringComparison.Ordinal)..];
         selectableBody = selectableBody[..selectableBody.IndexOf("} as const", StringComparison.Ordinal)];
-        Assert.DoesNotContain("LegacyCarryover", selectableBody);
-        Assert.Contains("Card:", selectableBody);
+        Assert.DoesNotContain("legacy_carryover", selectableBody);
+        Assert.Contains("card:", selectableBody);
     }
 
     [Fact]

@@ -16,6 +16,14 @@ namespace MddBooster.Generators.TypeScript;
 /// M3L:  <c>## OrderStatus ::enum  - draft: "초안"  - confirmed: "확정"</c>
 /// TS:   <c>export type OrderStatus = 'draft' | 'confirmed'</c>
 /// </example>
+/// <para>
+/// The literal values are the M3L member names as declared (e.g. <c>draft</c>,
+/// <c>in_production</c>) — the same wire form the C# generator carries via
+/// <c>[EnumMember(Value = "...")]</c> (see <c>EnumRenderer</c>), not the
+/// PascalCase CLR member name. A server whose EDM/JSON layers honor
+/// <c>[EnumMember]</c> serializes and deserializes enums using that form, so
+/// this type must agree with it by construction rather than by coincidence.
+/// </para>
 /// </remarks>
 public static class TsEnumRenderer
 {
@@ -56,9 +64,9 @@ public static class TsEnumRenderer
                     sb.Append("  ");
                     if (i > 0) sb.Append("| ");
                     else sb.Append("  ");
-                    // API serializes enum members as PascalCase C# member names (not snake_case DB values).
-                    // m3l "supplier" → C# EnumType.Supplier → JSON "Supplier"
-                    sb.Append("'").Append(NameCasing.ToPascalCase(v.Name ?? string.Empty)).Append("'");
+                    // Wire form, matching [EnumMember(Value = "...")] on the C# side (EnumRenderer):
+                    // m3l "supplier" → C# [EnumMember(Value = "supplier")] EnumType.Supplier → JSON "supplier"
+                    sb.Append("'").Append(EscapeString(v.Name ?? string.Empty)).Append("'");
                 }
                 sb.AppendLine();
             }
@@ -68,4 +76,6 @@ public static class TsEnumRenderer
 
         return sb.ToString();
     }
+
+    private static string EscapeString(string s) => s.Replace("\\", "\\\\").Replace("'", "\\'");
 }

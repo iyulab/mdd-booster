@@ -10,6 +10,28 @@
 
 ---
 
+## Unreleased
+
+### 🔴 TS enum 생성기가 wire 이름이 아니라 CLR 스타일 이름을 방출했다 (버그)
+
+`types/enums_gen.ts`의 union 리터럴과 `enum_labels_gen.ts`의 라벨/선택-맵 키가 M3L 멤버 이름을
+PascalCase로 변환해 방출하고 있었다 — C# 생성기(`Enum_gen/*.cs`)가 이미
+`[EnumMember(Value = "...")]`로 선언하는 wire 이름(M3L 원문 그대로, 예: `in_production`)과 다른 값이었다. 서버 쪽 EDM/JSON 계층이 `[EnumMember]`를 무시하는 동안에는
+두 산출물이 우연히 같은 모양(CLR 이름)으로 맞아떨어지지만, 그 계층이 `[EnumMember]`를 따르는
+순간 TS 쪽만 어긋난 값을 계속 주장하게 된다 — 같은 enum 선언의 두 생성물이 서로 다른 wire
+계약을 주장해서는 안 된다는 것이 이 수정의 근거다.
+
+TS 생성기가 C#과 같은 wire-이름 해석(멤버 선언 그대로)을 쓰도록 고쳤다 — 두 산출물이 같은
+enum 선언에서 항상 같은 wire 계약을 가리킨다.
+
+### 파괴적 변경 — 재생성 시 TS 산출물 값이 바뀐다
+
+`enums_gen.ts`의 union 리터럴과 `enum_labels_gen.ts`의 객체 키·`Exclude<>` 타입 인자가 CLR
+스타일(`'InProduction'`)에서 M3L 원문(`'in_production'`)으로 바뀐다. 라벨 텍스트 자체(사람이
+읽는 문자열)는 바뀌지 않는다 — description이 없는 값의 표시 폴백만 그대로 PascalCase를 쓴다.
+이 값을 문자열 비교하는 소비앱 코드(예: `status === 'InProduction'`)는 재생성 후 갱신이
+필요하다 — 서버가 `[EnumMember]`를 따르는 한, 새 값이 실제 wire 계약과 일치한다.
+
 ## 0.13.1
 
 ### 🔴 enum CHECK 제약(opt-in)이 apply→diff 를 영원히 수렴하지 않게 만들었다 (버그)

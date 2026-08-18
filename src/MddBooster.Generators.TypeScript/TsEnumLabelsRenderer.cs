@@ -11,8 +11,14 @@ namespace MddBooster.Generators.TypeScript;
 /// <remarks>
 /// <example>
 /// M3L:  <c>## OrderStatus ::enum  - draft: "작성중"</c>
-/// TS:   <c>export const OrderStatusLabels: Record&lt;OrderStatus, string&gt; = { Draft: '작성중' } as const</c>
+/// TS:   <c>export const OrderStatusLabels: Record&lt;OrderStatus, string&gt; = { draft: '작성중' } as const</c>
 /// </example>
+/// <para>
+/// Keys are the M3L member names as declared (the same wire form
+/// <c>TsEnumRenderer</c> uses for the <c>OrderStatus</c> union members), not
+/// PascalCase — the map must index by the same values the type it is
+/// <c>Record&lt;&gt;</c>-keyed on actually holds.
+/// </para>
 /// </remarks>
 public static class TsEnumLabelsRenderer
 {
@@ -58,10 +64,10 @@ public static class TsEnumLabelsRenderer
 
             foreach (var v in enumNode.Values)
             {
-                var key = NameCasing.ToPascalCase(v.Name ?? string.Empty);
+                var key = v.Name ?? string.Empty;
                 var label = !string.IsNullOrWhiteSpace(v.Description)
                     ? v.Description
-                    : key;
+                    : NameCasing.ToPascalCase(key);
                 // Escape single quotes inside label
                 var escaped = label.Replace("\\", "\\\\").Replace("'", "\\'");
                 sb.Append("  ").Append(key).Append(": '").Append(escaped).AppendLine("',");
@@ -96,7 +102,7 @@ public static class TsEnumLabelsRenderer
 
         var excluded = enumNode.Values
             .Where(EnumValueVisibility.IsSystemValue)
-            .Select(v => "'" + NameCasing.ToPascalCase(v.Name ?? string.Empty) + "'")
+            .Select(v => "'" + (v.Name ?? string.Empty) + "'")
             .ToList();
 
         sb.AppendLine("/** Input choices — excludes values marked @system in the model. */");
@@ -106,8 +112,8 @@ public static class TsEnumLabelsRenderer
 
         foreach (var v in enumNode.Values.Where(v => !EnumValueVisibility.IsSystemValue(v)))
         {
-            var key = NameCasing.ToPascalCase(v.Name ?? string.Empty);
-            var label = !string.IsNullOrWhiteSpace(v.Description) ? v.Description : key;
+            var key = v.Name ?? string.Empty;
+            var label = !string.IsNullOrWhiteSpace(v.Description) ? v.Description : NameCasing.ToPascalCase(key);
             var escaped = label.Replace("\\", "\\\\").Replace("'", "\\'");
             sb.Append("  ").Append(key).Append(": '").Append(escaped).AppendLine("',");
         }
