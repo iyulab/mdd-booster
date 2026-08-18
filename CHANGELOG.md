@@ -10,6 +10,34 @@
 
 ---
 
+## 0.13.1
+
+### 🔴 enum CHECK 제약(opt-in)이 apply→diff 를 영원히 수렴하지 않게 만들었다 (버그)
+
+`emitEnumCheckConstraints` 는 처음 나온 순간부터 이 문제 때문에 기본 off 였다. 근본 원인을
+라이브 SQL Server 로 실측했다: **SQL Server 는 `CHECK (col IN (v1, v2, …))` 를 문자 그대로
+저장하지 않는다** — 제약이 만들어지는 순간 **역순 OR 체인**으로 다시 쓴다
+(`sys.check_constraints.definition` 이 `CHECK (col IN (a, b))` 를
+`([col]=b OR [col]=a)` 로 돌려준다. 값이 하나면 그냥 `=` 로 접힌다). 선언형 비교 도구가
+그 라이브 정의를 우리 `IN (…)` 원본과 비교하면 **영원히 다른 모양으로 보여**, 몇 번을
+apply 해도 재-diff 가 수렴하지 않았다.
+
+생성기가 처음부터 SQL Server 가 실제로 저장하는 모양(역순 OR 체인)으로 방출하도록 고쳤다.
+라이브 SQL Server 2022 컨테이너로 처음부터 끝까지 검증: 기존 테이블에 제약을 새로 추가 →
+apply → 재-diff 가 **첫 시도에 변경 0건**(이전에는 같은 DROP+ADD 가 계속 반복됐다).
+
+**Postgres 타깃은 이 수정의 영향을 받지 않는다** — 이미 자기만의 재작성 형태
+(`= ANY(ARRAY[...])`)로 저장하며, 그쪽이 같은 문제를 겪는지는 별도 검증이 필요해 이번에는
+다루지 않았다.
+
+### 파괴적 변경 없음
+
+`emitEnumCheckConstraints` 를 켠 소비자는 재생성 시 제약 정의 텍스트가 바뀐다(같은 의미의
+다른 모양) — 다음 apply 한 번으로 반영되고, 그 apply 이후로는 재-diff 가 안정된다. 옵션
+자체는 여전히 기본 off — 이 릴리스는 이유였던 결함만 고쳤을 뿐, 기본값 재검토는 별개다.
+
+---
+
 ## 0.13.0
 
 ### ⚠️ `emitForeignKeyIndexes` 기본값이 `false` → `true`로 바뀐다 (Sql·Postgres 타깃, 동작 변화)
