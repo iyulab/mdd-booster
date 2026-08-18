@@ -100,7 +100,7 @@ public static class TableRenderer
 
                 var column = NameCasing.ToPascalCase(field.Name);
                 inlineConstraints.Add(
-                    $"CONSTRAINT [CK_{model.Name}_{column}] CHECK ([{column}] IN ({EnumSqlConvention.CheckValues(enumNode)}))");
+                    $"CONSTRAINT [CK_{model.Name}_{column}] CHECK ({EnumSqlConvention.CheckExpression(enumNode, column)})");
             }
         }
 

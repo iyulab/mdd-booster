@@ -139,8 +139,10 @@ public class SqlEmissionKnobsTests
             Assert.Equal(0, exit);
 
             var deviceSql = File.ReadAllText(Path.Combine(dbDir, "dbo", "Tables_gen", "Device.sql"));
+            // Reverse declaration order — the shape SQL Server itself rewrites `IN (…)`
+            // into (see EnumSqlConvention.CheckExpression).
             Assert.Contains(
-                "CONSTRAINT [CK_Device_Status] CHECK ([Status] IN (N'active', N'retired'))",
+                "CONSTRAINT [CK_Device_Status] CHECK ([Status]=N'retired' OR [Status]=N'active')",
                 deviceSql);
         }
         finally

@@ -19,6 +19,31 @@ public static class EnumSqlConvention
     }
 
     /// <summary>
+    /// The CHECK expression for an enum column, as an <c>OR</c> chain of equality tests
+    /// (<c>[Col]=N'd' OR [Col]=N'c' OR …</c>) instead of <c>[Col] IN (…)</c>.
+    /// <para>
+    /// SQL Server does not store a CHECK constraint's <c>IN (…)</c> list literally — it
+    /// rewrites it into this exact OR-chain shape, in reverse declaration order, the
+    /// moment the constraint is created (confirmed empirically: `sys.check_constraints
+    /// .definition` for `CHECK (c IN (a, b))` reads `([c]=N'b' OR [c]=N'a')`, and a single
+    /// value collapses to a bare `=`). A declarative comparison tool that re-parses the
+    /// live definition and diffs it against our <c>IN (…)</c> source text sees two
+    /// different shapes forever — the round-trip through the server never converges, no
+    /// matter how many times it is re-applied. Emitting the same shape SQL Server itself
+    /// stores means the very first re-diff is empty.
+    /// </para>
+    /// </summary>
+    public static string CheckExpression(EnumNode enumNode, string columnName)
+    {
+        ArgumentNullException.ThrowIfNull(enumNode);
+        ArgumentException.ThrowIfNullOrWhiteSpace(columnName);
+        var literals = enumNode.Values
+            .Select(v => "N'" + (v.Name ?? string.Empty).Replace("'", "''") + "'")
+            .Reverse();
+        return string.Join(" OR ", literals.Select(l => $"[{columnName}]={l}"));
+    }
+
+    /// <summary>
     /// enum 컬럼 NVARCHAR 폭 — 최장 멤버 길이, 하한 20 (늦은 멤버 추가로 인한
     /// 컬럼 리사이즈를 줄이는 여유).
     /// </summary>
