@@ -1,4 +1,5 @@
 using M3L.Native;
+using MddBooster.Core.Naming;
 
 namespace MddBooster.Generators.Sql;
 
@@ -38,11 +39,19 @@ public sealed class SqlGenerator : IArtifactGenerator
         }
 
         // 2. Views
-        // First pass: plan all models and collect which ones have a FullView,
-        // so rollup subqueries can reference {Name}FullView when the target has derived fields.
+        // First pass: plan all models and collect each FullView model's own derived
+        // (Lookup/Rollup/Computed) column names, so a Lookup/Rollup elsewhere can tell
+        // whether the specific column it reads needs {Name}FullView or the base table
+        // suffices — redirecting on "target merely has a FullView" instead of "the exact
+        // column requested is derived" can chain two models into a cycle (SQL72009).
         var allPlans = context.Models.Select(m => planner.Plan(m)).ToList();
-        var fullViewModels = new HashSet<string>(
-            allPlans.Where(p => p.NeedsFullView).Select(p => p.Model.Name));
+        var derivedFieldsByModel = allPlans
+            .Where(p => p.NeedsFullView)
+            .ToDictionary(
+                p => p.Model.Name,
+                p => (IReadOnlySet<string>)new HashSet<string>(
+                    p.Lookups.Concat(p.Rollups).Concat(p.Computeds).Select(f => NameCasing.ToPascalCase(f.Name))),
+                StringComparer.Ordinal);
 
         var viewFileNames = new List<string>();
 
@@ -60,7 +69,7 @@ public sealed class SqlGenerator : IArtifactGenerator
 
             if (plan.NeedsFullView)
             {
-                var sql = FullViewRenderer.Render(plan, _options.Schema, fullViewModels);
+                var sql = FullViewRenderer.Render(plan, _options.Schema, derivedFieldsByModel);
                 var fileName = $"{plan.Model.Name}FullView.sql";
                 File.WriteAllText(Path.Combine(viewsGenDir, fileName), sql);
                 viewFileNames.Add(fileName);

@@ -1,4 +1,5 @@
 using MddBooster.Core.Ast;
+using MddBooster.Core.Naming;
 using MddBooster.Core.Semantic;
 using MddBooster.Generators.Sql;
 
@@ -8,6 +9,18 @@ public class FullViewRendererTests
 {
     private static string FixturePath(string name) =>
         Path.Combine(AppContext.BaseDirectory, "fixtures", name);
+
+    // Mirrors SqlGenerator's construction — model name → PascalCase names of that
+    // model's own Lookup/Rollup/Computed fields.
+    private static IReadOnlyDictionary<string, IReadOnlySet<string>> DerivedFieldsByModel(
+        IEnumerable<ResolvedModel> models, ViewPlanner planner) =>
+        models.Select(planner.Plan)
+            .Where(p => p.NeedsFullView)
+            .ToDictionary(
+                p => p.Model.Name,
+                p => (IReadOnlySet<string>)new HashSet<string>(
+                    p.Lookups.Concat(p.Rollups).Concat(p.Computeds).Select(f => NameCasing.ToPascalCase(f.Name))),
+                StringComparer.Ordinal);
 
     private static string WriteInlineM3l(string body)
     {
@@ -76,15 +89,85 @@ public class FullViewRendererTests
             var models = new InterfaceResolver(ast).ResolveAll();
             var order = models.Single(m => m.Name == "Order");
             var planner = new ViewPlanner();
-            var fullViewModels = new HashSet<string>(
-                models.Select(planner.Plan).Where(p => p.NeedsFullView).Select(p => p.Model.Name));
+            var derivedFieldsByModel = DerivedFieldsByModel(models, planner);
             var plan = planner.Plan(order);
 
-            var sql = FullViewRenderer.Render(plan, "dbo", fullViewModels);
+            var sql = FullViewRenderer.Render(plan, "dbo", derivedFieldsByModel);
 
             Assert.Contains("LEFT JOIN [dbo].[CustomerFullView] AS j_customer_id", sql);
             Assert.DoesNotContain("LEFT JOIN [dbo].[Customer] AS j_customer_id", sql);
             Assert.Contains("j_customer_id.[RegionName] AS [RegionName]", sql);
+        }
+        finally { File.Delete(tmp); }
+    }
+
+    [Fact]
+    public void Self_referencing_lookup_at_a_raw_column_joins_the_base_table_not_its_own_full_view()
+    {
+        // Regression: a self-referencing FK (Category.parent_id → Category) whose lookup
+        // reads a raw column (name) must join the base table. Redirecting to CategoryFullView
+        // whenever "the target has a FullView" makes the view reference itself in its own
+        // definition — SQL Server can't compute a deployment order for that (SQL72009).
+        var tmp = WriteInlineM3l(
+            "## Category\n" +
+            "- id: identifier @pk @generated\n" +
+            "- name: string(50) @not_null\n" +
+            "- parent_id: identifier? @reference(Category)?\n\n" +
+            "### Lookup\n" +
+            "- parent_name: string? @lookup(parent_id.name)\n");
+        try
+        {
+            var ast = new M3lLoader().LoadFile(tmp);
+            var models = new InterfaceResolver(ast).ResolveAll();
+            var category = models.Single(m => m.Name == "Category");
+            var planner = new ViewPlanner();
+            var derivedFieldsByModel = DerivedFieldsByModel(models, planner);
+            var plan = planner.Plan(category);
+
+            var sql = FullViewRenderer.Render(plan, "dbo", derivedFieldsByModel);
+
+            Assert.Contains("LEFT JOIN [dbo].[Category] AS j_parent_id", sql);
+            Assert.DoesNotContain("LEFT JOIN [dbo].[CategoryFullView] AS j_parent_id", sql);
+        }
+        finally { File.Delete(tmp); }
+    }
+
+    [Fact]
+    public void Rollup_and_reverse_lookup_over_raw_columns_do_not_create_a_view_cycle()
+    {
+        // Regression (mdd-booster 0.12.3): Parent.Rollup(Child.parent_id, count) and
+        // Child.Lookup(parent_id.name) — a count aggregate and a raw-column lookup — used
+        // to redirect to each other's FullView just because a FullView existed at all,
+        // producing ParentFullView ⇄ ChildFullView, which SQL Server refuses (SQL72009).
+        // Neither actually reads a derived column, so neither should leave the base table.
+        var tmp = WriteInlineM3l(
+            "## Parent\n" +
+            "- id: identifier @pk @generated\n" +
+            "- name: string(50) @not_null\n\n" +
+            "### Rollup\n" +
+            "- child_count: integer @rollup(Child.parent_id, count)\n\n" +
+            "## Child\n" +
+            "- id: identifier @pk @generated\n" +
+            "- parent_id: identifier @reference(Parent) @not_null\n\n" +
+            "### Lookup\n" +
+            "- parent_name: string @lookup(parent_id.name)\n");
+        try
+        {
+            var ast = new M3lLoader().LoadFile(tmp);
+            var models = new InterfaceResolver(ast).ResolveAll();
+            var planner = new ViewPlanner();
+            var derivedFieldsByModel = DerivedFieldsByModel(models, planner);
+
+            var parentPlan = planner.Plan(models.Single(m => m.Name == "Parent"));
+            var childPlan = planner.Plan(models.Single(m => m.Name == "Child"));
+
+            var parentSql = FullViewRenderer.Render(parentPlan, "dbo", derivedFieldsByModel);
+            var childSql = FullViewRenderer.Render(childPlan, "dbo", derivedFieldsByModel);
+
+            Assert.Contains("FROM [dbo].[Child] WHERE [ParentId] = b.[Id]", parentSql);
+            Assert.DoesNotContain("[ChildFullView]", parentSql);
+            Assert.Contains("LEFT JOIN [dbo].[Parent] AS j_parent_id", childSql);
+            Assert.DoesNotContain("[ParentFullView]", childSql);
         }
         finally { File.Delete(tmp); }
     }

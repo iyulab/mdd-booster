@@ -43,11 +43,19 @@ public static class FullViewRenderer
     /// </summary>
     /// <param name="plan">View plan for the model.</param>
     /// <param name="schema">SQL schema name (e.g. "dbo").</param>
-    /// <param name="fullViewModels">
-    /// Set of model names that have a FullView. Used so rollup subqueries target
-    /// <c>{TargetName}FullView</c> when the rollup target itself has derived fields.
+    /// <param name="derivedFieldsByModel">
+    /// Model name → the PascalCase names of that model's own Lookup/Rollup/Computed
+    /// fields (i.e. the columns that exist only on <c>{Model}FullView</c>, not on the
+    /// base table). A Lookup or Rollup that reads one of these columns from another
+    /// model must join/subquery against that model's FullView instead of its base
+    /// table — but only then: redirecting whenever the target merely *has* a FullView
+    /// (regardless of which column is being read) can chain two models into a cycle
+    /// neither one's own JOIN needs, which SQL Server refuses to deploy (SQL72009).
     /// </param>
-    public static string Render(ViewPlan plan, string schema, IReadOnlySet<string>? fullViewModels = null)
+    public static string Render(
+        ViewPlan plan,
+        string schema,
+        IReadOnlyDictionary<string, IReadOnlySet<string>>? derivedFieldsByModel = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentException.ThrowIfNullOrWhiteSpace(schema);
@@ -70,32 +78,38 @@ public static class FullViewRenderer
         var hasIndexed = plan.Rollups.Any(r => MddBooster.Core.Ast.FieldAttributes.Has(r, "indexed"));
 
         // --- Build JOIN list (one per unique FK column) ---
+        // Grouped by fkField first (not built lazily field-by-field): two lookups can share
+        // the same FK while one reads a raw column and the other a chained/derived one, and
+        // the join's target table is a single choice for the whole group — it must go to
+        // FullView if *any* member needs it, decided before any join is created.
+        var lookupsByFk = plan.Lookups
+            .Select(lookup =>
+            {
+                var path = lookup.Lookup?.Path
+                    ?? throw new InvalidOperationException(
+                        $"Lookup field '{plan.Model.Name}.{lookup.Name}' has no parsed LookupDef.");
+                var (fkField, targetColumn) = ParsePath(path);
+                return (lookup, fkField, targetColumnPascal: NameCasing.ToPascalCase(targetColumn));
+            })
+            .GroupBy(x => x.fkField, StringComparer.Ordinal);
+
         var joinsByFk = new Dictionary<string, JoinInfo>(StringComparer.Ordinal);
         var lookupColumns = new List<(string expr, string alias)>();
-        foreach (var lookup in plan.Lookups)
+        foreach (var group in lookupsByFk)
         {
-            var path = lookup.Lookup?.Path
-                ?? throw new InvalidOperationException(
-                    $"Lookup field '{plan.Model.Name}.{lookup.Name}' has no parsed LookupDef.");
-            var (fkField, targetColumn) = ParsePath(path);
+            var fkField = group.Key;
+            var target = ResolveReferenceTarget(plan.Model, fkField);
+            // Only chained lookup paths (e.g. `fk.some_lookup_field`) need the target's
+            // FullView — the base table doesn't carry that column. A lookup at a raw base
+            // column joins the base table, same as before this model gained any FullView.
+            var needsFullView = group.Any(x => IsDerivedColumn(derivedFieldsByModel, target, x.targetColumnPascal));
+            var targetTable = needsFullView ? target + "FullView" : target;
+            var alias = "j_" + fkField;
+            var join = new JoinInfo(TargetTable: targetTable, FkColumn: NameCasing.ToPascalCase(fkField), Alias: alias);
+            joinsByFk[fkField] = join;
 
-            if (!joinsByFk.TryGetValue(fkField, out var join))
-            {
-                var target = ResolveReferenceTarget(plan.Model, fkField);
-                // When the target model itself has derived fields (Lookup/Rollup/Computed),
-                // a chained lookup path (e.g. `fk.some_lookup_field`) can only resolve against
-                // {target}FullView — the base table doesn't carry that column. FullView is a
-                // strict superset of the base table's columns (see baseProjection above), so
-                // joining there is always safe even when every requested column is a raw one.
-                // Mirrors the same fallback RenderRollupSubquery already uses below.
-                var targetTable = (fullViewModels != null && fullViewModels.Contains(target))
-                    ? target + "FullView"
-                    : target;
-                var alias = "j_" + fkField;
-                join = new JoinInfo(TargetTable: targetTable, FkColumn: NameCasing.ToPascalCase(fkField), Alias: alias);
-                joinsByFk[fkField] = join;
-            }
-            lookupColumns.Add(($"{join.Alias}.[{NameCasing.ToPascalCase(targetColumn)}]", NameCasing.ToPascalCase(lookup.Name)));
+            foreach (var (lookup, _, targetColumnPascal) in group)
+                lookupColumns.Add(($"{join.Alias}.[{targetColumnPascal}]", NameCasing.ToPascalCase(lookup.Name)));
         }
 
         // --- Build rollup subquery list ---
@@ -106,7 +120,7 @@ public static class FullViewRenderer
                 ?? throw new InvalidOperationException(
                     $"Rollup field '{plan.Model.Name}.{rollup.Name}' has no parsed RollupDef.");
             rollupColumns.Add((
-                expr: RenderRollupSubquery(def, schema, baseAlias, fullViewModels),
+                expr: RenderRollupSubquery(def, schema, baseAlias, derivedFieldsByModel),
                 alias: NameCasing.ToPascalCase(rollup.Name)));
         }
 
@@ -206,17 +220,21 @@ public static class FullViewRenderer
     }
 
     private static string RenderRollupSubquery(RollupDef def, string schema, string baseAlias,
-        IReadOnlySet<string>? fullViewModels)
+        IReadOnlyDictionary<string, IReadOnlySet<string>>? derivedFieldsByModel)
     {
         var target = def.Target;
         var fkColumn = NameCasing.ToPascalCase(def.Fk);
         var aggregate = (def.Aggregate ?? "count").Trim().ToLowerInvariant();
         var field = def.Field;
 
-        // When the rollup target itself has derived fields, source from its FullView.
-        var fromTarget = (fullViewModels != null && fullViewModels.Contains(target))
-            ? target + "FullView"
-            : target;
+        // Only source from the target's FullView when the aggregated field is itself one
+        // of the target's derived columns (e.g. summing a Rollup/Computed field). `count`
+        // has no field to aggregate and every other aggregate over a raw base column reads
+        // straight from the base table — same as before the target had any FullView.
+        var fromTarget = !string.IsNullOrEmpty(field)
+            && IsDerivedColumn(derivedFieldsByModel, target, NameCasing.ToPascalCase(field))
+                ? target + "FullView"
+                : target;
 
         var innerExpr = aggregate switch
         {
@@ -231,6 +249,19 @@ public static class FullViewRenderer
 
         return $"(SELECT {innerExpr} FROM [{schema}].[{fromTarget}] WHERE [{fkColumn}] = {baseAlias}.[Id])";
     }
+
+    /// <summary>
+    /// True when <paramref name="columnPascal"/> is one of <paramref name="model"/>'s own
+    /// Lookup/Rollup/Computed fields — a column that exists only on <c>{model}FullView</c>,
+    /// not the base table.
+    /// </summary>
+    private static bool IsDerivedColumn(
+        IReadOnlyDictionary<string, IReadOnlySet<string>>? derivedFieldsByModel,
+        string model,
+        string columnPascal)
+        => derivedFieldsByModel != null
+            && derivedFieldsByModel.TryGetValue(model, out var derived)
+            && derived.Contains(columnPascal);
 
     private static string NormalizeComputedExpression(string expr)
     {
