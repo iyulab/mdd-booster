@@ -43,11 +43,7 @@ public sealed class ApiRegistrationGenerator(ApiRegistrationGeneratorOptions opt
     }
 
     private string ResolveProjectRoot(string workingDirectory)
-    {
-        if (Path.IsPathRooted(_options.ProjectPath))
-            return Path.GetFullPath(_options.ProjectPath);
-        return Path.GetFullPath(Path.Combine(workingDirectory, _options.ProjectPath));
-    }
+        => ConfiguredPathResolver.Resolve(workingDirectory, _options.ProjectPath, "projectPath");
 
     private static void CleanDir(string dir)
     {

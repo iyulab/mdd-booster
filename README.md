@@ -36,6 +36,12 @@ Sql 타깃 선택 노브(모두 생략 가능): `emitSqlProj`(기본 true — SS
 SSDT dacpac은 CHECK diff가 불안정하므로 선언형 도구(Schemorph) 소비자용 opt-in),
 `emitForeignKeyIndexes`(기본 false — 아래).
 
+**`projectPath`/`outputPath`/`formsOutputPath`/`sqlProjectPath`는 상대경로면 `mdd.json`이 있는
+디렉터리 기준, 절대경로면 그대로 쓴다.** 절대경로를 쓰면서 같은 저장소를 여러 물리적
+체크아웃(linked git worktree, 별도 클론)에서 빌드하면, `mdd build`를 어디서 실행하든 그
+고정된 절대경로 하나에만 쓴다 — 지금 작업 중인 체크아웃과 다를 수 있다. 호출 디렉터리와
+해석된 경로가 서로 다른 git 작업트리에 속하면 stderr로 경고한다(빌드는 막지 않는다).
+
 #### TypeScript 타깃 옵션
 
 ```json

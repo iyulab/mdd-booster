@@ -83,9 +83,7 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
         if (string.IsNullOrEmpty(_options.SqlProjectPath))
             return [];
 
-        var sqlRoot = Path.IsPathRooted(_options.SqlProjectPath)
-            ? Path.GetFullPath(_options.SqlProjectPath)
-            : Path.GetFullPath(Path.Combine(workingDirectory, _options.SqlProjectPath));
+        var sqlRoot = ConfiguredPathResolver.Resolve(workingDirectory, _options.SqlProjectPath, "sqlProjectPath");
 
         var viewsDir = Path.Combine(sqlRoot, "dbo", "Views");
         if (!Directory.Exists(viewsDir))
@@ -117,11 +115,7 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
     }
 
     private string ResolveProjectRoot(string workingDirectory)
-    {
-        if (Path.IsPathRooted(_options.ProjectPath))
-            return Path.GetFullPath(_options.ProjectPath);
-        return Path.GetFullPath(Path.Combine(workingDirectory, _options.ProjectPath));
-    }
+        => ConfiguredPathResolver.Resolve(workingDirectory, _options.ProjectPath, "projectPath");
 
     private static void CleanDir(string dir)
     {

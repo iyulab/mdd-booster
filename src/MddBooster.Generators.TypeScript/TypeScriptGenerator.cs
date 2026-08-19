@@ -23,9 +23,7 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var outDir = Path.IsPathRooted(_options.OutputPath)
-            ? Path.GetFullPath(_options.OutputPath)
-            : Path.GetFullPath(Path.Combine(context.WorkingDirectory, _options.OutputPath));
+        var outDir = ConfiguredPathResolver.Resolve(context.WorkingDirectory, _options.OutputPath, "outputPath");
 
         Directory.CreateDirectory(outDir);
 
@@ -62,9 +60,8 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
         // {Entity}Form_gen.tsx (optional)
         if (_options.FormsOutputPath is not null)
         {
-            var formsDir = Path.IsPathRooted(_options.FormsOutputPath)
-                ? Path.GetFullPath(_options.FormsOutputPath)
-                : Path.GetFullPath(Path.Combine(context.WorkingDirectory, _options.FormsOutputPath));
+            var formsDir = ConfiguredPathResolver.Resolve(
+                context.WorkingDirectory, _options.FormsOutputPath, "formsOutputPath");
 
             Directory.CreateDirectory(formsDir);
 

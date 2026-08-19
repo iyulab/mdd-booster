@@ -10,6 +10,23 @@
 
 ---
 
+## Unreleased
+
+### 🟡 절대경로 `projectPath`/`outputPath`가 다른 git 작업트리를 가리킬 때 경고
+
+`mdd.json` 타깃이 절대경로(또는 `..`를 많이 쓴 상대경로)로 프로젝트 루트를 지정하면, 그 값은
+`mdd build`를 어느 디렉터리에서 실행하든 항상 같은 곳을 가리킨다. 이 설정을 여러 물리적
+체크아웃(예: linked git worktree와 그 메인 체크아웃, 또는 별도 클론 두 개)에서 그대로
+재사용하면, 빌드는 지금 실행 중인 체크아웃이 아니라 그 경로가 실제로 위치한 체크아웃에
+조용히 쓴다.
+
+이제 `mdd build`가 호출된 디렉터리와 해석된 경로가 서로 다른 git 작업트리에 속하면 `stderr`로
+경고한다. `Sql`·`Model`·`Api`·`TypeScript` 타깃 전부 적용된다(`projectPath`/`outputPath`/
+`formsOutputPath`/`sqlProjectPath`). 경고이며 빌드를 막지 않는다 — 여러 체크아웃이 의도적으로
+한 위치를 공유하는 구성일 수도 있다.
+
+---
+
 ## 0.13.2
 
 ### 🔴 TS enum 생성기가 wire 이름이 아니라 CLR 스타일 이름을 방출했다 (버그)
