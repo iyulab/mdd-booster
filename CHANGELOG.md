@@ -10,7 +10,7 @@
 
 ---
 
-## Unreleased
+## 0.14.0
 
 ### 🟡 절대경로 `projectPath`/`outputPath`가 다른 git 작업트리를 가리킬 때 경고
 
