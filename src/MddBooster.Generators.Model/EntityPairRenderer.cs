@@ -337,19 +337,23 @@ public static class EntityPairRenderer
                 sb.Append("    [StringLength(").Append(maxLength).AppendLine(")]");
         }
 
-        // [Display(Name, GroupName)] — field label and/or group from M3L declaration.
+        // [Display(Name, GroupName, Description)] — field label/group/help from M3L declaration.
         // @label(text) overrides the description; unlike FieldAttributes.EffectiveLabel this
         // does NOT fall back to the PascalCase field name — presence of Name here signals
         // authored, meaningful text (No_Display_when_field_has_no_label_or_group pins the
         // alternative: omit [Display] entirely rather than restate the property's own name).
+        // @help(text) maps to Description — the same free-text field TsFormRenderer's helpText
+        // already reads, so this mirrors an existing, established mapping rather than inventing one.
         var displayLabel = GetAttributeFirstParam(f, "label") ?? f.Description;
         var displayGroup = GetAttributeString(f, "group");
-        if (displayLabel != null || displayGroup != null)
+        var displayHelp = GetAttributeString(f, "help");
+        if (displayLabel != null || displayGroup != null || displayHelp != null)
         {
             sb.Append("    [Display(");
             var displayParts = new List<string>();
             if (displayLabel != null) displayParts.Add($"Name = \"{EscapeStringLiteral(displayLabel)}\"");
             if (displayGroup != null) displayParts.Add($"GroupName = \"{EscapeStringLiteral(displayGroup)}\"");
+            if (displayHelp != null) displayParts.Add($"Description = \"{EscapeStringLiteral(displayHelp)}\"");
             sb.Append(string.Join(", ", displayParts));
             sb.AppendLine(")]");
         }

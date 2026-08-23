@@ -80,4 +80,28 @@ public class EntityPairRendererDisplayTests
 
         Assert.Contains("[Display(Name = \"Notes\"", result.Write);
     }
+
+    [Fact]
+    public void Explicit_help_attribute_becomes_the_Display_Description()
+    {
+        var models = LoadInline(
+            "## Sample\n" +
+            "- id: identifier @pk @generated\n" +
+            "- title: string(50) @not_null @label(\"Title\") @help(\"Shown at the top of the page\")\n");
+        var result = EntityPairRenderer.Render(models[0], "Test.Ns");
+
+        Assert.Contains("Description = \"Shown at the top of the page\"", result.Write);
+    }
+
+    [Fact]
+    public void Help_attribute_alone_is_enough_without_label_or_group()
+    {
+        var models = LoadInline(
+            "## Sample\n" +
+            "- id: identifier @pk @generated\n" +
+            "- notes: text? @help(\"Internal use only\")\n");
+        var result = EntityPairRenderer.Render(models[0], "Test.Ns");
+
+        Assert.Contains("[Display(Description = \"Internal use only\")]", result.Write);
+    }
 }
