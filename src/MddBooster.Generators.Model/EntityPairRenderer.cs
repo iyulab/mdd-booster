@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using M3L.Native;
+using MddBooster.Core.Generation;
 using MddBooster.Core.Semantic;
 using MddBooster.Core.Naming;
 
@@ -77,10 +78,18 @@ public static class EntityPairRenderer
             .Where(f => f.Kind is FieldKind.Lookup or FieldKind.Rollup or FieldKind.Computed)
             .ToList();
 
+        // A field-level @internal field stays on the base table and the write entity
+        // (storage), but drops out of the read surface — the interface both classes
+        // implement, and the Ext (read) class itself. Dropping it from the interface is
+        // not optional: XxxExt still has to compile against IXxx, so IXxx cannot declare
+        // a member the Ext class no longer has.
+        var readOnlyStoredFields = storedFields.Where(f => !EntitySurface.IsFieldInternal(f)).ToList();
+        var readOnlyDerivedFields = derivedFields.Where(f => !EntitySurface.IsFieldInternal(f)).ToList();
+
         return new RenderedPair(
-            Interface: RenderInterface(entityName, storedFields, ns, knownEnumNames),
+            Interface: RenderInterface(entityName, readOnlyStoredFields, ns, knownEnumNames),
             Write: RenderClass(entityName, storedFields, derivedFields: null, ns, isExt: false, knownEnumNames, extBacking, model.Source),
-            Read: RenderClass(entityName, storedFields, derivedFields, ns, isExt: true, knownEnumNames, extBacking, model.Source));
+            Read: RenderClass(entityName, readOnlyStoredFields, readOnlyDerivedFields, ns, isExt: true, knownEnumNames, extBacking, model.Source));
     }
 
     private static string RenderInterface(string entityName, IReadOnlyList<FieldNode> fields, string ns, IReadOnlySet<string>? knownEnumNames)

@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using M3L.Native;
+using MddBooster.Core.Generation;
 using MddBooster.Core.Semantic;
 using MddBooster.Core.Naming;
 
@@ -73,16 +74,23 @@ public static class FullViewRenderer
         // Explicit base-column projection instead of `b.*` — makes the generated view text
         // track the table's columns so declarative schema tools re-define the view when a
         // column is added, rather than leaving a `SELECT *` view silently stale (see BaseColumns).
-        var baseProjection = BaseColumns.Projection(plan.Model, baseAlias);
+        var baseProjection = BaseColumns.Projection(plan.Model, baseAlias, excludeFieldInternal: true);
 
-        var hasIndexed = plan.Rollups.Any(r => MddBooster.Core.Ast.FieldAttributes.Has(r, "indexed"));
+        // A field-level @internal derived field never reaches the read surface — drop it
+        // before building joins/subqueries so an internal-only lookup doesn't even produce
+        // a JOIN nobody selects from.
+        var lookups = plan.Lookups.Where(f => !EntitySurface.IsFieldInternal(f)).ToList();
+        var rollups = plan.Rollups.Where(f => !EntitySurface.IsFieldInternal(f)).ToList();
+        var computeds = plan.Computeds.Where(f => !EntitySurface.IsFieldInternal(f)).ToList();
+
+        var hasIndexed = rollups.Any(r => MddBooster.Core.Ast.FieldAttributes.Has(r, "indexed"));
 
         // --- Build JOIN list (one per unique FK column) ---
         // Grouped by fkField first (not built lazily field-by-field): two lookups can share
         // the same FK while one reads a raw column and the other a chained/derived one, and
         // the join's target table is a single choice for the whole group — it must go to
         // FullView if *any* member needs it, decided before any join is created.
-        var lookupsByFk = plan.Lookups
+        var lookupsByFk = lookups
             .Select(lookup =>
             {
                 var path = lookup.Lookup?.Path
@@ -114,7 +122,7 @@ public static class FullViewRenderer
 
         // --- Build rollup subquery list ---
         var rollupColumns = new List<(string expr, string alias)>();
-        foreach (var rollup in plan.Rollups)
+        foreach (var rollup in rollups)
         {
             var def = rollup.Rollup
                 ?? throw new InvalidOperationException(
@@ -126,7 +134,7 @@ public static class FullViewRenderer
 
         // --- Build computed expression list ---
         var computedColumns = new List<(string expr, string alias)>();
-        foreach (var computed in plan.Computeds)
+        foreach (var computed in computeds)
         {
             var def = computed.Computed
                 ?? throw new InvalidOperationException(

@@ -77,6 +77,7 @@ public class ModelTargetAxisCoverageTests
             ["implements"] = (Disposition.Carried, "additional interfaces on the generated classes"),
             ["inherits"] = (Disposition.Carried, "base class override"),
             ["binding"] = (Disposition.Carried, "[Binding]"),
+            ["internal"] = (Disposition.Carried, "at field level: dropped from the interface and the Ext (read) class, kept on the write class. The FullView/UdView SELECT drops the same field in the same pass — see FullViewRendererTests/UdViewRendererTests. At model level it stays NotApplicable — that grain is EntitySurface.IsInternal, an Api/TypeScript-surface decision with no entity-generation counterpart"),
 
             // ---- asymmetric: another target carries it, this one does not ----
             ["unique"] = (Disposition.AsymmetricGap, "SQL emits the constraint; EF HasIndex().IsUnique() would be the counterpart. Informational only — it cannot pre-empt a duplicate without a round trip"),
@@ -99,7 +100,6 @@ public class ModelTargetAxisCoverageTests
             // ---- layers the entity does not model ----
             ["generated"] = (Disposition.NotApplicable, "database-side value generation; the key it qualifies is elided"),
             ["from"] = (Disposition.NotApplicable, "identifier naming"),
-            ["internal"] = (Disposition.NotApplicable, "excludes an entity from the data API surface, not from entity generation"),
             ["slot"] = (Disposition.NotApplicable, "form layout"),
             ["display_labels"] = (Disposition.NotApplicable, "form layout"),
             ["system"] = (Disposition.NotApplicable, "enum value visibility in the generated UI"),

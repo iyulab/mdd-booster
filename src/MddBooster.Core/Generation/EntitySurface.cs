@@ -1,9 +1,11 @@
+using M3L.Native;
+using MddBooster.Core.Ast;
 using MddBooster.Core.Semantic;
 
 namespace MddBooster.Core.Generation;
 
 /// <summary>
-/// 표면 타깃(Api·TypeScript)이 "어떤 엔티티를 방출하는가"를 결정하는 정본.
+/// 표면 타깃(Api·TypeScript)이 "어떤 엔티티를, 어떤 필드를 방출하는가"를 결정하는 정본.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,6 +20,11 @@ namespace MddBooster.Core.Generation;
 /// "타깃 A에서는 빠지고 타깃 B에는 남는다"를 표현할 수 없다. 배포 토폴로지는 소비자 설정
 /// (<c>mdd.json</c>)에 살아야 하고 공유 정본(m3l)에 심으면 안 된다.
 /// </para>
+/// <para>
+/// <see cref="IsFieldInternal"/>은 같은 어휘(<c>@internal</c>)를 **필드** 결에 적용한다 —
+/// 엔티티 자체는 데이터 API에 남지만 그 필드 하나만 읽기 표면(뷰 SELECT·Ext 클래스)에서
+/// 빠진다. 기반 테이블·기반(Write) 엔티티에는 그대로 남는다 — 저장은 하되 노출하지 않는다.
+/// </para>
 /// </remarks>
 public static class EntitySurface
 {
@@ -27,6 +34,13 @@ public static class EntitySurface
         ArgumentNullException.ThrowIfNull(model);
         return (model.Source.Attributes ?? [])
             .Any(a => string.Equals(a.Name, "internal", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>필드에 <c>@internal</c>이 붙어 있는지 — 읽기 표면(뷰 SELECT·Ext 클래스)에서 제외 대상.</summary>
+    public static bool IsFieldInternal(FieldNode field)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        return FieldAttributes.Has(field, "internal");
     }
 }
 

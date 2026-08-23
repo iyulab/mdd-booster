@@ -62,6 +62,55 @@ public class FullViewRendererTests
     }
 
     [Fact]
+    public void Field_marked_internal_is_excluded_from_the_select_but_base_table_column_stays()
+    {
+        var tmp = WriteInlineM3l(
+            "## Order\n" +
+            "- id: identifier @pk @generated\n" +
+            "- customer_id: identifier @reference(Customer) @not_null\n" +
+            "- secret: string @internal\n" +
+            "- customer_name: string @lookup(customer_id.name)\n\n" +
+            "## Customer\n" +
+            "- id: identifier @pk @generated\n" +
+            "- name: string(50) @not_null\n");
+        try
+        {
+            var ast = new M3lLoader().LoadFile(tmp);
+            var order = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Order");
+            var plan = new ViewPlanner().Plan(order);
+            var sql = FullViewRenderer.Render(plan, "dbo");
+
+            Assert.Contains("SELECT b.[Id], b.[CustomerId],", sql);
+            Assert.DoesNotContain("[Secret]", sql);
+        }
+        finally { File.Delete(tmp); }
+    }
+
+    [Fact]
+    public void Internal_lookup_field_is_excluded_and_its_join_is_dropped_when_unused_elsewhere()
+    {
+        var tmp = WriteInlineM3l(
+            "## Order\n" +
+            "- id: identifier @pk @generated\n" +
+            "- customer_id: identifier @reference(Customer) @not_null\n" +
+            "- customer_name: string @lookup(customer_id.name) @internal\n\n" +
+            "## Customer\n" +
+            "- id: identifier @pk @generated\n" +
+            "- name: string(50) @not_null\n");
+        try
+        {
+            var ast = new M3lLoader().LoadFile(tmp);
+            var order = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Order");
+            var plan = new ViewPlanner().Plan(order);
+            var sql = FullViewRenderer.Render(plan, "dbo");
+
+            Assert.DoesNotContain("CustomerName", sql);
+            Assert.DoesNotContain("LEFT JOIN", sql);
+        }
+        finally { File.Delete(tmp); }
+    }
+
+    [Fact]
     public void Chained_lookup_through_a_lookup_field_joins_the_targets_full_view()
     {
         // `Order.customer_id.name` is a raw column on Customer, so the join targets the base

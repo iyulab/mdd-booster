@@ -24,7 +24,7 @@ public static class UdViewRenderer
         ArgumentException.ThrowIfNullOrWhiteSpace(schema);
 
         var modelName = model.Name;
-        var projection = BaseColumns.Projection(model);
+        var projection = BaseColumns.Projection(model, excludeFieldInternal: true);
 
         var sb = new StringBuilder();
         sb.AppendLine(Header);

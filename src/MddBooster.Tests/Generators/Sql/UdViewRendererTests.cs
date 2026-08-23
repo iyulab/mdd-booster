@@ -51,4 +51,20 @@ public class UdViewRendererTests
         Assert.Contains("CREATE VIEW [custom].[ProductUdView]", sql);
         Assert.Contains("FROM [custom].[Product]", sql);
     }
+
+    [Fact]
+    public void Field_marked_internal_is_excluded_from_the_projection()
+    {
+        var order = Resolve(
+            "## Order\n" +
+            "- id: identifier @pk @generated\n" +
+            "- order_number: string(30) @not_null\n" +
+            "- secret: string @internal\n" +
+            "- deleted_at: timestamp\n", "Order");
+
+        var sql = UdViewRenderer.Render(order, "dbo");
+
+        Assert.Contains("SELECT [Id], [OrderNumber], [DeletedAt] FROM [dbo].[Order]", sql);
+        Assert.DoesNotContain("[Secret]", sql);
+    }
 }

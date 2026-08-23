@@ -16,6 +16,18 @@ public class EntityPairRendererTests
         return new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "BankAccount");
     }
 
+    private static ResolvedModel ResolveInline(string body, string name)
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), $"mdd-epr-{Guid.NewGuid():N}.m3l.md");
+        File.WriteAllText(tmp, "# Namespace: test\n\n" + body);
+        try
+        {
+            var ast = new M3lLoader().LoadFile(tmp);
+            return new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == name);
+        }
+        finally { File.Delete(tmp); }
+    }
+
     /// <summary>
     /// 2026-07-22 회귀 — `@primary`(스펙상 `@pk`의 정본 표기)로 선언한 PK 필드가
     /// elide되지 않고 일반 속성으로 렌더되어 상속된 `IyuEntity.Id`와 충돌함.
@@ -100,6 +112,32 @@ public class EntityPairRendererTests
         Assert.Contains("namespace Custom.Namespace;", rendered.Interface);
         Assert.Contains("namespace Custom.Namespace;", rendered.Write);
         Assert.Contains("namespace Custom.Namespace;", rendered.Read);
+    }
+
+    [Fact]
+    public void Internal_field_is_dropped_from_interface_and_read_class_but_kept_on_write_class()
+    {
+        var resolved = ResolveInline(
+            "## User\n" +
+            "- id: identifier @pk @generated\n" +
+            "- created_at: timestamp @not_null\n" +
+            "- updated_at: timestamp @not_null\n" +
+            "- email: string(200) @not_null\n" +
+            "- password_hash: string @internal\n", "User");
+
+        var rendered = EntityPairRenderer.Render(resolved, "Test.Entities");
+
+        Assert.DoesNotContain("PasswordHash", rendered.Interface);
+        Assert.DoesNotContain("PasswordHash", rendered.Read);
+        Assert.Contains("public string PasswordHash { get; set; }", rendered.Write);
+
+        // Both classes must still compile against the (now narrower) interface.
+        foreach (var src in new[] { rendered.Interface, rendered.Write, rendered.Read })
+        {
+            var tree = CSharpSyntaxTree.ParseText(src);
+            Assert.DoesNotContain(tree.GetDiagnostics(),
+                d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error);
+        }
     }
 
     [Fact]
