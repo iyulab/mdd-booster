@@ -91,7 +91,10 @@ public static class TsFieldSchemaRenderer
 
         double? min = GetAttributeNumber(field, "min");
         double? max = GetAttributeNumber(field, "max");
-        string? label = field.Description;
+        // @label(text) overrides the description; unlike FieldAttributes.EffectiveLabel this
+        // does NOT fall back to the PascalCase field name — presence of a label here signals
+        // authored, meaningful text, and every field mechanically has a PascalCase name.
+        string? label = MddBooster.Core.Ast.FieldAttributes.FirstArg(field, "label") ?? field.Description;
         string? group = GetAttributeString(field, "group");
 
         return new FieldConstraints(required, maxLength, min, max, label, group);

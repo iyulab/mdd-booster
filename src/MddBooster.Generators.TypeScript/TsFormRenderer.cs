@@ -512,7 +512,7 @@ public static class TsFormRenderer
         IReadOnlySet<string> withSystemValues)
     {
         var prop = NameCasing.ToPascalCase(field.Name);
-        var label = field.Description ?? prop;
+        var label = MddBooster.Core.Ast.FieldAttributes.EffectiveLabel(field);
         var required = !field.Nullable;
         var requiredAttr = required ? " required" : "";
         // @help("...") → label 아래 도움말(description). 라벨은 짧게 유지하고

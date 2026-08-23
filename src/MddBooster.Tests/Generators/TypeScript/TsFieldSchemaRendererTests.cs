@@ -13,6 +13,18 @@ public class TsFieldSchemaRendererTests
         return new InterfaceResolver(ast).ResolveAll();
     }
 
+    private static IReadOnlyList<ResolvedModel> LoadInline(string body)
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), $"mdd-tsfs-{Guid.NewGuid():N}.m3l.md");
+        File.WriteAllText(tmp, "# Namespace: test\n\n" + body);
+        try
+        {
+            var ast = new M3lLoader().LoadFile(tmp);
+            return new InterfaceResolver(ast).ResolveAll();
+        }
+        finally { File.Delete(tmp); }
+    }
+
     /// <summary>
     /// 2026-07-22 회귀 — `@primary` 별칭 PK가 elide되지 않아 필드 스키마에 Id가 노출됨.
     /// </summary>
@@ -102,6 +114,34 @@ public class TsFieldSchemaRendererTests
 
         // rate: decimal(5,2) = 0 @min(0) @max(100) — non-nullable → required: true, min: 0, max: 100
         Assert.Contains("Rate: { required: true, min: 0, max: 100 },", result);
+    }
+
+    [Fact]
+    public void Explicit_label_attribute_overrides_the_description()
+    {
+        var models = LoadInline(
+            "## Sample\n" +
+            "- id: identifier @pk @generated\n" +
+            "- password_hash: string(64) @not_null @label(\"Password\") \"Salted hash of the user's password\"\n");
+
+        var result = TsFieldSchemaRenderer.RenderAll(models);
+
+        Assert.Contains("PasswordHash: { required: true, maxLength: 64, label: 'Password' },", result);
+    }
+
+    [Fact]
+    public void Explicit_label_attribute_alone_is_enough_to_include_an_otherwise_bare_nullable_field()
+    {
+        // Same shape as Omits_nullable_field_with_no_other_constraints, but with @label —
+        // that must be enough on its own, without needing a description or any other constraint.
+        var models = LoadInline(
+            "## Sample\n" +
+            "- id: identifier @pk @generated\n" +
+            "- notes: text? @label(\"Notes\")\n");
+
+        var result = TsFieldSchemaRenderer.RenderAll(models);
+
+        Assert.Contains("Notes: { label: 'Notes' },", result);
     }
 
     [Fact]

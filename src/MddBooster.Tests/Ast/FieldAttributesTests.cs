@@ -129,4 +129,56 @@ public class FieldAttributesTests
         // report a 12-character ceiling for a numeric column.
         Assert.Null(FieldAttributes.StringMaxLength(EdgeField("not_a_string")));
     }
+
+    // --- EffectiveLabel ----------------------------------------------------------------
+    //
+    // Single source for "what short text names this field to a human" — Model's
+    // [Display(Name)], the TS field schema's label, and the generated form's label prop
+    // all read this instead of each re-deriving their own priority.
+
+    private static FieldNode LabelField(string body, string fieldName)
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), $"mdd-label-{Guid.NewGuid():N}.m3l.md");
+        File.WriteAllText(tmp, "# Namespace: test\n\n## Sample\n" + body);
+        try
+        {
+            var ast = new M3lLoader().LoadFile(tmp);
+            var model = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Sample");
+            return model.Fields.Single(f => f.Name == fieldName);
+        }
+        finally { File.Delete(tmp); }
+    }
+
+    [Fact]
+    public void EffectiveLabel_prefers_explicit_label_over_description()
+    {
+        var field = LabelField(
+            "- id: identifier @pk @generated\n" +
+            "- password_hash: string @label(\"Password\") \"Salted hash of the user's password\"\n",
+            "password_hash");
+
+        Assert.Equal("Password", FieldAttributes.EffectiveLabel(field));
+    }
+
+    [Fact]
+    public void EffectiveLabel_falls_back_to_description_without_a_label()
+    {
+        var field = LabelField(
+            "- id: identifier @pk @generated\n" +
+            "- email: string(200) \"Primary contact email address\"\n",
+            "email");
+
+        Assert.Equal("Primary contact email address", FieldAttributes.EffectiveLabel(field));
+    }
+
+    [Fact]
+    public void EffectiveLabel_falls_back_to_pascal_case_name_without_label_or_description()
+    {
+        var field = LabelField(
+            "- id: identifier @pk @generated\n" +
+            "- password_hash: string\n",
+            "password_hash");
+
+        Assert.Equal("PasswordHash", FieldAttributes.EffectiveLabel(field));
+    }
 }

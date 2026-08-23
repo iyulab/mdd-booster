@@ -337,8 +337,12 @@ public static class EntityPairRenderer
                 sb.Append("    [StringLength(").Append(maxLength).AppendLine(")]");
         }
 
-        // [Display(Name, GroupName)] — field label and/or group from M3L declaration
-        var displayLabel = f.Description;
+        // [Display(Name, GroupName)] — field label and/or group from M3L declaration.
+        // @label(text) overrides the description; unlike FieldAttributes.EffectiveLabel this
+        // does NOT fall back to the PascalCase field name — presence of Name here signals
+        // authored, meaningful text (No_Display_when_field_has_no_label_or_group pins the
+        // alternative: omit [Display] entirely rather than restate the property's own name).
+        var displayLabel = GetAttributeFirstParam(f, "label") ?? f.Description;
         var displayGroup = GetAttributeString(f, "group");
         if (displayLabel != null || displayGroup != null)
         {

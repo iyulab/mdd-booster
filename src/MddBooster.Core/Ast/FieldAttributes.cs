@@ -1,4 +1,5 @@
 using M3L.Native;
+using MddBooster.Core.Naming;
 
 namespace MddBooster.Core.Ast;
 
@@ -151,6 +152,23 @@ public static class FieldAttributes
         if (attr is null) return null;
         var args = StringArgs(attr.Args);
         return args is { Count: > 0 } ? args[0] : null;
+    }
+
+    /// <summary>
+    /// 필드를 사람에게 짧게 이름 붙이는 텍스트의 정본 — Model 타깃의 <c>[Display(Name)]</c>,
+    /// TypeScript 필드 스키마의 <c>label</c>, 생성 폼의 <c>label</c> prop이 전부 이걸 읽는다.
+    /// </summary>
+    /// <remarks>
+    /// 우선순위: <c>@label(text)</c>(명시 오버라이드) → 필드 <c>description</c>(기존 관용,
+    /// 하위호환 유지) → <c>PascalCase(필드명)</c>(전에 없던 fallback을 새로 발명하지 않는다 —
+    /// <c>TsEnumLabelsRenderer</c>가 enum 값에 이미 쓰는 것과 같은 모양).
+    /// </remarks>
+    public static string EffectiveLabel(FieldNode field)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        return FirstArg(field, "label")
+            ?? field.Description
+            ?? NameCasing.ToPascalCase(field.Name);
     }
 
     /// <summary>

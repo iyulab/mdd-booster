@@ -15,6 +15,18 @@ public class EntityPairRendererDisplayTests
         return (models, enumNames);
     }
 
+    private static IReadOnlyList<ResolvedModel> LoadInline(string body)
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), $"mdd-eprd-{Guid.NewGuid():N}.m3l.md");
+        File.WriteAllText(tmp, "# Namespace: test\n\n" + body);
+        try
+        {
+            var ast = new M3lLoader().LoadFile(tmp);
+            return new InterfaceResolver(ast).ResolveAll();
+        }
+        finally { File.Delete(tmp); }
+    }
+
     [Fact]
     public void Emits_Display_Name_when_field_has_label()
     {
@@ -42,5 +54,30 @@ public class EntityPairRendererDisplayTests
         var result = EntityPairRenderer.Render(models[0], "Test.Ns", enumNames);
 
         Assert.DoesNotContain("[Display(", result.Write);
+    }
+
+    [Fact]
+    public void Explicit_label_attribute_overrides_the_description()
+    {
+        var models = LoadInline(
+            "## Sample\n" +
+            "- id: identifier @pk @generated\n" +
+            "- password_hash: string(64) @not_null @label(\"Password\") \"Salted hash of the user's password\"\n");
+        var result = EntityPairRenderer.Render(models[0], "Test.Ns");
+
+        Assert.Contains("[Display(Name = \"Password\"", result.Write);
+        Assert.DoesNotContain("Salted hash", result.Write);
+    }
+
+    [Fact]
+    public void Explicit_label_attribute_alone_is_enough_without_a_description()
+    {
+        var models = LoadInline(
+            "## Sample\n" +
+            "- id: identifier @pk @generated\n" +
+            "- notes: text? @label(\"Notes\")\n");
+        var result = EntityPairRenderer.Render(models[0], "Test.Ns");
+
+        Assert.Contains("[Display(Name = \"Notes\"", result.Write);
     }
 }

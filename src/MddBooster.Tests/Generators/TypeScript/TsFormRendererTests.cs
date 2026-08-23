@@ -14,6 +14,18 @@ public class TsFormRendererTests
         return new InterfaceResolver(ast).ResolveAll();
     }
 
+    private static IReadOnlyList<ResolvedModel> LoadInline(string body)
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), $"mdd-tsform-{Guid.NewGuid():N}.m3l.md");
+        File.WriteAllText(tmp, "# Namespace: test\n\n" + body);
+        try
+        {
+            var ast = new M3lLoader().LoadFile(tmp);
+            return new InterfaceResolver(ast).ResolveAll();
+        }
+        finally { File.Delete(tmp); }
+    }
+
 
     /// <summary>Enum nodes carrying only names — for fixtures where value metadata is irrelevant.</summary>
     private static IReadOnlyList<EnumNode> NamedEnums(params string[] names) =>
@@ -49,6 +61,20 @@ public class TsFormRendererTests
 
         Assert.Contains("label=\"품목명\"", content);
         Assert.Contains("onChange={v => onChange({ Name: v })}", content);
+    }
+
+    [Fact]
+    public void Explicit_label_attribute_overrides_the_description_in_the_rendered_form()
+    {
+        var models = LoadInline(
+            "## Sample\n" +
+            "- id: identifier @pk @generated\n" +
+            "- password_hash: string(64) @not_null @label(\"Password\") \"Salted hash of the user's password\"\n");
+        var results = TsFormRenderer.RenderAll(models, [], TestImports);
+        var content = results["Sample"];
+
+        Assert.Contains("label=\"Password\"", content);
+        Assert.DoesNotContain("Salted hash", content);
     }
 
     [Fact]
