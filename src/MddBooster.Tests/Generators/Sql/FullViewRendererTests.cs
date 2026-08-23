@@ -151,6 +151,56 @@ public class FullViewRendererTests
     }
 
     [Fact]
+    public void Same_named_lookup_column_reused_at_two_chain_depths_does_not_conflict()
+    {
+        // A derived column exposed directly on one model's FullView, and the *same-named*
+        // column reached one hop further via chaining, are not a conflict: each FullView is
+        // its own SELECT list, so two views projecting a column under the same alias is
+        // unremarkable. This mirrors `Chained_lookup_through_a_lookup_field_joins_the_targets_
+        // full_view` one level deeper (three models in a chain, with the leaf reusing the same
+        // field name as the middle model's own lookup) — confirming the 0.12.3/0.12.4 fix
+        // (see CHANGELOG) still holds at this depth.
+        var tmp = WriteInlineM3l(
+            "## Enterprise\n" +
+            "- id: identifier @pk @generated\n" +
+            "- name: string(50) @not_null\n\n" +
+            "## Order\n" +
+            "- id: identifier @pk @generated\n" +
+            "- enterprise_id: identifier @reference(Enterprise) @not_null\n\n" +
+            "### Lookup\n" +
+            "- customer_name: string @lookup(enterprise_id.name)\n\n" +
+            "## OrderItem\n" +
+            "- id: identifier @pk @generated\n" +
+            "- order_id: identifier @reference(Order) @not_null\n\n" +
+            "### Lookup\n" +
+            "- customer_name: string @lookup(order_id.customer_name)\n");
+        try
+        {
+            var ast = new M3lLoader().LoadFile(tmp);
+            var models = new InterfaceResolver(ast).ResolveAll();
+            var planner = new ViewPlanner();
+            var derivedFieldsByModel = DerivedFieldsByModel(models, planner);
+
+            var orderPlan = planner.Plan(models.Single(m => m.Name == "Order"));
+            var orderItemPlan = planner.Plan(models.Single(m => m.Name == "OrderItem"));
+
+            var orderSql = FullViewRenderer.Render(orderPlan, "dbo", derivedFieldsByModel);
+            var orderItemSql = FullViewRenderer.Render(orderItemPlan, "dbo", derivedFieldsByModel);
+
+            // Order's own lookup reads Enterprise's raw base column — base table, not a FullView.
+            Assert.Contains("LEFT JOIN [dbo].[Enterprise] AS j_enterprise_id", orderSql);
+            Assert.Contains("j_enterprise_id.[Name] AS [CustomerName]", orderSql);
+
+            // OrderItem's chained lookup reads Order's own derived CustomerName — must join
+            // OrderFullView, not the base Order table (which has no CustomerName column).
+            Assert.Contains("LEFT JOIN [dbo].[OrderFullView] AS j_order_id", orderItemSql);
+            Assert.DoesNotContain("LEFT JOIN [dbo].[Order] AS j_order_id", orderItemSql);
+            Assert.Contains("j_order_id.[CustomerName] AS [CustomerName]", orderItemSql);
+        }
+        finally { File.Delete(tmp); }
+    }
+
+    [Fact]
     public void Self_referencing_lookup_at_a_raw_column_joins_the_base_table_not_its_own_full_view()
     {
         // Regression: a self-referencing FK (Category.parent_id → Category) whose lookup
