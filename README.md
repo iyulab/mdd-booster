@@ -507,6 +507,11 @@ dotnet test MddBooster.slnx --nologo
   `MDDBOOSTER_ACCEPTANCE_MODEL` 에 다른 `.m3l.md` 경로를 넣으면 같은 게이트를 그 모델로
   돌린다(릴리스 전 대규모 모델 점검용). 경로가 잘못되면 **건너뛰지 않고 실패**한다.
 
+## 문서
+
+- [설계 원칙](docs/design-principles.md) — 이 프로젝트가 왜 지금의 경계를 긋는가
+- [기여하기](CONTRIBUTING.md) — 개발 환경, acceptance 게이트, 타깃 축 비대칭 체크
+
 ## 관련 저장소
 
 - [m3l](https://github.com/iyulab/m3l) — Rust 기반 M3L 파서 (NuGet `M3L.Native`)
