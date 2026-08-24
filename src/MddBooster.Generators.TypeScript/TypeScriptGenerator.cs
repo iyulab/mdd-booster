@@ -37,8 +37,8 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
         var enumsContent = TsEnumRenderer.RenderAll(context.Enums);
         File.WriteAllText(Path.Combine(outDir, "enums_gen.ts"), enumsContent);
 
-        // entities_gen.ts — @internal 은 존중하지 않는다. 타입은 데이터 API 전용이 아니며
-        // 전용 엔드포인트로 관리되는 인프라 엔티티에도 타입은 유용하다.
+        // entities_gen.ts — @internal 은 존중하지 않는다(엔티티·필드 레벨 둘 다). 타입은
+        // 데이터 API 전용이 아니며 전용 엔드포인트로 관리되는 인프라 엔티티에도 타입은 유용하다.
         var entitiesContent = TsInterfaceRenderer.RenderAll(models, enumNames);
         File.WriteAllText(Path.Combine(outDir, "entities_gen.ts"), entitiesContent);
 
@@ -53,11 +53,13 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
         var enumLabelsContent = TsEnumLabelsRenderer.RenderAll(context.Enums);
         File.WriteAllText(Path.Combine(outDir, "enum_labels_gen.ts"), enumLabelsContent);
 
-        // field_schema_gen.ts
+        // field_schema_gen.ts — @internal 필드도 존중하지 않는다, entities_gen.ts 와 같은 이유.
         var fieldSchemaContent = TsFieldSchemaRenderer.RenderAll(models);
         File.WriteAllText(Path.Combine(outDir, "field_schema_gen.ts"), fieldSchemaContent);
 
-        // {Entity}Form_gen.tsx (optional)
+        // {Entity}Form_gen.tsx (optional) — @internal 필드도 존중하지 않는다, entities_gen.ts 와
+        // 같은 이유. 필드를 폼에서 편집 못 하게 막는 것은 쓰기(Write) 축 관심사이고 @internal은
+        // 읽기(Read) 축 어휘라 이 형태로는 표현되지 않는다 — 별개 축, 별개 어휘가 필요하다.
         if (_options.FormsOutputPath is not null)
         {
             var formsDir = ConfiguredPathResolver.Resolve(
