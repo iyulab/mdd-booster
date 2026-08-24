@@ -293,15 +293,20 @@ mdd build ./mdd   # mdd.json 이 있는 디렉터리 — 생략하면 현재 디
 
 | 컴포넌트 | 언제 import되나 | 받는 프롭 |
 |---|---|---|
-| `UInput` | date · 숫자 · 문자열 필드 | `label` `required?` `description?` `type?`(`"date"`/`"number"`) **`step?: number`** **`maxlength?: number`** `value: string` `onChange: (v: string) => void` |
-| `UTextarea` | `text` 필드 | `label` `required?` `description?` **`minRows: number`** `value: string` `onChange: (v: string) => void` |
-| `USelect` | enum 필드 | `label` `required?` `description?` `placeholder?` `value: string` `options` `onChange: (v: string) => void` |
-| `UCheckbox` | boolean 필드 | `label` `description?` `checked: boolean` `onChange: (v: boolean) => void` |
+| `UInput` | date · 숫자 · 문자열 필드 | `label` `required?` `description?` `type?`(`"date"`/`"number"`) **`step?: number`** **`maxlength?: number`** **`disabled?: boolean`** `value: string` `onChange: (v: string) => void` |
+| `UTextarea` | `text` 필드 | `label` `required?` `description?` **`minRows: number`** **`disabled?: boolean`** `value: string` `onChange: (v: string) => void` |
+| `USelect` | enum 필드 | `label` `required?` `description?` `placeholder?` **`disabled?: boolean`** `value: string` `options` `onChange: (v: string) => void` |
+| `UCheckbox` | boolean 필드 | `label` `description?` **`disabled?: boolean`** `checked: boolean` `onChange: (v: boolean) => void` |
 
 - `required` / `description` 은 **모델이 그렇게 말할 때만** 방출된다
   (`@not_null` → `required`, `@help("...")` → `description`).
   즉 **네 컴포넌트 모두 `description`을 받을 수 있어야 한다** — 하나라도 빠지면
   그 타입의 필드에 `@help`를 붙이는 순간 빌드가 깨진다.
+- **`disabled`는 새로 추가된 요구조건이다**(버전은 [CHANGELOG](https://github.com/iyulab/mdd-booster/blob/main/CHANGELOG.md) 참조)
+  — `@immutable`이 붙은 필드에서만 방출된다. 값은 여전히 채워지고(`value`/`onChange`는 그대로
+  연결됨) 편집만 막힌다 — 필드를 감추는 것과는 다르다. **네 컴포넌트 모두 이 프롭을 받을 수
+  있어야 한다.** `readOnly`가 아니라 `disabled`를 선택한 이유: 체크박스·셀렉트는 네이티브
+  `readOnly` 의미가 컴포넌트마다 일관되지 않지만, `disabled`는 넷 다 동일하게 지원한다.
 - `value`/`onChange`는 **controlled 패턴**을 전제한다(빈 상태 sentinel은 `''`).
 - **`step`·`maxlength`는 0.8.0에서 추가된 요구조건이다** — 0.7.0 이하에서 만든 래퍼는
   갱신해야 한다([CHANGELOG 0.8.0](https://github.com/iyulab/mdd-booster/blob/main/CHANGELOG.md#080) 참조).

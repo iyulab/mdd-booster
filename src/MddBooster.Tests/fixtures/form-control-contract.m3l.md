@@ -9,7 +9,7 @@
 > | 필드 | 띄우는 프롭 |
 > |---|---|
 > | `title` (`string(n)` `@not_null` `@help`) | `label` `required` `description` `maxlength` `value` `onChange` |
-> | `code` (`string(n)`) | `maxlength` (required 없이 — 선택 필드 경로) |
+> | `code` (`string(n)` `@immutable`) | `maxlength` (required 없이 — 선택 필드 경로) · `disabled` |
 > | `body` (`text?` `@help`) | `minRows` · `FormRow full`(전폭 배치) |
 > | `done` (`boolean` `@help`) | `checked` (그리고 `value` 부재) |
 > | `rank` (enum `@not_null` `@help`) | `options` |
@@ -46,7 +46,7 @@
 - id: identifier @pk @generated
 - owner_id: identifier @reference(Owner) "담당자"
 - title: string(50) @not_null @group("기본") @help("표시용 제목") "제목"
-- code: string(20) @group("기본") "코드"
+- code: string(20) @immutable @group("기본") "코드"
 - due: date @group("기본") "마감일"
 - amount: decimal(18,4) @group("기본") "금액"
 - rank: Rank @not_null @group("기본") @help("처리 우선순위") "등급"

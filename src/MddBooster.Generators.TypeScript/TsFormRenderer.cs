@@ -519,6 +519,12 @@ public static class TsFormRenderer
         // 예시·부연 설명은 description footer로 분리한다 (필드 라벨 비대화 방지).
         var helpText = GetAttributeString(field, "help");
         var descAttr = !string.IsNullOrEmpty(helpText) ? $" description=\"{helpText}\"" : "";
+        // @immutable → disabled. The value still populates (form/onChange stay wired) so the
+        // field remains visible and its current value stays legible; only editing is blocked.
+        // Applies uniformly across every control below — `disabled` is the one prop every
+        // consumer-supplied component form (input/textarea/select/checkbox) can be expected to
+        // support natively, unlike `readOnly`, which checkboxes and selects do not honor consistently.
+        var disabledAttr = HasAttribute(field, "immutable") ? " disabled" : "";
 
         // Dispatch on the same classifier the import list uses (see ControlFor).
         var control = ControlFor(field, enumNames);
@@ -539,13 +545,13 @@ public static class TsFormRenderer
         }
 
         if (control == FormControl.Checkbox)
-            return $"<UCheckbox label=\"{label}\"{descAttr} checked={{form.{prop} ?? false}} onChange={{v => onChange({{ {prop}: v }})}} />";
+            return $"<UCheckbox label=\"{label}\"{descAttr}{disabledAttr} checked={{form.{prop} ?? false}} onChange={{v => onChange({{ {prop}: v }})}} />";
 
         // text → UTextarea. m3l's `text` means length-unbounded (the SQL target emits
         // NVARCHAR(MAX) for it), so a single-line control contradicts the model.
         // minRows is load-bearing — see TextareaMinRows.
         if (control == FormControl.Textarea)
-            return $"<UTextarea label=\"{label}\"{requiredAttr}{descAttr} minRows={{{TextareaMinRows}}} value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || null }})}} />";
+            return $"<UTextarea label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr} minRows={{{TextareaMinRows}}} value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || null }})}} />";
 
         if (control == FormControl.Select)
         {
@@ -561,7 +567,7 @@ public static class TsFormRenderer
             var onChangeCast = field.Nullable
                 ? $"v => onChange({{ {prop}: (v || null) as {enumTypeName} | null }})"
                 : $"v => onChange({{ {prop}: v as {enumTypeName} }})";
-            return $"<USelect label=\"{label}\"{requiredAttr}{descAttr}{placeholder} value={{form.{prop} ?? ''}} options={{enumToOptions({labelMap})}} onChange={{{onChangeCast}}} />";
+            return $"<USelect label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr}{placeholder} value={{form.{prop} ?? ''}} options={{enumToOptions({labelMap})}} onChange={{{onChangeCast}}} />";
         }
 
         // date → UInput type="date"
@@ -574,7 +580,7 @@ public static class TsFormRenderer
         if (string.Equals(field.Type, "date", StringComparison.OrdinalIgnoreCase))
         {
             var dateEmpty = field.Nullable ? "null" : "undefined";
-            return $"<UInput label=\"{label}\"{requiredAttr}{descAttr} type=\"date\" value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || {dateEmpty} }})}} />";
+            return $"<UInput label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr} type=\"date\" value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || {dateEmpty} }})}} />";
         }
 
         // number types — onChange uses undefined (not null) because Partial<T> marks fields as T | undefined.
@@ -582,7 +588,7 @@ public static class TsFormRenderer
         if (IsNumberType(field.Type))
         {
             var stepAttr = NumericStep(field) is { } step ? $" step={{{step}}}" : "";
-            return $"<UInput label=\"{label}\"{requiredAttr}{descAttr} type=\"number\"{stepAttr} value={{form.{prop} != null ? String(form.{prop}) : ''}} onChange={{v => onChange({{ {prop}: v ? Number(v) : undefined }})}} />";
+            return $"<UInput label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr} type=\"number\"{stepAttr} value={{form.{prop} != null ? String(form.{prop}) : ''}} onChange={{v => onChange({{ {prop}: v ? Number(v) : undefined }})}} />";
         }
 
         // string (default) — and, deliberately, timestamp / datetime / time. See this method's remarks:
@@ -601,7 +607,7 @@ public static class TsFormRenderer
         var maxLenAttr = MddBooster.Core.Ast.FieldAttributes.EffectiveMaxLength(field) is { } n
             ? $" maxlength={{{n}}}"
             : "";
-        return $"<UInput label=\"{label}\"{requiredAttr}{descAttr}{maxLenAttr} value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v }})}} />";
+        return $"<UInput label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr}{maxLenAttr} value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v }})}} />";
     }
 
     private static string? GetAttributeString(FieldNode field, string attrName)

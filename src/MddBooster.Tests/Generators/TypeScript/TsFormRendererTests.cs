@@ -298,6 +298,74 @@ public class TsFormRendererTests
         Assert.Contains("maxLength: 50", schema);
     }
 
+    // --- @immutable → disabled ---
+
+    [Fact]
+    public void Immutable_string_field_emits_disabled()
+    {
+        var models = LoadInline("""
+            ## Doc
+
+            - id: identifier @pk @generated
+            - token: string(50) @immutable "토큰"
+            """);
+        var content = TsFormRenderer.RenderAll(models, [], TestImports)["Doc"];
+
+        Assert.Contains("disabled", FieldLine(content, "Token"));
+    }
+
+    [Fact]
+    public void Non_immutable_field_emits_no_disabled()
+    {
+        var models = LoadInline("""
+            ## Doc
+
+            - id: identifier @pk @generated
+            - title: string(50) "제목"
+            """);
+        var content = TsFormRenderer.RenderAll(models, [], TestImports)["Doc"];
+
+        Assert.DoesNotContain("disabled", FieldLine(content, "Title"));
+    }
+
+    [Fact]
+    public void Immutable_checkbox_field_emits_disabled()
+    {
+        // Checkboxes do not honor a native readOnly attribute consistently — disabled is the
+        // one prop every control shape supports, which is why @immutable renders as disabled
+        // rather than readOnly. Pinning this on UCheckbox specifically, since it is the shape
+        // where the alternative (readOnly) would have silently done nothing.
+        var models = LoadInline("""
+            ## Doc
+
+            - id: identifier @pk @generated
+            - locked: boolean @not_null @immutable "잠금"
+            """);
+        var content = TsFormRenderer.RenderAll(models, [], TestImports)["Doc"];
+
+        Assert.Contains("<UCheckbox", FieldLine(content, "Locked"));
+        Assert.Contains("disabled", FieldLine(content, "Locked"));
+    }
+
+    [Fact]
+    public void Immutable_field_still_binds_value_and_onChange()
+    {
+        // disabled blocks editing, not visibility — the field must stay populated so its
+        // current value remains legible, unlike @internal (excluded from the read surface
+        // entirely). Losing this would make the field silently blank instead of read-only.
+        var models = LoadInline("""
+            ## Doc
+
+            - id: identifier @pk @generated
+            - token: string(50) @immutable "토큰"
+            """);
+        var content = TsFormRenderer.RenderAll(models, [], TestImports)["Doc"];
+        var line = FieldLine(content, "Token");
+
+        Assert.Contains("value={form.Token ?? ''}", line);
+        Assert.Contains("onChange={v => onChange({ Token: v })}", line);
+    }
+
     // --- temporal types: which get a native picker, and why the others must not ---
 
     [Fact]

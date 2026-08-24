@@ -86,12 +86,12 @@ public class ModelTargetAxisCoverageTests
             ["index"] = (Disposition.AsymmetricGap, "SQL emits the index; EF HasIndex() would be the counterpart"),
             ["min"] = (Disposition.AsymmetricGap, "reaches the TypeScript field schema; [Range] would be the C# counterpart"),
             ["max"] = (Disposition.AsymmetricGap, "reaches the TypeScript field schema; [Range] would be the C# counterpart"),
+            ["immutable"] = (Disposition.AsymmetricGap, "TypeScript's generated form emits `disabled` from it (TsFormRenderer); [Editable(false)] would be the Model-target counterpart, not yet carried"),
 
             // ---- parsed, then dropped by every target ----
             ["fk"] = (Disposition.UnimplementedEverywhere, "@reference is the spelling the generators read"),
             ["on_delete"] = (Disposition.UnimplementedEverywhere, "referential action; EF DeleteBehavior would be the counterpart, on the context rather than the entity"),
             ["on_update"] = (Disposition.UnimplementedEverywhere, "as on_delete"),
-            ["immutable"] = (Disposition.UnimplementedEverywhere, "[Editable(false)] would be the counterpart"),
             ["validate"] = (Disposition.UnimplementedEverywhere, "[RegularExpression] or a custom attribute would be the counterpart"),
             ["computed_raw"] = (Disposition.UnimplementedEverywhere, "raw-expression variant of computed; only the parsed computed form is read"),
             ["searchable"] = (Disposition.UnimplementedEverywhere, "query-surface hint with no entity-level counterpart"),
@@ -141,7 +141,7 @@ public class ModelTargetAxisCoverageTests
             .OrderBy(k => k, StringComparer.Ordinal)
             .ToList();
 
-        Assert.Equal(["index", "max", "min", "unique"], asymmetric);
+        Assert.Equal(["immutable", "index", "max", "min", "unique"], asymmetric);
     }
 
     /// <summary>
