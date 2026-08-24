@@ -252,6 +252,7 @@ mdd build ./mdd   # mdd.json 이 있는 디렉터리 — 생략하면 현재 디
 | `string(n)` | `[StringLength(n)]` | **널 허용 여부와 무관** — `string(50)?` 도 상한 50을 갖는다 |
 | `phone`·`email`·`url` | `[StringLength(n)]` | 상한이 **선언이 아니라 타입**에서 온다(명세 §10.4.2 — 30/320/2048). 컬럼·엔티티·필드 스키마·생성 폼이 같은 `n` 을 쓴다 |
 | `= <value>` | 속성 초기화자 | `= true;` · `= 3;` · `= "NEW";` · `= 0.5m;` · `= Status.Draft;` |
+| `@immutable` | `[Editable(false)]` | 저장 필드에만 붙는다. 아래 TypeScript 타깃의 생성 폼 `disabled` prop과 같은 선언을 미러링 — 둘 다 메타데이터일 뿐, 이 리포가 생성하는 어떤 API 계층도 이를 강제하지 않는다 |
 
 기준은 `@not_null` 을 적었는지가 **아니라 필드가 실제로 널을 허용하는지**다. `- name: string(50)`
 처럼 속성 없이 선언한 필드도 컬럼이 `NOT NULL` 이므로 동일하게 방출된다.

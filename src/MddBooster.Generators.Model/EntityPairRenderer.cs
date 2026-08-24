@@ -335,6 +335,13 @@ public static class EntityPairRenderer
             // optional `string(50)?` is still bounded at 50.
             if (MddBooster.Core.Ast.FieldAttributes.EffectiveMaxLength(f) is { } maxLength)
                 sb.Append("    [StringLength(").Append(maxLength).AppendLine(")]");
+
+            // [Editable(false)] — mirrors TS's `disabled` (TsFormRenderer, cycle-91).
+            // Metadata only, like [Required]/[StringLength] above: nothing in this
+            // repo's generated API layer enforces it. An actual write-blocking
+            // guard is docket #42's separate, still-open request.
+            if (MddBooster.Core.Ast.FieldAttributes.Has(f, "immutable"))
+                sb.AppendLine("    [Editable(false)]");
         }
 
         // [Display(Name, GroupName, Description)] — field label/group/help from M3L declaration.

@@ -42,3 +42,5 @@
 
 - made_at: timestamp = now() "C# 리터럴이 없는 타입 — 건너뛴다"
 - owner_id: identifier "값형 — Required 대상이 아니다"
+
+- locked_note: text? @immutable "immutable 방출 검증 — 상한 없는 널허용 필드로 다른 축과 겹치지 않는다"

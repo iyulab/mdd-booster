@@ -205,6 +205,32 @@ public class FieldConstraintRenderTests
             Assert.DoesNotContain(attrs[prop], a => a.StartsWith("[StringLength", StringComparison.Ordinal));
     }
 
+    // ---------------------------------------------------------------- [Editable(false)]
+
+    /// <summary>
+    /// Mirrors TS's `disabled` (TsFormRenderer, cycle-91) — write protection
+    /// against an accidental edit, not an enforced boundary. Nothing in this
+    /// repo's generated API layer checks <c>EditableAttribute</c>, the same way
+    /// nothing here enforces it for TS's `disabled` prop either; an actual
+    /// write-blocking guard is docket #42's separate, still-open request.
+    /// </summary>
+    [Fact]
+    public void Editable_false_is_emitted_for_immutable_fields()
+    {
+        var attrs = AttributesByProperty(RenderWrite());
+
+        Assert.Contains("[Editable(false)]", attrs["LockedNote"]);
+    }
+
+    [Fact]
+    public void Editable_false_is_not_emitted_without_the_immutable_attribute()
+    {
+        var attrs = AttributesByProperty(RenderWrite());
+
+        foreach (var prop in new[] { "BareName", "ExplicitName", "OptName", "Unbounded" })
+            Assert.DoesNotContain("[Editable(false)]", attrs[prop]);
+    }
+
     // ---------------------------------------------------------------- declared defaults
 
     [Fact]

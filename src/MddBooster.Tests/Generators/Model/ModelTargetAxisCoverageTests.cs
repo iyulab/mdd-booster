@@ -80,13 +80,13 @@ public class ModelTargetAxisCoverageTests
             ["label"] = (Disposition.Carried, "[Display(Name)] — overrides the field description as the label source; FieldAttributes.EffectiveLabel/GetAttributeFirstParam(\"label\") is the shared priority (see also TsFieldSchemaRenderer and TsFormRenderer, which read the same override for the TypeScript targets)"),
             ["internal"] = (Disposition.Carried, "at field level: dropped from the interface and the Ext (read) class, kept on the write class. The FullView/UdView SELECT drops the same field in the same pass — see FullViewRendererTests/UdViewRendererTests. At model level it stays NotApplicable — that grain is EntitySurface.IsInternal, an Api/TypeScript-surface decision with no entity-generation counterpart"),
             ["help"] = (Disposition.Carried, "[Display(Description)] — GetAttributeString(\"help\") is the same free-text read TsFormRenderer's helpText already uses for the generated form"),
+            ["immutable"] = (Disposition.Carried, "[Editable(false)], mirroring TypeScript's generated-form `disabled` (TsFormRenderer, cycle-91). Metadata only on both targets — nothing in this repo's generated API layer enforces either; an actual write-blocking guard is docket #42's separate, still-open request"),
 
             // ---- asymmetric: another target carries it, this one does not ----
             ["unique"] = (Disposition.AsymmetricGap, "SQL emits the constraint; EF HasIndex().IsUnique() would be the counterpart. Informational only — it cannot pre-empt a duplicate without a round trip"),
             ["index"] = (Disposition.AsymmetricGap, "SQL emits the index; EF HasIndex() would be the counterpart"),
             ["min"] = (Disposition.AsymmetricGap, "reaches the TypeScript field schema; [Range] would be the C# counterpart"),
             ["max"] = (Disposition.AsymmetricGap, "reaches the TypeScript field schema; [Range] would be the C# counterpart"),
-            ["immutable"] = (Disposition.AsymmetricGap, "TypeScript's generated form emits `disabled` from it (TsFormRenderer); [Editable(false)] would be the Model-target counterpart, not yet carried"),
 
             // ---- parsed, then dropped by every target ----
             ["fk"] = (Disposition.UnimplementedEverywhere, "@reference is the spelling the generators read"),
@@ -141,7 +141,7 @@ public class ModelTargetAxisCoverageTests
             .OrderBy(k => k, StringComparer.Ordinal)
             .ToList();
 
-        Assert.Equal(["immutable", "index", "max", "min", "unique"], asymmetric);
+        Assert.Equal(["index", "max", "min", "unique"], asymmetric);
     }
 
     /// <summary>
