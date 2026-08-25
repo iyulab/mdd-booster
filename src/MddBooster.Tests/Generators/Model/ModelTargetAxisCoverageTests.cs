@@ -81,10 +81,10 @@ public class ModelTargetAxisCoverageTests
             ["internal"] = (Disposition.Carried, "at field level: dropped from the interface and the Ext (read) class, kept on the write class. The FullView/UdView SELECT drops the same field in the same pass — see FullViewRendererTests/UdViewRendererTests. At model level it stays NotApplicable — that grain is EntitySurface.IsInternal, an Api/TypeScript-surface decision with no entity-generation counterpart"),
             ["help"] = (Disposition.Carried, "[Display(Description)] — GetAttributeString(\"help\") is the same free-text read TsFormRenderer's helpText already uses for the generated form"),
             ["immutable"] = (Disposition.Carried, "[Editable(false)], mirroring TypeScript's generated-form `disabled` (TsFormRenderer, cycle-91). Metadata only on both targets — nothing in this repo's generated API layer enforces either; an actual write-blocking guard is docket #42's separate, still-open request"),
+            ["unique"] = (Disposition.Carried, "DbContextRenderer.AppendIndexes emits modelBuilder.Entity<T>().HasIndex(...).IsUnique().HasDatabaseName(...) on the write entity (cycle-93), field-for-field parity with TableRenderer/PgTableRenderer's own UK_/uq_ naming. Nullable needs no extra code — the SQL Server provider's own SqlServerIndexConvention adds the WHERE ... IS NOT NULL filter automatically, matching TableRenderer's manual filtered-index branch; Postgres's UNIQUE already treats NULL as distinct, matching PgTableRenderer with no filter either"),
+            ["index"] = (Disposition.Carried, "same AppendIndexes call as unique (cycle-93), IX_/ix_ naming; a field declaring both wins as unique-only, mirroring TableRenderer's own @unique @index exclusion"),
 
             // ---- asymmetric: another target carries it, this one does not ----
-            ["unique"] = (Disposition.AsymmetricGap, "SQL emits the constraint; EF HasIndex().IsUnique() would be the counterpart. Informational only — it cannot pre-empt a duplicate without a round trip"),
-            ["index"] = (Disposition.AsymmetricGap, "SQL emits the index; EF HasIndex() would be the counterpart"),
             ["min"] = (Disposition.AsymmetricGap, "reaches the TypeScript field schema; [Range] would be the C# counterpart"),
             ["max"] = (Disposition.AsymmetricGap, "reaches the TypeScript field schema; [Range] would be the C# counterpart"),
 
@@ -141,7 +141,7 @@ public class ModelTargetAxisCoverageTests
             .OrderBy(k => k, StringComparer.Ordinal)
             .ToList();
 
-        Assert.Equal(["index", "max", "min", "unique"], asymmetric);
+        Assert.Equal(["max", "min"], asymmetric);
     }
 
     /// <summary>

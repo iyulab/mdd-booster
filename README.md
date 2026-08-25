@@ -253,9 +253,14 @@ mdd build ./mdd   # mdd.json 이 있는 디렉터리 — 생략하면 현재 디
 | `phone`·`email`·`url` | `[StringLength(n)]` | 상한이 **선언이 아니라 타입**에서 온다(명세 §10.4.2 — 30/320/2048). 컬럼·엔티티·필드 스키마·생성 폼이 같은 `n` 을 쓴다 |
 | `= <value>` | 속성 초기화자 | `= true;` · `= 3;` · `= "NEW";` · `= 0.5m;` · `= Status.Draft;` |
 | `@immutable` | `[Editable(false)]` | 저장 필드에만 붙는다. 아래 TypeScript 타깃의 생성 폼 `disabled` prop과 같은 선언을 미러링 — 둘 다 메타데이터일 뿐, 이 리포가 생성하는 어떤 API 계층도 이를 강제하지 않는다 |
+| 필드 단위 `@unique` | `HasIndex(...).IsUnique()` | 엔티티 속성이 아니라 `DbContext.OnModelCreating`의 fluent 설정 — SQL 타깃의 `UK_{Model}_{Column}`/PG의 `uq_{table}_{field}`와 같은 이름을 `HasDatabaseName`으로 명시한다. 널 허용 컬럼도 분기 없이 같은 한 줄만 방출 — SQL Server 프로바이더가 unique index의 널 허용 컬럼에 `WHERE ... IS NOT NULL` 필터를 자동으로 붙이므로 (SQL 타깃의 filtered index와 동일 결과), PostgreSQL은 애초에 `UNIQUE`가 NULL을 distinct로 취급하므로 (둘 다 이 리포가 손으로 만드는 코드가 아니다) |
+| 필드 단위 `@index` | `HasIndex(...)` | 위와 같은 자리, `IX_{Model}_{Column}`/`ix_{table}_{field}` 이름. `@unique`와 함께 선언되면 `unique`만 방출한다(제약이 이미 인덱스를 소유 — SQL 타깃과 동일한 배제) |
 
 기준은 `@not_null` 을 적었는지가 **아니라 필드가 실제로 널을 허용하는지**다. `- name: string(50)`
 처럼 속성 없이 선언한 필드도 컬럼이 `NOT NULL` 이므로 동일하게 방출된다.
+
+`@unique`/`@index`는 **필드 단위 선언만** 방출한다. 섹션 레벨 복합 선언(`@unique(c1, c2)` ·
+`@index(c1)`)은 아직 이 타깃에 닿지 않는다 — 별도 축이다.
 
 **`[Required]` 는 `NOT NULL` 보다 좁다.** SQL `NOT NULL` 컬럼은 빈 문자열을 허용하지만
 `[Required]` 는 거부하고, 판정 전에 trim 하므로 공백만 있는 값도 거부한다. 널 허용하지 않는

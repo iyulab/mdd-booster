@@ -44,3 +44,15 @@
 - owner_id: identifier "값형 — Required 대상이 아니다"
 
 - locked_note: text? @immutable "immutable 방출 검증 — 상한 없는 널허용 필드로 다른 축과 겹치지 않는다"
+
+## IndexSample
+
+> `@unique`/`@index` → Model 타깃 `HasIndex()` 방출 검증(cycle-93). `Sample`과 분리 — 대조를
+> 위한 무속성 필드(`plain_ref`)를 섞어 두려면 별도 모델이 더 읽기 쉽다.
+
+- id: identifier @pk @generated @index "PK 위에 index 겹침 — 스킵되어야 한다(PK가 이미 유일 인덱스)"
+- email: string(80) @not_null @unique "unique만"
+- optional_code: string(20)? @unique "nullable + unique — SQL Server는 filtered index, PG는 평범한 UNIQUE. 두 경우 모두 이 렌더러는 같은 한 줄만 방출한다(EF 자체 컨벤션이 SQL Server 필터를 붙인다)"
+- tag: string(30) @index "index만"
+- serial_no: string(40) @not_null @unique @index "동시 선언 — unique만 방출되어야 한다(제약이 이미 인덱스를 소유)"
+- plain_ref: string(20)? "대조군 — 어느 축도 없다"

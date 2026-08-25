@@ -1,5 +1,6 @@
 using System.Text;
 using M3L.Native;
+using MddBooster.Core.Ast;
 using MddBooster.Core.Naming;
 using MddBooster.Core.Semantic;
 
@@ -113,10 +114,59 @@ public static class DbContextRenderer
             sb.Append("        modelBuilder.Entity<").Append(name)
               .Append("Ext>().Property(e => e.Id).HasColumnName(\"").Append(column).AppendLine("\");");
         }
+
+        // field-level @unique/@index — SQL parity (TableRenderer). Write entity only; the Ext
+        // class maps to a view, which has no index of its own. Nullable-unique's filtered-index
+        // behavior (WHERE ... IS NOT NULL) needs no code here — the SQL Server provider's own
+        // SqlServerIndexConvention adds that filter automatically for any nullable column in a
+        // unique index, matching TableRenderer's manual CREATE UNIQUE ... WHERE branch exactly.
+        foreach (var model in ordered)
+        {
+            AppendIndexes(sb, model, NameCasing.ToPascalCase(model.Name), model.Name, isPostgres: false);
+        }
         sb.AppendLine("    }");
 
         sb.AppendLine("}");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Emits <c>HasIndex()</c>/<c>HasIndex().IsUnique()</c> for every stored, non-PK field
+    /// carrying <c>@unique</c> or <c>@index</c> — the Model-target counterpart TableRenderer's own
+    /// disposition note names. PK is skipped: it already carries a unique index by definition, the
+    /// same reason TableRenderer/PgTableRenderer skip it. A field declaring both wins as unique
+    /// only, mirroring TableRenderer's <c>@unique @index</c> exclusion (a unique constraint already
+    /// owns its index). <paramref name="indexNamePrefix"/> is the SQL/PG object-name prefix
+    /// (<c>model.Name</c> for SQL Server, the mapped snake_case table for Postgres) so the emitted
+    /// <c>HasDatabaseName</c> matches the real constraint/index name exactly — a consumer reading a
+    /// unique-violation error by name finds the same identifier in the EF model.
+    /// </summary>
+    private static void AppendIndexes(
+        StringBuilder sb, ResolvedModel model, string entityName, string indexNamePrefix, bool isPostgres)
+    {
+        var receiver = isPostgres ? "e" : $"modelBuilder.Entity<{entityName}>()";
+        var indent = isPostgres ? "            " : "        ";
+
+        foreach (var field in BaseColumnsOf(model))
+        {
+            if (FieldAttributes.Has(field, "pk")) continue;
+
+            var property = NameCasing.ToPascalCase(field.Name);
+            var columnToken = isPostgres ? field.Name : property;
+
+            if (FieldAttributes.Has(field, "unique"))
+            {
+                sb.Append(indent).Append(receiver).Append(".HasIndex(x => x.").Append(property)
+                  .Append(").IsUnique().HasDatabaseName(\"").Append(isPostgres ? "uq_" : "UK_")
+                  .Append(indexNamePrefix).Append('_').Append(columnToken).AppendLine("\");");
+            }
+            else if (FieldAttributes.Has(field, "index"))
+            {
+                sb.Append(indent).Append(receiver).Append(".HasIndex(x => x.").Append(property)
+                  .Append(").HasDatabaseName(\"").Append(isPostgres ? "ix_" : "IX_")
+                  .Append(indexNamePrefix).Append('_').Append(columnToken).AppendLine("\");");
+            }
+        }
     }
 
     /// <summary>
@@ -153,6 +203,7 @@ public static class DbContextRenderer
             sb.AppendLine("        {");
             sb.Append("            e.ToTable(\"").Append(table).AppendLine("\");");
             AppendPostgresColumns(sb, model, pk);
+            AppendIndexes(sb, model, name, table, isPostgres: true);
             sb.AppendLine("        });");
 
             sb.Append("        modelBuilder.Entity<").Append(name).AppendLine("Ext>(e =>");
