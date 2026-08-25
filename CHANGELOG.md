@@ -10,6 +10,39 @@
 
 ---
 
+## 0.16.0
+
+### `@immutable` — 생성 폼에서 `disabled`, 생성 엔티티에서 `[Editable(false)]`
+
+`@immutable`은 표준 필드 속성 카탈로그에 이미 등록돼 있었으나 지금까지 어느 타깃도 소비하지
+않고 있었다.
+
+**TypeScript 타깃**: 생성 폼의 네 컨트롤(`UInput`·`UTextarea`·`USelect`·`UCheckbox`) 전부에
+`disabled` prop을 방출한다 — 필드는 계속 보이고 현재 값에 바인딩된 채로, 편집만 막힌다.
+`readOnly`가 아니라 `disabled`를 선택한 이유: 체크박스·셀렉트는 네이티브 `readOnly` 의미가
+컴포넌트마다 일관되지 않지만 `disabled`는 넷 다 동일하게 지원한다.
+
+> **`disabled`는 새로 추가된 요구조건이다** — 소비 중인 컴포넌트 래퍼가 이 prop을 받지
+> 못하면 갱신해야 한다.
+
+**Model 타깃**: 생성 엔티티(쓰기·읽기 클래스 둘 다)에 `[Editable(false)]`를 방출한다 — TS
+쪽과 같은 메타데이터일 뿐, 이 리포가 생성하는 어떤 API 계층도 이를 강제하지 않는다(두 타깃
+모두 동일).
+
+### `@unique`/`@index` → 생성 엔티티의 `HasIndex()`
+
+SQL 타깃이 이미 UNIQUE 제약·인덱스로 방출하던 필드 단위 `@unique`/`@index`가 이제 Model
+타깃에도 도달한다. `OnModelCreating`에 `modelBuilder.Entity<T>().HasIndex(...)`(`@index`) /
+`.HasIndex(...).IsUnique()`(`@unique`)를 방출하며, 인덱스·제약 이름은 SQL Server(`UK_`/`IX_`)·
+PostgreSQL(`uq_`/`ix_`) 방언이 실제로 쓰는 이름과 정확히 일치한다. 한 필드가 둘 다 선언하면
+`unique`만 방출된다(제약이 이미 인덱스를 소유하므로 SQL 타깃과 동일한 배제). PK 필드는
+제외된다(이미 유일 인덱스를 갖는다).
+
+**섹션 레벨 복합 선언**(`@unique(c1, c2)`, `@index(c1)`)은 이번 릴리스에 포함되지 않는다 —
+필드 단위 선언만 방출한다.
+
+---
+
 ## 0.15.0
 
 ### 필드 단위 `@internal` — 저장하되 노출하지 않는다
