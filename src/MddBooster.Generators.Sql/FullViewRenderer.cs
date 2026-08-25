@@ -263,7 +263,12 @@ public static class FullViewRenderer
     /// Lookup/Rollup/Computed fields — a column that exists only on <c>{model}FullView</c>,
     /// not the base table.
     /// </summary>
-    private static bool IsDerivedColumn(
+    /// <summary>
+    /// Shared with <see cref="FullViewCycleDetector"/> — the cycle detector must ask the exact
+    /// same question the renderer asks when deciding a JOIN/subquery target, or the two can
+    /// disagree about which edges exist.
+    /// </summary>
+    internal static bool IsDerivedColumn(
         IReadOnlyDictionary<string, IReadOnlySet<string>>? derivedFieldsByModel,
         string model,
         string columnPascal)
@@ -332,7 +337,7 @@ public static class FullViewRenderer
         _ => false,
     };
 
-    private static (string fk, string column) ParsePath(string path)
+    internal static (string fk, string column) ParsePath(string path)
     {
         var idx = path.IndexOf('.');
         if (idx <= 0 || idx >= path.Length - 1)
@@ -340,7 +345,7 @@ public static class FullViewRenderer
         return (path[..idx], path[(idx + 1)..]);
     }
 
-    private static string ResolveReferenceTarget(ResolvedModel model, string fkFieldName)
+    internal static string ResolveReferenceTarget(ResolvedModel model, string fkFieldName)
     {
         var field = model.Fields.FirstOrDefault(f =>
             string.Equals(f.Name, fkFieldName, StringComparison.Ordinal));

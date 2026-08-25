@@ -215,6 +215,9 @@ public static class TsFormRenderer
 
         sb.Append("import { FormSection, FormRow } from '")
           .Append(imports.Modules.Layout).AppendLine("'");
+        // Only needed for the sectionProps passthrough below, but every entity has at least
+        // the "기타" fallback section, so this import is never actually unused.
+        sb.AppendLine("import type { CSSProperties } from 'react'");
 
         // Import exactly the controls the rendered fields actually use — derived from
         // the same classifier the renderer dispatches on, so the two cannot disagree.
@@ -264,6 +267,17 @@ public static class TsFormRenderer
             sb.AppendLine();
         }
 
+        // Section props type — lets the consumer inject per-section className/style, keyed by
+        // the same title string rendered onto <FormSection title="...">. Only className/style
+        // are exposed (docket #101 mdd-booster #102): the scoped request was a passthrough for
+        // consumer-side CSS-driven layout (e.g. collapsing a section), not a new built-in
+        // collapsible semantic — that stays a separate, undecided design question.
+        sb.Append("export type ").Append(entityName).AppendLine("FormSectionProps = Partial<Record<string, {");
+        sb.AppendLine("  className?: string");
+        sb.AppendLine("  style?: CSSProperties");
+        sb.AppendLine("}>>");
+        sb.AppendLine();
+
         // FormBase function.
         // When all fields are FK slots, form/onChange are not used in JSX.
         // Use destructuring rename { form: _form } to satisfy noUnusedParameters.
@@ -273,17 +287,22 @@ public static class TsFormRenderer
         sb.Append("  ").AppendLine(formDestructure + ",");
         sb.Append("  ").AppendLine(onChangeDestructure + ",");
         if (fkFields.Count > 0) sb.AppendLine("  slots,");
+        sb.AppendLine("  sectionProps,");
         sb.AppendLine("}: {");
         sb.Append("  form: Partial<").Append(entityName).AppendLine(">");
         sb.Append("  onChange: (updates: Partial<").Append(entityName).AppendLine(">) => void");
         if (fkFields.Count > 0) sb.Append("  slots?: ").Append(entityName).AppendLine("FormSlots");
+        sb.Append("  sectionProps?: ").Append(entityName).AppendLine("FormSectionProps");
         sb.AppendLine("}) {");
         sb.AppendLine("  return (");
         sb.AppendLine("    <>");
 
         foreach (var (sectionTitle, fields) in sections)
         {
-            sb.Append("      <FormSection title=\"").Append(sectionTitle).AppendLine("\">");
+            var escapedTitle = sectionTitle.Replace("'", "\\'");
+            sb.Append("      <FormSection title=\"").Append(sectionTitle)
+              .Append("\" className={sectionProps?.['").Append(escapedTitle).Append("']?.className}")
+              .Append(" style={sectionProps?.['").Append(escapedTitle).AppendLine("']?.style}>");
             RenderSectionRows(sb, fields, enumNames, withSystemValues);
             sb.AppendLine("      </FormSection>");
         }

@@ -47,9 +47,33 @@ public class TsFormRendererTests
         var results = TsFormRenderer.RenderAll(models, [], TestImports);
         var content = results["OrderItem"];
 
-        Assert.Contains("<FormSection title=\"기본\">", content);
-        Assert.Contains("<FormSection title=\"상세\">", content);
-        Assert.Contains("<FormSection title=\"기타\">", content);
+        Assert.Contains(
+            "<FormSection title=\"기본\" className={sectionProps?.['기본']?.className} style={sectionProps?.['기본']?.style}>",
+            content);
+        Assert.Contains(
+            "<FormSection title=\"상세\" className={sectionProps?.['상세']?.className} style={sectionProps?.['상세']?.style}>",
+            content);
+        Assert.Contains(
+            "<FormSection title=\"기타\" className={sectionProps?.['기타']?.className} style={sectionProps?.['기타']?.style}>",
+            content);
+    }
+
+    [Fact]
+    public void Emits_a_section_props_type_and_wires_it_through_FormBase()
+    {
+        // docket #102 — a passthrough for consumer-side per-section className/style, so a
+        // consumer can (e.g.) collapse or otherwise style one section without forking the
+        // generated FormBase. Scoped to className/style only; no built-in collapse semantic.
+        var models = LoadFixture("order-with-group.m3l.md");
+        var results = TsFormRenderer.RenderAll(models, [], TestImports);
+        var content = results["OrderItem"];
+
+        Assert.Contains("export type OrderItemFormSectionProps = Partial<Record<string, {", content);
+        Assert.Contains("className?: string", content);
+        Assert.Contains("style?: CSSProperties", content);
+        Assert.Contains("import type { CSSProperties } from 'react'", content);
+        Assert.Contains("sectionProps,", content);
+        Assert.Contains("sectionProps?: OrderItemFormSectionProps", content);
     }
 
     [Fact]

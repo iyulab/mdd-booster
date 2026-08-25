@@ -53,6 +53,21 @@ public sealed class SqlGenerator : IArtifactGenerator
                     p.Lookups.Concat(p.Rollups).Concat(p.Computeds).Select(f => NameCasing.ToPascalCase(f.Name))),
                 StringComparer.Ordinal);
 
+        // Fail the build, not the deployment: two models can each redirect a JOIN/subquery to
+        // the other's FullView for independently valid reasons and still add up to a cycle
+        // neither one's own render step can see on its own (docket #101).
+        var cycle = FullViewCycleDetector.Detect(allPlans, derivedFieldsByModel);
+        if (cycle != null)
+        {
+            throw new InvalidOperationException(
+                $"Circular FullView dependency detected: {string.Join(" -> ", cycle)}. " +
+                "SQL Server cannot deploy views that reference each other (SQL72009). This happens " +
+                "when a chained Lookup passes through a derived (Lookup/Rollup/Computed) column on a " +
+                "model that also Rollups an aggregate sourced from a derived column back on the " +
+                "originating model. Break the cycle by pointing the chained Lookup at a raw base " +
+                "column, or by sourcing the Rollup's aggregated field from a raw column instead.");
+        }
+
         var viewFileNames = new List<string>();
 
         foreach (var plan in allPlans)

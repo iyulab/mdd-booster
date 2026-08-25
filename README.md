@@ -333,7 +333,15 @@ export function enumToOptions(labels: Record<string, string>): /* USelect의 opt
 
 #### `formLayoutImport` 가 가리킬 모듈 — 레이아웃 (기본값 `@iyulab/enterprise`)
 
-`FormSection`(`title`) · `FormRow`(`full?`) 를 export해야 한다.
+`FormSection`(`title` **`className?: string`** **`style?: CSSProperties`**) · `FormRow`(`full?`) 를 export해야 한다.
+
+- **`className`·`style`는 새로 추가된 요구조건이다**(버전은 [CHANGELOG](https://github.com/iyulab/mdd-booster/blob/main/CHANGELOG.md) 참조)
+  — 생성 폼의 `{Entity}FormBase`가 받는 `sectionProps?: {Entity}FormSectionProps`(섹션 제목 →
+  `{ className?, style? }`)를 그대로 각 `<FormSection>`에 전달한다. 소비앱이 특정 섹션만 접기/
+  숨기기 같은 CSS 기반 커스터마이징을 스스로 구현할 수 있게 하려는 것 — 내장 접힘 시맨틱은
+  아직 아니다(수요 관측 전). **`className`/`style`은 `sectionProps`를 실제로 넘기는지와 무관하게
+  항상 방출된다**(`undefined`일 뿐 프롭 자체는 항상 전달됨) — `FormSection`이 이 프롭을 선언하지
+  않으면 `sectionProps`를 쓰지 않는 소비앱도 **모든 생성 폼의 컴파일이 즉시 깨진다.**
 
 #### 생성기가 제공하는 것 (소비자가 만들 필요 없음)
 
