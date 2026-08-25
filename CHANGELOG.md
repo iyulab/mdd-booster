@@ -10,6 +10,37 @@
 
 ---
 
+## 0.17.0
+
+### 체이닝 Lookup + rollup 역방향 순환 뷰 의존성 — build-time 조기 실패
+
+한 모델이 다른 모델의 파생(rollup) 필드를 lookup으로 체이닝하고, 그 다른 모델이 다시 앞
+모델의 파생 필드를 되짚는 경우, `FullViewRenderer`가 모델 단위로는 각각 옳게 판단한 리다이렉트
+두 개가 합쳐져 모델 간 순환을 만들 수 있었다. 지금까지는 `mdd build`가 이를 통과시켰고,
+Schemorph 같은 선언형 스키마 도구가 실제로 뷰를 배포하려 할 때에야 SQL72009로 처음 드러났다.
+
+이제 `mdd build`가 뷰를 쓰기 전에 순환을 그래프로 탐지해 순환 경로를 이름으로 나열하며
+즉시 실패한다 — 배포 시점이 아니라 빌드 시점에 잡힌다. 자동 우회(순환 지점을 베이스
+테이블+원 lookup 대상으로 재라우팅)는 이번 릴리스에 포함되지 않는다 — `IsDerivedColumn`
+판정이 이미 한 번 회귀를 낸 민감한 지점이라 별도 트랙으로 신중히 다룬다.
+
+### 생성 폼 `FormSection` — `sectionProps` 패스스루
+
+소비 컴포넌트(`@iyulab/enterprise`의 `FormSection`)가 이미 받는 `className`/`style`을
+생성기가 호출부에서 넘길 방법이 없었다. 이제 각 엔티티마다 `{Entity}FormSectionProps`
+타입을 방출하고, 생성 폼(`{Entity}FormBase`)이 `sectionProps?: {Entity}FormSectionProps`를
+받아 섹션 제목별로 `className`/`style`을 해당 `<FormSection>`에 그대로 전달한다. 소비앱은
+이걸로 CSS 기반의 접기/숨김을 스스로 구현할 수 있다. 내장 접힘 시맨틱(`advancedSections`,
+`@group`의 collapsible 옵션)은 이번 릴리스에 포함되지 않는다 — 실사용 사례가 하나뿐이라
+UX(펼침 상태 기억 위치, 접힌 섹션의 검증 타이밍)를 지금 굳히기엔 이르다고 판단했다.
+
+> **`className`/`style`은 새로 추가된 요구조건이다** — `sectionProps`를 넘기는지와 무관하게
+> 모든 생성 폼의 `<FormSection>` 호출에 항상 방출되므로, 소비 중인 `FormSection` 컴포넌트가
+> 이 두 프롭을 받지 못하면 업그레이드 즉시 컴파일이 깨진다. `disabled`(0.16.0)와 같은 종류의
+> 요구조건 추가다.
+
+---
+
 ## 0.16.0
 
 ### `@immutable` — 생성 폼에서 `disabled`, 생성 엔티티에서 `[Editable(false)]`
