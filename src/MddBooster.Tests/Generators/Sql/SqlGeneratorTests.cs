@@ -72,6 +72,10 @@ public sealed class SqlGeneratorTests : IDisposable
         Assert.Contains("Circular FullView dependency", ex.Message);
         Assert.Contains("Order", ex.Message);
         Assert.Contains("OrderItem", ex.Message);
+        // Each hop after the first names the field that redirected the previous model's
+        // FullView here, not just the bare model-name path.
+        Assert.Contains("(via Order.SupplyTotal rollup)", ex.Message);
+        Assert.Contains("(via OrderItem.CustomerName lookup)", ex.Message);
     }
 
     [Fact]

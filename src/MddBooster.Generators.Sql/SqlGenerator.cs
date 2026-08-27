@@ -59,8 +59,10 @@ public sealed class SqlGenerator : IArtifactGenerator
         var cycle = FullViewCycleDetector.Detect(allPlans, derivedFieldsByModel);
         if (cycle != null)
         {
+            var path = string.Join(" -> ", cycle.Select(step =>
+                step.Via is null ? step.Model : $"{step.Model} (via {step.Via})"));
             throw new InvalidOperationException(
-                $"Circular FullView dependency detected: {string.Join(" -> ", cycle)}. " +
+                $"Circular FullView dependency detected: {path}. " +
                 "SQL Server cannot deploy views that reference each other (SQL72009). This happens " +
                 "when a chained Lookup passes through a derived (Lookup/Rollup/Computed) column on a " +
                 "model that also Rollups an aggregate sourced from a derived column back on the " +

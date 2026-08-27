@@ -69,10 +69,16 @@ public class FullViewCycleDetectorTests
             var cycle = FullViewCycleDetector.Detect(plans, derivedFieldsByModel);
 
             Assert.NotNull(cycle);
-            Assert.Contains("Order", cycle);
-            Assert.Contains("OrderItem", cycle);
+            Assert.Contains(cycle!, step => step.Model == "Order");
+            Assert.Contains(cycle, step => step.Model == "OrderItem");
             // A cycle path starts and ends on the same node.
-            Assert.Equal(cycle![0], cycle[^1]);
+            Assert.Equal(cycle[0].Model, cycle[^1].Model);
+            // The first hop has no incoming edge; every later hop names the field that redirected
+            // the previous model's FullView to this one.
+            Assert.Null(cycle[0].Via);
+            Assert.All(cycle.Skip(1), step => Assert.NotNull(step.Via));
+            Assert.Contains(cycle, step => step.Via == "Order.SupplyTotal rollup");
+            Assert.Contains(cycle, step => step.Via == "OrderItem.CustomerName lookup");
         }
         finally { File.Delete(tmp); }
     }
