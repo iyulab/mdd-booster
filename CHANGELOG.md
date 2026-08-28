@@ -10,6 +10,31 @@
 
 ---
 
+## 0.18.0
+
+### `mdd.json` JSON Schema
+
+에디터가 JSON Schema를 이해하면(예: VS Code) `mdd.json`을 저장 즉시 검증하고 타깃별 옵션을
+자동완성할 수 있다. 모든 계층에서 `additionalProperties: false`를 강제해, 타깃 레벨 옵션을
+설정 루트에 잘못 둔 경우(System.Text.Json이 알 수 없는 속성을 기본적으로 무시하므로 조용히
+무시된다) 가장 흔한 실수 유형을 즉시 드러낸다. `$schema` 필드에
+`https://raw.githubusercontent.com/iyulab/mdd-booster/main/schemas/mdd.schema.json`을 추가하면
+바로 쓸 수 있다.
+
+README의 `emitForeignKeyIndexes` 기본값 표기 오류도 함께 정정했다 — `0.13.0`에서
+`false`→`true`로 바뀐 뒤 세 릴리스 동안 문서가 낡은 값을 그대로 두고 있었다.
+
+### 실행 가능한 퀵스타트 샘플
+
+README의 Model 타깃 퀵스타트가 실행 가능한 예제를 가리키지 않고 있었다. `samples/`에
+`@reference`/`@lookup`/`@rollup`/`@computed`/enum을 쓰는 Project/Task 모델과 동작하는
+`mdd.json`(Sql/Model/Api 타깃)을 추가했다 — `mdd build ./samples`로 바로 검증할 수 있다.
+생성 결과물은 커밋 대상이 아니다(재생성되는 산출물).
+
+### 파괴적 변경 없음
+
+두 추가 모두 기존 모델·설정의 생성 결과에 영향을 주지 않는다.
+
 ## 0.17.1
 
 ### 순환 FullView 의존성 에러 메시지 — 필드 단위 귀속
