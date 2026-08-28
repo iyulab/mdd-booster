@@ -239,6 +239,20 @@ dotnet run --project src/MddBooster.Cli -- build ./samples
 #   OData/GraphQL 등록 코드가 생성된다(gitignore 대상 — 매 빌드마다 새로 나온다)
 ```
 
+**Model 타깃 출력을 컴파일하려면 소비 프로젝트에 `global using` 선언이 필요하다.** 생성된
+엔티티는 런타임 기반 타입(`IyuEntity` 등)을 단순 이름으로만 참조한다 — 이 저장소는 그 타입들이
+어느 네임스페이스에 있는지 알지 못하도록 설계돼 있으므로(위 「생성 타깃」 표), 소비 프로젝트가
+직접 `using` 을 선언해야 한다. 필요한 선언 목록은 소비하는 런타임의 README를 따른다(예:
+[iyu-framework-v5](https://github.com/iyulab/iyu-framework-v5#readme) 소비 시 "Namespaces a
+consumer needs" 절). 빠뜨리면 `CS0246`으로 드러난다.
+
+**Sql 타깃의 `Scripts_gen/`은 SSDT post-deployment 관례다.** `Tables_gen`·`Views_gen`(선언적
+DDL)과 달리, desired-state 스타일 스키마 관리 도구(예: 선언형 diff/apply 도구)는 선언적 DDL만
+기대하므로 이 스크립트를 그대로 desired-state 디렉터리에 두면 스킵된다 — 별도 배포 단계(또는
+버저닝된 마이그레이션)로 분리해 적용해야 한다. `emitSqlProj: false`(위 「빌드 실행」 예시가
+쓰는 설정)로도 이 파일 자체는 계속 생성되므로, 소비 파이프라인에서 무시하거나 분리하는 처리는
+소비자 몫이다.
+
 빌드가 실패하면 한 줄 에러 메시지만 출력한다(JSON 스키마 오류는 위치 정보를 포함). 원인
 추적을 위해 .NET 스택트레이스가 필요하면 `MDD_DEBUG` 환경변수를 설정한다:
 

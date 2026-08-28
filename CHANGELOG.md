@@ -12,6 +12,14 @@
 
 ## [Unreleased]
 
+### README — Model/Sql 타깃 소비 시 주의사항 안내
+
+README의 "빌드 실행" 절(Model 타깃 퀵스타트 직후)에 두 가지를 추가했다: ⑴ Model 타깃 생성
+엔티티는 런타임 타입을 단순 이름으로만 참조하므로 소비 프로젝트가 직접 `global using`을
+선언해야 한다는 것 — 빠뜨리면 `CS0246`으로 드러난다. ⑵ Sql 타깃의 `Scripts_gen/`은 SSDT
+post-deployment 관례라, desired-state 스타일 스키마 관리 도구는 이를 스킵하므로 별도 배포
+단계로 분리해야 한다는 것. 둘 다 문서만 추가, 생성기 동작 변경 없음.
+
 ### CLI 최상위 예외 출력 정리
 
 `mdd build`가 실패할 때 원시 .NET 스택트레이스(~10줄)가 그대로 출력되던 문제를 고쳤다 —
