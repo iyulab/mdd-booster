@@ -21,6 +21,7 @@ M3L → SQL/C#/API 코드 생성기. 단일 `tables.m3l.md` 소스로 SSDT 스�
 
 ```json
 {
+  "$schema": "https://raw.githubusercontent.com/iyulab/mdd-booster/main/schemas/mdd.schema.json",
   "sources": ["./tables.m3l.md"],
   "targets": [
     { "type": "Sql", "projectPath": "../src/MyApp.Database", "schema": "dbo" },
@@ -30,11 +31,16 @@ M3L → SQL/C#/API 코드 생성기. 단일 `tables.m3l.md` 소스로 SSDT 스�
 }
 ```
 
+`$schema`는 선택이지만 넣어 두길 권한다 — VS Code 등 JSON Schema를 아는 에디터가 타깃별로
+허용되는 키를 자동완성하고, **타깃 레벨 옵션(`emitForeignKeyIndexes` 등)을 루트에 잘못
+두는 실수를 저장 즉시 잡아준다**(과거엔 이 실수가 조용히 무시돼 "옵션이 안 먹는다"는
+증상으로만 드러났다). 스키마 정본은 [`schemas/mdd.schema.json`](./schemas/mdd.schema.json).
+
 Sql 타깃 선택 노브(모두 생략 가능): `emitSqlProj`(기본 true — SSDT `.sqlproj` 패치),
 `emitRefreshScript`(기본 true — post-deployment `sp_refreshview` 스크립트),
 `emitEnumCheckConstraints`(기본 false — enum 컬럼 table-level `CK_{Table}_{Column}` CHECK.
 SSDT dacpac은 CHECK diff가 불안정하므로 선언형 도구(Schemorph) 소비자용 opt-in),
-`emitForeignKeyIndexes`(기본 false — 아래).
+`emitForeignKeyIndexes`(기본 true, 0.13.0부터 — 아래).
 
 **`projectPath`/`outputPath`/`formsOutputPath`/`sqlProjectPath`는 상대경로면 `mdd.json`이 있는
 디렉터리 기준, 절대경로면 그대로 쓴다.** 절대경로를 쓰면서 같은 저장소를 여러 물리적
@@ -87,8 +93,9 @@ T-SQL `IX_{Model}_{Column}` · PostgreSQL `ix_{table}_{column}`. 대상 판정�
 | 복합 인덱스/유니크의 **선두** 컬럼 | ❌ `(a, b)` 인덱스가 `a` 조회를 처리한다 |
 | 복합 인덱스/유니크의 **둘째 이후** 컬럼 | ✅ 그 인덱스로는 조회되지 않는다 |
 
-**기본값은 `false`다.** 켜는 것은 읽기 이득과 쓰기·저장 비용의 교환이며, 기존 스키마에 조용히
-적용할 판단이 아니다. 끈 상태의 산출물은 이전과 동일하다.
+**기본값은 `true`다(0.13.0부터 — 이전은 `false`).** EF가 `@reference` 마다 관례로 인덱스를
+만드는 것과 Sql/Model 두 타깃을 정렬한 결정이다. 끄면 0.12.x 산출물(인덱스 미방출)로 복귀한다 —
+상세 근거는 [CHANGELOG의 0.13.0 항목](./CHANGELOG.md) 참고.
 
 > 알려진 예외: **널 허용 유니크** 컬럼은 T-SQL 에서 filtered unique index 가 되어 일반 조인에는
 > 쓰이지 않지만(PG 의 plain unique index 와 다르다), 판정기는 양쪽 모두 덮인 것으로 본다.

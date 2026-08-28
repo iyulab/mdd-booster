@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/iyulab/mdd-booster/main/schemas/mdd.schema.json",
   "sources": ["./tables.m3l.md"],
   "targets": [
     {

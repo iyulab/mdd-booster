@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/iyulab/mdd-booster/main/schemas/mdd.schema.json",
+  "title": "mdd-booster configuration (mdd.json)",
+  "description": "Config consumed by `mdd build` — one or more M3L sources, generated into one or more targets (Sql/Model/Api/TypeScript). A property placed at the wrong level (e.g. a target-level knob left at the root) is otherwise silently ignored by the loader; this schema's additionalProperties:false at every level exists specifically to catch that.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sources", "targets"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional — point editors at this file for autocomplete/validation."
+    },
+    "sources": {
+      "type": "array",
+      "description": "Paths to .m3l.md files, relative to this file's directory. Multiple sources are parsed as one merged resolve unit (cross-file inheritance/interfaces are supported).",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    },
+    "targets": {
+      "type": "array",
+      "description": "One or more generation targets. The same type may appear more than once (e.g. two Api targets for two servers sharing one model) as long as their path differs.",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/sqlTarget" },
+          { "$ref": "#/$defs/modelTarget" },
+          { "$ref": "#/$defs/apiTarget" },
+          { "$ref": "#/$defs/typeScriptTarget" }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "sqlTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "projectPath"],
+      "properties": {
+        "type": { "const": "Sql" },
+        "projectPath": {
+          "type": "string",
+          "description": "Output directory, relative to this file's directory unless absolute."
+        },
+        "dialect": {
+          "type": "string",
+          "enum": ["tsql", "postgres", "postgresql", "pg"],
+          "default": "tsql",
+          "description": "SQL dialect. tsql (default) keeps the SSDT/T-SQL layout; postgres/postgresql/pg switches to snake_case identifiers and a tables_gen/ layout. Matched case-insensitively by the CLI; use lowercase here."
+        },
+        "schema": {
+          "type": "string",
+          "description": "Database schema name. Defaults to \"dbo\" for tsql, \"public\" for postgres."
+        },
+        "emitSqlProj": {
+          "type": "boolean",
+          "default": true,
+          "description": "tsql only — patch the .sqlproj ItemGroup with generated files. Set false when a desired-state tool (e.g. Schemorph) consumes the schema instead. Not supported under dialect:postgres (that dialect has no .sqlproj concept)."
+        },
+        "emitRefreshScript": {
+          "type": "boolean",
+          "default": true,
+          "description": "tsql only — emit the post-deployment RefreshViews.sql (sp_refreshview). Independent of emitSqlProj. Not supported under dialect:postgres."
+        },
+        "emitEnumCheckConstraints": {
+          "type": "boolean",
+          "default": false,
+          "description": "Emit table-level CK_{Table}_{Column} CHECK constraints for enum columns. Off by default because SSDT dacpac represents CHECK as drop+create on every diff; declarative-tool consumers (Schemorph) can opt in for DB-level enum enforcement."
+        },
+        "emitForeignKeyIndexes": {
+          "type": "boolean",
+          "default": true,
+          "description": "Create an index on every @reference foreign-key column the model has not already covered by a PK/unique/composite-index leading column. Default true since 0.13.0 (was false before) — set false to keep pre-0.13 output."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "dialect": { "enum": ["postgres", "postgresql", "pg"] } },
+            "required": ["dialect"]
+          },
+          "then": {
+            "properties": {
+              "emitSqlProj": { "const": false },
+              "emitRefreshScript": { "const": false }
+            }
+          }
+        }
+      ]
+    },
+    "modelTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "projectPath", "namespace", "dbContextName"],
+      "properties": {
+        "type": { "const": "Model" },
+        "projectPath": {
+          "type": "string",
+          "description": "Output directory, relative to this file's directory unless absolute."
+        },
+        "namespace": {
+          "type": "string",
+          "description": "C# namespace for generated entities/enums/DbContext."
+        },
+        "dbContextName": {
+          "type": "string",
+          "description": "Name of the generated DbContext class."
+        },
+        "sqlProjectPath": {
+          "type": "string",
+          "description": "Optional path to the SSDT SQL project root. When set, the generator scans dbo/Views/ for {Name}ExtView.sql files to use as the highest-priority read backing."
+        },
+        "dialect": {
+          "type": "string",
+          "enum": ["tsql", "postgres", "postgresql", "pg"],
+          "default": "tsql",
+          "description": "Must match the Sql target's dialect this model is paired with — a mismatch produces snake_case/PascalCase-mismatched naming between the DDL and the EF mapping (build-time warning, not an error)."
+        }
+      }
+    },
+    "apiTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "projectPath", "namespace"],
+      "not": { "required": ["includeEntities", "excludeEntities"] },
+      "properties": {
+        "type": { "const": "Api" },
+        "projectPath": {
+          "type": "string",
+          "description": "Output directory, relative to this file's directory unless absolute."
+        },
+        "namespace": {
+          "type": "string",
+          "description": "C# namespace for the generated ApiRegistration_gen.cs."
+        },
+        "entitiesNamespace": {
+          "type": "string",
+          "description": "Namespace of the entity types this target references. Required (build error) when more than one Model target declares a namespace; otherwise inferred from the sole Model target."
+        },
+        "includeEntities": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Whitelist of entities this target exposes. Mutually exclusive with excludeEntities (build error if both are set). Omit both for all entities. Does not track new entities added later — prefer excludeEntities if new entities should be exposed by default."
+        },
+        "excludeEntities": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Blacklist of entities this target omits. Mutually exclusive with includeEntities."
+        }
+      }
+    },
+    "typeScriptTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "outputPath"],
+      "not": { "required": ["includeEntities", "excludeEntities"] },
+      "properties": {
+        "type": { "const": "TypeScript" },
+        "outputPath": {
+          "type": "string",
+          "description": "Directory the generated *_gen.ts files (5) go into, relative to this file's directory unless absolute."
+        },
+        "formsOutputPath": {
+          "type": "string",
+          "description": "Directory {Entity}Form_gen.tsx files go into. Omit to skip form generation entirely."
+        },
+        "formLayoutImport": {
+          "type": "string",
+          "default": "@iyulab/enterprise",
+          "description": "Module a generated form imports FormSection/FormRow from. The default is a historical compatibility value, not a recommendation."
+        },
+        "formControlsImport": {
+          "type": "string",
+          "default": "../components/ui",
+          "description": "Module a generated form imports its controls (UInput/UTextarea/USelect/UCheckbox) from."
+        },
+        "formSelectOptionsImport": {
+          "type": "string",
+          "default": "../lib/select-options",
+          "description": "Module supplying enumToOptions, consumed by the generated {Enum}Labels maps."
+        },
+        "includeEntities": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Whitelist of entities this target exposes. Mutually exclusive with excludeEntities. Keep aligned with any Api target's filter — entity_names_gen.ts mirrors OData entity set names, and a name this target advertises without a matching Api target registering it becomes a dead OData URL (build-time warning)."
+        },
+        "excludeEntities": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Blacklist of entities this target omits. Mutually exclusive with includeEntities."
+        }
+      }
+    }
+  }
+}

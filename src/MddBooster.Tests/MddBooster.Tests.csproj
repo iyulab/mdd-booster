@@ -14,6 +14,7 @@
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
+    <PackageReference Include="JsonSchema.Net" Version="9.4.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -40,6 +41,16 @@
       point — a ratchet that silently stops finding its subject asserts nothing.
     -->
     <None Include="..\..\README.md" Link="contract\README.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!--
+      Same ratchet shape as the README above: MddSchemaTests validates the published
+      schema/sample against each other, not a copy of either kept in test code.
+    -->
+    <None Include="..\..\schemas\mdd.schema.json" Link="contract\mdd.schema.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\samples\mdd.json" Link="contract\samples-mdd.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
