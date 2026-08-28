@@ -10,6 +10,16 @@
 
 ---
 
+## 0.17.1
+
+### 순환 FullView 의존성 에러 메시지 — 필드 단위 귀속
+
+`0.17.0`의 build-time 순환 감지는 순환 경로를 모델 이름만으로 나열했다(`Order -> OrderItem
+-> Order`). Lookup이 많은 모델에서는 어느 필드가 각 홉을 만들었는지 역추적해야 했다. 이제
+각 홉에 그 홉을 만든 필드와 종류가 붙는다: `Order -> OrderItem (via Order.SupplyTotal rollup)
+-> Order (via OrderItem.CustomerName lookup)`. 순환 감지 로직 자체는 바뀌지 않았다 — 같은
+그래프에서 귀속 정보만 함께 기록한다.
+
 ## 0.17.0
 
 ### 체이닝 Lookup + rollup 역방향 순환 뷰 의존성 — build-time 조기 실패
