@@ -26,7 +26,10 @@ public static class Program
         catch (Exception ex)
         {
             Console.Error.WriteLine($"error: {ex.Message}");
-            Console.Error.WriteLine(ex.StackTrace);
+            if (Environment.GetEnvironmentVariable("MDD_DEBUG") is not null)
+            {
+                Console.Error.WriteLine(ex.StackTrace);
+            }
             return 1;
         }
     }

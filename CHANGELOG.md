@@ -10,6 +10,15 @@
 
 ---
 
+## [Unreleased]
+
+### CLI 최상위 예외 출력 정리
+
+`mdd build`가 실패할 때 원시 .NET 스택트레이스(~10줄)가 그대로 출력되던 문제를 고쳤다 —
+이제 예외 메시지 한 줄만 출력한다. JSON 스키마 오류는 이미 메시지 자체에 `Path`/`LineNumber`/
+`BytePositionInLine`이 포함돼 있어 정보 손실이 없다. 스택트레이스가 필요하면 `MDD_DEBUG`
+환경변수를 설정한다(`MDD_DEBUG=1 mdd build`).
+
 ## 0.18.0
 
 ### `mdd.json` JSON Schema

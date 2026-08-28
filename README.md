@@ -239,6 +239,13 @@ dotnet run --project src/MddBooster.Cli -- build ./samples
 #   OData/GraphQL 등록 코드가 생성된다(gitignore 대상 — 매 빌드마다 새로 나온다)
 ```
 
+빌드가 실패하면 한 줄 에러 메시지만 출력한다(JSON 스키마 오류는 위치 정보를 포함). 원인
+추적을 위해 .NET 스택트레이스가 필요하면 `MDD_DEBUG` 환경변수를 설정한다:
+
+```bash
+MDD_DEBUG=1 mdd build ./mdd
+```
+
 ## M3L 기능 지원 (현재)
 
 | 기능 | 지원 |
