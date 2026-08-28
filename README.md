@@ -11,7 +11,7 @@ M3L → SQL/C#/API 코드 생성기. 단일 `tables.m3l.md` 소스로 SSDT 스�
 
 | 타입 | 출력 | 소비자 |
 |---|---|---|
-| **Sql** | tsql(기본): `dbo/Tables_gen/{Entity}.sql`, `dbo/Views_gen/{Entity}_{full,ext}.sql`, `.sqlproj` ItemGroup 패치 · postgres: `tables_gen/{table}.sql` (snake_case, 아래 방언 절) | SSDT 프로젝트 · Schemorph |
+| **Sql** | tsql(기본): `dbo/Tables_gen/{Entity}.sql`, `dbo/Views_gen/{Entity}_{full,ext}.sql`, `.sqlproj` ItemGroup 패치 · postgres: `tables_gen/{table}.sql` (snake_case, 아래 방언 절) | SSDT 프로젝트 · desired-state 스타일 스키마 관리 도구 |
 | **Model** | `Entity_gen/{I,}{Entity}{,Ext}.cs`, `Enum_gen/{Enum}.cs`, `DbContext_gen/{Name}.cs` (with auto-`ToView` 매핑) | C# classlib (EF Core + 소비앱의 런타임 패키지) |
 | **Api** | `Api_gen/ApiRegistration_gen.cs` (OData + GraphQL 엔티티 페어 등록) | ASP.NET Core 서버 (OData/GraphQL 런타임) |
 
@@ -39,7 +39,7 @@ M3L → SQL/C#/API 코드 생성기. 단일 `tables.m3l.md` 소스로 SSDT 스�
 Sql 타깃 선택 노브(모두 생략 가능): `emitSqlProj`(기본 true — SSDT `.sqlproj` 패치),
 `emitRefreshScript`(기본 true — post-deployment `sp_refreshview` 스크립트),
 `emitEnumCheckConstraints`(기본 false — enum 컬럼 table-level `CK_{Table}_{Column}` CHECK.
-SSDT dacpac은 CHECK diff가 불안정하므로 선언형 도구(Schemorph) 소비자용 opt-in),
+SSDT dacpac은 CHECK diff가 불안정하므로 선언형 스키마 관리 도구 소비자용 opt-in),
 `emitForeignKeyIndexes`(기본 true, 0.13.0부터 — 아래).
 
 **`projectPath`/`outputPath`/`formsOutputPath`/`sqlProjectPath`는 상대경로면 `mdd.json`이 있는
@@ -183,8 +183,8 @@ DDL과 EF 매핑이 서로 다른 네이밍을 전제하게 된다).
 { "type": "Model", "dialect": "postgres", "projectPath": "../src/MyApp.Entities", "namespace": "…", "dbContextName": "…" }
 ```
 
-**Sql 타깃 (postgres)** — `{projectPath}/tables_gen/{table}.sql` (Schemorph desired-state
-관례: 테이블당 한 파일. `schema` 기본 `public`):
+**Sql 타깃 (postgres)** — `{projectPath}/tables_gen/{table}.sql` (desired-state 스타일
+스키마 관리 도구의 관례: 테이블당 한 파일. `schema` 기본 `public`):
 
 - **식별자 = 비인용 snake_case**: 테이블명은 모델명 Pascal→snake 결정적 변환
   (`WorkOrder→work_order`, `FMSCode→fms_code`, `Iso14224Class→iso14224_class`),
@@ -230,8 +230,8 @@ mdd build ./mdd   # mdd.json 이 있는 디렉터리 — 생략하면 현재 디
 
 **바로 실행해 볼 수 있는 예시**는 이 리포의 [`samples/`](./samples)에 있다 —
 `tables.m3l.md`(Project/Task, `@reference`·`@lookup`·`@rollup`·`@computed`·enum 을 갖춘 작은
-모델) + `mdd.json`(Sql·Model·Api 3타깃, `emitSqlProj: false`로 Schemorph 같은 선언형 도구
-소비를 가정) 한 쌍이다:
+모델) + `mdd.json`(Sql·Model·Api 3타깃, `emitSqlProj: false`로 desired-state 스타일 스키마
+관리 도구 소비를 가정) 한 쌍이다:
 
 ```bash
 dotnet run --project src/MddBooster.Cli -- build ./samples
