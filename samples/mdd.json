@@ -1,0 +1,22 @@
+{
+  "sources": ["./tables.m3l.md"],
+  "targets": [
+    {
+      "type": "Sql",
+      "projectPath": "./generated/Database",
+      "schema": "dbo",
+      "emitSqlProj": false
+    },
+    {
+      "type": "Model",
+      "projectPath": "./generated/Entities",
+      "namespace": "TaskTracker.Entities",
+      "dbContextName": "TaskTrackerDbContext"
+    },
+    {
+      "type": "Api",
+      "projectPath": "./generated/Server",
+      "namespace": "TaskTracker.Server"
+    }
+  ]
+}

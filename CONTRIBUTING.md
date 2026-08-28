@@ -30,6 +30,7 @@ dotnet build MddBooster.slnx
 dotnet test                                          # MddBooster.Tests
 dotnet test --filter "FullyQualifiedName~<Name>"     # 테스트 하나만
 dotnet run --project src/MddBooster.Cli -- build <mdd.json 이 있는 디렉터리>
+dotnet run --project src/MddBooster.Cli -- build ./samples   # 바로 돌려볼 수 있는 예시
 ```
 
 `TreatWarningsAsErrors` 가 켜져 있다 — 경고가 빌드를 깬다.

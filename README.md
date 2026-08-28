@@ -221,6 +221,17 @@ dotnet run --project src/MddBooster.Cli -- build path/to/mdd
 mdd build ./mdd   # mdd.json 이 있는 디렉터리 — 생략하면 현재 디렉터리
 ```
 
+**바로 실행해 볼 수 있는 예시**는 이 리포의 [`samples/`](./samples)에 있다 —
+`tables.m3l.md`(Project/Task, `@reference`·`@lookup`·`@rollup`·`@computed`·enum 을 갖춘 작은
+모델) + `mdd.json`(Sql·Model·Api 3타깃, `emitSqlProj: false`로 Schemorph 같은 선언형 도구
+소비를 가정) 한 쌍이다:
+
+```bash
+dotnet run --project src/MddBooster.Cli -- build ./samples
+# → samples/generated/{Database,Entities,Server}/ 에 SSDT 스키마·EF Core 엔티티·
+#   OData/GraphQL 등록 코드가 생성된다(gitignore 대상 — 매 빌드마다 새로 나온다)
+```
+
 ## M3L 기능 지원 (현재)
 
 | 기능 | 지원 |
