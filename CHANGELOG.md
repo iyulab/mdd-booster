@@ -12,6 +12,8 @@
 
 ## [Unreleased]
 
+## 0.18.1
+
 ### README — Model/Sql 타깃 소비 시 주의사항 안내
 
 README의 "빌드 실행" 절(Model 타깃 퀵스타트 직후)에 두 가지를 추가했다: ⑴ Model 타깃 생성
