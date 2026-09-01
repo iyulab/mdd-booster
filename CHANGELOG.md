@@ -12,6 +12,15 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **nullable number 필드의 폼 클리어가 OData PATCH에 반영되지 않던 결함 수정** — 생성 폼
+  (`*_gen.tsx`)의 number 컨트롤이 값을 지울 때 필드의 nullable 여부와 무관하게 항상
+  `undefined`를 보냈다. `JSON.stringify`가 `undefined` 프로퍼티를 직렬화에서 통째로 생략해,
+  PATCH 바디에 그 필드가 아예 빠지고 OData delta 시맨틱상 "손대지 않음"으로 해석돼 클리어가
+  조용히 무시됐다. `date`/`select`/`textarea` 컨트롤이 이미 쓰던 nullable/required 구분
+  패턴(nullable → `null`, required만 `undefined`)을 number 컨트롤에도 적용해 해소.
+
 ## 0.18.1
 
 ### README — Model/Sql 타깃 소비 시 주의사항 안내

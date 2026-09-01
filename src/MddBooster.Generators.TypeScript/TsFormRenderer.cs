@@ -602,12 +602,16 @@ public static class TsFormRenderer
             return $"<UInput label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr} type=\"date\" value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || {dateEmpty} }})}} />";
         }
 
-        // number types — onChange uses undefined (not null) because Partial<T> marks fields as T | undefined.
+        // number types — nullable fields must clear via null (OData PATCH omits an undefined
+        // property from the JSON body entirely, which the delta semantics read as "untouched").
+        // Required fields keep undefined, matching Partial<T>'s T | undefined and the same
+        // required/nullable split the date branch above already uses.
         // step is a brace-numeric literal, not a quoted string — see NumericStep.
         if (IsNumberType(field.Type))
         {
             var stepAttr = NumericStep(field) is { } step ? $" step={{{step}}}" : "";
-            return $"<UInput label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr} type=\"number\"{stepAttr} value={{form.{prop} != null ? String(form.{prop}) : ''}} onChange={{v => onChange({{ {prop}: v ? Number(v) : undefined }})}} />";
+            var numberEmpty = field.Nullable ? "null" : "undefined";
+            return $"<UInput label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr} type=\"number\"{stepAttr} value={{form.{prop} != null ? String(form.{prop}) : ''}} onChange={{v => onChange({{ {prop}: v ? Number(v) : {numberEmpty} }})}} />";
         }
 
         // string (default) — and, deliberately, timestamp / datetime / time. See this method's remarks:

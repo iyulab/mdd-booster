@@ -178,12 +178,12 @@ public class TsFormRendererTests
     }
 
     [Theory]
-    [InlineData("byte_size", "ByteSize")]  // long? — nullable 64-bit regression
-    [InlineData("rank", "Rank")]           // short?
-    [InlineData("flag", "Flag")]           // byte?
-    [InlineData("price", "Price")]         // decimal(12,2)?
-    [InlineData("qty", "Qty")]             // integer, not_null
-    public void Renders_number_UInput_for_every_numeric_primitive(string _, string prop)
+    [InlineData("byte_size", "ByteSize", true)]  // long? — nullable 64-bit regression
+    [InlineData("rank", "Rank", true)]           // short?
+    [InlineData("flag", "Flag", true)]           // byte?
+    [InlineData("price", "Price", true)]         // decimal(12,2)?
+    [InlineData("qty", "Qty", false)]            // integer, not_null
+    public void Renders_number_UInput_for_every_numeric_primitive(string _, string prop, bool nullable)
     {
         // Regression: IsNumberType() used to only match "integer"/"decimal" via StartsWith, so
         // "long"/"short"/"byte" silently fell through to the default string UInput branch —
@@ -200,7 +200,11 @@ public class TsFormRendererTests
         var line = FieldLine(content, prop);
         Assert.Contains("type=\"number\"", line);
         Assert.Contains($"value={{form.{prop} != null ? String(form.{prop}) : ''}}", line);
-        Assert.Contains($"onChange={{v => onChange({{ {prop}: v ? Number(v) : undefined }})}}", line);
+        // docket iyulab/mdd-booster#157: a nullable field must clear via `null` — `undefined`
+        // is dropped by JSON.stringify, so OData PATCH reads the field as untouched and the
+        // clear silently no-ops. Required fields keep `undefined` (Partial<T> semantics).
+        var emptyToken = nullable ? "null" : "undefined";
+        Assert.Contains($"onChange={{v => onChange({{ {prop}: v ? Number(v) : {emptyToken} }})}}", line);
     }
 
     // --- decimal step (scale → input affordance) ---------------------------------
