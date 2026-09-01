@@ -525,6 +525,16 @@ public static class TsFormRenderer
     /// (offset-aware split/recombine) — a new contract surface carrying a real trade-off, so it is
     /// a human decision, not autonomous scope.
     /// </remarks>
+    /// <summary>
+    /// The value an onChange handler sends when a control's clear gesture fires — <c>null</c> if
+    /// the field accepts it, <c>undefined</c> (dropped from <c>Partial&lt;T&gt;</c>, matching an
+    /// OData PATCH's delta semantics for a required field) otherwise. Shared by every control
+    /// whose clear gesture is distinct from typing an empty string (date, number below) — the
+    /// plain-text branch has no equivalent because an empty string is itself a legitimate value
+    /// there, not a separate "cleared" state.
+    /// </summary>
+    private static string ClearToken(FieldNode field) => field.Nullable ? "null" : "undefined";
+
     private static string RenderField(
         FieldNode field,
         IReadOnlySet<string> enumNames,
@@ -598,7 +608,7 @@ public static class TsFormRenderer
         // See this method's remarks.
         if (string.Equals(field.Type, "date", StringComparison.OrdinalIgnoreCase))
         {
-            var dateEmpty = field.Nullable ? "null" : "undefined";
+            var dateEmpty = ClearToken(field);
             return $"<UInput label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr} type=\"date\" value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || {dateEmpty} }})}} />";
         }
 
@@ -610,7 +620,7 @@ public static class TsFormRenderer
         if (IsNumberType(field.Type))
         {
             var stepAttr = NumericStep(field) is { } step ? $" step={{{step}}}" : "";
-            var numberEmpty = field.Nullable ? "null" : "undefined";
+            var numberEmpty = ClearToken(field);
             return $"<UInput label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr} type=\"number\"{stepAttr} value={{form.{prop} != null ? String(form.{prop}) : ''}} onChange={{v => onChange({{ {prop}: v ? Number(v) : {numberEmpty} }})}} />";
         }
 
