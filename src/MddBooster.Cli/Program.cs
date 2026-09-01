@@ -15,13 +15,19 @@ public static class Program
 
         try
         {
-            return args[0] switch
+            var exitCode = args[0] switch
             {
                 "build" => RunBuild(args),
                 "--help" or "-h" or "help" => PrintUsage(),
                 "--version" or "-v" or "version" => PrintVersion(),
                 _ => UnknownCommand(args[0]),
             };
+
+            // Only on the actual work command — keeps --help/version output clean and scriptable.
+            if (args[0] == "build")
+                UpdateNotifier.CheckAndNotify(GetCurrentVersion());
+
+            return exitCode;
         }
         catch (Exception ex)
         {
@@ -54,17 +60,22 @@ public static class Program
     private static int PrintVersion()
     {
         var asm = typeof(Program).Assembly;
-        var informational = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-        var version = informational ?? asm.GetName().Version?.ToString() ?? "unknown";
         var location = asm.Location;
         var built = !string.IsNullOrEmpty(location) && File.Exists(location)
             ? File.GetLastWriteTime(location).ToString("yyyy-MM-dd HH:mm:ss")
             : "?";
 
-        Console.WriteLine($"mdd {version}");
+        Console.WriteLine($"mdd {GetCurrentVersion()}");
         Console.WriteLine($"  built: {built}");
         Console.WriteLine($"  path:  {location}");
         return 0;
+    }
+
+    private static string GetCurrentVersion()
+    {
+        var asm = typeof(Program).Assembly;
+        return asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? asm.GetName().Version?.ToString() ?? "unknown";
     }
 
     private static int UnknownCommand(string cmd)

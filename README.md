@@ -260,6 +260,11 @@ DDL)과 달리, desired-state 스타일 스키마 관리 도구(예: 선언형 d
 MDD_DEBUG=1 mdd build ./mdd
 ```
 
+`mdd build`는 nuget.org에 더 최신 버전이 있으면 알려준다(최대 24시간에 한 번만 조회,
+2초 안에 응답이 없으면 조용히 넘어간다 — 오프라인이어도 빌드에 영향 없음). 실제 설치는
+`dotnet tool update -g mdd`로 직접 한다. `MDD_NO_UPDATE_CHECK` 환경변수로 이 알림 자체를
+끌 수 있다.
+
 ## M3L 기능 지원 (현재)
 
 | 기능 | 지원 |
