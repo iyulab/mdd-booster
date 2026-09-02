@@ -1,9 +1,12 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Runtime.CompilerServices;
 using M3L.Native;
 using MddBooster.Core.Generation;
 using MddBooster.Core.Semantic;
 using MddBooster.Core.Naming;
+
+[assembly: InternalsVisibleTo("MddBooster.Tests")]
 
 namespace MddBooster.Generators.Sql;
 
@@ -227,7 +230,7 @@ public static class FullViewRenderer
         }
     }
 
-    private static string RenderRollupSubquery(RollupDef def, string schema, string baseAlias,
+    internal static string RenderRollupSubquery(RollupDef def, string schema, string baseAlias,
         IReadOnlyDictionary<string, IReadOnlySet<string>>? derivedFieldsByModel)
     {
         var target = def.Target;
@@ -255,7 +258,11 @@ public static class FullViewRenderer
                 $"Unsupported rollup: aggregate='{aggregate}' field='{field}'."),
         };
 
-        return $"(SELECT {innerExpr} FROM [{schema}].[{fromTarget}] WHERE [{fkColumn}] = {baseAlias}.[Id])";
+        var whereClause = $"[{fkColumn}] = {baseAlias}.[Id]";
+        if (!string.IsNullOrWhiteSpace(def.Where))
+            whereClause += $" AND ({NormalizeComputedExpression(def.Where)})";
+
+        return $"(SELECT {innerExpr} FROM [{schema}].[{fromTarget}] WHERE {whereClause})";
     }
 
     /// <summary>

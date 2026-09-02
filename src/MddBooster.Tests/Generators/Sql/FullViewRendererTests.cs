@@ -1,3 +1,4 @@
+using M3L.Native;
 using MddBooster.Core.Ast;
 using MddBooster.Core.Naming;
 using MddBooster.Core.Semantic;
@@ -324,6 +325,54 @@ public class FullViewRendererTests
             "(SELECT ISNULL(SUM([LineTotal]), 0) FROM [dbo].[OrderItem] WHERE [OrderId] = b.[Id]) AS [TotalSum]",
             sql);
         Assert.Contains("WITH SCHEMABINDING", sql);
+    }
+
+    // `RollupDef` is constructed directly here rather than through `M3lLoader` — the
+    // point of these tests is the generator's own handling of an already-parsed
+    // `Where` value, decoupled from whichever released parser version happens to be
+    // pinned. `RenderRollupSubquery` is `internal` for exactly this seam.
+
+    [Fact]
+    public void Rollup_where_clause_filters_the_subquery()
+    {
+        var def = new RollupDef { Target = "Order", Fk = "customer_id", Aggregate = "count", Where = "status != 'cancelled'" };
+
+        var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", derivedFieldsByModel: null);
+
+        Assert.Equal(
+            "(SELECT COUNT(*) FROM [dbo].[Order] WHERE [CustomerId] = b.[Id] AND ([Status] != 'cancelled'))",
+            sql);
+    }
+
+    [Fact]
+    public void Rollup_where_clause_with_in_list_normalizes_identifiers_but_preserves_string_literals()
+    {
+        var def = new RollupDef
+        {
+            Target = "OrderItem",
+            Fk = "order_id",
+            Aggregate = "count",
+            Where = "row_type IN ('product', 'print_order')",
+        };
+
+        var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", derivedFieldsByModel: null);
+
+        Assert.Equal(
+            "(SELECT COUNT(*) FROM [dbo].[OrderItem] WHERE [OrderId] = b.[Id] AND ([RowType] IN ('product', 'print_order')))",
+            sql);
+    }
+
+    [Fact]
+    public void Rollup_without_where_clause_is_unfiltered()
+    {
+        // The AND(...) clause must not appear at all when there is no filter — this
+        // is the pre-existing, still-supported plain form.
+        var def = new RollupDef { Target = "Bar", Fk = "foo_id", Aggregate = "count" };
+
+        var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", derivedFieldsByModel: null);
+
+        Assert.Equal("(SELECT COUNT(*) FROM [dbo].[Bar] WHERE [FooId] = b.[Id])", sql);
+        Assert.DoesNotContain("AND", sql);
     }
 
     // ── Computed (CTE path) ──────────────────────────────────────────────────
