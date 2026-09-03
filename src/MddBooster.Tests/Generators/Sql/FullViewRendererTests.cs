@@ -375,6 +375,35 @@ public class FullViewRendererTests
         Assert.DoesNotContain("AND", sql);
     }
 
+    // Now routed through `M3lLoader`, unlike the three tests above — with the
+    // `M3L.Native` pin actually carrying the parser's `where:` fix (docket #174),
+    // this closes the integration gap those tests deliberately left open.
+    [Fact]
+    public void Rollup_where_clause_parsed_from_m3l_source_reaches_the_rendered_subquery()
+    {
+        var tmp = WriteInlineM3l(
+            "## Order\n" +
+            "- id: identifier @pk @generated\n" +
+            "- customer_id: identifier @reference(Customer) @not_null\n" +
+            "- status: string(20) @not_null\n\n" +
+            "## Customer\n" +
+            "- id: identifier @pk @generated\n" +
+            "- active_orders: integer @rollup(Order.customer_id, count, where: \"status != 'cancelled'\")\n");
+        try
+        {
+            var ast = new M3lLoader().LoadFile(tmp);
+            var customer = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Customer");
+            var plan = new ViewPlanner().Plan(customer);
+            var sql = FullViewRenderer.Render(plan, "dbo");
+
+            Assert.Contains("WHERE [CustomerId] = b.[Id] AND ([Status] != 'cancelled')", sql);
+        }
+        finally
+        {
+            File.Delete(tmp);
+        }
+    }
+
     // ── Computed (CTE path) ──────────────────────────────────────────────────
 
     [Fact]

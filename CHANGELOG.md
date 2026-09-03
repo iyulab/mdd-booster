@@ -10,6 +10,15 @@
 
 ---
 
+## 0.19.1
+
+### Fixed
+
+- **A conditional `@rollup`'s `where:` clause is now honored when rendering the generated view's
+  correlated subquery.** The filter was silently dropped, so a rollup like an "active order count"
+  that should exclude cancelled rows was rendered unfiltered instead — counting or summing over
+  every row regardless of the documented condition.
+
 ## 0.19.0
 
 ### Added
