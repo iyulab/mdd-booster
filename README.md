@@ -343,10 +343,10 @@ MDD_DEBUG=1 mdd build ./mdd
 
 | 컴포넌트 | 언제 import되나 | 받는 프롭 |
 |---|---|---|
-| `UInput` | date · 숫자 · 문자열 필드 | `label` `required?` `description?` `type?`(`"date"`/`"number"`) **`step?: number`** **`maxlength?: number`** **`disabled?: boolean`** `value: string` `onChange: (v: string) => void` |
-| `UTextarea` | `text` 필드 | `label` `required?` `description?` **`minRows: number`** **`disabled?: boolean`** `value: string` `onChange: (v: string) => void` |
-| `USelect` | enum 필드 | `label` `required?` `description?` `placeholder?` **`disabled?: boolean`** `value: string` `options` `onChange: (v: string) => void` |
-| `UCheckbox` | boolean 필드 | `label` `description?` **`disabled?: boolean`** `checked: boolean` `onChange: (v: boolean) => void` |
+| `UInput` | date · 숫자 · 문자열 필드 | `label` `required?` `description?` `type?`(`"date"`/`"number"`) **`step?: number`** **`maxlength?: number`** **`disabled?: boolean`** **`error?: string`** `value: string` `onChange: (v: string) => void` |
+| `UTextarea` | `text` 필드 | `label` `required?` `description?` **`minRows: number`** **`disabled?: boolean`** **`error?: string`** `value: string` `onChange: (v: string) => void` |
+| `USelect` | enum 필드 | `label` `required?` `description?` `placeholder?` **`disabled?: boolean`** **`error?: string`** `value: string` `options` `onChange: (v: string) => void` |
+| `UCheckbox` | boolean 필드 | `label` `description?` **`disabled?: boolean`** **`error?: string`** `checked: boolean` `onChange: (v: boolean) => void` |
 
 - `required` / `description` 은 **모델이 그렇게 말할 때만** 방출된다
   (`@not_null` → `required`, `@help("...")` → `description`).
@@ -357,6 +357,16 @@ MDD_DEBUG=1 mdd build ./mdd
   연결됨) 편집만 막힌다 — 필드를 감추는 것과는 다르다. **네 컴포넌트 모두 이 프롭을 받을 수
   있어야 한다.** `readOnly`가 아니라 `disabled`를 선택한 이유: 체크박스·셀렉트는 네이티브
   `readOnly` 의미가 컴포넌트마다 일관되지 않지만, `disabled`는 넷 다 동일하게 지원한다.
+- **`error`도 새로 추가된 요구조건이다**(버전은 [CHANGELOG](https://github.com/iyulab/mdd-booster/blob/main/CHANGELOG.md)
+  참조) — `disabled`와 달리 모델 선언이 아니라 **호출자가 넘기는 런타임 값**에서 온다.
+  `{Entity}FormBase`는 `errors?: Partial<Record<keyof {Entity}, string>>`를 새 프롭으로
+  받아, 필드마다 `errors?.{필드}`를 그대로 `error`로 전달한다(값이 없으면 `undefined`) —
+  **네 컴포넌트 모두 이 프롭을 받을 수 있어야 한다.** 메시지가 있을 때 그것을 어떻게
+  시각적으로 반영하는지(테두리 색, 필드 아래 문구 등)는 **전적으로 컴포넌트의 몫**이다 —
+  이 생성기는 어떤 내부 메커니즘(예: `setCustomValidity`/`reportValidity` 계열 API)을
+  가정하지 않는다. 다만 그런 API를 감싼 컴포넌트라면, 문자열을 설정하는 호출만으로 화면의
+  invalid 표시까지 갱신되지 않는 구현이 흔하다는 점은 알아둘 만하다 — 그 경우 별도의
+  재검증 호출(`reportValidity()`류)까지 함께 실행해야 `error`가 실제로 보인다.
 - `value`/`onChange`는 **controlled 패턴**을 전제한다(빈 상태 sentinel은 `''`).
 - **`step`·`maxlength`는 0.8.0에서 추가된 요구조건이다** — 0.7.0 이하에서 만든 래퍼는
   갱신해야 한다([CHANGELOG 0.8.0](https://github.com/iyulab/mdd-booster/blob/main/CHANGELOG.md#080) 참조).

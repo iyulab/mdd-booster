@@ -279,20 +279,23 @@ public static class TsFormRenderer
         sb.AppendLine();
 
         // FormBase function.
-        // When all fields are FK slots, form/onChange are not used in JSX.
+        // When all fields are FK slots, form/onChange/errors are not used in JSX.
         // Use destructuring rename { form: _form } to satisfy noUnusedParameters.
         var formDestructure = allFieldsAreSlots ? "form: _form" : "form";
         var onChangeDestructure = allFieldsAreSlots ? "onChange: _onChange" : "onChange";
+        var errorsDestructure = allFieldsAreSlots ? "errors: _errors" : "errors";
         sb.Append("export function ").Append(entityName).AppendLine("FormBase({");
         sb.Append("  ").AppendLine(formDestructure + ",");
         sb.Append("  ").AppendLine(onChangeDestructure + ",");
         if (fkFields.Count > 0) sb.AppendLine("  slots,");
         sb.AppendLine("  sectionProps,");
+        sb.Append("  ").AppendLine(errorsDestructure + ",");
         sb.AppendLine("}: {");
         sb.Append("  form: Partial<").Append(entityName).AppendLine(">");
         sb.Append("  onChange: (updates: Partial<").Append(entityName).AppendLine(">) => void");
         if (fkFields.Count > 0) sb.Append("  slots?: ").Append(entityName).AppendLine("FormSlots");
         sb.Append("  sectionProps?: ").Append(entityName).AppendLine("FormSectionProps");
+        sb.Append("  errors?: Partial<Record<keyof ").Append(entityName).AppendLine(", string>>");
         sb.AppendLine("}) {");
         sb.AppendLine("  return (");
         sb.AppendLine("    <>");
@@ -554,6 +557,12 @@ public static class TsFormRenderer
         // consumer-supplied component form (input/textarea/select/checkbox) can be expected to
         // support natively, unlike `readOnly`, which checkboxes and selects do not honor consistently.
         var disabledAttr = HasAttribute(field, "immutable") ? " disabled" : "";
+        // A per-field validation message from the caller (docket #176) — the model has no
+        // opinion on this, so it is emitted unconditionally rather than gated by an
+        // attribute like disabledAttr/descAttr above. The control decides how to surface it
+        // (this generator does not assume setCustomValidity/reportValidity or any other
+        // specific mechanism — see the README consumer contract).
+        var errorAttr = $" error={{errors?.{prop}}}";
 
         // Dispatch on the same classifier the import list uses (see ControlFor).
         var control = ControlFor(field, enumNames);
@@ -574,13 +583,13 @@ public static class TsFormRenderer
         }
 
         if (control == FormControl.Checkbox)
-            return $"<UCheckbox label=\"{label}\"{descAttr}{disabledAttr} checked={{form.{prop} ?? false}} onChange={{v => onChange({{ {prop}: v }})}} />";
+            return $"<UCheckbox label=\"{label}\"{descAttr}{disabledAttr}{errorAttr} checked={{form.{prop} ?? false}} onChange={{v => onChange({{ {prop}: v }})}} />";
 
         // text → UTextarea. m3l's `text` means length-unbounded (the SQL target emits
         // NVARCHAR(MAX) for it), so a single-line control contradicts the model.
         // minRows is load-bearing — see TextareaMinRows.
         if (control == FormControl.Textarea)
-            return $"<UTextarea label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr} minRows={{{TextareaMinRows}}} value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || null }})}} />";
+            return $"<UTextarea label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr}{errorAttr} minRows={{{TextareaMinRows}}} value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || null }})}} />";
 
         if (control == FormControl.Select)
         {
@@ -596,7 +605,7 @@ public static class TsFormRenderer
             var onChangeCast = field.Nullable
                 ? $"v => onChange({{ {prop}: (v || null) as {enumTypeName} | null }})"
                 : $"v => onChange({{ {prop}: v as {enumTypeName} }})";
-            return $"<USelect label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr}{placeholder} value={{form.{prop} ?? ''}} options={{enumToOptions({labelMap})}} onChange={{{onChangeCast}}} />";
+            return $"<USelect label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr}{errorAttr}{placeholder} value={{form.{prop} ?? ''}} options={{enumToOptions({labelMap})}} onChange={{{onChangeCast}}} />";
         }
 
         // date → UInput type="date"
@@ -609,7 +618,7 @@ public static class TsFormRenderer
         if (string.Equals(field.Type, "date", StringComparison.OrdinalIgnoreCase))
         {
             var dateEmpty = ClearToken(field);
-            return $"<UInput label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr} type=\"date\" value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || {dateEmpty} }})}} />";
+            return $"<UInput label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr}{errorAttr} type=\"date\" value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || {dateEmpty} }})}} />";
         }
 
         // number types — nullable fields must clear via null (OData PATCH omits an undefined
@@ -621,7 +630,7 @@ public static class TsFormRenderer
         {
             var stepAttr = NumericStep(field) is { } step ? $" step={{{step}}}" : "";
             var numberEmpty = ClearToken(field);
-            return $"<UInput label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr} type=\"number\"{stepAttr} value={{form.{prop} != null ? String(form.{prop}) : ''}} onChange={{v => onChange({{ {prop}: v ? Number(v) : {numberEmpty} }})}} />";
+            return $"<UInput label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr}{errorAttr} type=\"number\"{stepAttr} value={{form.{prop} != null ? String(form.{prop}) : ''}} onChange={{v => onChange({{ {prop}: v ? Number(v) : {numberEmpty} }})}} />";
         }
 
         // string (default) — and, deliberately, timestamp / datetime / time. See this method's remarks:
@@ -640,7 +649,7 @@ public static class TsFormRenderer
         var maxLenAttr = MddBooster.Core.Ast.FieldAttributes.EffectiveMaxLength(field) is { } n
             ? $" maxlength={{{n}}}"
             : "";
-        return $"<UInput label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr}{maxLenAttr} value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v }})}} />";
+        return $"<UInput label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr}{errorAttr}{maxLenAttr} value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v }})}} />";
     }
 
     private static string? GetAttributeString(FieldNode field, string attrName)

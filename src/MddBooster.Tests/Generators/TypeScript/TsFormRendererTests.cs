@@ -394,6 +394,66 @@ public class TsFormRendererTests
         Assert.Contains("onChange={v => onChange({ Token: v })}", line);
     }
 
+    // --- runtime field errors (docket #176) ---
+
+    [Fact]
+    public void Emits_an_errors_prop_and_wires_it_through_FormBase()
+    {
+        var models = LoadInline("""
+            ## Doc
+
+            - id: identifier @pk @generated
+            - title: string(50) "제목"
+            """);
+        var content = TsFormRenderer.RenderAll(models, [], TestImports)["Doc"];
+
+        Assert.Contains("errors?: Partial<Record<keyof Doc, string>>", content);
+        Assert.Contains("  errors,", content);
+    }
+
+    [Fact]
+    public void Every_control_receives_error_bound_to_its_own_field()
+    {
+        // Unlike `disabled` (gated by @immutable), `error` is a runtime value with no
+        // model-side trigger, so it is emitted unconditionally for every renderable field —
+        // and each field must read its own key, not a neighbor's.
+        var models = LoadInline("""
+            ## Doc
+
+            - id: identifier @pk @generated
+            - title: string(50) "제목"
+            - active: boolean @not_null "활성"
+            """);
+        var content = TsFormRenderer.RenderAll(models, [], TestImports)["Doc"];
+
+        Assert.Contains("error={errors?.Title}", FieldLine(content, "Title"));
+        Assert.Contains("<UCheckbox", FieldLine(content, "Active"));
+        Assert.Contains("error={errors?.Active}", FieldLine(content, "Active"));
+    }
+
+    [Fact]
+    public void Slot_field_does_not_receive_an_error_prop()
+    {
+        // FK/@slot fields render through the caller's own slot content, not a generated
+        // control, so there is no element here for `error` to attach to. Every stored field
+        // here is a slot, so this also exercises the all-slots destructuring-rename branch
+        // (errors: _errors) — a plain `errors,` here would fail noUnusedParameters.
+        var models = LoadInline("""
+            ## Target
+
+            - id: identifier @pk @generated
+
+            ## Doc
+
+            - id: identifier @pk @generated
+            - target_id: identifier @reference(Target) @not_null "대상"
+            """);
+        var content = TsFormRenderer.RenderAll(models, [], TestImports)["Doc"];
+
+        Assert.DoesNotContain("errors?.TargetId", content);
+        Assert.Contains("errors: _errors,", content);
+    }
+
     // --- temporal types: which get a native picker, and why the others must not ---
 
     [Fact]
@@ -549,8 +609,12 @@ public class TsFormRendererTests
         var content = results["Article"];
 
         Assert.Contains("<UTextarea label=\"요약\" required", content);
-        // The nullable one stays unmarked.
-        Assert.Contains("<UTextarea label=\"내용\" minRows", content);
+        // The nullable one stays unmarked. Matched by line rather than a literal adjacent
+        // substring — docket #176's `error` attribute now sits between the label and
+        // `minRows`, same as it sits between every other optional attribute pair below.
+        var nullableLine = content.Split('\n').Single(l => l.Contains("label=\"내용\""));
+        Assert.DoesNotContain(" required", nullableLine);
+        Assert.Contains("minRows", nullableLine);
     }
 
     // --- 선행 약어 엔티티의 camelCase 헬퍼 이름 ---

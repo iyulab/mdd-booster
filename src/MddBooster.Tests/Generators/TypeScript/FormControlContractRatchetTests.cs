@@ -228,7 +228,7 @@ public sealed class FormControlContractRatchetTests
         [
             "label", "required", "description", "type", "step", "maxlength",
             "value", "onChange", "minRows", "options", "placeholder", "checked",
-            "title", "full", "disabled", "className", "style",
+            "title", "full", "disabled", "error", "className", "style",
         ];
 
         var unexercised = documentedProps.Where(p => !emitted.Contains(p)).ToList();
