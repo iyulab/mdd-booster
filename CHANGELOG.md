@@ -10,6 +10,17 @@
 
 ---
 
+## 0.20.0
+
+### Added
+
+- **Generated forms can now surface a per-field validation message.** `{Entity}FormBase` accepts
+  a new `errors?: Partial<Record<keyof {Entity}, string>>` prop, and every rendered control
+  (`UInput`/`UTextarea`/`USelect`/`UCheckbox`) now also receives its own `error?: string` — a new
+  requirement on the consumer's component library, documented in the README consumer contract
+  alongside `disabled`. How a component turns that string into a visible validation state is left
+  entirely to it; the generator makes no assumption about the underlying mechanism.
+
 ## 0.19.1
 
 ### Fixed
