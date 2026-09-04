@@ -67,6 +67,39 @@ public class DbContextPostgresNamingTests
     }
 
     [Fact]
+    public void PostgresNaming_LookupBackedModel_MapsToSnakeFullViewAndDerivedColumn()
+    {
+        // Ext는 이제 PascalCase "{Model}FullView"가 아니라 PG Sql 타깃이 실제로 방출하는
+        // snake_case "{table}_full_view"를 가리키고, 파생(Lookup) 컬럼도 HasColumnName으로
+        // 명시돼야 EF 기본 컨벤션(PascalCase 추정)과 실제 뷰 컬럼(snake)이 어긋나지 않는다.
+        var tmp = Path.Combine(Path.GetTempPath(), $"mdd-dbctx-{Guid.NewGuid():N}.m3l.md");
+        File.WriteAllText(tmp,
+            "# Namespace: test\n\n" +
+            "## Worker\n" +
+            "- id: identifier @pk @generated\n" +
+            "- name: string(50) @not_null\n\n" +
+            "## UserAccount\n" +
+            "- id: identifier @pk @generated\n" +
+            "- username: string(50) @not_null\n" +
+            "- worker_id: identifier? @reference(Worker)\n" +
+            "- worker_name: string? @lookup(worker_id.name)\n");
+        try
+        {
+            var models = new InterfaceResolver(new M3lLoader().LoadFile(tmp)).ResolveAll().ToList();
+            var output = DbContextRenderer.Render(models, "TestDbContext", "Test.Ns", postgresNaming: true);
+
+            Assert.Contains("modelBuilder.Entity<UserAccountExt>(e =>", output);
+            Assert.Contains("e.ToView(\"user_account_full_view\");", output);
+            Assert.DoesNotContain("e.ToView(\"UserAccountFullView\");", output);
+            Assert.Contains("e.Property(x => x.WorkerName).HasColumnName(\"worker_name\");", output);
+        }
+        finally
+        {
+            File.Delete(tmp);
+        }
+    }
+
+    [Fact]
     public void DefaultRender_IsUnchangedByTheNewParameter()
     {
         var models = Load("bank-account.m3l.md");

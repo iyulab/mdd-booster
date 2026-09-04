@@ -200,8 +200,12 @@ DDL과 EF 매핑이 서로 다른 네이밍을 전제하게 된다).
   PK·UNIQUE 제약이 소유하는 인덱스는 중복 방출하지 않고, `CONCURRENTLY` 는 쓰지 않는다
   (적용이 단일 트랜잭션이라 concurrent 빌드가 참여할 수 없다). 인덱스명도 제약명과 같은
   63바이트 게이트를 통과해야 한다 — 다중 컬럼 인덱스명이 제약명보다 쉽게 넘긴다.
-- **뷰는 아직 방출하지 않는다** (derived 필드의 `_full`/`_ud`) — 무음 탈락 대신 **stderr 경고**로
-  표면화한다.
+- **뷰**: Lookup/Rollup 파생 필드가 있는 모델은 `{projectPath}/views_gen/{table}_full_view.sql`,
+  soft-delete(`deleted_at`)가 있는 모델은 `{table}_ud_view.sql`을 함께 방출한다(T-SQL의
+  `{Model}FullView`/`{Model}UdView`와 같은 파생 체인, 식별자만 비인용 snake_case). **Computed
+  파생 필드 또는 `@indexed` Rollup이 있는 모델, 그리고 그런 모델을 체이닝으로 딛는 모델은 아직
+  방출하지 않는다** — 무음 탈락 대신 **stderr 경고**로 표면화한다(Computed는 방언별 표현식
+  문법 차이로 안전한 자동 변환이 불가, `@indexed`는 구체화 뷰 갱신 전략이 별도 결정 필요).
 - 널 허용 `@unique`는 PG가 NULL을 distinct로 취급하므로 filtered index 없이 UNIQUE 제약 하나로
   정확하다 (T-SQL 경로는 filtered unique index가 필요하다).
 - `emitSqlProj`/`emitRefreshScript`는 SSDT 개념 — postgres와 함께 명시하면 오류.
@@ -212,9 +216,11 @@ DDL과 EF 매핑이 서로 다른 네이밍을 전제하게 된다).
 **Model 타깃 (postgres)** — DbContext에 명시 매핑을 굽는다(런타임 네이밍 컨벤션 추론
 없음): 엔티티별 `ToTable("snake")` + 저장 필드 전체 `HasColumnName("필드명")`,
 공유 PK는 상속 `Id`를 PK 물리명으로, `json` 필드는 `HasColumnType("jsonb")`.
-Ext 읽기 모델은 뷰 backing이 없으면 같은 테이블을 읽고, 뷰 backing이 필요한 모델
-(derived 필드·soft-delete)은 **경고** — PG 방언은 뷰를 방출하지 않으므로 해당 뷰를
-직접 만들기 전까지 Ext 질의는 실패한다.
+Ext 읽기 모델은 뷰 backing이 없으면 같은 테이블을 읽고, 뷰 backing이 있으면 Sql 타깃이
+실제로 방출하는 이름(`{table}_full_view`/`{table}_ud_view`)을 그대로 가리키며 비-internal
+Lookup/Rollup 파생 컬럼도 `HasColumnName`으로 명시한다. Computed 파생 필드 또는 `@indexed`
+Rollup이 있는 모델(및 그런 모델을 체이닝으로 딛는 모델)은 여전히 **경고** — 그 뷰는 Sql
+타깃도 아직 방출하지 않으므로 해당 뷰를 직접 만들기 전까지 Ext 질의는 실패한다.
 
 ### 빌드 실행
 

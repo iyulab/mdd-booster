@@ -1,6 +1,7 @@
 using System.Text;
 using M3L.Native;
 using MddBooster.Core.Ast;
+using MddBooster.Core.Generation;
 using MddBooster.Core.Naming;
 using MddBooster.Core.Semantic;
 
@@ -171,9 +172,13 @@ public static class DbContextRenderer
 
     /// <summary>
     /// PG 방언의 엔티티별 명시 매핑 블록. 쓰기 엔티티는 snake 테이블로, Ext 읽기 모델은
-    /// 뷰 backing이 없으면 같은 snake 테이블을 뷰로 읽는다(뷰 backing이 있으면 기존
-    /// 뷰 이름을 유지 — PG 방언은 뷰를 방출하지 않으므로 ModelGenerator가 경고한다).
-    /// 컬럼 매핑은 저장 필드 전체: 속성 PascalCase → 컬럼 = M3L 필드명 그대로.
+    /// 뷰 backing이 없으면 같은 snake 테이블을 뷰로 읽는다. 뷰 backing이 있으면 PG Sql
+    /// 타깃(<c>PostgresSqlGenerator</c>)이 실제로 방출하는 이름과 맞춘다 — Lookup/Rollup
+    /// 파생 필드·soft-delete는 <c>{table}_full_view</c>/<c>{table}_ud_view</c>(ADR-0001의
+    /// 비인용 snake_case 규칙); 사용자 관리 ExtView는 기존대로 PascalCase(별개 기능, 이
+    /// 변경의 범위 밖).
+    /// 컬럼 매핑은 저장 필드 전체 + (FullView backing일 때) 비-internal Lookup/Rollup 필드:
+    /// 속성 PascalCase → 컬럼 = M3L 필드명 그대로(파생 필드도 이미 snake_case 관례).
     /// 공유 PK(필드명 != id)는 상속된 <c>Id</c> 속성이 그 필드의 물리명으로 간다.
     /// <c>json</c> 필드는 DDL이 jsonb이므로 <c>HasColumnType("jsonb")</c>를 함께 굽는다(D24).
     /// </summary>
@@ -192,9 +197,9 @@ public static class DbContextRenderer
             var backing = ClassifyBacking(model, customExtViewModels);
             var extView = backing switch
             {
-                "ext" => name + "ExtView",
-                "full" => name + "FullView",
-                "ud" => name + "UdView",
+                "ext" => name + "ExtView",   // 사용자 관리 뷰 — 이 변경의 범위 밖, 기존 명명 유지
+                "full" => table + "_full_view",
+                "ud" => table + "_ud_view",
                 _ => table,   // 뷰 backing 없음 — 같은 snake 테이블을 읽는다
             };
 
@@ -211,6 +216,10 @@ public static class DbContextRenderer
             sb.AppendLine("            e.ToTable((string?)null);");
             sb.Append("            e.ToView(\"").Append(extView).AppendLine("\");");
             AppendPostgresColumns(sb, model, pk);
+            if (backing == "full")
+            {
+                AppendPostgresDerivedColumns(sb, model);
+            }
             sb.AppendLine("        });");
         }
     }
@@ -228,6 +237,26 @@ public static class DbContextRenderer
                 sb.Append(".HasColumnType(\"jsonb\")");
             }
             sb.AppendLine(";");
+        }
+    }
+
+    /// <summary>
+    /// Ext 읽기 모델 전용 — FullView가 프로젝션하는 비-internal Lookup/Rollup 컬럼의 물리명을
+    /// 명시한다. 이게 없으면 EF 기본 컨벤션이 속성 PascalCase(<c>WorkerName</c>)를 그대로 컬럼명
+    /// 삼아 실제 뷰 컬럼(<c>worker_name</c>)과 어긋난다 — <see cref="AppendPostgresColumns"/>가
+    /// 저장 필드만 훑는 이유와 대칭인 공백. Computed는 이 뷰 자체를 아직 방출하지 않으므로
+    /// (<c>PostgresSqlGenerator</c>) 여기서도 매핑하지 않는다 — 매핑해도 쿼리는 어차피 실패한다.
+    /// </summary>
+    private static void AppendPostgresDerivedColumns(StringBuilder sb, ResolvedModel model)
+    {
+        var derived = model.Fields
+            .Where(f => f.Kind is FieldKind.Lookup or FieldKind.Rollup)
+            .Where(f => !EntitySurface.IsFieldInternal(f));
+        foreach (var field in derived)
+        {
+            var property = NameCasing.ToPascalCase(field.Name);
+            sb.Append("            e.Property(x => x.").Append(property)
+              .Append(").HasColumnName(\"").Append(field.Name).AppendLine("\");");
         }
     }
 

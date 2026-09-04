@@ -129,11 +129,11 @@ public class PostgresDialectE2ETests
     }
 
     [Fact]
-    public void PostgresDialect_DerivedFields_SkippedWithStderrWarning()
+    public void PostgresDialect_LookupField_EmitsFullView()
     {
-        // T-SQL 타깃은 derived 필드를 _ext 뷰로 물질화하지만 PG 방언은 뷰를 방출하지
-        // 않는다(Schemorph P3 전) — 무음 탈락 금지: stderr 경고 필수.
-        var (mddDir, dbDir) = Scaffold("derived",
+        // PG Sql 타깃도 T-SQL과 대칭으로 Lookup 파생 필드가 있는 모델의
+        // {table}_full_view를 방출한다(더 이상 경고-스킵하지 않는다).
+        var (mddDir, dbDir) = Scaffold("lookup",
             "# Namespace: X\n\n" +
             "## Product\n" +
             "- id: identifier @pk @generated\n" +
@@ -153,9 +153,167 @@ public class PostgresDialectE2ETests
             var productSql = File.ReadAllText(Path.Combine(dbDir, "tables_gen", "product.sql"));
             Assert.DoesNotContain("cat_name", productSql); // derived — 물리 컬럼 아님
 
+            var viewPath = Path.Combine(dbDir, "views_gen", "product_full_view.sql");
+            Assert.True(File.Exists(viewPath));
+            var viewSql = File.ReadAllText(viewPath);
+            Assert.Contains("CREATE VIEW public.product_full_view AS", viewSql);
+            Assert.Contains("LEFT JOIN public.category AS j_cat_id ON b.cat_id = j_cat_id.id", viewSql);
+            Assert.Contains("j_cat_id.name AS cat_name", viewSql);
+            Assert.DoesNotContain("GO", viewSql);
+            Assert.DoesNotContain("[", viewSql);
+
+            Assert.DoesNotContain("[sql-pg]", captured.Text); // 이제 지원 대상이라 경고 없음
+        }
+        finally
+        {
+            Cleanup(mddDir);
+        }
+    }
+
+    [Fact]
+    public void PostgresDialect_RollupField_EmitsFullView()
+    {
+        var (mddDir, dbDir) = Scaffold("rollup",
+            "# Namespace: X\n\n" +
+            "## Category\n" +
+            "- id: identifier @pk @generated\n" +
+            "- name: string(50) @not_null\n" +
+            "- product_count: integer @rollup(Product.cat_id, count)\n\n" +
+            "## Product\n" +
+            "- id: identifier @pk @generated\n" +
+            "- cat_id: identifier @reference(Category) @not_null\n" +
+            "- price: decimal(10,2) @not_null\n");
+        WriteConfig(mddDir, "{ \"type\": \"Sql\", \"dialect\": \"postgres\", \"projectPath\": \"../db\" }");
+
+        try
+        {
+            var exit = new BuildCommand().Run(mddDir);
+            Assert.Equal(0, exit);
+
+            var viewSql = File.ReadAllText(Path.Combine(dbDir, "views_gen", "category_full_view.sql"));
+            Assert.Contains("CREATE VIEW public.category_full_view AS", viewSql);
+            Assert.Contains("(SELECT COUNT(*) FROM public.product WHERE cat_id = b.id) AS product_count", viewSql);
+        }
+        finally
+        {
+            Cleanup(mddDir);
+        }
+    }
+
+    [Fact]
+    public void PostgresDialect_SoftDelete_EmitsUdView()
+    {
+        var (mddDir, dbDir) = Scaffold("softdelete",
+            "# Namespace: X\n\n" +
+            "## Widget\n" +
+            "- id: identifier @pk @generated\n" +
+            "- name: string(50) @not_null\n" +
+            "- deleted_at: timestamp?\n");
+        WriteConfig(mddDir, "{ \"type\": \"Sql\", \"dialect\": \"postgres\", \"projectPath\": \"../db\" }");
+
+        try
+        {
+            var exit = new BuildCommand().Run(mddDir);
+            Assert.Equal(0, exit);
+
+            var viewSql = File.ReadAllText(Path.Combine(dbDir, "views_gen", "widget_ud_view.sql"));
+            Assert.Contains("CREATE VIEW public.widget_ud_view AS", viewSql);
+            Assert.Contains("WHERE b.deleted_at IS NULL", viewSql);
+            Assert.False(File.Exists(Path.Combine(dbDir, "views_gen", "widget_full_view.sql")));
+        }
+        finally
+        {
+            Cleanup(mddDir);
+        }
+    }
+
+    [Fact]
+    public void PostgresDialect_UdViewName_OverLengthGate_FailsBuildInsteadOfSilentTruncation()
+    {
+        // 테이블명 자체는 63바이트 게이트를 통과해도 "_ud_view" 접미사가 붙으면 새로 넘을 수
+        // 있다 — PG는 초과분을 조용히 절단하므로, 이 리포의 게이트 원칙(무음 보정 금지)대로
+        // 여기서도 모아서 실패시켜야 한다.
+        var longName = "X" + new string('a', 57); // snake화해도 58바이트 — 그 자체는 유효
+        var (mddDir, _) = Scaffold("udlen",
+            "# Namespace: X\n\n" +
+            $"## {longName}\n" +
+            "- id: identifier @pk @generated\n" +
+            "- name: string(50) @not_null\n" +
+            "- deleted_at: timestamp?\n");
+        WriteConfig(mddDir, "{ \"type\": \"Sql\", \"dialect\": \"postgres\", \"projectPath\": \"../db\" }");
+
+        try
+        {
+            var ex = Assert.Throws<PostgresNamingException>(() => new BuildCommand().Run(mddDir));
+            Assert.Contains("UdView명", ex.Message);
+            Assert.Contains("63바이트", ex.Message);
+        }
+        finally
+        {
+            Cleanup(mddDir);
+        }
+    }
+
+    [Fact]
+    public void PostgresDialect_ComputedField_SkippedWithStderrWarning()
+    {
+        // Computed는 방언별 표현식 문법 차이로 안전한 자동 변환이 불가해 아직 방출하지
+        // 않는다 — 무음 탈락 금지: stderr 경고 필수.
+        var (mddDir, dbDir) = Scaffold("computed",
+            "# Namespace: X\n\n" +
+            "## Invoice\n" +
+            "- id: identifier @pk @generated\n" +
+            "- subtotal: decimal(12,2) @not_null\n" +
+            "- grand_total: decimal(12,2) @computed(`subtotal * 1.1`)\n");
+        WriteConfig(mddDir, "{ \"type\": \"Sql\", \"dialect\": \"postgres\", \"projectPath\": \"../db\" }");
+
+        using var captured = new ConsoleErrorCapture(this);
+        try
+        {
+            var exit = new BuildCommand().Run(mddDir);
+            Assert.Equal(0, exit);
+
+            Assert.False(File.Exists(Path.Combine(dbDir, "views_gen", "invoice_full_view.sql")));
             var stderr = captured.Text;
             Assert.Contains("[sql-pg]", stderr);
-            Assert.Contains("Product", stderr);
+            Assert.Contains("Invoice", stderr);
+            Assert.Contains("Computed", stderr);
+        }
+        finally
+        {
+            Cleanup(mddDir);
+        }
+    }
+
+    [Fact]
+    public void PostgresDialect_ChainedLookupThroughUnsupportedTarget_SkippedWithStderrWarning()
+    {
+        // Parent의 FullView는 Computed 때문에 아직 방출되지 않는다 — Child의 Lookup이 그
+        // Computed 파생 컬럼을 체이닝으로 읽으므로, Child도 존재하지 않을 뷰를 참조하지
+        // 않도록 함께 보류돼야 한다.
+        var (mddDir, dbDir) = Scaffold("chained",
+            "# Namespace: X\n\n" +
+            "## Parent\n" +
+            "- id: identifier @pk @generated\n" +
+            "- subtotal: decimal(12,2) @not_null\n" +
+            "- grand_total: decimal(12,2) @computed(`subtotal * 1.1`)\n\n" +
+            "## Child\n" +
+            "- id: identifier @pk @generated\n" +
+            "- parent_id: identifier @reference(Parent) @not_null\n" +
+            "- parent_total: decimal(12,2) @lookup(parent_id.grand_total)\n");
+        WriteConfig(mddDir, "{ \"type\": \"Sql\", \"dialect\": \"postgres\", \"projectPath\": \"../db\" }");
+
+        using var captured = new ConsoleErrorCapture(this);
+        try
+        {
+            var exit = new BuildCommand().Run(mddDir);
+            Assert.Equal(0, exit);
+
+            Assert.False(File.Exists(Path.Combine(dbDir, "views_gen", "parent_full_view.sql")));
+            Assert.False(File.Exists(Path.Combine(dbDir, "views_gen", "child_full_view.sql")));
+            var stderr = captured.Text;
+            Assert.Contains("'Parent'", stderr);
+            Assert.Contains("'Child'", stderr);
         }
         finally
         {
