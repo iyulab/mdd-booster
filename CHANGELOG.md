@@ -10,6 +10,29 @@
 
 ---
 
+## 0.21.0
+
+### Added
+
+- **The PostgreSQL Sql target now emits views for Lookup/Rollup derived fields and
+  soft-delete**, symmetric with the T-SQL target. A model with a `@lookup`/`@rollup` field now
+  gets a `{table}_full_view.sql` in a new `views_gen/` directory; a model with `deleted_at` also
+  gets `{table}_ud_view.sql`. The Model target's generated `ToView(...)` mapping and derived
+  column mapping now point at these actual view names instead of a name nothing created — a
+  model using either now works end to end under `dialect: postgres`, including through OData.
+- Computed derived fields and an `@indexed` Rollup remain unsupported under the PostgreSQL
+  dialect (expression syntax differs by dialect; a materialized view needs its own refresh
+  strategy) — a model that needs either, or that chains a Lookup/Rollup through one, still gets
+  a build-time `stderr` warning instead of a silently broken view.
+
+### Fixed
+
+- The PostgreSQL Model target's `ToView(...)` mapping for a FullView/UdView-backed Ext entity
+  used the T-SQL target's PascalCase name (`{Model}FullView`) even though this dialect commits to
+  unquoted snake_case identifiers everywhere else, and never mapped a Lookup/Rollup property's
+  physical column name at all — both silently wrong since no such view had ever existed to expose
+  the mismatch.
+
 ## 0.20.0
 
 ### Added
