@@ -44,7 +44,8 @@ public sealed class BuildCommand
         Console.WriteLine($"[m3l] 모델 {allModels.Count}개, enum {allEnums.Count}개 로드됨: {string.Join(", ", allModels.Select(m => m.Name))}");
 
         // 로더 회계 — 파싱은 되지만 생성 파이프라인이 소비하지 않는 요소를 가시화한다.
-        // (standalone ::view / ::flow / extension은 현재 어떤 타깃도 산출하지 않는다.)
+        // (standalone ::view / ::flow / extension, 그리고 언어가 정의하지 않은 ### 섹션은
+        //  현재 어떤 타깃도 산출하지 않는다.)
         if (allUnconsumed.Count > 0)
         {
             Console.Error.WriteLine(

@@ -9,9 +9,10 @@
 > implements* note under its heading; a section without one is implemented as written.
 >
 > Read those notes before building on a section. Almost everything below parses, and almost
-> nothing below fails a build for being unsupported — so a section the generator ignores looks
-> exactly like one it implements, right up until the output is missing. The one section that does
-> fail a build says so in its note.
+> nothing below fails a build for being unsupported. A `### Section` the language does not define is
+> at least reported as unconsumed at build time; an *attribute* the generator ignores is not, so it
+> looks exactly like one it implements right up until the output is missing. The one section that
+> does fail a build says so in its note.
 
 
 ## Table of Contents
@@ -866,7 +867,8 @@ Multi-line format:
 **What this generator implements**: the attribute form only. `@primary(1)`/`@primary(2)` above
 is read as a composite key. The multi-line `### PrimaryKey` form is not — the section is carried
 into the model as unstructured entries and nothing reads them, so the fields it names are **not**
-marked as keys and no warning says so. Declare composite keys with `@primary(order)`.
+marked as keys. The build reports the section as unconsumed. Declare composite keys with
+`@primary(order)`.
 
 ### 4.2 Comments and Documentation
 
@@ -1135,7 +1137,8 @@ Rules for validating field values.
 **What this generator implements**: nothing. `@validate(...)` reaches the model as an attribute
 and no target reads it — no validation is emitted from it, and none is checked at build time. Length
 bounds in the output come from the declared type, not from here. A cross-field `### Validations`
-section is likewise carried and ignored.
+section is carried and ignored too, though that one at least gets reported as unconsumed —
+`@validate` itself does not, because an attribute is not a section.
 
 ### 4.8 Templates and Generics
 
@@ -1211,9 +1214,9 @@ Version information for the schema.
 - date: 2023-10-15
 ```
 
-**What this generator implements**: nothing. A `### Version` section is carried into the model
-as unstructured entries that no target reads, so schema version information appears in no output and
-no warning reports its absence.
+**What this generator implements**: nothing. A `### Version` section is carried into the model as
+unstructured entries that no target reads, so schema version information appears in no output. The
+build reports the section as unconsumed.
 
 ### 6.2 Migration Notation
 
@@ -1231,7 +1234,7 @@ Defining changes between schema versions.
 ```
 
 **What this generator implements**: nothing, by design. A `### Migration` section is carried and
-ignored like the one above. This generator emits desired-state schema — what the database should
+ignored like the one above, and reported as unconsumed. This generator emits desired-state schema — what the database should
 look like — and leaves reconciling an existing database with it to whichever tool applies the
 output.
 

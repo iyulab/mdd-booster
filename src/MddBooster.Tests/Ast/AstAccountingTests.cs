@@ -23,6 +23,52 @@ public class AstAccountingTests
         Assert.Contains("::view VAssetFailureStats", unconsumed);
     }
 
+    /// <summary>
+    /// A section whose name the language does not define cannot be read by any
+    /// target — it arrives as unstructured entries and nothing looks at them.
+    /// Dropping it in silence is the same failure the standalone view had.
+    /// </summary>
+    [Fact]
+    public void A_section_the_language_does_not_define_is_reported_unconsumed()
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), $"mdd-acct-{Guid.NewGuid():N}.m3l.md");
+        File.WriteAllText(tmp, """
+# Namespace: x
+
+## A
+- id: identifier @pk @generated
+- order_id: identifier @not_null
+
+### PrimaryKey
+- fields: [id, order_id]
+""");
+        try
+        {
+            var ast = new M3lLoader().LoadFile(tmp);
+
+            Assert.Contains("A: ### PrimaryKey", AstAccounting.ListUnconsumed(ast));
+        }
+        finally
+        {
+            File.Delete(tmp);
+        }
+    }
+
+    /// <summary>
+    /// The sections the language does define stay quiet here: `### Indexes` is
+    /// read by the Sql target, and reporting a section that is consumed would
+    /// train the reader to ignore this warning.
+    /// </summary>
+    [Fact]
+    public void A_consumed_section_is_not_reported_unconsumed()
+    {
+        var ast = new M3lLoader().LoadFile(
+            Path.Combine(AppContext.BaseDirectory, "fixtures", "table-with-labeled-indexes.m3l.md"));
+
+        Assert.NotEmpty(ast.Models.SelectMany(m => m.Sections?.Indexes ?? []));
+        Assert.Empty(AstAccounting.ListUnconsumed(ast));
+    }
+
     [Fact]
     public void Model_only_ast_reports_nothing_unconsumed()
     {
