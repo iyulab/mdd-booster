@@ -677,6 +677,11 @@ Relationships can have additional attributes:
   - order_by: created_at desc
 ```
 
+**What this generator implements**: the `@reference(Target)` attribute, and only that. Foreign keys,
+navigation properties and lookup redirects are all built from it. Neither the `### Relations` section
+nor the `@relation(...)` attribute is read by any target — declaring a relationship that way produces
+no output, and the build reports the section as unconsumed.
+
 ### 3.3 Index Definition
 
 Indexes are used to optimize query performance.
@@ -738,6 +743,9 @@ For example:
 ```markdown
 - @unique(tenant_id, username) "Ensures username uniqueness within each tenant"
 ```
+
+**What this generator implements**: this one, in full — `### Indexes` is the only section any target
+reads, which is why it is the only one the build does not report as unconsumed.
 
 ### 3.4 Inheritance and Interfaces
 
@@ -843,6 +851,9 @@ Metadata provides additional information about the model itself or implementatio
 - owner: "Data Team"
 ```
 
+**What this generator implements**: nothing. A `### Metadata` section is read by no target and
+appears in no output; the build reports it as unconsumed.
+
 ## 4. Advanced Features
 
 ### 4.1 Composite Key Definition
@@ -924,6 +935,10 @@ Behaviors define events and actions associated with a model.
   - action: notify_changes
   - condition: status_changed
 ```
+
+**What this generator implements**: nothing. Neither the `### Behaviors` section nor `@behavior` is
+read by any target; the section is reported as unconsumed. Behaviour belongs to the application
+running on the generated model, not to the generated model.
 
 ### 4.4 Computed Fields
 

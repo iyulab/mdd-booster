@@ -69,6 +69,67 @@ public class AstAccountingTests
         Assert.Empty(AstAccounting.ListUnconsumed(ast));
     }
 
+    /// <summary>
+    /// `### Relations`, `### Behaviors` and `### Metadata` are sections the language
+    /// defines, and no target reads any of them — generating the same model with and
+    /// without all three produced byte-identical output across every target. Silence
+    /// about them is the same silence a section the language does not name got.
+    /// </summary>
+    private static void AssertSectionIsReportedUnconsumed(string section, string expected)
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), $"mdd-acct-{Guid.NewGuid():N}.m3l.md");
+        File.WriteAllText(tmp, $@"# Namespace: x
+
+## B
+- id: identifier @pk @generated
+
+## A
+- id: identifier @pk @generated
+- b_id: identifier @reference(B) @not_null
+
+{section}
+");
+        try
+        {
+            var ast = new M3lLoader().LoadFile(tmp);
+
+            Assert.Contains(expected, AstAccounting.ListUnconsumed(ast));
+        }
+        finally
+        {
+            File.Delete(tmp);
+        }
+    }
+
+    [Fact]
+    public void A_relations_section_is_reported_unconsumed() =>
+        AssertSectionIsReportedUnconsumed(
+            """
+### Relations
+- >author
+  - target: B
+  - from: b_id
+""",
+            "A: ### Relations");
+
+    [Fact]
+    public void A_behaviors_section_is_reported_unconsumed() =>
+        AssertSectionIsReportedUnconsumed(
+            """
+### Behaviors
+- on_create: set_timestamp
+""",
+            "A: ### Behaviors");
+
+    [Fact]
+    public void A_metadata_section_is_reported_unconsumed() =>
+        AssertSectionIsReportedUnconsumed(
+            """
+### Metadata
+- domain: "editorial"
+""",
+            "A: ### Metadata");
+
     [Fact]
     public void Model_only_ast_reports_nothing_unconsumed()
     {
