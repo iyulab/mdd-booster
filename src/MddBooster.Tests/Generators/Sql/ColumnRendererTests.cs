@@ -1,3 +1,4 @@
+using System.Globalization;
 using MddBooster.Core.Ast;
 using MddBooster.Core.Semantic;
 using MddBooster.Generators.Sql;
@@ -118,5 +119,59 @@ public class ColumnRendererTests
         var line = ColumnRenderer.Render(codeField);
 
         Assert.Contains("DEFAULT N'TBD'", line);
+    }
+
+    /// <summary>
+    /// An unquoted default that contains a colon reaches the DDL as it was written.
+    /// The parser used to read such an argument as a key/value pair and rebuild it,
+    /// which inserted a space after the colon — and that rebuilt value was rendered
+    /// into the DEFAULT constraint, so a time literal shipped as a different time
+    /// literal. Nothing between the parser and the DDL inspects the value, so this
+    /// is the layer the guarantee has to be measured at.
+    /// </summary>
+    [Fact]
+    public void Render_DefaultContainingAColon_KeepsTheValueAsWritten()
+    {
+        var ast = new M3lLoader().LoadFile(FixturePath("colon-bearing-default.m3l.md"));
+        var schedule = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Schedule");
+        var cutoff = schedule.Fields.Single(f => f.Name == "cutoff");
+
+        var line = ColumnRenderer.Render(cutoff);
+
+        Assert.Contains("DEFAULT N'23:59:59'", line);
+    }
+
+    /// <summary>
+    /// The DDL a model produces does not depend on the machine's locale.
+    /// <para>
+    /// This held even before the parse was made invariant, and it held for a reason worth
+    /// stating: the numeric check only decides which branch is taken — the value written
+    /// out is the source text either way — and every culture agrees on a literal like
+    /// <c>1.5</c>. So there is no input this test would have caught. It is here to keep
+    /// the property from being lost later, when someone renders the parsed number instead
+    /// of the source text and the branch decision starts to matter.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("de-DE")]
+    public void Render_NumericDefault_IsLocaleIndependent(string culture)
+    {
+        var ast = new M3lLoader().LoadFile(FixturePath("numeric-default.m3l.md"));
+        var reading = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Reading");
+        var rate = reading.Fields.Single(f => f.Name == "rate");
+
+        var original = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo(culture);
+            var line = ColumnRenderer.Render(rate);
+
+            Assert.Contains("DEFAULT 1.5", line);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
     }
 }

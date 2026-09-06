@@ -241,7 +241,9 @@ public static class PgTableRenderer
             return "now()";
         }
 
-        if (double.TryParse(trimmed, out _))
+        // 숫자 리터럴 — tsql 쪽과 같은 이유로 불변 문화로 읽는다.
+        if (double.TryParse(trimmed, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out _))
         {
             return trimmed;
         }

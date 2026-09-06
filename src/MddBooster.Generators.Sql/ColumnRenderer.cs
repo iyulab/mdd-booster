@@ -90,8 +90,10 @@ public static class ColumnRenderer
             return "SYSDATETIMEOFFSET()";
         }
 
-        // 숫자 리터럴 (decimal/integer 등)
-        if (double.TryParse(trimmed, out _))
+        // 숫자 리터럴 (decimal/integer 등) — 모델 소스는 로케일이 없으므로 불변 문화로 읽는다
+        // (`EntityPairRenderer.IsNumericLiteral` 이 세운 관례).
+        if (double.TryParse(trimmed, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out _))
         {
             return trimmed;
         }

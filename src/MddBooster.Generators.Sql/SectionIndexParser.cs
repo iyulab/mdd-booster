@@ -64,9 +64,14 @@ public static class SectionIndexParser
     }
 
     /// <summary>
-    /// Column names carried by an entry's <c>args</c>. M3L.Native has emitted an array since
-    /// 0.5.5; before that a single argument came as a bare string, and that shape is still
-    /// read so an index declared against an older AST is not silently dropped.
+    /// Column names carried by an entry's <c>args</c>. The parser emits an array today, and
+    /// the pinned package is the only thing that produces an AST here, so the bare-string
+    /// shape a single argument once took is not reachable from any supported version.
+    /// It is still read, because the failure it guards against is invisible: an index whose
+    /// <c>args</c> this method cannot decode yields no columns and is dropped, and dropped
+    /// indexes are the one element the unconsumed-element accounting deliberately does not
+    /// warn about — <c>### Indexes</c> is excluded from it precisely because it <em>is</em>
+    /// consumed. Nothing else would report the loss.
     /// </summary>
     private static List<string> Columns(JsonElement argsEl)
     {

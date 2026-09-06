@@ -112,7 +112,9 @@ public class SectionIndexParserTests
     [Fact]
     public void Scalar_args_are_read_as_a_single_column()
     {
-        // 단일 인자를 배열이 아니라 문자열로 싣는 상류 판본이 있었다.
+        // 현재 핀에서는 나오지 않는 형태다. 이 관용을 지키는 이유는 호환이 아니라 «조용함»이다 —
+        // 디코딩에 실패한 항목은 컬럼 0개가 되어 인덱스째 탈락하는데, `### Indexes` 는 소비되는
+        // 섹션이라 미소비 요소 회계에서 의도적으로 제외돼 있어 그 탈락을 알릴 곳이 없다.
         var entries = SectionIndexParser.Parse(
             WithEntries("""{"type":"directive","args":"customer_id"}"""));
 
