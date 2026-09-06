@@ -273,36 +273,10 @@ public static class PgTableRenderer
         ResolvedModel model, string tableName,
         List<(string Name, string Body)> constraints, List<(string Name, string Columns)> indexes)
     {
-        var entries = model.Source.Sections?.Indexes;
-        if (entries is null || entries.Count == 0) return;
-
-        foreach (var idxEl in entries)
+        foreach (var entry in SectionIndexParser.Parse(model))
         {
-            if (idxEl.ValueKind != JsonValueKind.Object) continue;
-            if (!idxEl.TryGetProperty("type", out var typeProp)) continue;
-            var typeStr = typeProp.GetString();
-            if (typeStr != "directive" && typeStr != "indexed") continue;
-            if (!idxEl.TryGetProperty("args", out var argsEl)) continue;
-
-            var cols = new List<string>();
-            if (argsEl.ValueKind == JsonValueKind.String)
-            {
-                var s = argsEl.GetString();
-                if (!string.IsNullOrWhiteSpace(s)) cols.Add(s!);
-            }
-            else if (argsEl.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var a in argsEl.EnumerateArray())
-                {
-                    var s = a.ValueKind == JsonValueKind.String ? a.GetString() : a.GetRawText();
-                    if (!string.IsNullOrWhiteSpace(s)) cols.Add(s!);
-                }
-            }
-            if (cols.Count == 0) continue;
-
-            var isUnique = idxEl.TryGetProperty("unique", out var uniqueProp)
-                           && uniqueProp.ValueKind == JsonValueKind.True;
-            if (isUnique)
+            var cols = entry.Columns;
+            if (entry.IsUnique)
             {
                 constraints.Add((
                     $"uq_{tableName}_{string.Join("_", cols)}",

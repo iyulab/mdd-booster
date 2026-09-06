@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json;
 using M3L.Native;
 using MddBooster.Core.Semantic;
 using MddBooster.Core.Naming;
@@ -131,21 +130,16 @@ public static class TableRenderer
     }
 
     /// <summary>
-    /// `### Indexes` 섹션 처리. M3L.Native 0.5.5+ 기준 두 가지 entry 형식 모두 지원:
-    /// <list type="bullet">
-    /// <item><c>type=directive</c> — `- @index(c)` / `- @unique(c1, c2)` 형식</item>
-    /// <item><c>type=indexed</c> — `- idx_xxx: @index(c)` / `- idx_xxx: @unique(c1, c2)` 라벨드 형식</item>
-    /// </list>
-    /// 양쪽 다 <c>args</c>(컬럼 배열) + <c>unique</c>(bool) 키를 보유. M3L.Native 0.5.4 호환을 위해
-    /// args가 string scalar로 들어올 가능성도 fallback 처리한다.
+    /// `### Indexes` 섹션 처리. entry 해석은 <see cref="SectionIndexParser"/> 몫이고,
+    /// 여기서는 이 방언의 표기(PascalCase 컬럼명)와 널 허용 컬럼 분기만 맡는다.
     /// </summary>
     private static void AppendSectionIndexes(
         ResolvedModel model, string schema,
         IReadOnlyList<FieldNode> storedFields,
         List<string> inlineConstraints, List<string> postTableStatements)
     {
-        var indexes = model.Source.Sections?.Indexes;
-        if (indexes is null || indexes.Count == 0) return;
+        var entries = SectionIndexParser.Parse(model);
+        if (entries.Count == 0) return;
 
         // PascalCase 컬럼명 → nullable 매핑. 다중 컬럼 UK에 nullable 컬럼이 끼면
         // SQL Server UNIQUE 제약은 NULL을 값으로 취급(다중 NULL 허용 안 됨)하므로
@@ -155,37 +149,10 @@ public static class TableRenderer
             f => f.Nullable,
             StringComparer.Ordinal);
 
-        foreach (var idxEl in indexes)
+        foreach (var entry in entries)
         {
-            if (idxEl.ValueKind != JsonValueKind.Object) continue;
-
-            // type이 directive 또는 indexed일 때만 처리 (정보 부족한 entry 차단)
-            if (!idxEl.TryGetProperty("type", out var typeProp)) continue;
-            var typeStr = typeProp.GetString();
-            if (typeStr != "directive" && typeStr != "indexed") continue;
-
-            if (!idxEl.TryGetProperty("args", out var argsEl)) continue;
-
-            // M3L.Native 0.5.5+: args는 항상 array.
-            // 0.5.4 호환: 단일 인자가 string scalar로 들어올 수 있음.
-            var cols = new List<string>();
-            if (argsEl.ValueKind == JsonValueKind.String)
-            {
-                var s = argsEl.GetString();
-                if (!string.IsNullOrWhiteSpace(s)) cols.Add(NameCasing.ToPascalCase(s!));
-            }
-            else if (argsEl.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var a in argsEl.EnumerateArray())
-                {
-                    var s = a.ValueKind == JsonValueKind.String ? a.GetString() : a.GetRawText();
-                    if (!string.IsNullOrWhiteSpace(s)) cols.Add(NameCasing.ToPascalCase(s!));
-                }
-            }
-            if (cols.Count == 0) continue;
-
-            var isUnique = idxEl.TryGetProperty("unique", out var uniqueProp)
-                           && uniqueProp.ValueKind == JsonValueKind.True;
+            var cols = entry.Columns.Select(NameCasing.ToPascalCase).ToList();
+            var isUnique = entry.IsUnique;
             var colJoined = string.Join("_", cols);
             var colList = string.Join(", ", cols.Select(c => $"[{c}]"));
 

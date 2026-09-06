@@ -1,4 +1,3 @@
-using System.Text.Json;
 using M3L.Native;
 using MddBooster.Core.Semantic;
 
@@ -68,38 +67,10 @@ public static class ForeignKeyIndexPlanner
             }
         }
 
-        var entries = model.Source.Sections?.Indexes;
-        if (entries is null) return covered;
-
-        foreach (var entry in entries)
+        foreach (var entry in SectionIndexParser.Parse(model))
         {
-            var first = FirstColumn(entry);
-            if (first is not null) covered.Add(first);
+            covered.Add(entry.Columns[0]);
         }
         return covered;
-    }
-
-    private static string? FirstColumn(JsonElement entry)
-    {
-        if (entry.ValueKind != JsonValueKind.Object) return null;
-        if (!entry.TryGetProperty("type", out var typeProp)) return null;
-        var type = typeProp.GetString();
-        if (type != "directive" && type != "indexed") return null;
-        if (!entry.TryGetProperty("args", out var args)) return null;
-
-        if (args.ValueKind == JsonValueKind.String)
-        {
-            var s = args.GetString();
-            return string.IsNullOrWhiteSpace(s) ? null : s;
-        }
-        if (args.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var a in args.EnumerateArray())
-            {
-                var s = a.ValueKind == JsonValueKind.String ? a.GetString() : a.GetRawText();
-                if (!string.IsNullOrWhiteSpace(s)) return s;
-            }
-        }
-        return null;
     }
 }
