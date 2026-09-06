@@ -1,5 +1,19 @@
 # Meta Model Markup Language (M3L) Specification
 
+> **This is a reference copy.** The language specification is maintained upstream, in the `m3l`
+> project, and that copy is the authoritative one — it carries a per-section implementation status
+> this copy does not reproduce.
+>
+> What this copy adds is the question a reader opens it *here* with: **where this generator stops.**
+> A section describing something the generator cannot act on carries a *What this generator
+> implements* note under its heading; a section without one is implemented as written.
+>
+> Read those notes before building on a section. Almost everything below parses, and almost
+> nothing below fails a build for being unsupported — so a section the generator ignores looks
+> exactly like one it implements, right up until the output is missing. The one section that does
+> fail a build says so in its note.
+
+
 ## Table of Contents
 1. [Introduction](#1-introduction)
    1. [Core Principles](#11-core-principles)
@@ -259,7 +273,7 @@ rejects nothing well-formed. `phone` is the exception: `string(20)` is sized for
 E.164 value, not for the same number written with separators, a spelled-out
 international prefix, or an extension.
 
-**What this generator emits** differs from the table above in two places, and both are
+**What this generator implements** differs from the table above in two places, and both are
 deliberate:
 
 - `phone` maps to a **30**-character bound, not 20. Narrowing an existing column is not
@@ -613,6 +627,7 @@ When no explicit symbol or attribute is provided, CASCADE behavior is determined
 
 # Critical constraints: Use RESTRICT
 - SystemAdminId: identifier @reference(User)!! @restrict
+```
 
 #### 3.2.2 Model Level Relationships (Single Line)
 
@@ -848,6 +863,11 @@ Multi-line format:
 - fields: [order_id, product_id]
 ```
 
+**What this generator implements**: the attribute form only. `@primary(1)`/`@primary(2)` above
+is read as a composite key. The multi-line `### PrimaryKey` form is not — the section is carried
+into the model as unstructured entries and nothing reads them, so the fields it names are **not**
+marked as keys and no warning says so. Declare composite keys with `@primary(order)`.
+
 ### 4.2 Comments and Documentation
 
 M3L provides two types of comments:
@@ -1032,6 +1052,11 @@ Fields that exist or are required only under certain conditions.
   - visible: "account_type == 'business'"
 ```
 
+**What this generator implements**: nothing. Both forms reach the model as plain attributes —
+`@if(...)` as an attribute named `if`, the sub-field form as attributes named `required` and
+`visible` — and no target reads any of them. A conditional field is emitted as an ordinary field,
+silently.
+
 ### 4.6 Complex Data Structures
 
 Defining complex nested data structures.
@@ -1072,6 +1097,11 @@ With specified structure:
     - description: string
 ```
 
+**What this generator implements**: `object` sub-fields and `map<K,V>` are read. Array-of-objects
+and deeply nested shapes are supported only in their basic form — beyond one level of nesting,
+neither the parser nor this generator has been exercised against them, so treat the output as
+unverified rather than guaranteed.
+
 ### 4.7 Validation Rules
 
 Rules for validating field values.
@@ -1102,6 +1132,11 @@ Rules for validating field values.
   - trigger: [create, password_update]
 ```
 
+**What this generator implements**: nothing. `@validate(...)` reaches the model as an attribute
+and no target reads it — no validation is emitted from it, and none is checked at build time. Length
+bounds in the output come from the declared type, not from here. A cross-field `### Validations`
+section is likewise carried and ignored.
+
 ### 4.8 Templates and Generics
 
 Defining reusable templates with generic parameters.
@@ -1120,6 +1155,11 @@ Defining reusable templates with generic parameters.
 ## ProductList : List<Product>
 - category: string
 ```
+
+**What this generator implements**: nothing. `## List<T>` is read as a model whose *name* is
+the literal text `List<T>`, and `## ProductList : List<Product>` as a model inheriting from a model
+named `List<Product>` — the type parameter is never substituted and no instantiation happens. The
+output is whatever those literal names produce, which is not what this section describes.
 
 ## 5. External References
 
@@ -1140,6 +1180,21 @@ Referencing external schemas or models.
 - category_id: identifier @reference(external://taxonomy.Category)
 ```
 
+**What this generator implements**: nothing — and it fails loudly rather than silently. The
+`external://` protocol has no parser support, so a reference written this way is not recognised as
+external; it is treated as pointing at a model that does not exist and the build stops with an
+unresolved-reference error.
+
+To reference a table this build does not own, declare the column **without** `@reference`:
+
+```markdown
+- asset_id: identifier            # owned by another build; no @reference
+```
+
+The column is emitted with the type you gave it, and no foreign key, navigation property, or lookup
+redirect is generated for it. That is a plain column, not a checked reference — nothing verifies
+that the target exists or that the two sides still agree on its type.
+
 ## 6. Versioning and Migration
 
 ### 6.1 Schema Versioning
@@ -1155,6 +1210,10 @@ Version information for the schema.
 - date: 2023-10-15
 ```
 
+**What this generator implements**: nothing. A `### Version` section is carried into the model
+as unstructured entries that no target reads, so schema version information appears in no output and
+no warning reports its absence.
+
 ### 6.2 Migration Notation
 
 Defining changes between schema versions.
@@ -1169,6 +1228,11 @@ Defining changes between schema versions.
 - removed:
   - Person.fax
 ```
+
+**What this generator implements**: nothing, by design. A `### Migration` section is carried and
+ignored like the one above. This generator emits desired-state schema — what the database should
+look like — and leaves reconciling an existing database with it to whichever tool applies the
+output.
 
 ## 7. Complete Examples
 
