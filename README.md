@@ -552,6 +552,7 @@ consumer-repo/
 | MDD005 | 해당 fk에 `@reference` 없음 |
 | MDD006 | lookup target 엔티티에 `col` 필드 없음 |
 | MDD007-9 | `@rollup` 대응 검증 |
+| MDD012 | `@reference` 대상이 스킴을 사용(`external://…` 등) — 이 생성기는 스킴 붙은 참조를 해석하지 않는다 |
 
 에러 발생 시 exitcode 3으로 종료.
 

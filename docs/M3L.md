@@ -1180,10 +1180,11 @@ Referencing external schemas or models.
 - category_id: identifier @reference(external://taxonomy.Category)
 ```
 
-**What this generator implements**: nothing — and it fails loudly rather than silently. The
-`external://` protocol has no parser support, so a reference written this way is not recognised as
-external; it is treated as pointing at a model that does not exist and the build stops with an
-unresolved-reference error.
+**What this generator implements**: nothing — and it fails loudly rather than silently. A reference
+target that names a scheme is not a model name this build loaded, so the build stops with `MDD012`,
+which names the scheme and says the generator does not read one. (It does not report a missing
+entity: the target was never meant to be an entity name, and saying so would send you looking for a
+typo.)
 
 To reference a table this build does not own, declare the column **without** `@reference`:
 

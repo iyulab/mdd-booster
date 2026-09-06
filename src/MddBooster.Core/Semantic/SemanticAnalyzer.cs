@@ -203,6 +203,23 @@ public sealed class SemanticAnalyzer
         if (string.IsNullOrEmpty(target)) return;
         if (_modelNames.Contains(target)) return;
 
+        // A model name never contains a colon, so a target that does is naming a
+        // scheme (M3L §5.2, external://…) — specified by the language, not read by
+        // this generator. Reporting that as a missing entity sends the reader
+        // hunting for a typo in a name that was never meant to be one.
+        var colon = target.IndexOf(':');
+        if (colon > 0)
+        {
+            var scheme = target[..colon];
+            diagnostics.Add(new SemanticDiagnostic(
+                "MDD012",
+                $"'{model.Name}.{field.Name}' 필드의 @reference 대상이 '{scheme}' 스킴을 사용합니다. " +
+                "이 생성기는 스킴이 붙은 참조를 해석하지 않습니다 — 대상은 이 빌드가 로드한 모델 이름이어야 합니다. " +
+                "이 빌드가 소유하지 않은 테이블을 가리키려면 @reference 없이 컬럼만 선언하십시오(외래 키·내비게이션은 생성되지 않습니다).",
+                field.Loc));
+            return;
+        }
+
         diagnostics.Add(new SemanticDiagnostic(
             "MDD002",
             $"'{model.Name}.{field.Name}' 필드의 @reference({target}) 대상 엔티티가 존재하지 않습니다.",
