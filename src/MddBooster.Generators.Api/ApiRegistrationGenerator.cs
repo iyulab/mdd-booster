@@ -34,6 +34,15 @@ public sealed class ApiRegistrationGenerator(ApiRegistrationGeneratorOptions opt
 
         File.WriteAllText(Path.Combine(apiDir, "ApiRegistration_gen.cs"), rendered);
 
+        // 권한 키는 opt-in 이다. 형식을 모르는 채로 내면 규약이 다른 소비자에게 틀린 상수가
+        // 가므로, 형식을 준 소비자에게만 방출한다.
+        if (!string.IsNullOrWhiteSpace(_options.PermissionKeyTemplate))
+        {
+            File.WriteAllText(
+                Path.Combine(apiDir, "Permissions_gen.cs"),
+                PermissionsRenderer.Render(models, _options.Namespace, _options.PermissionKeyTemplate));
+        }
+
         var controllers = ODataControllerRenderer.Render(
             models,
             _options.Namespace,
@@ -76,4 +85,14 @@ public sealed class ApiRegistrationGeneratorOptions
     /// 기본값은 전량 통과 — 미지정 소비자는 현행 동작 그대로다.
     /// </summary>
     public EntitySurfaceFilter SurfaceFilter { get; init; } = EntitySurfaceFilter.PassAll;
+
+    /// <summary>
+    /// 권한 키 형식(<c>permissionKeyTemplate</c>). 지정하면 <c>Permissions_gen.cs</c> 를 함께
+    /// 방출하고, 생략하면(기본) 아무것도 내지 않는다 — 미지정 소비자는 현행 동작 그대로다.
+    /// </summary>
+    /// <remarks>
+    /// 값이 «입력»인 것이 요점이다. 키 형식은 소비앱의 인가 규약이지 이 생성기가 아는 사실이
+    /// 아니라, 여기서 발명하면 규약이 다른 소비자에게는 쓸모없는 것이 아니라 **틀린** 상수가 된다.
+    /// </remarks>
+    public string? PermissionKeyTemplate { get; init; }
 }

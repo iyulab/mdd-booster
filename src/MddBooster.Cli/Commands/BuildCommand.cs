@@ -1,4 +1,5 @@
 using MddBooster.Cli.Config;
+using MddBooster.Generators.Api;
 using MddBooster.Generators.TypeScript;
 
 namespace MddBooster.Cli.Commands;
@@ -146,6 +147,27 @@ public sealed class BuildCommand
             filters[target] = EntitySurfaceFilter.Validate(
                 target.IncludeEntities, target.ExcludeEntities, allModels, label, out var violations);
             configViolations.AddRange(violations);
+
+            // 1.7a. 권한 키 형식 — 자리표시자 오타는 어떤 정책과도 매칭 안 되는 리터럴 키를
+            // 조용히 방출한다. 통과시키지 않는다.
+            if (!string.IsNullOrWhiteSpace(target.PermissionKeyTemplate))
+            {
+                if (target.Type != "Api")
+                {
+                    configViolations.Add(
+                        $"{label}: permissionKeyTemplate 는 Api 타깃에만 지정할 수 있습니다 "
+                        + "— 권한 상수를 방출하는 타깃이 그것뿐입니다.");
+                }
+                else
+                {
+                    foreach (var bad in PermissionKeyTemplate.Validate(target.PermissionKeyTemplate))
+                    {
+                        configViolations.Add(
+                            $"{label}: permissionKeyTemplate 의 '{{{bad}}}' 은(는) 알 수 없는 자리표시자입니다 "
+                            + $"— 쓸 수 있는 것: {string.Join(", ", PermissionKeyTemplate.Placeholders.Select(p => "{" + p + "}"))}.");
+                    }
+                }
+            }
 
             // 1.7b. 폼 전용 필터 — 같은 술어를 재사용하되 적용 범위가 좁다.
             var hasFormsFilter = target.FormsInclude?.Count > 0 || target.FormsExclude?.Count > 0;
@@ -429,6 +451,7 @@ public sealed class BuildCommand
                         ?? throw new InvalidOperationException("Api target requires 'namespace'."),
                     EntitiesNamespace = modelNamespace,
                     SurfaceFilter = surfaceFilter,
+                    PermissionKeyTemplate = target.PermissionKeyTemplate,
                 }),
             "TypeScript" => new TypeScriptGenerator(
                 new TypeScriptGeneratorOptions

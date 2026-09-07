@@ -160,6 +160,11 @@
           "type": "string",
           "description": "Directory the generated *_gen.ts files (5) go into, relative to this file's directory unless absolute."
         },
+        "permissionKeyTemplate": {
+          "type": "string",
+          "description": "Emit Api_gen/Permissions_gen.cs with one constant per (entity set, verb) plus an entity-set -> (read, write) default map, using this pattern. Placeholders: {entitySet} (Orders), {entitySetLower} (orders), {verb} (read/write), {Verb} (Read/Write) — e.g. \"{entitySetLower}.{verb}\" yields orders.read. An unknown placeholder fails the build rather than passing through as a literal that matches no policy. Omit to emit nothing. The pattern is input because the key shape is the consuming app's authorization convention: a generator that picked one would hand every app with a different convention constants that are wrong, not merely unused. Read and write only, matching the runtime's RestrictPolicy(setName, readPolicy, writePolicy) pair.",
+          "examples": ["{entitySetLower}.{verb}"]
+        },
         "formsOutputPath": {
           "type": "string",
           "description": "Directory {Entity}Form_gen.tsx files go into. Omit to skip form generation entirely."

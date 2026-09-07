@@ -18,6 +18,29 @@
 
 ## [Unreleased]
 
+### Api 타깃이 권한 키를 낸다 (`permissionKeyTemplate`)
+
+생성기는 엔티티셋 목록을 이미 내고 있었다(`AddEntityPair`). 그 목록에 권한 차원이 없어서
+소비앱이 같은 셋을 한 벌 더 손으로 유지했고, 거기서 한 줄이 빠지면 그 엔드포인트는 인증만
+통과한 아무나 읽는다 — 빌드·타입·테스트·응답 어디에도 나타나지 않는다.
+
+```json
+{ "type": "Api", "…": "…", "permissionKeyTemplate": "{entitySetLower}.{verb}" }
+```
+
+`Api_gen/Permissions_gen.cs` — (엔티티셋 × 동사)마다 상수 하나 + 엔티티셋 → (read, write)
+기본 매핑. 소비앱은 그 위에 예외만 얹으므로 **새 엔티티가 매핑에서 조용히 빠지는 일이
+구조적으로 없어진다.**
+
+🔴 **형식은 입력이다.** 키 모양은 소비앱의 인가 규약이라, 생성기가 정하면 규약이 다른
+소비자에게 «틀린» 상수가 간다. 자리표시자는 `{entitySet}`·`{entitySetLower}`·`{verb}`·`{Verb}`
+이고, **알 수 없는 자리표시자는 빌드 오류**다(통과시키면 어떤 정책과도 매칭 안 되는 리터럴 키가
+조용히 나간다). 생략하면 아무것도 방출하지 않는다.
+
+`@internal` 엔티티는 등록 파일과 같은 이유로 제외된다. 동사는 **read·write 둘뿐** — 런타임의
+짝이 `RestrictPolicy(setName, readPolicy, writePolicy)` 라 `delete` 를 내면 소비하는 쪽이 하지
+않는 구분을 발명하게 된다.
+
 ### 폼만 좁히는 `formsInclude` / `formsExclude`
 
 `includeEntities`/`excludeEntities` 는 타깃의 **엔티티 파생 산출물 전체**에 걸린다. 그래서

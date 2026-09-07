@@ -165,6 +165,54 @@ T-SQL `IX_{Model}_{Column}` · PostgreSQL `ix_{table}_{column}`. 대상 판정�
 `formsInclude` 도 화이트리스트라 위와 같은 drift 성질을 갖는다 — 커버리지 출력이 `폼
 formsInclude: 포함 N개 / 제외 M개 — 이름…` 으로 매 빌드에 보여준다.
 
+#### 권한 키 방출 (`permissionKeyTemplate`)
+
+Api 타깃은 이미 엔티티셋 목록을 낸다(`AddEntityPair`). 그런데 그 목록에 **권한 차원이 없어서**,
+소비앱은 같은 셋 목록을 **한 벌 더 손으로** 유지하게 된다 — 그리고 거기서 한 줄이 빠지면
+그 엔드포인트는 인증만 통과한 아무나 읽는다. 빌드·타입·테스트·응답 어디에도 안 나타난다.
+
+```json
+{ "type": "Api", "projectPath": "../src/MyApp.Server", "namespace": "MyApp.Server",
+  "permissionKeyTemplate": "{entitySetLower}.{verb}" }
+```
+
+`Api_gen/Permissions_gen.cs` 가 함께 나온다:
+
+```csharp
+public static class GeneratedPermissions
+{
+    public const string OrdersRead  = "orders.read";
+    public const string OrdersWrite = "orders.write";
+
+    /// 엔티티셋 → (read, write). 소비앱은 이 위에 예외만 얹는다.
+    public static readonly IReadOnlyDictionary<string, (string Read, string Write)> Default = …;
+}
+```
+
+| 자리표시자 | 값 |
+|---|---|
+| `{entitySet}` | `Orders` |
+| `{entitySetLower}` | `orders` |
+| `{verb}` · `{Verb}` | `read`/`write` · `Read`/`Write` |
+
+🔴 **형식이 «입력»인 것이 요점이다.** 키 모양(`orders.read` · `Order:Read` · `perm.orders.view`)은
+소비앱의 인가 규약이지 이 생성기가 아는 사실이 아니다. 여기서 하나를 정하면, 규약이 다른
+소비자에게는 쓸모없는 상수가 아니라 **틀린** 상수가 간다.
+
+- 생략하면 **아무것도 방출하지 않는다**(기존 소비자 무영향).
+- 알 수 없는 자리표시자는 **빌드 오류** — 그대로 통과시키면 어떤 정책과도 매칭되지 않는
+  리터럴 키가 조용히 나간다.
+- `@internal` 엔티티는 등록 파일과 **같은 이유로 제외**된다(데이터 API 표면이 없다).
+- **read·write 둘뿐**이다. 런타임의 짝이 `RestrictPolicy(setName, readPolicy, writePolicy)` 라,
+  `delete` 를 세 번째 동사로 내면 이 키를 소비하는 쪽이 하지 않는 구분을 발명하게 된다.
+
+> TypeScript 쪽은 이 옵션이 필요 없다 — `entity_names_gen.ts` 의 `ENTITY_NAMES`/`EntitySetName`
+> 위에 세 줄이면 같은 타입이 나오고, 새 엔티티가 모델에 들어오면 그 타입이 자동으로 넓어진다:
+> ```ts
+> type Verb = 'read' | 'write'
+> export type EntityPermission = `${Lowercase<EntitySetName>}.${Verb}`
+> ```
+
 #### 복수 타깃 게이트
 
 같은 종류의 타깃을 **여러 개** 둘 수 있다(한 정본 → 여러 서버). 다만 조용한 오출력이 되는 두 경우는 오류다.

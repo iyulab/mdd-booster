@@ -183,4 +183,21 @@ public sealed class MddJsonTarget
     /// </summary>
     [JsonPropertyName("formsExclude")]
     public List<string>? FormsExclude { get; set; }
+
+    /// <summary>
+    /// Api 타깃이 방출할 권한 키의 형식. 지정하면 <c>Api_gen/Permissions_gen.cs</c> 가 함께
+    /// 생성되고, 생략하면(기본) 아무것도 방출하지 않는다.
+    /// <para>
+    /// 자리표시자: <c>{entitySet}</c>(예 <c>Orders</c>) · <c>{entitySetLower}</c>(<c>orders</c>) ·
+    /// <c>{verb}</c>(<c>read</c>/<c>write</c>) · <c>{Verb}</c>(<c>Read</c>/<c>Write</c>).
+    /// 예: <c>"{entitySetLower}.{verb}"</c> → <c>orders.read</c>. 알 수 없는 자리표시자는 빌드 오류다
+    /// — 그대로 통과시키면 어떤 정책과도 매칭되지 않는 리터럴 키가 조용히 나간다.
+    /// </para>
+    /// <para>
+    /// 🔴 값이 «입력»인 것이 요점이다. 키 형식은 소비앱의 인가 규약이라, 생성기가 정하면 규약이
+    /// 다른 소비자에게 «틀린» 상수가 간다.
+    /// </para>
+    /// </summary>
+    [JsonPropertyName("permissionKeyTemplate")]
+    public string? PermissionKeyTemplate { get; set; }
 }
