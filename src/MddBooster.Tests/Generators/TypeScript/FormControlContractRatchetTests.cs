@@ -206,6 +206,81 @@ public sealed class FormControlContractRatchetTests
     }
 
     /// <summary>
+    /// Quoted literals the contract section names in backticks — <c>`"date"`</c> contributes
+    /// <c>date</c>. Complements <see cref="DocumentedNames"/>, which deliberately skips these
+    /// because they do not start with an identifier.
+    /// </summary>
+    private static HashSet<string> DocumentedLiterals()
+    {
+        var section = Regex.Replace(ContractSection(), @"^```[\s\S]*?^```", "", RegexOptions.Multiline);
+
+        var literals = new HashSet<string>(StringComparer.Ordinal);
+        foreach (Match span in Regex.Matches(section, @"`(?<s>[^`
+]+)`"))
+        {
+            var quoted = Regex.Match(span.Groups["s"].Value.Trim(), @"^""(?<v>[^""]*)""$");
+            if (quoted.Success) literals.Add(quoted.Groups["v"].Value);
+        }
+        return literals;
+    }
+
+    /// <summary>
+    /// Values the rendered form assigns to <c>type</c>. Read with a plain pattern rather than the
+    /// tag walk <see cref="AttributesOn"/> uses: a generated form has no element of its own, so
+    /// every <c>type=</c> in it is a prop on a consumer-supplied control.
+    /// </summary>
+    private static HashSet<string> EmittedTypeValues() =>
+        Regex.Matches(RenderForm(), @"\stype=""(?<v>[^""]*)""")
+             .Select(m => m.Groups["v"].Value)
+             .ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The same ratchet one level down. <c>type</c> being a documented prop name does not tell a
+    /// consumer which <em>values</em> arrive — and an unhandled value is exactly as breaking as an
+    /// unhandled prop, since the wrapper has to decide what to render for each one.
+    /// </summary>
+    /// <remarks>
+    /// <c>type="datetime"</c> arrived this way and the prop-name ratchet above stayed green
+    /// throughout, because <c>type</c> was already listed. That gap is what this closes.
+    /// </remarks>
+    [Fact]
+    public void Every_emitted_type_value_is_named_in_the_consumer_contract()
+    {
+        var documented = DocumentedLiterals();
+        var missing = EmittedTypeValues()
+            .Where(v => !documented.Contains(v))
+            .OrderBy(v => v, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(missing.Count == 0,
+            "the generated form emits `type` values the consumer contract does not mention: " +
+            string.Join(", ", missing.Select(v => $"`\"{v}\"`")) +
+            "\n\nA wrapper switches on this value to pick a control, so an unlisted one silently " +
+            "falls through to whatever its default branch does. Name it in the 「소비 프로젝트 계약」 " +
+            "section of README.md, next to the values already listed for `type?`.");
+    }
+
+    /// <summary>
+    /// The reverse direction, matching <see cref="The_fixture_emits_every_documented_prop"/>: a
+    /// value the README demands but no fixture field produces is a value this ratchet cannot see.
+    /// </summary>
+    [Fact]
+    public void The_fixture_emits_every_documented_type_value()
+    {
+        var emitted = EmittedTypeValues();
+        var unexercised = DocumentedLiterals()
+            .Where(v => !emitted.Contains(v))
+            .OrderBy(v => v, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(unexercised.Count == 0,
+            "the contract lists `type` values the fixture never renders: " +
+            string.Join(", ", unexercised.Select(v => $"`\"{v}\"`")) +
+            "\n\nAdd a field to fixtures/form-control-contract.m3l.md that produces it — the " +
+            "ratchet above is blind to any value this fixture cannot reach.");
+    }
+
+    /// <summary>
     /// The ratchet's reach is bounded by what the fixture renders. A prop that no fixture
     /// field triggers is a prop this ratchet cannot see, so the fixture is asserted to
     /// exercise the whole documented surface rather than trusted to.

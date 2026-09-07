@@ -12,6 +12,38 @@
 
 ## [Unreleased]
 
+### 생성 폼이 `timestamp`·`datetime` 필드에 `type="datetime"` 을 방출한다
+
+이 두 타입은 그동안 아무 힌트 없는 자유 텍스트로 나갔다. 사용자가 `2026-08-19 10:00` 처럼
+치면 서버 모델바인딩이 파싱에 실패해 400 이 나는데, 화면에는 어떤 형식이 필요한지 알려 줄
+것이 없었다.
+
+```diff
+- <UInput label="발송 일시" value={form.SentAt ?? ''} onChange={v => onChange({ SentAt: v })} />
++ <UInput label="발송 일시" type="datetime" value={form.SentAt ?? ''} onChange={v => onChange({ SentAt: v || null })} />
+```
+
+**`datetime` 은 HTML input 타입이 아니다** — 명세의 invalid-value default 가 Text 라, 이 값을
+그대로 `<input>` 에 넘기는 래퍼는 지금까지와 똑같은 텍스트 입력을 얻는다(Chrome 152 실측:
+`.type === "text"`, 값 보존). 값을 담을 수 있는 위젯이 있는 래퍼만 이 토큰에서 그쪽으로
+라우팅하면 된다. **네이티브 `datetime-local` 을 쓰지 않은 이유가 이것이다** — 그 컨트롤은
+`DATETIMEOFFSET` 의 오프셋을 담지 못해 값을 통째로 버린다(같은 실측: `.value === ""`),
+그래서 모르는 래퍼에게 데이터 손실이 된다. 실패 방향이 반대다.
+
+`time` 은 **의도적으로 그대로** 자유 텍스트다. 날짜 피커는 시각-only 값을 다루지 않고,
+`TIME(7)` 의 소수 초를 담는 컨트롤도 없다.
+
+⚠ **같은 변경에 「비우기」 페이로드 변화가 포함된다.** 두 타입이 이제 `date`·숫자 필드와 같은
+규약을 따른다 — nullable 필드는 `null`, 필수 필드는 `undefined`. 이전에는 빈 문자열(`''`)이
+그대로 나갔고, nullable `DateTimeOffset` 컬럼을 비우려던 요청은 그 경로에서 400 을 받고
+있었다.
+
+**소비자 래퍼 요구조건**: `UInput` 의 `type?` 가 받을 수 있는 값에 `"datetime"` 이 추가된다.
+모르는 값이어도 깨지지 않지만(위), 위젯을 붙이려면 그 위젯의 `value` 가 완전한 ISO-8601
+`DateTimeOffset` 문자열(`YYYY-MM-DDTHH:mm:ss±HH:mm`)을 주고받아야 한다. 상세는 README
+「소비 프로젝트 계약」.
+
+
 ### 따옴표 없는 속성 인자의 값이 더 이상 변형되지 않는다 (파서 핀 상승)
 
 `M3L.Native` 핀을 올렸다. 이 생성기가 읽는 값이 **원문 그대로** 오게 되어, 산출물에 실려

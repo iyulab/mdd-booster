@@ -349,7 +349,7 @@ MDD_DEBUG=1 mdd build ./mdd
 
 | 컴포넌트 | 언제 import되나 | 받는 프롭 |
 |---|---|---|
-| `UInput` | date · 숫자 · 문자열 필드 | `label` `required?` `description?` `type?`(`"date"`/`"number"`) **`step?: number`** **`maxlength?: number`** **`disabled?: boolean`** **`error?: string`** `value: string` `onChange: (v: string) => void` |
+| `UInput` | date · **datetime** · 숫자 · 문자열 필드 | `label` `required?` `description?` `type?`(`"date"`/**`"datetime"`**/`"number"`) **`step?: number`** **`maxlength?: number`** **`disabled?: boolean`** **`error?: string`** `value: string` `onChange: (v: string) => void` |
 | `UTextarea` | `text` 필드 | `label` `required?` `description?` **`minRows: number`** **`disabled?: boolean`** **`error?: string`** `value: string` `onChange: (v: string) => void` |
 | `USelect` | enum 필드 | `label` `required?` `description?` `placeholder?` **`disabled?: boolean`** **`error?: string`** `value: string` `options` `onChange: (v: string) => void` |
 | `UCheckbox` | boolean 필드 | `label` `description?` **`disabled?: boolean`** **`error?: string`** `checked: boolean` `onChange: (v: boolean) => void` |
@@ -373,6 +373,16 @@ MDD_DEBUG=1 mdd build ./mdd
   가정하지 않는다. 다만 그런 API를 감싼 컴포넌트라면, 문자열을 설정하는 호출만으로 화면의
   invalid 표시까지 갱신되지 않는 구현이 흔하다는 점은 알아둘 만하다 — 그 경우 별도의
   재검증 호출(`reportValidity()`류)까지 함께 실행해야 `error`가 실제로 보인다.
+- **`type="datetime"`은 새로 추가된 요구조건이다**(버전은 [CHANGELOG](https://github.com/iyulab/mdd-booster/blob/main/CHANGELOG.md) 참조)
+  — `timestamp`·`datetime` 필드에서 방출된다. **래퍼가 이 값을 모르면 아무것도 깨지지 않는다**:
+  그대로 아래 `<input>`에 넘기면 브라우저가 텍스트로 폴백해 이전과 동일하게 동작한다(위 실측).
+  값을 담을 수 있는 위젯이 있다면 이 토큰에서 그쪽으로 라우팅하면 된다 — 그 위젯의 `value`는
+  완전한 ISO-8601 `DateTimeOffset` 문자열(`YYYY-MM-DDTHH:mm:ss±HH:mm`)을 주고받아야 한다.
+  이 생성기는 어떤 컴포넌트 라이브러리도 가정하지 않으므로 위젯 선택은 전적으로 래퍼의 몫이다.
+- ⚠ **같은 버전에서 `timestamp`·`datetime`의 «비우기» 페이로드가 바뀌었다** — 자유 텍스트일
+  때는 빈 문자열(`''`)을 보냈으나, 이제 `date`·숫자 필드와 같은 규약을 따라 nullable 필드는
+  `null`, 필수 필드는 `undefined`를 보낸다. 빈 문자열을 nullable `DateTimeOffset` 컬럼에 그대로
+  넘기던 소비자는 그 경로에서 400을 받고 있었을 것이다.
 - `value`/`onChange`는 **controlled 패턴**을 전제한다(빈 상태 sentinel은 `''`).
 - **`step`·`maxlength`는 0.8.0에서 추가된 요구조건이다** — 0.7.0 이하에서 만든 래퍼는
   갱신해야 한다([CHANGELOG 0.8.0](https://github.com/iyulab/mdd-booster/blob/main/CHANGELOG.md#080) 참조).
@@ -415,7 +425,8 @@ export function enumToOptions(labels: Record<string, string>): /* USelect의 opt
 | `boolean` | `UCheckbox` | |
 | enum 타입명 | `USelect` | |
 | `date` | `UInput type="date"` | `DateOnly` → `"2026-07-28"`, 컨트롤이 받는 형식과 일치 |
-| `timestamp` · `datetime` · `time` | `UInput` (**자유 텍스트, 의도적**) | 네이티브 피커가 **값을 파괴한다** — 아래 |
+| `timestamp` · `datetime` | `UInput type="datetime"` | `datetime`은 **HTML input 타입이 아니다** — 모르는 래퍼는 텍스트로 안전하게 열화하고, 아는 래퍼만 자기 위젯으로 라우팅한다. `datetime-local`을 쓰지 않는 이유는 아래 |
+| `time` | `UInput` (**자유 텍스트, 의도적**) | 네이티브 피커가 **값을 파괴한다** — 아래 |
 | `decimal(p,s)` | `UInput type="number" step={10^-s}` | 스케일에서 유도. `decimal(18,4)`→`step={0.0001}`. 파라미터 없는 `decimal`은 SQL 기본값 `DECIMAL(18,2)`에 맞춰 `step={0.01}` |
 | 정수 타입 (`integer`/`long`/`short`/`byte`), `decimal(p,0)` | `UInput type="number"` | `step` 미방출 — HTML 기본값 1이 정확히 맞다 |
 | `float` / `double` | `UInput type="number"` | **알려진 한계**: `step` 미방출이라 **소수 입력이 막힌다**. 정답인 `step="any"`를 `step?: number` 계약이 담지 못한다(아래) |
@@ -434,25 +445,41 @@ export function enumToOptions(labels: Record<string, string>): /* USelect의 opt
 > **`float`/`double` 대신 `decimal(p,s)`로 모델링할 것** — 정밀도가 명시되므로 SQL·EF·폼이
 > 모두 같은 약속을 하게 된다.
 
-> **`timestamp`/`datetime`/`time`이 자유 텍스트인 것은 미구현이 아니라 결정이다.**
-> 피커는 API가 돌려주는 값을 컨트롤이 받아들일 때만 도움이 된다. 실측 결과:
+> **어떤 temporal 타입이 컨트롤을 받고 어떤 것이 받지 않는가 — 그리고 왜.**
+> 컨트롤은 API가 돌려주는 값을 **담을 수 있을 때만** 도움이 된다. 실측 결과:
 >
-> | m3l | CLR | JSON 직렬화 | 컨트롤이 받는 형식 | 왕복 |
+> | m3l | CLR | JSON 직렬화 | 방출 | 왜 |
 > |---|---|---|---|---|
-> | `date` | `DateOnly` | `"2026-07-28"` | `type="date"` = `YYYY-MM-DD` | ✅ |
-> | `timestamp`·`datetime` | `DateTimeOffset` | `"2026-07-28T14:30:00+09:00"` | `datetime-local` = `YYYY-MM-DDTHH:mm[:ss]` — **오프셋 불가** | ❌ |
-> | `time` | `TimeOnly` | `"14:30:45"` · `"14:30:45.1230000"` | `type="time"` — 기본 `step=60`(초 거부), 소수 초 3자리 한계 | ❌ |
+> | `date` | `DateOnly` | `"2026-07-28"` | `type="date"` | 컨트롤이 받는 형식과 정확히 일치 |
+> | `timestamp`·`datetime` | `DateTimeOffset` | `"2026-07-28T14:30:00+09:00"` | `type="datetime"` | 아래 |
+> | `time` | `TimeOnly` | `"14:30:45"` · `"14:30:45.1230000"` | 없음 (자유 텍스트) | 아래 |
 >
-> SQL 타입이 `DATETIMEOFFSET`·`TIME(7)`이므로 오프셋과 소수 초는 **실제 데이터**다.
-> 피커를 붙이면 브라우저가 그 값을 거부해 컨트롤이 **빈 칸으로 렌더**되고, 그대로 저장하면
-> **기존 값이 지워진다** — 값을 보여주기라도 하는 자유 텍스트보다 나쁘다.
-> `type="time" step={1}`은 초 문제만 풀고 소수 초는 조용히 버려서 **어떤 값은 되고 어떤 값은
-> 사라지는** 더 나쁜 상태를 만든다.
+> SQL 타입이 `DATETIMEOFFSET`·`TIME(7)`이므로 **오프셋과 소수 초는 실제 데이터**다(형식 장식이
+> 아니다). 그래서 `datetime-local`은 답이 될 수 없다 — 그 컨트롤은 오프셋을 담지 못한다.
+> Chrome 152에서 실측:
+>
+> ```js
+> input.type = 'datetime-local'; input.value = '2026-08-19T10:00:00+09:00';
+> input.value === ''            // 값이 지워진다 → 그대로 저장하면 기존 값이 사라진다
+>
+> input.setAttribute('type', 'datetime');
+> input.type === 'text'         // 명세의 invalid-value default
+> input.value === '2026-08-19T10:00:00+09:00'   // 값은 그대로
+> ```
+>
+> ⇒ 방출하는 토큰은 **`datetime`**이다. HTML 명세에서 제거된 값이라 브라우저는 텍스트로
+> 폴백한다. **이 토큰을 모르는 래퍼는 오늘까지와 똑같은 자유 텍스트 입력을 얻고**(잃는 것 없음),
+> 아는 래퍼는 완전한 ISO-8601 `DateTimeOffset` 문자열을 그대로 담는 위젯으로 라우팅하면 된다.
+> 실패 방향이 `datetime-local`과 반대라는 것이 이 선택의 전부다 — 저쪽은 모르는 것이 데이터
+> 손실이 되고, 이쪽은 모르는 것이 현상 유지가 된다.
+>
+> **`time`은 여전히 자유 텍스트다.** 날짜 피커는 시각-only 값을 다루지 않고, 소수 초 문제
+> (`TIME(7)` 7자리 대 컨트롤 3자리)를 해소하는 컨트롤도 없다. `type="time" step={1}`은 초
+> 문제만 풀고 소수 초는 조용히 버려 **어떤 값은 되고 어떤 값은 사라지는** 더 나쁜 상태를 만든다.
 >
 > 숫자 `step`과 방향이 반대라는 점에 주의: 거기서는 모델 정보를 컨트롤로 옮기면 막혔던 입력이
-> **가능해지지만**, 여기서는 컨트롤이 모델 정보를 담지 못해 옮기면 데이터가 **사라진다**.
+> **가능해지지만**, `time`에서는 컨트롤이 모델 정보를 담지 못해 옮기면 데이터가 **사라진다**.
 > 증상("모델은 타입을 아는데 폼이 안 쓴다")이 같아 보여도 처방이 반대다.
-> 피커를 쓰려면 오프셋 인지 변환 계층이 소비자 계약에 추가돼야 한다 — 사람이 결정할 사안이다.
 
 > `minRows`는 선택 옵션이 아니다. `<u-textarea>`는 자동 높이 조절이라 **1줄에서 시작**하므로,
 > 없으면 단일행 입력과 육안으로 구분되지 않는다. (속성명은 `minRows`이며 `rows`는 존재하지 않는다.)

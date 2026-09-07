@@ -506,11 +506,15 @@ public static class TsFormRenderer
     ///   That is why this one type gets a picker.</description></item>
     /// <item><term><c>timestamp</c>/<c>datetime</c></term><description><c>DateTimeOffset</c> →
     ///   <c>"2026-07-28T14:30:00+09:00"</c>. <c>&lt;input type="datetime-local"&gt;</c> accepts
-    ///   <c>YYYY-MM-DDTHH:mm[:ss]</c> and <b>cannot carry a UTC offset</b>. The browser rejects the
-    ///   value, the control renders <b>empty</b>, and submitting writes that empty back —
-    ///   silent data loss. Strictly worse than a text input that at least shows the value.
-    ///   The SQL/EF types are <c>DATETIMEOFFSET</c>/<c>DateTimeOffset</c>, so the offset is real
-    ///   data, not incidental formatting.</description></item>
+    ///   <c>YYYY-MM-DDTHH:mm[:ss]</c> and <b>cannot carry a UTC offset</b>; measured in Chrome 152,
+    ///   assigning the value above leaves <c>.value === ""</c> — the control renders <b>empty</b>
+    ///   and submitting writes that empty back. The SQL/EF types are
+    ///   <c>DATETIMEOFFSET</c>/<c>DateTimeOffset</c>, so the offset is real data, not incidental
+    ///   formatting. <b>These two now emit <c>type="datetime"</c> instead</b> — not an HTML input
+    ///   type, so the spec's invalid-value default (Text) makes an unaware wrapper degrade to the
+    ///   plain text box, while an aware one routes to a widget that holds the whole string. The
+    ///   failure direction is what separates the two tokens: with <c>datetime-local</c> not
+    ///   knowing costs the data, here it costs nothing.</description></item>
     /// <item><term><c>time</c></term><description><c>TimeOnly</c> → <c>"14:30:45"</c>, or
     ///   <c>"14:30:45.1230000"</c> when the column carries sub-second precision (SQL <c>TIME</c>
     ///   defaults to <c>TIME(7)</c>). <c>&lt;input type="time"&gt;</c> defaults to
@@ -524,9 +528,15 @@ public static class TsFormRenderer
     /// hold the model's information, so moving it <b>destroys</b> data. Same-looking symptom
     /// ("the model knows the type but the form ignores it"), opposite remedy.
     ///
-    /// Making these pickers work needs a value-conversion layer on the consumer contract
-    /// (offset-aware split/recombine) — a new contract surface carrying a real trade-off, so it is
-    /// a human decision, not autonomous scope.
+    /// <b>What changed for <c>timestamp</c>/<c>datetime</c>, and what did not for <c>time</c>.</b>
+    /// The original decision here said a picker needs a value-conversion layer on the consumer
+    /// contract — offset-aware split/recombine — and deferred it on that basis. That
+    /// layer turned out never to be needed: a widget whose own value contract <i>is</i> a complete
+    /// ISO-8601 <c>DateTimeOffset</c> string makes the exchange a plain string on both sides, the
+    /// same shape <c>date</c>/<c>DateOnly</c> always had. So the token is emitted and the consumer
+    /// decides what to render. <c>time</c> is untouched: a date picker does not cover a time-only
+    /// value, and nothing addresses the sub-second half (<c>TIME(7)</c> vs. three digits), so its
+    /// half of the original decision still stands.
     /// </remarks>
     /// <summary>
     /// The value an onChange handler sends when a control's clear gesture fires — <c>null</c> if
@@ -536,6 +546,15 @@ public static class TsFormRenderer
     /// plain-text branch has no equivalent because an empty string is itself a legitimate value
     /// there, not a separate "cleared" state.
     /// </summary>
+    /// <summary>
+    /// The two m3l types that map to <c>DateTimeOffset</c> — the pair that shares one control
+    /// branch. Kept as a predicate rather than an inline comparison so the type list has one home,
+    /// the way <c>IsNumberType</c> already does for the numeric family.
+    /// </summary>
+    private static bool IsDateTimeType(string? type) =>
+        string.Equals(type, "timestamp", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(type, "datetime", StringComparison.OrdinalIgnoreCase);
+
     private static string ClearToken(FieldNode field) => field.Nullable ? "null" : "undefined";
 
     private static string RenderField(
@@ -619,6 +638,24 @@ public static class TsFormRenderer
         {
             var dateEmpty = ClearToken(field);
             return $"<UInput label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr}{errorAttr} type=\"date\" value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || {dateEmpty} }})}} />";
+        }
+
+        // timestamp / datetime → UInput type="datetime"
+        //
+        // `datetime` is deliberately NOT an HTML input type. The spec's invalid-value default for
+        // `type` is Text, so a consumer wrapper that forwards this straight to <input> degrades to
+        // the plain text box these fields had before — while a wrapper that recognises the token
+        // can route to a widget that holds a whole DateTimeOffset string. `datetime-local` has the
+        // opposite failure direction and is why this is not that; see this method's remarks.
+        //
+        // The value still reaches the control unconverted, exactly as the text fall-through did.
+        // Only the clear gesture changes shape, matching the `date` branch above: a picker has a
+        // distinct "cleared" state, so an emptied field must send null/undefined rather than the
+        // empty string a text box would (the same delta semantics the number branch documents).
+        if (IsDateTimeType(field.Type))
+        {
+            var dateTimeEmpty = ClearToken(field);
+            return $"<UInput label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr}{errorAttr} type=\"datetime\" value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || {dateTimeEmpty} }})}} />";
         }
 
         // number types — nullable fields must clear via null (OData PATCH omits an undefined

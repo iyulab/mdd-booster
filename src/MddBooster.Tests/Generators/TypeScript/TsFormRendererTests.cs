@@ -468,29 +468,52 @@ public class TsFormRendererTests
     }
 
     [Theory]
-    [InlineData("HappenedAt")]   // timestamp  → DateTimeOffset → "2026-07-28T14:30:00+09:00"
-    [InlineData("ScheduledAt")]  // datetime   → DateTimeOffset → same
-    [InlineData("OpensAt")]      // time       → TimeOnly → "14:30:45" / "14:30:45.1230000"
-    public void Timestamp_datetime_and_time_deliberately_get_no_native_picker(string prop)
+    [InlineData("HappenedAt")]   // timestamp → DateTimeOffset → "2026-07-28T14:30:00+09:00"
+    [InlineData("ScheduledAt")]  // datetime  → DateTimeOffset → same
+    public void Timestamp_and_datetime_get_a_non_native_datetime_token(string prop)
     {
-        // TRIPWIRE — this asserts an intentional NON-implementation. If you are here because you
-        // added `type="datetime-local"` or `type="time"`, read RenderField's remarks first:
+        // `datetime` is NOT an HTML input type — the spec's invalid-value default for `type` is
+        // Text, so a wrapper that forwards this straight to <input> degrades to the plain text
+        // box these fields already had. Measured in Chrome 152:
         //
-        //   datetime-local cannot carry the UTC offset that DATETIMEOFFSET/DateTimeOffset holds.
-        //   type=time defaults to step=60 (rejects non-zero seconds) and caps fractional seconds
-        //   at 3 digits, while SQL TIME defaults to TIME(7).
+        //   <input type="datetime">        .type === "text"            value kept verbatim
+        //   <input type="datetime-local">  .type === "datetime-local"  value WIPED to ""
         //
-        // In both cases the browser rejects the API's own value, renders the control EMPTY, and
-        // submitting writes that empty back — silent data loss. That is strictly worse than the
-        // plain text input, which at least shows the value. Making these work needs an
-        // offset-aware conversion layer on the consumer contract: a human decision, not a fix.
+        // That asymmetry is the whole reason for the token. A wrapper that recognises it can route
+        // to a widget holding a full DateTimeOffset string (offset included); one that does not
+        // loses nothing. `datetime-local` inverts it: not knowing costs you the data.
         var models = LoadFixture("temporal-types.m3l.md");
         var content = TsFormRenderer.RenderAll(models, [], TestImports)["Event"];
         var line = FieldLine(content, prop);
 
-        Assert.DoesNotContain("type=", line);
-        // The value must reach the input unconverted — no truncation of offset or sub-second part.
+        Assert.Contains("type=\"datetime\"", line);
+        // TRIPWIRE — the native token must never appear. It is a superset match of the line above,
+        // so assert its absence explicitly rather than relying on the positive assertion.
+        Assert.DoesNotContain("datetime-local", line);
+        // The value must reach the control unconverted — no truncation of the offset.
         Assert.Contains($"value={{form.{prop} ?? ''}}", line);
+    }
+
+    [Fact]
+    public void Time_deliberately_gets_no_native_picker()
+    {
+        // TRIPWIRE — this asserts an intentional NON-implementation, and it survived the
+        // datetime change above. If you are here because you added `type="time"`, read
+        // RenderField's remarks first:
+        //
+        //   type=time defaults to step=60 (rejects non-zero seconds) and caps fractional seconds
+        //   at 3 digits, while SQL TIME defaults to TIME(7). The browser rejects the API's own
+        //   value, renders the control EMPTY, and submitting writes that empty back.
+        //
+        // Unlike timestamp/datetime, no widget resolved this: a date-picker does not cover a
+        // time-only value, and the sub-second half is untouched by one. The original decision
+        // still stands for this type alone.
+        var models = LoadFixture("temporal-types.m3l.md");
+        var content = TsFormRenderer.RenderAll(models, [], TestImports)["Event"];
+        var line = FieldLine(content, "OpensAt");
+
+        Assert.DoesNotContain("type=", line);
+        Assert.Contains("value={form.OpensAt ?? ''}", line);
     }
 
     // --- @system values ---------------------------------------------------------

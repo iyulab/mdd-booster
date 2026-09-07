@@ -15,6 +15,7 @@
 > | `rank` (enum `@not_null` `@help`) | `options` |
 > | `mood` (enum?) | `placeholder` (널 허용 enum 만 낸다) |
 > | `due` (`date`) | `type="date"` |
+> | `starts_at` (`datetime`) | `type="datetime"` |
 > | `amount` (`decimal(18,4)`) | `type="number"` · `step` (스케일에서 유도) |
 > | `owner_id` (`@reference`) | slot 경로 — 컨트롤을 내지 않는 필드가 섞여 있어야 한다 |
 > | `@group` 2개 | `FormSection title` |
@@ -48,6 +49,7 @@
 - title: string(50) @not_null @group("기본") @help("표시용 제목") "제목"
 - code: string(20) @immutable @group("기본") "코드"
 - due: date @group("기본") "마감일"
+- starts_at: datetime @group("기본") "시작시각"
 - amount: decimal(18,4) @group("기본") "금액"
 - rank: Rank @not_null @group("기본") @help("처리 우선순위") "등급"
 - mood: Mood? @group("기본") "상태"
