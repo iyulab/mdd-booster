@@ -10,7 +10,7 @@
 
 ---
 
-## [Unreleased]
+## 0.23.0
 
 ### enum 값에 `@deprecated` — 「이제는 고르지 않는 값」
 
