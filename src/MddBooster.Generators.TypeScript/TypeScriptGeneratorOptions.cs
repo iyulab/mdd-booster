@@ -34,4 +34,12 @@ public sealed class TypeScriptGeneratorOptions
     /// <c>enum_labels_gen.ts</c>는 필터하지 않는다 — 가지치기하면 임포트가 깨진다.
     /// </summary>
     public EntitySurfaceFilter SurfaceFilter { get; init; } = EntitySurfaceFilter.PassAll;
+
+    /// <summary>
+    /// 폼 전용 부분집합 필터 (<c>formsInclude</c>/<c>formsExclude</c>). 기본값은 전량 통과.
+    /// <see cref="SurfaceFilter"/>가 이미 좁힌 결과 <b>위에</b> 적용되므로 폼 집합은 언제나
+    /// 타깃 집합의 부분집합이다 — 생성 폼이 자기 타입을 <c>entities_gen.ts</c> 에서 임포트하기
+    /// 때문에 그 포함관계는 취향이 아니라 정합성이다.
+    /// </summary>
+    public EntitySurfaceFilter FormsSurfaceFilter { get; init; } = EntitySurfaceFilter.PassAll;
 }

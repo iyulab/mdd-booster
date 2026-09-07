@@ -145,12 +145,20 @@ public sealed class EntitySurfaceFilter
     /// 콘솔 회계 한 줄 — 포함 수·제외 수·제외된 이름. 화이트리스트는 정본에 새 엔티티가 추가돼도
     /// 조용히 빠지므로(drift), 무엇이 빠졌는지 매 빌드에서 보이게 한다.
     /// </summary>
-    public string DescribeCoverage(IReadOnlyList<ResolvedModel> allModels)
+    /// <param name="optionPrefix">
+    /// 이 필터를 설정하는 옵션 이름의 접두 — 회계 줄이 소비자가 «실제로 쓴» 키를 가리키게 한다.
+    /// 기본값 <c>""</c> 는 타깃 필터(<c>includeEntities</c>/<c>excludeEntities</c>)이고,
+    /// 폼 전용 필터는 <c>"forms"</c> 를 넘겨 <c>formsInclude</c>/<c>formsExclude</c> 로 읽히게 한다.
+    /// 틀린 키를 가리키는 안내는 없느니만 못하다 — 소비자가 그 키를 찾아 고치려 들기 때문이다.
+    /// </param>
+    public string DescribeCoverage(IReadOnlyList<ResolvedModel> allModels, string optionPrefix = "")
     {
         ArgumentNullException.ThrowIfNull(allModels);
         var kept = Apply(allModels);
         var dropped = allModels.Where(m => !kept.Contains(m)).Select(m => m.Name).ToList();
-        var mode = _include is not null ? "includeEntities" : "excludeEntities";
+        var mode = optionPrefix.Length == 0
+            ? (_include is not null ? "includeEntities" : "excludeEntities")
+            : optionPrefix + (_include is not null ? "Include" : "Exclude");
         return $"{mode}: 포함 {kept.Count}개 / 제외 {dropped.Count}개"
                + (dropped.Count > 0 ? $" — {string.Join(", ", dropped)}" : "");
     }

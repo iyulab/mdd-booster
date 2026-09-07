@@ -158,4 +158,29 @@ public sealed class MddJsonTarget
     /// </summary>
     [JsonPropertyName("excludeEntities")]
     public List<string>? ExcludeEntities { get; set; }
+
+    /// <summary>
+    /// TypeScript 타깃이 <b>폼만</b> 좁힐 화이트리스트. 생략하면 타깃 범위 전량(현행).
+    /// <see cref="FormsExcludeEntities"/>와 함께 지정하면 빌드 오류.
+    /// <para>
+    /// <see cref="IncludeEntities"/>와는 **입도가 다르다**: 그쪽은 타깃의 엔티티 파생 산출물
+    /// 전체(타입·필드 스키마·폼)에 걸리고, 이쪽은 <c>{Entity}Form_gen.tsx</c> 에만 걸린다.
+    /// 엔티티 수 &gt; 화면 수인 소비앱 — 접합 테이블·감사 로그·부모 화면에 인라인으로 편집되는
+    /// 자식처럼 단독 폼을 가질 수 없는 모델이 있는 쪽 — 이 타입은 전량 쓰면서 폼만 줄이는 자리다.
+    /// </para>
+    /// <para>
+    /// 폼 집합은 언제나 타깃 집합의 <b>부분집합</b>이다. 생성된 폼이 자기 타입을
+    /// <c>entities_gen.ts</c> 에서 임포트하므로, 타깃이 내지 않는 엔티티의 폼은 임포트가 깨진
+    /// 파일이 된다 — 그 조합은 조용히 드롭하지 않고 설정 오류로 세운다.
+    /// </para>
+    /// </summary>
+    [JsonPropertyName("formsInclude")]
+    public List<string>? FormsInclude { get; set; }
+
+    /// <summary>
+    /// TypeScript 타깃이 폼에서 제외할 블랙리스트. <see cref="FormsInclude"/>의 반대 방향이며,
+    /// 같은 부분집합 규칙과 검증을 따른다.
+    /// </summary>
+    [JsonPropertyName("formsExclude")]
+    public List<string>? FormsExclude { get; set; }
 }

@@ -164,6 +164,16 @@
           "type": "string",
           "description": "Directory {Entity}Form_gen.tsx files go into. Omit to skip form generation entirely."
         },
+        "formsInclude": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Entities to emit forms for. Narrower than includeEntities, which covers every entity-derived artifact of the target: this one narrows only {Entity}Form_gen.tsx, so an app that consumes all the types but has screens for a subset keeps its types whole. Always a subset of the target's entity range — a form imports its type from entities_gen.ts, so naming an entity that includeEntities/excludeEntities already dropped is a build error, not a silent skip. Mutually exclusive with formsExclude; requires formsOutputPath."
+        },
+        "formsExclude": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Entities to skip forms for — the other direction of formsInclude, under the same subset rule and validation. Mutually exclusive with formsInclude; requires formsOutputPath."
+        },
         "formLayoutImport": {
           "type": "string",
           "default": "@iyulab/enterprise",

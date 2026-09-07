@@ -229,4 +229,152 @@ public class TsFieldSchemaRendererTests
 
         Assert.DoesNotContain("NullableOnly:", result);
     }
+
+    // ── 읽기(파생) 필드 ─────────────────────────────────────────────────────────
+    // entities_gen.ts 는 lookup/rollup/computed 를 타입에 싣고 C# Ext 클래스도
+    // [Display(Name=…)] 를 내는데, 이 렌더러만 FieldKind.Stored 로 좁혀 놓아
+    // 목록 표가 그리는 바로 그 필드들의 라벨 원천이 없었다.
+
+    [Fact]
+    public void Derived_lookup_field_is_emitted_with_its_label_and_read_only_marker()
+    {
+        var models = LoadFixture("order-with-derived.m3l.md");
+
+        var result = TsFieldSchemaRenderer.RenderAll(models);
+
+        // customer_name: string @lookup(customer_id.name) "고객명"
+        Assert.Contains("CustomerName: { label: '고객명', derived: 'lookup', readOnly: true },", result);
+    }
+
+    [Fact]
+    public void Derived_rollup_and_computed_fields_carry_their_own_kind()
+    {
+        var models = LoadFixture("order-with-derived.m3l.md");
+
+        var result = TsFieldSchemaRenderer.RenderAll(models);
+
+        Assert.Contains("ItemCount: { derived: 'rollup', readOnly: true },", result);
+        Assert.Contains("TaxAmount: { derived: 'computed', readOnly: true },", result);
+    }
+
+    /// <summary>
+    /// `required` 는 「사용자가 반드시 채워야 한다」는 쓰기 축 진술이다. 파생 필드는 애초에
+    /// 쓰이지 않으므로, 원천 컬럼이 non-null 이라 nullable=false 로 해석되더라도 그것을
+    /// required 로 옮겨 적으면 소비자에게 거짓말이 된다.
+    /// </summary>
+    [Fact]
+    public void Derived_field_never_claims_required()
+    {
+        var models = LoadFixture("order-with-derived.m3l.md");
+
+        var result = TsFieldSchemaRenderer.RenderAll(models);
+
+        Assert.DoesNotContain("CustomerName: { required", result);
+        Assert.DoesNotContain("required: true, label: '고객명'", result);
+    }
+
+    /// <summary>
+    /// 라벨 없는 파생 필드도 실린다 — `derived`/`readOnly` 자체가 소비자가 알아야 할
+    /// 정보이고, 「이 필드가 스키마에 존재하는 것」이 이 요청의 핵심이었다.
+    /// 저장 필드의 기존 HasAny 게이트(제약이 하나도 없으면 생략)는 그대로 둔다.
+    /// </summary>
+    [Fact]
+    public void Derived_field_without_a_label_still_appears()
+    {
+        var models = LoadFixture("order-with-derived.m3l.md");
+
+        var result = TsFieldSchemaRenderer.RenderAll(models);
+
+        // customer_email: string @lookup(customer_id.email) — 라벨 없음
+        Assert.Contains("CustomerEmail: { derived: 'lookup', readOnly: true },", result);
+    }
+
+    // ── @lookup 라벨 상속 ───────────────────────────────────────────────────────
+    // 대상 필드가 이미 라벨을 갖고 있으면 같은 문자열을 두 번 적을 이유가 없다.
+    // rollup/computed 는 상속하지 않는다 — 집계식·표현식에는 이름을 줄 「대상 필드」가 없다.
+
+    private const string LookupInheritanceModel = """
+        ## Customer
+        - id: identifier @pk @generated
+        - name: string(50) @not_null "고객 상호"
+        - email: string(100) @not_null
+
+        ## Order
+        - id: identifier @pk @generated
+        - customer_id: identifier @reference(Customer) @not_null
+        - customer_name: string @lookup(customer_id.name)
+        - customer_email: string @lookup(customer_id.email)
+        - buyer: string @lookup(customer_id.name) "매입처"
+        """;
+
+    [Fact]
+    public void Lookup_without_its_own_label_inherits_the_target_field_label()
+    {
+        var models = LoadInline(LookupInheritanceModel);
+
+        var result = TsFieldSchemaRenderer.RenderAll(models);
+
+        Assert.Contains("CustomerName: { label: '고객 상호', derived: 'lookup', readOnly: true },", result);
+    }
+
+    [Fact]
+    public void An_explicit_label_wins_over_the_inherited_one()
+    {
+        var models = LoadInline(LookupInheritanceModel);
+
+        var result = TsFieldSchemaRenderer.RenderAll(models);
+
+        Assert.Contains("Buyer: { label: '매입처', derived: 'lookup', readOnly: true },", result);
+    }
+
+    /// <summary>
+    /// 대상에도 라벨이 없으면 아무것도 지어내지 않는다 — PascalCase 필드명으로 채우는 폴백은
+    /// 「사람이 쓴 의미 있는 텍스트」라는 label 의 뜻을 깬다(ExtractConstraints 의 기존 근거).
+    /// </summary>
+    [Fact]
+    public void Nothing_is_invented_when_the_target_has_no_label_either()
+    {
+        var models = LoadInline(LookupInheritanceModel);
+
+        var result = TsFieldSchemaRenderer.RenderAll(models);
+
+        Assert.Contains("CustomerEmail: { derived: 'lookup', readOnly: true },", result);
+    }
+
+    [Fact]
+    public void Rollup_and_computed_do_not_inherit_a_label()
+    {
+        var models = LoadFixture("order-with-derived.m3l.md");
+
+        var result = TsFieldSchemaRenderer.RenderAll(models);
+
+        // item_count @rollup(OrderItem.order_id, count) — 집계에는 대상 「필드」가 없다
+        Assert.Contains("ItemCount: { derived: 'rollup', readOnly: true },", result);
+        // tax_amount @computed(`subtotal * 0.1`) — 표현식도 마찬가지
+        Assert.Contains("TaxAmount: { derived: 'computed', readOnly: true },", result);
+    }
+
+    [Fact]
+    public void FieldConstraints_type_declares_the_two_new_members()
+    {
+        var models = LoadFixture("order-with-derived.m3l.md");
+
+        var result = TsFieldSchemaRenderer.RenderAll(models);
+
+        Assert.Contains("derived?: 'lookup' | 'rollup' | 'computed'", result);
+        Assert.Contains("readOnly?: true", result);
+    }
+
+    /// <summary>
+    /// 저장 필드의 방출은 한 글자도 바뀌지 않는다 — 이 변경은 순증이다.
+    /// </summary>
+    [Fact]
+    public void Stored_field_emission_is_unchanged_by_the_derived_addition()
+    {
+        var models = LoadFixture("order-with-derived.m3l.md");
+
+        var result = TsFieldSchemaRenderer.RenderAll(models);
+
+        Assert.Contains("OrderNumber: { required: true, maxLength: 30 },", result);
+    }
 }

@@ -262,4 +262,78 @@ public class EntityFilterBuildTests
         }
         finally { Cleanup(root); }
     }
+
+    // ── 폼 전용 필터 ────────────────────────────────────────────────────────────
+    // 기존 includeEntities 는 「타깃 전체」에 걸린다. 폼만 좁히려면 그것으로는 안 되는데,
+    // 좁히는 순간 entities_gen.ts 의 타입까지 함께 사라지기 때문이다.
+
+    /// <summary>
+    /// 이 갭의 실체: 폼은 25개만 필요한데 타입은 50개가 다 필요한 소비자가 있다.
+    /// </summary>
+    [Fact]
+    public void Forms_filter_narrows_the_forms_while_the_types_stay_whole()
+    {
+        var mddDir = Scaffold(
+            """{ "type": "TypeScript", "outputPath": "../ts", "formsOutputPath": "../ts/forms", "formsInclude": ["Order"] }""",
+            out var root);
+        try
+        {
+            Assert.Equal(0, new BuildCommand().Run(mddDir));
+
+            var forms = Path.Combine(root, "ts", "forms");
+            Assert.True(File.Exists(Path.Combine(forms, "OrderForm_gen.tsx")));
+            Assert.False(File.Exists(Path.Combine(forms, "OrderItemForm_gen.tsx")));
+            Assert.False(File.Exists(Path.Combine(forms, "ProductionWorkForm_gen.tsx")));
+
+            // 타입은 그대로 전량 — 이것이 includeEntities 로는 안 되던 부분이다.
+            var entities = File.ReadAllText(Path.Combine(root, "ts", "entities_gen.ts"));
+            Assert.Contains("interface Order", entities);
+            Assert.Contains("interface OrderItem", entities);
+            Assert.Contains("interface ProductionWork", entities);
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    public void Forms_exclude_is_the_other_direction_of_the_same_filter()
+    {
+        var mddDir = Scaffold(
+            """{ "type": "TypeScript", "outputPath": "../ts", "formsOutputPath": "../ts/forms", "formsExclude": ["OrderItem"] }""",
+            out var root);
+        try
+        {
+            Assert.Equal(0, new BuildCommand().Run(mddDir));
+
+            var forms = Path.Combine(root, "ts", "forms");
+            Assert.True(File.Exists(Path.Combine(forms, "OrderForm_gen.tsx")));
+            Assert.False(File.Exists(Path.Combine(forms, "OrderItemForm_gen.tsx")));
+        }
+        finally { Cleanup(root); }
+    }
+
+    /// <summary>
+    /// 폼은 자기 타입을 `entities_gen.ts` 에서 임포트한다. 타깃 필터가 뺀 엔티티의 폼을
+    /// 내면 임포트가 깨진 파일이 나오므로, 「폼 집합 ⊆ 타깃 집합」은 취향이 아니라 정합성이다.
+    /// 조용히 드롭하지 않고 설정 오류로 세운다.
+    /// </summary>
+    [Theory]
+    // formsInclude 가 타깃 필터 밖의 엔티티를 가리킴
+    [InlineData("""{ "type": "TypeScript", "outputPath": "../ts", "formsOutputPath": "../ts/forms", "includeEntities": ["Order"], "formsInclude": ["OrderItem"] }""")]
+    // formsOutputPath 없이 폼 필터만
+    [InlineData("""{ "type": "TypeScript", "outputPath": "../ts", "formsInclude": ["Order"] }""")]
+    // 폼 필터를 TypeScript 아닌 타깃에
+    [InlineData("""{ "type": "Api", "projectPath": "../api", "namespace": "T.Server", "formsInclude": ["Order"] }""")]
+    // 둘 다 지정
+    [InlineData("""{ "type": "TypeScript", "outputPath": "../ts", "formsOutputPath": "../ts/forms", "formsInclude": ["Order"], "formsExclude": ["OrderItem"] }""")]
+    // 미지 엔티티명
+    [InlineData("""{ "type": "TypeScript", "outputPath": "../ts", "formsOutputPath": "../ts/forms", "formsInclude": ["Ordr"] }""")]
+    public void Invalid_forms_filter_config_fails_the_build(string targetJson)
+    {
+        var mddDir = Scaffold(targetJson, out var root);
+        try
+        {
+            Assert.Equal(4, new BuildCommand().Run(mddDir));
+        }
+        finally { Cleanup(root); }
+    }
 }

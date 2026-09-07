@@ -24,6 +24,8 @@ public static class TsFieldSchemaRenderer
         sb.AppendLine("  max?: number");
         sb.AppendLine("  label?: string");
         sb.AppendLine("  group?: string");
+        sb.AppendLine("  derived?: 'lookup' | 'rollup' | 'computed'");
+        sb.AppendLine("  readOnly?: true");
         sb.AppendLine("}");
         sb.AppendLine();
         sb.AppendLine("export const FieldSchema = {");
@@ -31,15 +33,21 @@ public static class TsFieldSchemaRenderer
         foreach (var model in models)
         {
             var entityName = NameCasing.ToPascalCase(model.Name);
-            var storedFields = model.Fields
-                .Where(f => f.Kind == FieldKind.Stored)
+            // Stored and derived fields are both in scope, but they earn their place on
+            // different terms. A stored field is here for its *constraints*, so one with none
+            // says nothing and is dropped (HasAny). A derived field is here for its *kind* —
+            // `derived`/`readOnly` is itself what the consumer needs to know — so it is never
+            // dropped for lacking a label. Declaration order is preserved by filtering the
+            // model's own field list once rather than concatenating two passes.
+            var schemaFields = model.Fields
+                .Where(f => f.Kind is FieldKind.Stored or FieldKind.Lookup or FieldKind.Rollup or FieldKind.Computed)
                 .Where(f => !HasAttribute(f, "pk"))
                 .Where(f => !IsInheritedTimestamp(f.Name))
                 .ToList();
 
-            var constrainedFields = storedFields
-                .Select(f => (Field: f, Constraints: ExtractConstraints(f)))
-                .Where(pair => pair.Constraints.HasAny)
+            var constrainedFields = schemaFields
+                .Select(f => (Field: f, Constraints: ExtractConstraints(f, model, models)))
+                .Where(pair => pair.Constraints.IsDerived || pair.Constraints.HasAny)
                 .ToList();
 
             if (constrainedFields.Count == 0) continue;
@@ -66,6 +74,11 @@ public static class TsFieldSchemaRenderer
                     var escapedGroup = constraints.Group.Replace("\\", "\\\\").Replace("'", "\\'");
                     parts.Add($"group: '{escapedGroup}'");
                 }
+                if (constraints.Derived != null)
+                {
+                    parts.Add($"derived: '{constraints.Derived}'");
+                    parts.Add("readOnly: true");
+                }
 
                 sb.Append(' ').Append(string.Join(", ", parts)).AppendLine(" },");
             }
@@ -79,9 +92,24 @@ public static class TsFieldSchemaRenderer
         return sb.ToString();
     }
 
-    private static FieldConstraints ExtractConstraints(FieldNode field)
+    private static FieldConstraints ExtractConstraints(
+        FieldNode field,
+        ResolvedModel owner,
+        IReadOnlyList<ResolvedModel> allModels)
     {
-        var required = !field.Nullable;
+        var derived = field.Kind switch
+        {
+            FieldKind.Lookup => "lookup",
+            FieldKind.Rollup => "rollup",
+            FieldKind.Computed => "computed",
+            _ => null,
+        };
+
+        // `required` is a write-axis statement — "the user must supply this". A derived field is
+        // never supplied, so carrying its resolved nullability across would assert something
+        // false: `customer_name @lookup(customer_id.name)` reads a NOT NULL column and therefore
+        // resolves non-nullable, but nothing about that obliges a *form* to collect it.
+        var required = derived is null && !field.Nullable;
 
         // Shared with the generated form's `maxlength` — see FieldAttributes.EffectiveMaxLength.
         // Extracting it separately here is how the two would drift into disagreeing about the
@@ -95,9 +123,22 @@ public static class TsFieldSchemaRenderer
         // does NOT fall back to the PascalCase field name — presence of a label here signals
         // authored, meaningful text, and every field mechanically has a PascalCase name.
         string? label = MddBooster.Core.Ast.FieldAttributes.FirstArg(field, "label") ?? field.Description;
+
+        // A lookup with no label of its own borrows the one on the field it reads: the target
+        // already names this value, and making the author repeat that string is how the two drift.
+        // Only lookups can do this — a rollup is an aggregate (`count`, `sum(x)`) and a computed is
+        // an expression, so neither has a single target *field* whose name would apply.
+        // An explicit label always wins; if the target has none either, nothing is invented — the
+        // PascalCase fallback is deliberately not used here (see the comment above).
+        if (label is null && derived == "lookup")
+        {
+            var target = LookupTarget.Resolve(owner, field, allModels);
+            if (target is not null)
+                label = MddBooster.Core.Ast.FieldAttributes.FirstArg(target, "label") ?? target.Description;
+        }
         string? group = GetAttributeString(field, "group");
 
-        return new FieldConstraints(required, maxLength, min, max, label, group);
+        return new FieldConstraints(required, maxLength, min, max, label, group, derived);
     }
 
     private static double? GetAttributeNumber(FieldNode field, string attrName)
@@ -132,12 +173,20 @@ public static class TsFieldSchemaRenderer
 
     private record FieldConstraints(
         bool Required, int? MaxLength, double? Min, double? Max,
-        string? Label, string? Group)
+        string? Label, string? Group, string? Derived)
     {
         /// <summary>
         /// True when the field has at least one constraint or metadata (required, maxLength, min, max, label, group).
         /// A nullable field with only label or group still qualifies for schema inclusion.
         /// </summary>
         public bool HasAny => Required || MaxLength.HasValue || Min.HasValue || Max.HasValue || Label != null || Group != null;
+
+        /// <summary>
+        /// Derived fields (lookup/rollup/computed) are included on their kind alone — see the
+        /// selection comment in <see cref="RenderAll"/>. <see cref="HasAny"/> deliberately does
+        /// not fold this in: it answers "does this field carry constraints?", which stays the
+        /// right question for stored fields and would silently change meaning if widened.
+        /// </summary>
+        public bool IsDerived => Derived != null;
     }
 }

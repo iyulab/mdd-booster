@@ -128,6 +128,7 @@ public sealed class BuildCommand
         // 1.7. 타깃별 엔티티 부분집합 검증 — 조용한 드롭·조용한 무시 금지:
         // 오타로 표면이 텅 비는 것이 가장 나쁜 실패다.
         var filters = new Dictionary<MddJsonTarget, EntitySurfaceFilter>();
+        var formsFilters = new Dictionary<MddJsonTarget, EntitySurfaceFilter>();
         foreach (var target in cfg.Targets)
         {
             var label = $"{target.Type} 타깃({TargetPathOf(target)})";
@@ -145,6 +146,52 @@ public sealed class BuildCommand
             filters[target] = EntitySurfaceFilter.Validate(
                 target.IncludeEntities, target.ExcludeEntities, allModels, label, out var violations);
             configViolations.AddRange(violations);
+
+            // 1.7b. 폼 전용 필터 — 같은 술어를 재사용하되 적용 범위가 좁다.
+            var hasFormsFilter = target.FormsInclude?.Count > 0 || target.FormsExclude?.Count > 0;
+            if (!hasFormsFilter) continue;
+
+            if (target.Type != "TypeScript")
+            {
+                configViolations.Add(
+                    $"{label}: formsInclude/formsExclude 는 TypeScript 타깃에만 지정할 수 있습니다 "
+                    + "— 폼을 방출하는 타깃이 그것뿐입니다.");
+                continue;
+            }
+
+            if (target.FormsOutputPath is null)
+            {
+                configViolations.Add(
+                    $"{label}: formsInclude/formsExclude 를 지정했지만 formsOutputPath 가 없습니다 "
+                    + "— 폼을 아예 내지 않는 설정이라 이 필터가 아무것도 하지 않습니다. "
+                    + "폼을 내려면 formsOutputPath 를, 안 내려면 이 필터를 지우세요.");
+                continue;
+            }
+
+            var formsFilter = EntitySurfaceFilter.Validate(
+                target.FormsInclude, target.FormsExclude, allModels,
+                $"{label} 폼", out var formsViolations);
+            configViolations.AddRange(formsViolations);
+
+            // 폼 집합 ⊆ 타깃 집합. 생성 폼은 자기 타입을 entities_gen.ts 에서 임포트하므로,
+            // 타깃이 내지 않는 엔티티의 폼은 임포트가 깨진 파일이 된다. 조용히 드롭하면
+            // 소비자는 자기가 적은 이름이 왜 폼으로 안 나오는지 알 수 없다 — 말하게 한다.
+            if (formsViolations.Count == 0 && target.FormsInclude is { Count: > 0 })
+            {
+                var inTargetSurface = filters[target].Apply(allModels)
+                    .Select(m => m.Name)
+                    .ToHashSet(StringComparer.Ordinal);
+
+                foreach (var name in target.FormsInclude.Where(n => !inTargetSurface.Contains(n)))
+                {
+                    configViolations.Add(
+                        $"{label}: formsInclude 의 '{name}' 은(는) 이 타깃의 엔티티 범위 밖입니다 "
+                        + "(includeEntities/excludeEntities 가 이미 제외했습니다) — 폼은 자기 타입을 "
+                        + "entities_gen.ts 에서 임포트하므로 타입 없이 폼만 낼 수 없습니다.");
+                }
+            }
+
+            formsFilters[target] = formsFilter;
         }
 
         // 1.8. TypeScript 타깃의 EntitySetName 이 **어떤 Api 타깃도 등록하지 않는** 셋을 광고하는지.
@@ -248,13 +295,18 @@ public sealed class BuildCommand
             // 명시 > 유일 추론 > null. 후보가 둘 이상인 경우는 위에서 이미 오류로 걸렀다.
             var entitiesNamespace = target.EntitiesNamespace
                 ?? (modelNamespaces.Count == 1 ? modelNamespaces[0] : null);
-            var generator = ResolveGenerator(target, entitiesNamespace, filter);
+            var formsFilter = formsFilters.TryGetValue(target, out var ff) ? ff : EntitySurfaceFilter.PassAll;
+            var generator = ResolveGenerator(target, entitiesNamespace, filter, formsFilter);
             var targetPath = TargetPathOf(target);
             Console.WriteLine($"[{generator.Name}] 생성 시작 (target: {targetPath})");
             // 커버리지 회계 — 화이트리스트는 정본에 새 엔티티가 들어와도 조용히 빠지므로
             // 무엇이 제외됐는지 매 빌드에서 보이게 한다.
             if (!filter.IsPassAll)
                 Console.WriteLine($"[{generator.Name}] {filter.DescribeCoverage(allModels)}");
+            // 폼 필터도 같은 성질을 갖는다 — 화이트리스트면 새 엔티티가 조용히 폼에서 빠진다.
+            // 기준은 allModels 가 아니라 **타깃이 이미 좁힌 집합**이다(폼 ⊆ 타깃).
+            if (!formsFilter.IsPassAll)
+                Console.WriteLine($"[{generator.Name}] 폼 {formsFilter.DescribeCoverage(filter.Apply(allModels), "forms")}");
             generator.Generate(context);
             Console.WriteLine($"[{generator.Name}] 완료");
         }
@@ -352,7 +404,8 @@ public sealed class BuildCommand
     }
 
     private IArtifactGenerator ResolveGenerator(
-        MddJsonTarget target, string? modelNamespace, EntitySurfaceFilter surfaceFilter)
+        MddJsonTarget target, string? modelNamespace, EntitySurfaceFilter surfaceFilter,
+        EntitySurfaceFilter formsSurfaceFilter)
     {
         return target.Type switch
         {
@@ -385,6 +438,7 @@ public sealed class BuildCommand
                     FormsOutputPath = target.FormsOutputPath,
                     FormModules = FormModulesFor(target),
                     SurfaceFilter = surfaceFilter,
+                    FormsSurfaceFilter = formsSurfaceFilter,
                 }),
             _ => throw new NotSupportedException(
                 $"지원하지 않는 target type: '{target.Type}' (지원: Sql, Model, Api, TypeScript)"),

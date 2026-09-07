@@ -18,6 +18,82 @@
 
 ## [Unreleased]
 
+### 폼만 좁히는 `formsInclude` / `formsExclude`
+
+`includeEntities`/`excludeEntities` 는 타깃의 **엔티티 파생 산출물 전체**에 걸린다. 그래서
+*「타입은 전량 쓰는데 폼은 일부만 필요하다」*는 구성 — 접합 테이블·감사 로그·인라인 편집되는
+자식처럼 단독 폼을 가질 수 없는 모델이 있는 앱 — 은 표현할 수단이 없었다. 좁히는 순간
+`entities_gen.ts` 의 타입까지 사라졌기 때문이다.
+
+```json
+{ "type": "TypeScript", "outputPath": "../ui/src/types",
+  "formsOutputPath": "../ui/src/forms",
+  "formsInclude": ["Order", "Payment", "Consumer"] }
+```
+
+기존 필터와 **같은 술어·같은 검증**을 쓰고 적용 범위만 `{Entity}Form_gen.tsx` 로 좁다.
+
+🔴 **폼 집합은 언제나 타깃 집합의 부분집합이다.** 생성 폼이 자기 타입을 `entities_gen.ts` 에서
+임포트하므로, `includeEntities` 가 이미 제외한 엔티티를 `formsInclude` 에 적으면 임포트가 깨진
+파일이 나온다 — 조용히 드롭하지 않고 **빌드 오류**로 세운다. `formsOutputPath` 없이 필터만
+지정하는 것, `TypeScript` 아닌 타깃에 지정하는 것도 마찬가지로 오류다.
+
+### `field_schema_gen.ts` 가 읽기 필드(lookup·rollup·computed)도 싣는다
+
+지금까지 이 파일은 **쓰기 필드만** 실었다. 그런데 `entities_gen.ts` 는 읽기 필드를 타입에 싣고,
+C# 읽기 클래스도 그 필드에 `[Display(Name=…)]` 를 낸다 — 즉 **모델에 있는 라벨이 한 타깃에는
+도달하고 다른 타깃에는 도달하지 않았다.** 목록 표가 그리는 것이 대개 읽기 필드라, 그 열의
+라벨은 소비앱이 손으로 적는 수밖에 없었고 모델 라벨을 고쳐도 표는 따라오지 않았다.
+
+각 항목에 두 필드가 붙는다:
+
+```ts
+export type FieldConstraints = {
+  // …
+  derived?: 'lookup' | 'rollup' | 'computed'
+  readOnly?: true
+}
+
+Order: {
+  OrderNumber:  { required: true, maxLength: 30 },      // 그대로
+  CustomerName: { label: '고객명', derived: 'lookup', readOnly: true },
+  ItemCount:    { derived: 'rollup', readOnly: true },
+}
+```
+
+⚠ **`Object.keys(FieldSchema.X)` 를 순회해 「입력 필드 목록」을 도출하고 있다면 그 결과가
+넓어진다.** 읽기 필드는 편집 대상이 아니므로 `readOnly !== true` 로 걸러야 한다. 생성 폼
+(`*Form_gen.tsx`)은 이 맵을 읽지 않으므로 영향이 없고, 저장 필드의 방출은 **한 글자도 바뀌지
+않는다** — 순증이다.
+
+읽기 필드에는 `required` 를 **싣지 않는다.** `@lookup(customer_id.name)` 이 NOT NULL 컬럼을
+가리켜 non-nullable 로 해석되더라도, 그것이 폼더러 그 값을 받으라는 뜻은 아니다 — `required` 는
+쓰기 축의 진술이라 파생 필드에 옮겨 적으면 거짓이 된다.
+
+라벨이 없는 읽기 필드도 실린다. `derived`/`readOnly` 자체가 소비자가 알아야 할 정보이기
+때문이다(저장 필드는 종전대로 제약이 하나도 없으면 생략된다).
+
+### `@lookup` 이 대상 필드의 라벨을 상속한다
+
+`@lookup(customer_id.name)` 은 **대상 필드가 이미 그 값을 이름 짓고 있다.** 같은 문자열을 두 번
+적게 하는 것은 둘이 갈라지는 경로라, 라벨을 따로 안 붙인 lookup 은 이제 대상의 것을 물려받는다.
+
+```markdown
+## Customer
+- name: string(50) @not_null "고객 상호"
+
+## Order
+- customer_name: string @lookup(customer_id.name)              # → label: '고객 상호'
+- buyer:         string @lookup(customer_id.name) "매입처"      # → label: '매입처'  (직접 지정 우선)
+```
+
+- **직접 지정한 라벨이 언제나 이긴다.**
+- **대상에도 라벨이 없으면 아무것도 지어내지 않는다** — 필드명을 PascalCase 로 바꿔 채우는
+  폴백은 쓰지 않는다. `label` 의 존재는 「사람이 쓴 의미 있는 텍스트」라는 뜻을 유지한다.
+- **`@rollup`·`@computed` 는 상속하지 않는다.** 집계(`count`·`sum(x)`)와 표현식에는 이름을 줄
+  대상 «필드»가 없다.
+- 상속은 **한 단계**다. 대상이 그 자신 라벨 없는 lookup 이면 거기서 멈춘다.
+
 ### 빌드가 「의도적으로 구현하지 않은 것」을 스스로 말한다
 
 `time` 필드를 가진 모델이 TypeScript 폼 타깃에 닿으면 빌드가 안내 한 줄을 낸다 — 그 필드가

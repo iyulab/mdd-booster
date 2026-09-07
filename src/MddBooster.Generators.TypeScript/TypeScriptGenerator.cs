@@ -78,7 +78,11 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
                 Modules = _options.FormModules,
             };
 
-            var formFiles = TsFormRenderer.RenderAll(models, context.Enums, imports);
+            // 폼 전용 입도 — 이미 타깃 필터를 통과한 `models` 위에 얹는다. 그래서 폼 집합이
+            // 타깃 집합의 부분집합이라는 것이 별도 검사 없이 성립한다(임포트 정합성).
+            var formModels = _options.FormsSurfaceFilter.Apply(models);
+
+            var formFiles = TsFormRenderer.RenderAll(formModels, context.Enums, imports);
             foreach (var (entityName, content) in formFiles)
             {
                 File.WriteAllText(Path.Combine(formsDir, $"{entityName}Form_gen.tsx"), content);
