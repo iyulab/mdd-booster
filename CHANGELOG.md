@@ -10,7 +10,7 @@
 
 ---
 
-## [Unreleased]
+## 0.22.0
 
 ### 생성 폼이 `timestamp`·`datetime` 필드에 `type="datetime"` 을 방출한다
 
