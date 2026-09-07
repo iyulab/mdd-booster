@@ -89,9 +89,15 @@ options={enumToOptions(PaymentMethodSelectableLabels)}
 options={enumToOptions(paymentMethodChoices(form.Method))}
 ```
 
-**소비앱이 할 일은 없다.** `enumToOptions` 헬퍼 시그니처는 인자 하나 그대로이고
-(이 함수의 반환값이 그 인자에 그대로 들어간다), `{Enum}SelectableLabels`도 계속 방출된다.
-제외된 값이 없는 enum의 산출물은 바이트 단위로 이전과 같다.
+**생성 폼에 대해서는 소비앱이 할 일이 없다.** `enumToOptions` 헬퍼 시그니처는 인자 하나
+그대로이고 (이 함수의 반환값이 그 인자에 그대로 들어간다), `{Enum}SelectableLabels`도 계속
+방출된다. 제외된 값이 없는 enum의 산출물은 바이트 단위로 이전과 같다.
+
+⚠ **생성 폼 밖에 손으로 만든 select 가 있다면 그쪽도 함께 옮겨야 한다.** 생성기가 닿는 범위는
+생성물까지다 — 손으로 쓴 입력 자리가 전체 라벨맵(`{Enum}Labels`)을 펼치고 있으면, 모델에서
+제외한 값이 **그 자리에서는 계속 선택지에 남는다.** `@system`·`@deprecated` 로 좁힌 enum을
+입력에 쓰는 자리는 `{enum}Choices(current)`(편집 경로) 또는 `{Enum}SelectableLabels`(신규 전용)를
+읽도록 옮길 것. 표시·필터 자리는 전체 라벨맵이 맞으므로 그대로 둔다.
 
 ⚠ **관측되는 변화**: 제외된 값을 가진 enum 필드의 폼 import가 `{Enum}SelectableLabels`에서
 `{enum}Choices`로 바뀐다. 생성물끼리의 import라 소비앱 계약과는 무관하다.
