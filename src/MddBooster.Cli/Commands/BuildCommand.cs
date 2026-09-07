@@ -194,6 +194,53 @@ public sealed class BuildCommand
             return 4;
         }
 
+        // 1.9. 「의도적으로 구현하지 않은 것」을 생성물이 스스로 말하지 않는 자리 — 안내 레벨.
+        //
+        // 결함이 아니라 «설계»인데, 소비자 입장에서는 결함과 구분되지 않는다: 폼이 그냥 텍스트
+        // 상자를 낸다. 실제로 한 소비자가 근거 절(README 「타입 → 컨트롤 매핑」, 실측 표까지 있다)을
+        // 못 찾고 스스로 스파이크를 짰다. 문서를 더 쓰는 것은 답이 아니었다 — 그 자리에 이미 있었다.
+        // 닿지 않은 것은 **문서가 아니라 시점**이라, 소비자가 반드시 보는 출력(빌드)에 건다.
+        //
+        // 경고가 아니라 «안내»인 이유: 고칠 것이 없다. 경고로 내면 소비자가 결함으로 읽고
+        // 없애려 들며, 그러면 이 줄은 다시 소음이 된다. 문면에 「의도된 것」과 「근거 위치」가
+        // 둘 다 들어가야 하는 이유도 같다.
+        //
+        // 🔴 그래서 stdout 이다. 이 CLI 는 스트림으로 층위를 나눈다 — 정보는 stdout(`[m3l] 로딩`·
+        // `[ts] 완료`), 진단은 stderr(경고·오류). 접두사만으로 나누고 stderr 에 실으면
+        // `LargeModelAcceptanceTests.Building_the_acceptance_fixture_reports_nothing_on_stderr`
+        // 가 깨진다 — 그 게이트는 「깨끗한 모델은 stderr 가 비어 있다」를 재는 것이고, 안내를
+        // 그쪽에 실으면 게이트를 «약화시켜» 맞춰야 한다. 약화시키는 대신 스트림을 맞췄다:
+        // 이 줄은 빌드가 못 한 일이 아니라 한 일에 대한 설명이므로 애초에 진단이 아니다.
+        //
+        // 대상은 **조용한** 축 하나뿐이다. `timestamp`/`datetime` 은 `type="datetime"` 토큰을
+        // 방출해 이미 말하고 있고, `money`/`percentage` 는 빌드가 실패한다. 남는 것은 `time` —
+        // 네이티브 피커가 소수 초를 조용히 버리기 때문에 자유 텍스트로 두는 축이다
+        // (근거: `TsFormRenderer` 의 remarks 실측 표). 새로 조용한 축이 생기면 여기 더한다.
+        var tsTargets = cfg.Targets.Where(t => t.Type == "TypeScript").ToList();
+        if (tsTargets.Count > 0)
+        {
+            var plainTextTimeFields = tsTargets
+                .SelectMany(t => (filters.TryGetValue(t, out var tf) ? tf : EntitySurfaceFilter.PassAll)
+                    .Apply(allModels))
+                .SelectMany(m => m.Fields
+                    .Where(f => string.Equals(f.Type, "time", StringComparison.OrdinalIgnoreCase))
+                    .Select(f => $"{m.Name}.{f.Name}"))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(n => n, StringComparer.Ordinal)
+                .ToList();
+
+            if (plainTextTimeFields.Count > 0)
+            {
+                Console.WriteLine(
+                    $"[typescript] 안내: 'time' 필드 {plainTextTimeFields.Count}개가 생성 폼에서 "
+                    + "자유 텍스트 입력으로 나옵니다 — 결함이 아니라 의도된 것입니다. "
+                    + "네이티브 시각 피커는 소수 초(SQL TIME(7))를 조용히 버려서, 일부 값만 "
+                    + "저장되고 나머지는 사라집니다. 근거와 실측 표: README 「타입 → 컨트롤 매핑」. "
+                    + $"대상: {string.Join(", ", plainTextTimeFields.Take(10))}"
+                    + (plainTextTimeFields.Count > 10 ? $" … (+{plainTextTimeFields.Count - 10})" : ""));
+            }
+        }
+
         // 2. 타깃별 생성기 실행
         foreach (var target in cfg.Targets)
         {

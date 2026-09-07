@@ -45,6 +45,22 @@ public sealed class ConsoleErrorCapture : IDisposable
 
     public ConsoleErrorCapture(object callingTestInstance)
     {
+        RequireCaptureCollection(callingTestInstance);
+
+        _previous = Console.Error;
+        Console.SetError(_captured);
+    }
+
+    public string Text => _captured.ToString();
+
+    public void Dispose() => Console.SetError(_previous);
+
+    /// <summary>
+    /// Shared by both capture types: refuses to start unless the calling test class joined the
+    /// serializing collection. Both replace process-wide state, so both need the same guard.
+    /// </summary>
+    internal static void RequireCaptureCollection(object callingTestInstance)
+    {
         ArgumentNullException.ThrowIfNull(callingTestInstance);
 
         var type = callingTestInstance.GetType();
@@ -64,12 +80,34 @@ public sealed class ConsoleErrorCapture : IDisposable
                 "process-wide state, so an uncollected class races every other capturing test and " +
                 $"fails intermittently. Add [Collection(ConsoleCaptureCollection.Name)] to {type.Name}.");
         }
+    }
+}
 
-        _previous = Console.Error;
-        Console.SetError(_captured);
+/// <summary>
+/// Captures <c>Console.Out</c> for the lifetime of the instance, restoring it on dispose.
+/// </summary>
+/// <remarks>
+/// The CLI partitions its output by stream, not only by prefix: <b>stdout carries information</b>
+/// (what was loaded, what was generated, notices about deliberate design) and <b>stderr carries
+/// diagnostics</b> (warnings and errors — things the build could not do). That split is load-bearing:
+/// <c>LargeModelAcceptanceTests.Building_the_acceptance_fixture_reports_nothing_on_stderr</c> asserts
+/// a clean model produces an empty stderr, and that gate keeps its full strength only if
+/// informational output never lands there. Tests asserting on notices therefore capture this stream.
+/// </remarks>
+public sealed class ConsoleOutCapture : IDisposable
+{
+    private readonly TextWriter _previous;
+    private readonly StringWriter _captured = new();
+
+    public ConsoleOutCapture(object callingTestInstance)
+    {
+        ConsoleErrorCapture.RequireCaptureCollection(callingTestInstance);
+
+        _previous = Console.Out;
+        Console.SetOut(_captured);
     }
 
     public string Text => _captured.ToString();
 
-    public void Dispose() => Console.SetError(_previous);
+    public void Dispose() => Console.SetOut(_previous);
 }
