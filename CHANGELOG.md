@@ -16,7 +16,7 @@
 
 ---
 
-## [Unreleased]
+## 0.24.0
 
 ### Api 타깃이 권한 키를 낸다 (`permissionKeyTemplate`)
 
