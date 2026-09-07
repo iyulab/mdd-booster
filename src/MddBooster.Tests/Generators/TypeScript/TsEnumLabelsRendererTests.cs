@@ -177,9 +177,7 @@ public class TsEnumLabelsRendererTests
 
         var result = TsEnumLabelsRenderer.RenderAll(ast.Enums);
 
-        Assert.Contains(
-            "export const PaymentMethodSelectableLabels: Record<Exclude<PaymentMethod, 'legacy_carryover'>, string> = {",
-            result);
+        Assert.Contains("export const PaymentMethodSelectableLabels: Record<Exclude<PaymentMethod, 'legacy_carryover'", result);
         Assert.Contains("  cash: '현금',", result);
         // The system value is absent from the entries — it appears only inside the
         // Exclude<> type expression, which is what performs the exclusion.
@@ -188,6 +186,52 @@ public class TsEnumLabelsRendererTests
         selectableBody = selectableBody[..selectableBody.IndexOf("} as const", StringComparison.Ordinal)];
         Assert.DoesNotContain("legacy_carryover", selectableBody);
         Assert.Contains("card:", selectableBody);
+    }
+
+    [Fact]
+    public void Excludes_deprecated_values_from_the_choice_map_too()
+    {
+        var ast = LoadFixture("enum-system-value.m3l.md");
+
+        var result = TsEnumLabelsRenderer.RenderAll(ast.Enums);
+
+        // @system and @deprecated give different reasons for the same rule — this
+        // value is no longer offered for authoring. One map carries both.
+        Assert.Contains(
+            "export const PaymentMethodSelectableLabels: Record<Exclude<PaymentMethod, 'legacy_carryover' | 'voucher'>, string> = {",
+            result);
+        // ...and the display label survives, exactly as for @system: rows already
+        // holding it must still render.
+        Assert.Contains("  voucher: '상품권',", result);
+    }
+
+    [Fact]
+    public void Emits_choices_function_that_restores_the_current_value()
+    {
+        var ast = LoadFixture("enum-system-value.m3l.md");
+
+        var result = TsEnumLabelsRenderer.RenderAll(ast.Enums);
+
+        // The narrowed map alone cannot serve an edit form: a row already holding
+        // the excluded value would find its own value missing from the choices.
+        // This function adds that one value back, and only when it is the current one.
+        Assert.Contains(
+            "export function paymentMethodChoices(current?: string | null): Record<string, string> {",
+            result);
+        Assert.Contains("if (!current || current in PaymentMethodSelectableLabels) return PaymentMethodSelectableLabels", result);
+        Assert.Contains("{ ...PaymentMethodSelectableLabels, [current]: label }", result);
+    }
+
+    [Fact]
+    public void Does_not_emit_choices_function_when_no_value_is_system()
+    {
+        var ast = LoadFixture("enum-system-value.m3l.md");
+
+        var result = TsEnumLabelsRenderer.RenderAll(ast.Enums);
+
+        // Priority narrows nothing, so its form reads the label map directly —
+        // a function that can only return that same map is dead weight.
+        Assert.DoesNotContain("priorityChoices", result);
     }
 
     [Fact]
@@ -215,5 +259,9 @@ public class TsEnumLabelsRendererTests
 
         Assert.Contains("N'legacy_carryover'", check);
         Assert.Contains("N'cash'", check);
+        // Same for @deprecated, and for the same reason: a retired choice is still
+        // held by existing rows, and rejecting it at the database would make those
+        // rows unsaveable. Both reasons must stay on the authoring side alone.
+        Assert.Contains("N'voucher'", check);
     }
 }

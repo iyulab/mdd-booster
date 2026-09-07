@@ -4,6 +4,7 @@
 - cash: "현금"
 - card: "카드"
 - legacy_carryover: "레거시 이관 정리" @system
+- voucher: "상품권" @deprecated("card 로 대체")
 
 ## Priority ::enum
 - low: "낮음"

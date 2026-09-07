@@ -10,6 +10,70 @@
 
 ---
 
+## [Unreleased]
+
+### enum 값에 `@deprecated` — 「이제는 고르지 않는 값」
+
+값 레벨 `@deprecated` 가 `@system` 과 **같은 규칙**을 받는다: 생성 폼의 선택지에서 빠지고,
+표시 라벨·C# enum·SQL CHECK 제약에는 **그대로 남는다.**
+
+```markdown
+## PaymentMethod ::enum
+- card: "카드"
+- voucher: "상품권" @deprecated("card 로 대체")
+```
+
+두 attribute를 하나로 합치지 않은 이유는 **이유가 곧 정보**이기 때문이다 — `@system`은
+「시스템이 쓴다」, `@deprecated`는 「예전엔 골랐다」다. 폐지된 선택지를 `@system`으로 적으면
+모델이 「누가 그 값을 쓰는가」에 대해 사실이 아닌 말을 하게 된다. 산출물은 동일하다.
+
+인자(`@deprecated("card 로 대체")`)는 자유롭게 쓸 수 있고 생성기는 읽지 않는다.
+
+> M3L은 enum 값 attribute를 기록만 하고 의미를 정하지 않는다(명세 §3.1.8) — 위 의미는 이
+> 생성기가 정한 것이다. 파서 요구 버전은 `@system`과 같다(`M3L.Native` 0.6.0 이상).
+
+⚠ **이 버전 전까지 `@deprecated`는 어떤 타깃도 읽지 않는 이름이었다** — 모델에 적혀 있어도
+산출물에 아무 영향이 없었다(미등재 attribute는 경고 없이 통과한다). 다른 의도로(예: 린터·
+사람이 읽는 메모) **이미 enum 값에 `@deprecated`를 붙여 두었다면, 이 버전부터 그 값이 생성 폼의
+선택지에서 빠진다.** 재생성 후 해당 필드의 선택지를 확인할 것 — 저장·표시 라벨·C# enum·SQL
+CHECK 제약은 그대로이므로 기존 행과 서버 경로는 영향받지 않는다.
+
+판정은 **대소문자를 무시한 이름 일치**다(`@system`이 처음부터 그랬고 같은 술어를 쓴다) —
+`@Deprecated`·`@DEPRECATED`도 같게 취급된다. 인자 유무는 보지 않는다.
+
+### 🟠 `@system` 값을 가진 행을 편집하면 그 값이 선택지에서 사라졌다 (버그)
+
+enum 값에 `@system`을 붙이면 생성 폼이 좁혀진 선택지 맵(`{Enum}SelectableLabels`)을 읽는다 —
+그 값을 **새로 고를 수 없게** 하는 것이 목적이고, 그 목적은 지금까지 정확히 달성돼 왔다.
+
+빠져 있던 것은 반대 방향이다. 같은 생성 폼이 기존 행도 바인딩하는데
+(`{entity}FromEntity(row)`를 생성기가 함께 방출한다), **그 행이 이미 그 값을 들고 있으면**
+컨트롤은 자기 선택지에 없는 값을 받는다. 즉 편집 화면에서 현재 값이 표시되지 않고, 그대로
+저장하면 다른 값으로 바뀐다 — 저장은 제한하지 않는다던 `@system`의 계약과 어긋난다.
+
+이제 좁힘을 **함수**로 방출한다. 현재 값이 제외된 값일 때만 그 하나를 되돌려 놓는다:
+
+```ts
+/** Input choices, plus the current value when the model excludes it (so editing an existing row keeps it). */
+export function paymentMethodChoices(current?: string | null): Record<string, string>
+```
+
+```tsx
+// 이전
+options={enumToOptions(PaymentMethodSelectableLabels)}
+// 이후
+options={enumToOptions(paymentMethodChoices(form.Method))}
+```
+
+**소비앱이 할 일은 없다.** `enumToOptions` 헬퍼 시그니처는 인자 하나 그대로이고
+(이 함수의 반환값이 그 인자에 그대로 들어간다), `{Enum}SelectableLabels`도 계속 방출된다.
+제외된 값이 없는 enum의 산출물은 바이트 단위로 이전과 같다.
+
+⚠ **관측되는 변화**: 제외된 값을 가진 enum 필드의 폼 import가 `{Enum}SelectableLabels`에서
+`{enum}Choices`로 바뀐다. 생성물끼리의 import라 소비앱 계약과는 무관하다.
+
+---
+
 ## 0.22.0
 
 ### 생성 폼이 `timestamp`·`datetime` 필드에 `type="datetime"` 을 방출한다

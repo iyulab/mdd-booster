@@ -53,12 +53,12 @@ public static class TsFormRenderer
         ArgumentNullException.ThrowIfNull(imports);
 
         var enumNames = new HashSet<string>(enums.Select(e => e.Name), StringComparer.Ordinal);
-        var withSystemValues = EnumValueVisibility.TypeNamesWithSystemValues(enums);
+        var withExcludedValues = EnumValueVisibility.TypeNamesWithExcludedValues(enums);
 
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var model in models)
         {
-            var content = RenderOne(model, enumNames, withSystemValues, imports);
+            var content = RenderOne(model, enumNames, withExcludedValues, imports);
             if (content != null)
                 result[NameCasing.ToPascalCase(model.Name)] = content;
         }
@@ -123,26 +123,52 @@ public static class TsFormRenderer
     /// drift apart:
     /// <list type="bullet">
     /// <item><c>@display_labels(X)</c> swaps which enum supplies the text.</item>
-    /// <item>An enum carrying <c>@system</c> values supplies a narrowed choice map.</item>
+    /// <item>An enum carrying values excluded from authoring (<c>@system</c> /
+    /// <c>@deprecated</c>) is reached through its generated choices function rather
+    /// than a label map.</item>
     /// </list>
     /// The exclusion follows the enum whose labels are displayed, which is the same
     /// enum whose members the map is keyed by.
     /// </remarks>
-    private static string EffectiveLabelMap(FieldNode field, IReadOnlySet<string> withSystemValues)
+    private static string EffectiveLabelMap(FieldNode field, IReadOnlySet<string> withExcludedValues)
     {
-        var baseName = GetDisplayLabelsOverride(field) is { Length: > 0 } ov
+        var baseName = EffectiveEnumName(field);
+
+        return withExcludedValues.Contains(baseName)
+            ? EnumValueVisibility.ChoicesFunctionName(baseName)
+            : baseName + "Labels";
+    }
+
+    /// <summary>The enum whose labels this field displays — its own, or a
+    /// <c>@display_labels(X)</c> override.</summary>
+    private static string EffectiveEnumName(FieldNode field) =>
+        GetDisplayLabelsOverride(field) is { Length: > 0 } ov
             ? NameCasing.ToPascalCase(ov)
             : NameCasing.ToPascalCase(field.Type!);
 
-        return withSystemValues.Contains(baseName)
-            ? EnumValueVisibility.SelectableLabelsName(baseName)
-            : baseName + "Labels";
+    /// <summary>
+    /// The expression a <c>USelect</c> passes to <c>enumToOptions</c>.
+    /// </summary>
+    /// <remarks>
+    /// Same symbol <see cref="EffectiveLabelMap"/> resolves for the import list — a
+    /// narrowed enum's is a function, so here it is called with the field's current
+    /// value; an un-narrowed one is a map and stands alone. Both forms must come out
+    /// of the same resolution, which is why neither recomputes the enum name.
+    /// </remarks>
+    private static string ChoicesExpression(
+        FieldNode field, IReadOnlySet<string> withExcludedValues, string prop)
+    {
+        var symbol = EffectiveLabelMap(field, withExcludedValues);
+
+        return withExcludedValues.Contains(EffectiveEnumName(field))
+            ? $"{symbol}(form.{prop})"
+            : symbol;
     }
 
     private static string? RenderOne(
         ResolvedModel model,
         IReadOnlySet<string> enumNames,
-        IReadOnlySet<string> withSystemValues,
+        IReadOnlySet<string> withExcludedValues,
         TsFormImports imports)
     {
         var storedFields = model.Fields
@@ -202,7 +228,7 @@ public static class TsFormRenderer
         // an enum's own {Type}Labels when every field of that type is overridden (would be unused).
         var labelMapNames = renderableFields
             .Where(f => f.Type != null && enumNames.Contains(f.Type))
-            .Select(f => EffectiveLabelMap(f, withSystemValues))
+            .Select(f => EffectiveLabelMap(f, withExcludedValues))
             .Distinct()
             .ToList();
 
@@ -306,7 +332,7 @@ public static class TsFormRenderer
             sb.Append("      <FormSection title=\"").Append(sectionTitle)
               .Append("\" className={sectionProps?.['").Append(escapedTitle).Append("']?.className}")
               .Append(" style={sectionProps?.['").Append(escapedTitle).AppendLine("']?.style}>");
-            RenderSectionRows(sb, fields, enumNames, withSystemValues);
+            RenderSectionRows(sb, fields, enumNames, withExcludedValues);
             sb.AppendLine("      </FormSection>");
         }
 
@@ -451,7 +477,7 @@ public static class TsFormRenderer
         StringBuilder sb,
         List<FieldNode> fields,
         IReadOnlySet<string> enumNames,
-        IReadOnlySet<string> withSystemValues)
+        IReadOnlySet<string> withExcludedValues)
     {
         var i = 0;
         while (i < fields.Count)
@@ -462,15 +488,15 @@ public static class TsFormRenderer
             if (isFullWidth)
             {
                 sb.AppendLine("        <FormRow full>");
-                sb.Append("          ").AppendLine(RenderField(field, enumNames, withSystemValues));
+                sb.Append("          ").AppendLine(RenderField(field, enumNames, withExcludedValues));
                 sb.AppendLine("        </FormRow>");
                 i++;
             }
             else if (i + 1 < fields.Count && !IsFullWidth(fields[i + 1]))
             {
                 sb.AppendLine("        <FormRow>");
-                sb.Append("          ").AppendLine(RenderField(field, enumNames, withSystemValues));
-                sb.Append("          ").AppendLine(RenderField(fields[i + 1], enumNames, withSystemValues));
+                sb.Append("          ").AppendLine(RenderField(field, enumNames, withExcludedValues));
+                sb.Append("          ").AppendLine(RenderField(fields[i + 1], enumNames, withExcludedValues));
                 sb.AppendLine("        </FormRow>");
                 i += 2;
             }
@@ -478,7 +504,7 @@ public static class TsFormRenderer
             {
                 // unpaired half-width field
                 sb.AppendLine("        <FormRow full>");
-                sb.Append("          ").AppendLine(RenderField(field, enumNames, withSystemValues));
+                sb.Append("          ").AppendLine(RenderField(field, enumNames, withExcludedValues));
                 sb.AppendLine("        </FormRow>");
                 i++;
             }
@@ -560,7 +586,7 @@ public static class TsFormRenderer
     private static string RenderField(
         FieldNode field,
         IReadOnlySet<string> enumNames,
-        IReadOnlySet<string> withSystemValues)
+        IReadOnlySet<string> withExcludedValues)
     {
         var prop = NameCasing.ToPascalCase(field.Name);
         var label = MddBooster.Core.Ast.FieldAttributes.EffectiveLabel(field);
@@ -614,10 +640,10 @@ public static class TsFormRenderer
         {
             // Select is only classified for a field whose Type names a known enum.
             var enumTypeName = NameCasing.ToPascalCase(field.Type!);
-            // Which map supplies the choices — see EffectiveLabelMap. The stored/cast
+            // What supplies the choices — see ChoicesExpression. The stored/cast
             // type stays enumTypeName regardless: narrowing the choices never narrows
             // what may be stored.
-            var labelMap = EffectiveLabelMap(field, withSystemValues);
+            var labelMap = ChoicesExpression(field, withExcludedValues, prop);
             // USelect.value is T extends string, it cannot accept null.
             // Use '' as the empty-state sentinel; onChange receives '' for no-selection.
             var placeholder = field.Nullable ? $" placeholder=\"{label} 선택\"" : "";

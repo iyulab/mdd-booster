@@ -528,13 +528,31 @@ public class TsFormRendererTests
         var results = TsFormRenderer.RenderAll(models, ast.Enums, TestImports);
         var content = results["Payment"];
 
-        // The choices come from the selectable map, not the full label map.
-        Assert.Contains("options={enumToOptions(PaymentMethodSelectableLabels)}", content);
+        // The choices come from the narrowed axis, not the full label map.
         Assert.DoesNotContain("enumToOptions(PaymentMethodLabels)", content);
-        // ...and that map is what gets imported.
-        Assert.Contains("PaymentMethodSelectableLabels", content);
+        // ...reached through the choices function, which is what gets imported.
+        Assert.Contains("paymentMethodChoices", content);
         // The stored/cast type is unchanged — the value is still valid to store.
         Assert.Contains("as PaymentMethod", content);
+    }
+
+    [Fact]
+    public void Passes_the_current_value_to_the_choices_function()
+    {
+        // The same generated form binds an existing row (paymentFromEntity), so the
+        // choices have to depend on what that row already holds — otherwise editing
+        // a row whose value is excluded silently drops it.
+        var ast = new M3lLoader().LoadFile(
+            Path.Combine(AppContext.BaseDirectory, "fixtures", "enum-system-value.m3l.md"));
+        var models = new InterfaceResolver(ast).ResolveAll();
+
+        var results = TsFormRenderer.RenderAll(models, ast.Enums, TestImports);
+        var content = results["Payment"];
+
+        Assert.Contains("options={enumToOptions(paymentMethodChoices(form.Method))}", content);
+        // The function is what gets imported; the narrowed map is reached through it.
+        Assert.Contains("paymentMethodChoices", content);
+        Assert.DoesNotContain("enumToOptions(PaymentMethodSelectableLabels)", content);
     }
 
     [Fact]

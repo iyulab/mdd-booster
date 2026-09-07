@@ -83,7 +83,7 @@ public static class TsEnumLabelsRenderer
     }
 
     /// <summary>
-    /// Emits the input-choice map for enums carrying <c>@system</c> values.
+    /// Emits the input-choice map for enums carrying values excluded from authoring.
     /// </summary>
     /// <remarks>
     /// Display labels and input choices are different concerns that used to share
@@ -98,19 +98,19 @@ public static class TsEnumLabelsRenderer
     /// </remarks>
     private static void AppendSelectableLabels(StringBuilder sb, EnumNode enumNode, string typeName)
     {
-        if (!EnumValueVisibility.HasSystemValues(enumNode)) return;
+        if (!EnumValueVisibility.HasExcludedValues(enumNode)) return;
 
         var excluded = enumNode.Values
-            .Where(EnumValueVisibility.IsSystemValue)
+            .Where(EnumValueVisibility.IsExcludedFromChoices)
             .Select(v => "'" + (v.Name ?? string.Empty) + "'")
             .ToList();
 
-        sb.AppendLine("/** Input choices — excludes values marked @system in the model. */");
+        sb.AppendLine("/** Input choices — excludes values marked @system or @deprecated in the model. */");
         sb.Append("export const ").Append(EnumValueVisibility.SelectableLabelsName(typeName))
           .Append(": Record<Exclude<").Append(typeName).Append(", ")
           .Append(string.Join(" | ", excluded)).AppendLine(">, string> = {");
 
-        foreach (var v in enumNode.Values.Where(v => !EnumValueVisibility.IsSystemValue(v)))
+        foreach (var v in enumNode.Values.Where(v => !EnumValueVisibility.IsExcludedFromChoices(v)))
         {
             var key = v.Name ?? string.Empty;
             var label = !string.IsNullOrWhiteSpace(v.Description) ? v.Description : NameCasing.ToPascalCase(key);
@@ -119,6 +119,44 @@ public static class TsEnumLabelsRenderer
         }
 
         sb.AppendLine("} as const");
+        sb.AppendLine();
+
+        AppendChoicesFunction(sb, typeName);
+    }
+
+    /// <summary>
+    /// Emits the function a generated form calls for its choices.
+    /// </summary>
+    /// <remarks>
+    /// The narrowed map above answers "what may be authored". A form also has to
+    /// answer "what is this row showing", and for a row holding an excluded value
+    /// those two differ — the map has no entry for it, so the control receives a
+    /// value absent from its own options. This restores that single value while it
+    /// is the current one, leaving every other row with the narrowed choices.
+    /// <para>
+    /// The parameter is <c>string</c>, not the enum type, on purpose:
+    /// <c>@display_labels(X)</c> keys the map by <em>X</em> while the form's value is
+    /// still typed as the field's own enum, so typing the parameter as either one
+    /// makes the other combination stop compiling. The compile-time guarantee is
+    /// unaffected — it lives on the map's <c>Exclude&lt;&gt;</c> declaration, which
+    /// this only reads.
+    /// </para>
+    /// </remarks>
+    private static void AppendChoicesFunction(StringBuilder sb, string typeName)
+    {
+        var selectable = EnumValueVisibility.SelectableLabelsName(typeName);
+        var labels = typeName + "Labels";
+
+        sb.AppendLine("/** Input choices, plus the current value when the model excludes it (so editing an existing row keeps it). */");
+        sb.Append("export function ").Append(EnumValueVisibility.ChoicesFunctionName(typeName))
+          .AppendLine("(current?: string | null): Record<string, string> {");
+        sb.Append("  if (!current || current in ").Append(selectable)
+          .Append(") return ").Append(selectable).AppendLine();
+        sb.Append("  const label = (").Append(labels)
+          .AppendLine(" as Record<string, string>)[current]");
+        sb.Append("  return label === undefined ? ").Append(selectable)
+          .Append(" : { ...").Append(selectable).AppendLine(", [current]: label }");
+        sb.AppendLine("}");
         sb.AppendLine();
     }
 }

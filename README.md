@@ -398,8 +398,8 @@ MDD_DEBUG=1 mdd build ./mdd
 export function enumToOptions(labels: Record<string, string>): /* USelect의 options 타입 */
 ```
 생성기가 요구하는 것은 **인자 하나**와 그 결과가 `USelect`의 `options`에 그대로 들어간다는 것뿐이다
-(반환 타입은 소비자가 정한다). 값을 좁힐 때도 **인자를 늘리지 않고** 좁혀진 라벨맵을 따로 생성해
-넘기므로(아래 `@system` 절), 이 시그니처는 안정적이다.
+(반환 타입은 소비자가 정한다). 값을 좁힐 때도 **인자를 늘리지 않고** 좁힘을 생성물 쪽에서
+끝내 그 결과를 넘기므로(아래 `@system` 절), 이 시그니처는 안정적이다.
 
 #### `formLayoutImport` 가 가리킬 모듈 — 레이아웃 (기본값 `@iyulab/enterprise`)
 
@@ -496,9 +496,10 @@ mdd-booster 고유**이며, 다른 생성기는 이들을 무시한다.
 | `@help("설명")` | 필드 | 컨트롤에 `description="설명"` — 라벨은 짧게 두고 예시·부연을 아래로 분리 |
 | `@slot` | 필드 | 인라인 컨트롤 대신 **슬롯 자리표시자**로 렌더 (호출부가 내용을 주입). `@reference` FK 필드는 자동으로 슬롯 |
 | `@display_labels(다른Enum)` | enum 필드 | 표시 텍스트만 다른 enum의 라벨맵으로 교체. **저장/캐스트 타입은 그대로** |
-| `@system` | **enum 값** | 생성 폼 선택지에서 제외 (아래) |
+| `@system` | **enum 값** | 「시스템이 쓰는 값」 — 생성 폼 선택지에서 제외 (아래) |
+| `@deprecated` | **enum 값** | 「이제는 고르지 않는 값」 — 같은 규칙, 다른 이유 (아래) |
 
-### enum 값의 `@system` — 표시 라벨과 입력 선택지의 분리
+### enum 값의 `@system`·`@deprecated` — 표시 라벨과 입력 선택지의 분리
 
 M3L은 enum **값**에 붙은 attribute를 의미 없이 기록만 한다. 그 의미를 정하는 것은 생성기의 몫이며,
 `@system`은 **"시스템이 쓰는 값, 사람이 고르는 값이 아니다"** 로 해석된다.
@@ -508,35 +509,56 @@ M3L은 enum **값**에 붙은 attribute를 의미 없이 기록만 한다. 그 �
 - cash: "현금"
 - card: "카드"
 - legacy_carryover: "레거시 이관 정리" @system
+- voucher: "상품권" @deprecated("card 로 대체")
 ```
+
+**두 attribute 는 같은 규칙에 서로 다른 이유를 준다** — `@system` 은 *「시스템이 쓴다, 사람이
+고르는 값이 아니다」*, `@deprecated` 는 *「예전엔 골랐지만 이제는 고르지 않는다」*. 산출물은
+동일하고 그것이 의도다. 그럼에도 이름을 하나로 합치지 않은 것은 **모델을 읽는 사람에게는 이유가
+정보이기 때문**이다 — 폐지된 선택지를 `@system` 으로 적으면 「누가 그 값을 쓰는가」에 대해 사실이
+아닌 말을 하게 된다. 인자는 자유롭게 쓸 수 있고(`@deprecated("card 로 대체")`) 생성기는 읽지
+않는다 — 모델을 읽는 사람을 위한 자리다.
 
 생성 결과:
 
 ```ts
 // enum_labels_gen.ts — 표시 라벨은 전체 유지 (기존 행이 계속 렌더돼야 하므로)
 export const PaymentMethodLabels: Record<PaymentMethod, string> = {
-  Cash: '현금', Card: '카드', LegacyCarryover: '레거시 이관 정리',
+  cash: '현금', card: '카드', legacy_carryover: '레거시 이관 정리', voucher: '상품권',
 } as const
 
-/** Input choices — excludes values marked @system in the model. */
-export const PaymentMethodSelectableLabels: Record<Exclude<PaymentMethod, 'LegacyCarryover'>, string> = {
-  Cash: '현금', Card: '카드',
+/** Input choices — excludes values marked @system or @deprecated in the model. */
+export const PaymentMethodSelectableLabels: Record<Exclude<PaymentMethod, 'legacy_carryover' | 'voucher'>, string> = {
+  cash: '현금', card: '카드',
 } as const
+```
+
+```ts
+/** Input choices, plus the current value when the model excludes it (so editing an existing row keeps it). */
+export function paymentMethodChoices(current?: string | null): Record<string, string>
 ```
 
 ```tsx
-// {Entity}Form_gen.tsx — 폼은 좁혀진 맵을 쓴다
-options={enumToOptions(PaymentMethodSelectableLabels)}
+// {Entity}Form_gen.tsx — 폼은 현재 값을 넘겨 좁혀진 선택지를 받는다
+options={enumToOptions(paymentMethodChoices(form.Method))}
 ```
 
-**`@system`은 저장이 아니라 작성(authoring)을 제한한다.** 값은 SQL CHECK 제약(opt-in 시),
+**좁힘이 맵이 아니라 함수를 거치는 이유는 편집 때문이다.** 같은 생성 폼이 기존 행도 바인딩하고
+(`paymentFromEntity(row)`), 그 행이 이미 `@system` 값을 들고 있을 수 있다. 좁혀진 맵을 그대로
+넘기면 컨트롤이 자기 선택지에 없는 값을 받아 **현재 값이 표시되지 않고 저장 시 바뀐다.** 이
+함수는 현재 값이 제외된 값일 때에 **그 하나만** 되돌려 놓는다 — 다른 행의 선택지는 그대로다.
+
+**둘 다 저장이 아니라 작성(authoring)을 제한한다.** 값은 SQL CHECK 제약(opt-in 시),
 C# enum, 표시 라벨 맵에 **그대로 남는다** — 서버·마이그레이션이 쓰는 유효한 저장값이기 때문이다.
 빠지는 것은 생성 폼의 선택지뿐이다.
 
-소비앱의 `enumToOptions` 헬퍼 시그니처는 **바뀌지 않는다**. 좁힘은 별도 맵으로 표현되므로
+소비앱의 `enumToOptions` 헬퍼 시그니처는 **바뀌지 않는다**. 좁힘은 생성물 안에서 끝나므로
 헬퍼는 여전히 `Record<string, string>` 하나만 받으면 된다.
 
 > 요구 버전: `M3L.Native` 0.6.0 이상 (enum 값 attribute 파싱 지원).
+>
+> M3L 은 enum 값 attribute 를 **기록만 하고 의미를 정하지 않는다**(명세 §3.1.8). 위 두 이름의
+> 의미는 이 생성기가 정한 것이며, 다른 소비자는 같은 attribute 를 다르게 읽을 수 있다.
 
 ## 생성물 구조
 
