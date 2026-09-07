@@ -53,6 +53,14 @@
     <None Include="..\..\samples\mdd.json" Link="contract\samples-mdd.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!--
+      Same ratchet shape again: BundledSpecCopyDriftTests guards the bundled specification
+      copy's character — that it still says where this generator stops, and that it still
+      renders — so it must read the shipped document, not a copy of it kept in test code.
+    -->
+    <None Include="..\..\docs\M3L.md" Link="contract\M3L.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>
