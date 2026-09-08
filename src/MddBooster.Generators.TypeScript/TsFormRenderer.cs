@@ -235,8 +235,9 @@ public static class TsFormRenderer
         var sb = new StringBuilder();
         sb.AppendLine(Header);
 
-        // ReactNode is only used for FK slot types — only import when needed.
-        if (fkFields.Count > 0)
+        // ReactNode is used by FK slot types and by the per-field override type — either one
+        // needs the import, and an entity with neither must not carry an unused one.
+        if (fkFields.Count > 0 || renderableFields.Count > 0)
             sb.AppendLine("import type { ReactNode } from 'react'");
 
         sb.Append("import { FormSection, FormRow } from '")
@@ -304,6 +305,29 @@ public static class TsFormRenderer
         sb.AppendLine("}>>");
         sb.AppendLine();
 
+        // Per-field render override. The key is a union of the fields this component actually
+        // draws a control for — not `keyof Entity` — so naming a slot field, a derived field, or a
+        // misspelled one is a compile error rather than a prop that silently does nothing.
+        // Value and onChange are typed per field through the mapped type, so an override cannot
+        // quietly disagree with the column it replaces.
+        if (renderableFields.Count > 0)
+        {
+            sb.Append("export type ").Append(entityName).Append("FormField = ")
+              .AppendLine(string.Join(" | ", renderableFields
+                  .Select(f => "'" + NameCasing.ToPascalCase(f.Name) + "'")));
+            sb.AppendLine();
+            sb.Append("export type ").Append(entityName).AppendLine("FieldOverrides = {");
+            sb.Append("  [K in ").Append(entityName).AppendLine("FormField]?: (ctx: {");
+            sb.Append("    value: ").Append(entityName).AppendLine("[K] | undefined");
+            sb.Append("    onChange: (value: ").Append(entityName).AppendLine("[K]) => void");
+            sb.AppendLine("    label: string");
+            sb.AppendLine("    required: boolean");
+            sb.AppendLine("    error?: string");
+            sb.AppendLine("  }) => ReactNode");
+            sb.AppendLine("}");
+            sb.AppendLine();
+        }
+
         // FormBase function.
         // When all fields are FK slots, form/onChange/errors are not used in JSX.
         // Use destructuring rename { form: _form } to satisfy noUnusedParameters.
@@ -314,12 +338,15 @@ public static class TsFormRenderer
         sb.Append("  ").AppendLine(formDestructure + ",");
         sb.Append("  ").AppendLine(onChangeDestructure + ",");
         if (fkFields.Count > 0) sb.AppendLine("  slots,");
+        if (renderableFields.Count > 0) sb.AppendLine("  fieldOverrides,");
         sb.AppendLine("  sectionProps,");
         sb.Append("  ").AppendLine(errorsDestructure + ",");
         sb.AppendLine("}: {");
         sb.Append("  form: Partial<").Append(entityName).AppendLine(">");
         sb.Append("  onChange: (updates: Partial<").Append(entityName).AppendLine(">) => void");
         if (fkFields.Count > 0) sb.Append("  slots?: ").Append(entityName).AppendLine("FormSlots");
+        if (renderableFields.Count > 0)
+            sb.Append("  fieldOverrides?: ").Append(entityName).AppendLine("FieldOverrides");
         sb.Append("  sectionProps?: ").Append(entityName).AppendLine("FormSectionProps");
         sb.Append("  errors?: Partial<Record<keyof ").Append(entityName).AppendLine(", string>>");
         sb.AppendLine("}) {");
@@ -588,6 +615,35 @@ public static class TsFormRenderer
         IReadOnlySet<string> enumNames,
         IReadOnlySet<string> withExcludedValues)
     {
+        var control = RenderControl(field, enumNames, withExcludedValues);
+
+        // A slot field is already the consumer's to render, so aiming a second mechanism at the
+        // same field would only raise a question about which one wins. Every field the generator
+        // draws a control for is replaceable one at a time — and only the control is replaced: the
+        // row it sits in, its label, its required flag and its error stay generated. That is the
+        // whole difference between this and a slot, and the reason it costs the layout nothing.
+        if (!IsOverridable(field)) return control;
+
+        var prop = NameCasing.ToPascalCase(field.Name);
+        var label = JsonSerializer.Serialize(
+            MddBooster.Core.Ast.FieldAttributes.EffectiveLabel(field), SlotLabelJsonOptions);
+        var required = field.Nullable ? "false" : "true";
+
+        return $"{{fieldOverrides?.{prop}"
+             + $" ? fieldOverrides.{prop}({{ value: form.{prop}, onChange: v => onChange({{ {prop}: v }}),"
+             + $" label: {label}, required: {required}, error: errors?.{prop} }})"
+             + $" : {control}}}";
+    }
+
+    /// <summary>A field the generator itself draws a control for — i.e. not a slot.</summary>
+    private static bool IsOverridable(FieldNode field)
+        => !HasAttribute(field, "reference") && !HasAttribute(field, "slot");
+
+    private static string RenderControl(
+        FieldNode field,
+        IReadOnlySet<string> enumNames,
+        IReadOnlySet<string> withExcludedValues)
+    {
         var prop = NameCasing.ToPascalCase(field.Name);
         var label = MddBooster.Core.Ast.FieldAttributes.EffectiveLabel(field);
         var required = !field.Nullable;
@@ -633,8 +689,13 @@ public static class TsFormRenderer
         // text → UTextarea. m3l's `text` means length-unbounded (the SQL target emits
         // NVARCHAR(MAX) for it), so a single-line control contradicts the model.
         // minRows is load-bearing — see TextareaMinRows.
+        // The empty token follows nullability, the same way the date/datetime/number branches
+        // below already do. It used to be `null` unconditionally, which for a NOT NULL `text`
+        // column produced `string | null` against a `Partial<T>` field typed `string | undefined`
+        // — generated code a consumer's own `tsc --strict` rejects, and a null the column would
+        // refuse anyway. `undefined` omits the field from the patch instead.
         if (control == FormControl.Textarea)
-            return $"<UTextarea label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr}{errorAttr} minRows={{{TextareaMinRows}}} value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || null }})}} />";
+            return $"<UTextarea label=\"{label}\"{requiredAttr}{descAttr}{disabledAttr}{errorAttr} minRows={{{TextareaMinRows}}} value={{form.{prop} ?? ''}} onChange={{v => onChange({{ {prop}: v || {ClearToken(field)} }})}} />";
 
         if (control == FormControl.Select)
         {

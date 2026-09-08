@@ -105,20 +105,30 @@ public static class TsFieldSchemaRenderer
             _ => null,
         };
 
-        // `required` is a write-axis statement — "the user must supply this". A derived field is
-        // never supplied, so carrying its resolved nullability across would assert something
-        // false: `customer_name @lookup(customer_id.name)` reads a NOT NULL column and therefore
-        // resolves non-nullable, but nothing about that obliges a *form* to collect it.
-        var required = derived is null && !field.Nullable;
+        // `required`, `maxLength`, `min` and `max` are all write-axis statements — each one says
+        // something about a value the user supplies ("must be given", "at most this long", "within
+        // this range"). A derived field is never supplied, so carrying any of them across asserts
+        // something false about it: `customer_name @lookup(customer_id.name)` reads a NOT NULL
+        // column and resolves non-nullable, and a computed string field inherits its type's bound —
+        // but nothing about either obliges a *form* to collect or validate the value.
+        //
+        // Emitting them anyway is not harmless. A consumer that loops over this map checking
+        // constraints then reports "at most 50 characters" on a field the user cannot edit, and
+        // the only thing standing between that and a live app is whether the consumer happens to
+        // filter on `readOnly` first. `derived`/`readOnly`/`label` are what a read field is here
+        // for; the write-axis half is dropped.
+        var isDerived = derived is not null;
+
+        var required = !isDerived && !field.Nullable;
 
         // Shared with the generated form's `maxlength` — see FieldAttributes.EffectiveMaxLength.
         // Extracting it separately here is how the two would drift into disagreeing about the
         // same column's limit. The effective bound, not the declared one: a field can be
         // bounded by its type without the declaration saying so.
-        int? maxLength = MddBooster.Core.Ast.FieldAttributes.EffectiveMaxLength(field);
+        int? maxLength = isDerived ? null : MddBooster.Core.Ast.FieldAttributes.EffectiveMaxLength(field);
 
-        double? min = GetAttributeNumber(field, "min");
-        double? max = GetAttributeNumber(field, "max");
+        double? min = isDerived ? null : GetAttributeNumber(field, "min");
+        double? max = isDerived ? null : GetAttributeNumber(field, "max");
         // @label(text) overrides the description; unlike FieldAttributes.EffectiveLabel this
         // does NOT fall back to the PascalCase field name — presence of a label here signals
         // authored, meaningful text, and every field mechanically has a PascalCase name.

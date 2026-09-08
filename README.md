@@ -134,6 +134,53 @@ T-SQL `IX_{Model}_{Column}` · PostgreSQL `ix_{table}_{column}`. 대상 판정�
 > 나타나지 않는다. 신규 엔티티가 기본 노출되기를 원하면 `excludeEntities` 를 쓸 것.
 > (커버리지 출력이 무엇이 빠졌는지는 매 빌드에서 보여준다.)
 
+#### `field_schema_gen.ts` — 소비 계약
+
+TypeScript 타깃은 타입·폼과 함께 **필드 스키마 맵**을 낸다. 산출물 목록에는 있었지만 **무엇을
+담고 어떻게 쓰는지가 이 문서에 없었다** — 아래가 그 계약이다.
+
+```ts
+export type FieldConstraints = {
+  required?: true
+  maxLength?: number
+  min?: number
+  max?: number
+  label?: string
+  group?: string
+  derived?: 'lookup' | 'rollup' | 'computed'
+  readOnly?: true
+}
+
+export const FieldSchema = {
+  Order: {
+    OrderNumber:  { required: true, maxLength: 30 },
+    CustomerName: { label: '고객명', derived: 'lookup', readOnly: true },
+    ItemCount:    { derived: 'rollup', readOnly: true },
+  },
+}
+```
+
+**한 필드가 실리는 조건은 둘 중 하나다** — 제약·메타데이터를 하나라도 갖거나(저장 필드),
+파생 필드이거나. 아무것도 없는 저장 필드는 아무 말도 하지 않으므로 빠진다.
+
+🔴 **읽기 필드에는 쓰기축 진술을 싣지 않는다.** `required`·`maxLength`·`min`·`max` 는 전부
+*「사용자가 넣는 값」*에 대한 진술인데, 파생 필드는 사용자가 넣지 않는다. `@lookup` 이 NOT NULL
+컬럼을 가리켜 non-nullable 로 해석되든, `string(50) @computed(…)` 가 타입 상한을 갖든,
+**그 사실이 폼더러 그 값을 받거나 검증하라는 뜻이 아니다.** 읽기 필드가 이 맵에 실리는 이유는
+`derived`/`readOnly`/`label` 이지 제약이 아니다.
+
+⚠ **이 맵을 순회할 때 `readOnly` 를 먼저 거르라** — 특히 *「입력 필드 목록」*을 도출하는 자리에서.
+
+```ts
+for (const [field, rules] of Object.entries(FieldSchema.Order)) {
+  if (rules.readOnly) continue        // ← 읽기 필드는 입력 축이 아니다
+  // …제약 검사
+}
+```
+
+**생성 폼(`*Form_gen.tsx`)은 이 맵을 읽지 않는다** — 값을 인라인으로 방출한다. 즉 이 맵의
+소비자는 전부 소비앱 쪽이고, 무엇이 깨지는지는 이쪽에서 보이지 않는다.
+
 #### 폼만 좁히기 (`formsInclude` / `formsExclude`)
 
 위 필터는 타깃의 **엔티티 파생 산출물 전체**(타입·필드 스키마·폼)에 걸린다. 그래서 *「타입은
@@ -181,8 +228,9 @@ Api 타깃은 이미 엔티티셋 목록을 낸다(`AddEntityPair`). 그런데 �
 ```csharp
 public static class GeneratedPermissions
 {
-    public const string OrdersRead  = "orders.read";
-    public const string OrdersWrite = "orders.write";
+    public const string OrdersRead   = "orders.read";
+    public const string OrdersWrite  = "orders.write";
+    public const string OrdersDelete = "orders.delete";
 
     /// 엔티티셋 → (read, write). 소비앱은 이 위에 예외만 얹는다.
     public static readonly IReadOnlyDictionary<string, (string Read, string Write)> Default = …;
@@ -193,7 +241,13 @@ public static class GeneratedPermissions
 |---|---|
 | `{entitySet}` | `Orders` |
 | `{entitySetLower}` | `orders` |
-| `{verb}` · `{Verb}` | `read`/`write` · `Read`/`Write` |
+| `{verb}` · `{Verb}` | `read`/`write`/`delete` · `Read`/`Write`/`Delete` |
+
+🔴 **`delete` 상수는 내지만 «기본 매핑»에는 싣지 않는다.** 런타임의 기본값이 *「삭제는 write
+정책이 지배한다」*이고, 어느 셋이 그 둘을 가르는지는 소비앱 결정이다 — 매핑에 넣으면 생성기가
+**모든 셋에 대해 그 결정을 대신 내리는** 것이 되고, 그건 키 «형식»을 입력으로 둔 것과 같은
+경계를 반대편에서 넘는 것이다. 「고칠 수 있는 사람」과 「지울 수 있는 사람」이 다른 셋에서만
+`{Set}Delete` 를 꺼내 쓰면 된다.
 
 🔴 **형식이 «입력»인 것이 요점이다.** 키 모양(`orders.read` · `Order:Read` · `perm.orders.view`)은
 소비앱의 인가 규약이지 이 생성기가 아는 사실이 아니다. 여기서 하나를 정하면, 규약이 다른
@@ -514,6 +568,7 @@ export function enumToOptions(labels: Record<string, string>): /* USelect의 opt
 | `string`(무파라미터) | `UInput` | `NVARCHAR(MAX)`라 상한이 없다 — 방출할 것이 없다 |
 | `@reference` FK · `@slot` | **슬롯 자리표시자** | 호출부가 내용을 주입 |
 
+
 > **`step`은 선택 옵션이 아니다.** `<input type="number">`의 `step` 기본값은 1이라, 없으면
 > 브라우저가 소수를 거부하고("Value must be a multiple of 1") **submit이 앱에 아무 신호 없이
 > 막힌다** — 오류 없이 아무 일도 안 일어나는 것처럼 보인다. 스케일은 모델이 이미 갖고 있고
@@ -523,6 +578,61 @@ export function enumToOptions(labels: Record<string, string>): /* USelect의 opt
 > 정답인데, 계약상 `step`이 `number`라 `"any"`를 실을 수 없다. 소수가 필요한 필드는
 > **`float`/`double` 대신 `decimal(p,s)`로 모델링할 것** — 정밀도가 명시되므로 SQL·EF·폼이
 > 모두 같은 약속을 하게 된다.
+
+#### 필드 하나만 다르게 그리기 (`fieldOverrides`)
+
+생성 폼은 각 필드의 렌더를 자기 안에서 끝낸다. 그런데 *「이 필드 하나만 우리 컴포넌트로
+그려야 한다」*는 요구는 어느 소비앱에나 오고, 그때까지 유일한 탈출구는 `@slot` 이었다 —
+그 대가가 셋이다: ⑴ 슬롯 필드는 `<FormRow full>` 단독 행이 되어 **레이아웃이 강제로 바뀌고**
+⑵ `@slot` 은 m3l 선언이라 **소비자 전원이** 슬롯을 공급해야 하며 ⑶ 그 필드의 라벨·required·
+error 배선을 **영구히 인수**한다.
+
+`fieldOverrides` 는 셋 다 없다. **컨트롤만** 치환하고 나머지는 전부 생성기가 계속 소유한다.
+
+```tsx
+<OrderFormBase
+  form={form} onChange={setForm} errors={errors}
+  fieldOverrides={{
+    OrderNumber: ({ value, onChange, label, required, error }) => (
+      <OurCodeField label={label} required={required} error={error}
+                    value={value ?? ''} onChange={onChange} />
+    ),
+  }}
+/>
+```
+
+| | `@slot` | `fieldOverrides` |
+|---|---|---|
+| 선언 위치 | **모델**(m3l) — 모든 소비자에게 적용 | **호출부**(런타임 prop) — 이 앱에만 |
+| 행 배치 | `<FormRow full>` 강제 | **생성기가 정한 그대로** |
+| 라벨·required·error | 소비자가 인수 | **생성기가 계속 제공**(ctx 로 넘어온다) |
+| 공급하지 않으면 | 자리표시자 텍스트 | **생성된 컨트롤 그대로** |
+
+🔴 **둘은 대체 관계가 아니다.** `@slot` 은 *「이 필드는 모델 차원에서 특별하다」*를 말하고 그
+선언은 폼 밖에도 도달한다. `fieldOverrides` 는 *「이 앱에서만 다르게 그린다」*를 말한다. 어느
+필드가 어떤 위젯으로 그려져야 하는지가 **소비앱 결정**이면 이쪽이다.
+
+**키는 `keyof Entity` 가 아니라 「이 폼이 컨트롤을 그리는 필드」의 유니온이다**(`{Entity}FormField`).
+슬롯 필드·파생 필드·오타는 **컴파일 오류**다 — 조용히 아무 일도 안 하는 prop 이 되지 않는다.
+슬롯 필드가 빠지는 이유는 그 필드가 이미 소비자 것이어서다(같은 필드에 수단이 둘이면 어느 쪽이
+이기는지가 새 질문이 된다).
+
+```ts
+export type OrderFormField = 'OrderNumber' | 'Memo' | 'Amount'   // CustomerId(FK 슬롯)는 없다
+
+export type OrderFieldOverrides = {
+  [K in OrderFormField]?: (ctx: {
+    value: Order[K] | undefined
+    onChange: (value: Order[K]) => void
+    label: string
+    required: boolean
+    error?: string
+  }) => ReactNode
+}
+```
+
+`value`/`onChange` 는 **필드마다 타입이 다르다**(mapped type) — override 가 자기가 대신하는
+컬럼과 조용히 어긋날 수 없다.
 
 > **어떤 temporal 타입이 컨트롤을 받고 어떤 것이 받지 않는가 — 그리고 왜.**
 > 컨트롤은 API가 돌려주는 값을 **담을 수 있을 때만** 도움이 된다. 실측 결과:

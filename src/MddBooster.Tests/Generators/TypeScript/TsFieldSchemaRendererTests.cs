@@ -377,4 +377,40 @@ public class TsFieldSchemaRendererTests
 
         Assert.Contains("OrderNumber: { required: true, maxLength: 30 },", result);
     }
+
+    /// <summary>
+    /// 🔴 `required` 뿐 아니라 `maxLength`·`min`·`max` 도 **쓰기축 진술**이라 읽기 필드에 실리면
+    /// 안 된다. 소비자가 이 맵을 순회해 제약을 검사하면 «고칠 수 없는 칸»에 「50자 이하여야
+    /// 합니다」가 뜬다 — 그 사이에 서 있는 것이 소비자가 `readOnly` 로 먼저 거르느냐뿐이다.
+    /// 저장 필드 쪽 단언을 함께 두는 이유: 맵 전체가 비어도 통과하는 공허한 검사가 되지 않게.
+    /// </summary>
+    [Fact]
+    public void Write_axis_constraints_are_not_carried_onto_derived_fields()
+    {
+        var models = LoadInline(
+            "## Customer\n" +
+            "- id: identifier @pk @generated\n" +
+            "- carrier: string(50) @not_null\n" +
+            "\n" +
+            "## Delivery\n" +
+            "- id: identifier @pk @generated\n" +
+            "- customer_id: identifier @reference(Customer) @not_null\n" +
+            "- carrier: string(50) @not_null\n" +
+            "- weight: decimal(8,2) @min(0) @max(999)\n" +
+            "- tracking_search: string(50) @computed(`upper(carrier)`)\n" +
+            "- carrier_label: string(50) @lookup(customer_id.carrier)\n");
+
+        var result = TsFieldSchemaRenderer.RenderAll(models);
+
+        // 저장 필드는 한 글자도 안 바뀐다 — 이 단언이 빠지면 아래 검사가 공허해진다.
+        Assert.Contains("Carrier: { required: true, maxLength: 50 },", result);
+        Assert.Contains("min: 0", result);
+        Assert.Contains("max: 999", result);
+
+        // 파생 필드는 kind 만 싣는다 — 원천 컬럼의 길이 제약이 따라오지 않는다.
+        Assert.Contains("TrackingSearch: { derived: 'computed', readOnly: true },", result);
+        Assert.DoesNotContain("TrackingSearch: { maxLength", result);
+        Assert.DoesNotContain("CarrierLabel: { maxLength", result);
+    }
 }
+

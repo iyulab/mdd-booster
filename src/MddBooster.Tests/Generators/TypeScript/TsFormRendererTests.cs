@@ -654,8 +654,12 @@ public class TsFormRendererTests
         // substring — docket #176's `error` attribute now sits between the label and
         // `minRows`, same as it sits between every other optional attribute pair below.
         var nullableLine = content.Split('\n').Single(l => l.Contains("label=\"내용\""));
-        Assert.DoesNotContain(" required", nullableLine);
-        Assert.Contains("minRows", nullableLine);
+        // Sliced to the control itself rather than matched across the whole line: the per-field
+        // override wrapper now precedes the control on the same line and carries its own
+        // `required: false`, which a line-wide substring check would read as the attribute.
+        var control = nullableLine[nullableLine.IndexOf("<UTextarea", StringComparison.Ordinal)..];
+        Assert.DoesNotContain(" required", control);
+        Assert.Contains("minRows", control);
     }
 
     // --- 선행 약어 엔티티의 camelCase 헬퍼 이름 ---
@@ -722,5 +726,96 @@ public class TsFormRendererTests
 
         Assert.Contains("Status: 'draft'", content);
         Assert.DoesNotContain("Status: 'Draft'", content);
+    }
+
+    // ---- per-field render override -------------------------------------------------------
+
+    private const string OverrideModel =
+        "## Customer\n" +
+        "- id: identifier @pk @generated\n" +
+        "- name: string(50) @not_null\n" +
+        "\n" +
+        "## Order\n" +
+        "- id: identifier @pk @generated\n" +
+        "- customer_id: identifier @reference(Customer) @not_null\n" +
+        "- order_number: string(30) @not_null \"주문번호\"\n" +
+        "- note: text?\n";
+
+    /// <summary>
+    /// The key is a union of the fields this component draws a control for — not `keyof Entity`.
+    /// A slot field is already the consumer's to render, so including it would offer two
+    /// mechanisms for one field; naming it (or a typo) is a compile error instead of a prop that
+    /// silently does nothing.
+    /// </summary>
+    [Fact]
+    public void Field_override_type_covers_drawn_fields_and_excludes_slots()
+    {
+        var content = TsFormRenderer.RenderAll(LoadInline(OverrideModel), [], TestImports)["Order"];
+
+        Assert.Contains("export type OrderFormField = 'OrderNumber' | 'Note'", content);
+        Assert.DoesNotContain("'CustomerId'", content.Split("export type OrderFieldOverrides")[0]
+            .Split("export type OrderFormField")[1]);
+        Assert.Contains("[K in OrderFormField]?: (ctx: {", content);
+        // Typed per field through the mapped type — an override cannot quietly disagree with the
+        // column it replaces.
+        Assert.Contains("value: Order[K] | undefined", content);
+        Assert.Contains("onChange: (value: Order[K]) => void", content);
+    }
+
+    /// <summary>
+    /// Only the control is replaced. The row, the label, the required flag and the error stay
+    /// generated — that is the whole difference between this and a slot, and the reason it costs
+    /// the layout nothing.
+    /// </summary>
+    [Fact]
+    public void Field_override_replaces_only_the_control_and_keeps_the_generated_context()
+    {
+        var content = TsFormRenderer.RenderAll(LoadInline(OverrideModel), [], TestImports)["Order"];
+        var line = content.Split('\n').Single(l => l.Contains("fieldOverrides?.OrderNumber"));
+
+        Assert.Contains("fieldOverrides?.OrderNumber ? fieldOverrides.OrderNumber({", line);
+        Assert.Contains("value: form.OrderNumber", line);
+        Assert.Contains("onChange: v => onChange({ OrderNumber: v })", line);
+        Assert.Contains("label: \"주문번호\"", line);
+        Assert.Contains("required: true", line);
+        Assert.Contains("error: errors?.OrderNumber", line);
+        // The generated control is the else branch, not replaced text.
+        Assert.Contains(" : <UInput label=\"주문번호\"", line);
+        // Placement is untouched — it is not forced into a full-width row like a slot is.
+        Assert.DoesNotContain("<FormRow full>", string.Join("\n", content.Split('\n')
+            .SkipWhile(l => !l.Contains("fieldOverrides?.OrderNumber")).Take(1)));
+    }
+
+    /// <summary>A slot field gets no override wrapper — it already delegates to the consumer.</summary>
+    [Fact]
+    public void A_slot_field_is_not_wrapped_in_an_override()
+    {
+        var content = TsFormRenderer.RenderAll(LoadInline(OverrideModel), [], TestImports)["Order"];
+        var line = content.Split('\n').Single(l => l.Contains("slots?.CustomerId"));
+
+        Assert.DoesNotContain("fieldOverrides", line);
+    }
+
+    /// <summary>
+    /// 🔴 The textarea's empty token follows nullability, the same way date/datetime/number
+    /// already did. It was `null` unconditionally, which on a NOT NULL `text` column produced
+    /// `string | null` against a `Partial&lt;T&gt;` field typed `string | undefined` — code a
+    /// consumer's own `tsc --strict` rejects, for a null the column would refuse anyway.
+    /// Found by type-checking the real emitted output, not by a unit test.
+    /// </summary>
+    [Fact]
+    public void Textarea_empty_token_follows_nullability()
+    {
+        var content = TsFormRenderer.RenderAll(LoadInline(
+            "## Doc\n" +
+            "- id: identifier @pk @generated\n" +
+            "- body: text\n" +
+            "- note: text?\n"), [], TestImports)["Doc"];
+
+        var required = content.Split('\n').Single(l => l.Contains("<UTextarea label=\"Body\""));
+        var nullable = content.Split('\n').Single(l => l.Contains("<UTextarea label=\"Note\""));
+
+        Assert.Contains("Body: v || undefined", required);
+        Assert.Contains("Note: v || null", nullable);
     }
 }
