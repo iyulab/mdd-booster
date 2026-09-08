@@ -331,4 +331,90 @@ public sealed class FormControlContractRatchetTests
             "the contract section names fewer identifiers than any real contract would; " +
             "it was probably emptied or restructured, and the ratchet is passing vacuously");
     }
+
+    // ---------------------------------------------------------------------------------
+    // The contract's third expression: the .d.ts the TypeScript gate compiles against.
+    // ---------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Props that appear in the declarations but are not demands this generator makes.
+    /// </summary>
+    /// <remarks>
+    /// Same judgement as <see cref="NotAContractDemand"/>, one level over: the question is
+    /// whether the generated form puts the name on the tag. <c>children</c> is how JSX
+    /// nests elements, so a component that renders anything inside it declares the prop
+    /// whether or not this generator ever writes it as an attribute.
+    /// </remarks>
+    private static readonly HashSet<string> NotAnEmittedProp =
+        new(StringComparer.Ordinal) { "children" };
+
+    /// <summary>
+    /// Prop names declared for <paramref name="component"/> by the gate's contract
+    /// declarations, read from <c>fixtures/ts-contract/contract/*.d.ts</c> by the
+    /// <c>{Component}Props</c> interface naming the file uses throughout.
+    /// </summary>
+    private static HashSet<string> DeclaredFor(string component)
+    {
+        var dir = Path.Combine(AppContext.BaseDirectory, "fixtures", "ts-contract", "contract");
+        Assert.True(Directory.Exists(dir),
+            $"the gate's contract declarations were not found at '{dir}'. They are what " +
+            "`tsc` checks the generated forms against, so this test asserts nothing while " +
+            "they are missing — and the gate itself would be checking against nothing.");
+
+        var text = string.Concat(Directory.EnumerateFiles(dir, "*.d.ts").OrderBy(p => p, StringComparer.Ordinal)
+                                          .Select(File.ReadAllText));
+
+        var block = Regex.Match(text, $@"interface\s+{component}Props\s*\{{(?<body>[^}}]*)\}}");
+        Assert.True(block.Success,
+            $"no `{component}Props` interface in the gate's declarations. Every consumer-supplied " +
+            "component the generator writes props onto needs one, or `tsc` accepts anything for it.");
+
+        return Regex.Matches(block.Groups["body"].Value, @"^\s*(?<n>[A-Za-z][A-Za-z0-9]*)\??\s*:", RegexOptions.Multiline)
+                    .Select(m => m.Groups["n"].Value)
+                    .Where(n => !NotAnEmittedProp.Contains(n))
+                    .ToHashSet(StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// The gate's declarations are a second machine-readable copy of a contract whose one
+    /// source is the README — the defect this file's own <see cref="ReadmeText"/> remark
+    /// refuses to commit ("a copy is the same defect one level up"). It is accepted here
+    /// because <c>tsc</c> needs types and the README states them in prose, so this pins it
+    /// instead: the declarations must name exactly the props the generator emits.
+    /// </summary>
+    /// <remarks>
+    /// Equality, not containment, and in both directions for a reason. A missing
+    /// declaration means <c>tsc</c> silently stops checking that prop — the gate would
+    /// still be green while covering less, which is the failure mode that made this gate
+    /// necessary in the first place. An extra one means the declarations drifted ahead of
+    /// the generator and consumers are being type-checked against a demand nobody makes.
+    /// <para>
+    /// The type side is <em>not</em> covered: the README states prop types in prose, so
+    /// changing <c>step?: number</c> to a string there would leave this green. That seam
+    /// is known and narrow — the name axis is what has actually moved (<c>step</c> and
+    /// <c>maxlength</c> in 0.8.0, <c>disabled</c>, <c>error</c>, <c>className</c>/<c>style</c>).
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void The_type_gate_declares_exactly_the_props_the_generator_emits()
+    {
+        var drift = new StringBuilder();
+
+        foreach (var (component, emitted) in EmittedByComponent())
+        {
+            var declared = DeclaredFor(component);
+            var real = emitted.Where(p => !NotAContractDemand.ContainsKey(p)).ToHashSet(StringComparer.Ordinal);
+
+            foreach (var p in real.Except(declared).OrderBy(p => p, StringComparer.Ordinal))
+                drift.Append($"  <{component}> emits `{p}` but the declarations omit it — tsc is not checking it\n");
+            foreach (var p in declared.Except(real).OrderBy(p => p, StringComparer.Ordinal))
+                drift.Append($"  <{component}> declares `{p}` but the generator never emits it\n");
+        }
+
+        Assert.True(drift.Length == 0,
+            "the TypeScript gate's contract declarations have drifted from what the generator emits:\n" +
+            drift +
+            "\nUpdate fixtures/ts-contract/contract/*.d.ts to match, and check the README contract " +
+            "section says the same thing — it is the source all three expressions answer to.");
+    }
 }

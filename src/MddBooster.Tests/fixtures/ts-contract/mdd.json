@@ -1,0 +1,16 @@
+{
+  "sources": [
+    "../form-control-contract.m3l.md",
+    "../large-model-acceptance.m3l.md"
+  ],
+  "targets": [
+    {
+      "type": "TypeScript",
+      "outputPath": "./generated/types",
+      "formsOutputPath": "./generated/forms",
+      "formLayoutImport": "../../contract/layout",
+      "formControlsImport": "../../contract/controls",
+      "formSelectOptionsImport": "../../contract/select-options"
+    }
+  ]
+}

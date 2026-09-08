@@ -27,6 +27,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      Fixtures are copied so the gates can read them from the test output. The two
+      exclusions are the TypeScript contract gate's *working* directories, not fixtures:
+      `node_modules` is an npm-restored toolchain (24 MB) and `generated` is output the
+      gate rewrites on every run. Copying either only makes the build slower and the
+      output stale — the gate runs against the source tree, where npm put them.
+    -->
+    <None Remove="fixtures\ts-contract\node_modules\**\*" />
+    <None Remove="fixtures\ts-contract\generated\**\*" />
     <None Update="fixtures\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

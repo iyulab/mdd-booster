@@ -18,6 +18,17 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      # 아래 Test 단계에 생성 TypeScript 를 `tsc --strict` 로 컴파일하는 게이트가 있다
+      # (GeneratedTypeScriptCompilesTests). 그 게이트는 툴체인이 없으면 «건너뛰지 않고»
+      # 스스로 `npm ci` 로 복원한 뒤 실패 시 소리내어 실패한다 — 여기서 Node 를 고정해
+      # 그 복원이 러너 기본 버전에 좌우되지 않게 한다.
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: src/MddBooster.Tests/fixtures/ts-contract/package-lock.json
+
       # NuGet 복원 캐시: csproj 해시 키 + OS prefix fallback (CLAUDE.md GitHub Actions 정책).
       - name: Cache NuGet packages
         uses: actions/cache@v5
