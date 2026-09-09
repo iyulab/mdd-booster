@@ -14,6 +14,28 @@
 > looks exactly like one it implements right up until the output is missing. The one section that
 > does fail a build says so in its note.
 
+### Attributes no target reads
+
+The paragraph above names the gap; this names the attributes that fall into it.
+**What this generator implements** for each of them is *nothing* — the attribute parses, reaches
+the model, and no target emits anything from it. Nothing is reported at build time either, which is
+what makes them worth listing in one place.
+
+| Attribute | The specification defines it for | Where the same intent does reach the output |
+|---|---|---|
+| `@min_length` · `@max_length` | length bounds on a string field | the declared type — `string(20)` sets the column width, the API surface and the generated form together |
+| `@pattern` | a regular expression a value must match | nowhere; no check is emitted and none runs at build time |
+| `@ledger` | a table that only ever receives inserts | nowhere; no constraint, trigger or comment is emitted |
+| `@materialized` | a view whose rows are stored rather than computed per query | nowhere. A standalone `::view` model produces no output at all, so the marker has nothing to qualify — that much *is* reported, as an unconsumed element |
+
+Two attributes are absent from this list on purpose. `@validate` and `@behavior` are equally unread,
+but each has a section of its own below (§4.7, §4.3) and its own note there; repeating them here
+would give the same fact two homes that can disagree.
+
+The list is measured, not remembered: a model declaring all five produces SQL, entity and API output
+in which none of the five appears anywhere, and a test asserts exactly that. If one of them starts
+being implemented, that test fails and this table is what it points at.
+
 
 ## Table of Contents
 1. [Introduction](#1-introduction)
