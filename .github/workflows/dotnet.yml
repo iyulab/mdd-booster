@@ -13,6 +13,27 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # 릴리스 게이트: 이 태그의 버전이 CHANGELOG 에 절로 존재하는가 «만» 본다.
+      #
+      # 이 리포는 릴리스 시점에 CHANGELOG 를 쓰는 관례인데 그것을 강제하는 것이 없었다 —
+      # 잊어도 아무것도 실패하지 않고, 결과는 소비자에게 나간다. 내용의 «품질»은 검사하지
+      # 않는다: 자주 막는 게이트는 곧 무시되고, 그러면 게이트가 없는 것과 같아진다.
+      #
+      # 위치는 checkout 직후다. Pack/Publish 를 지난 뒤 실패하면 부분 게시가 되어 같은 태그를
+      # 다시 쓸 수 없으므로, 파일 하나만 읽으면 되는 검사를 뒤에 둘 이유가 없다.
+      - name: Changelog gate
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          pattern="^## \[?${version//./\.}\]?( |$)"
+          if grep -qE "$pattern" CHANGELOG.md; then
+            echo "CHANGELOG.md 에 ${version} 절이 있습니다."
+            exit 0
+          fi
+          echo "::error file=CHANGELOG.md::CHANGELOG.md 에 ${version} 절이 없습니다."
+          echo "이 태그가 게시할 내용을 그 절에 적은 뒤 태그를 다시 만드세요."
+          echo "Pack/Publish 이전에 멈췄으므로 같은 태그를 재사용해도 안전합니다."
+          exit 1
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
