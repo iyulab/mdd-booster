@@ -98,6 +98,12 @@ public static class EntityPairRenderer
         sb.AppendLine(Header);
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
+        // Mapped field types include BCL names (Guid, DateTimeOffset, DateOnly,
+        // TimeOnly) that only resolve if the consuming project happens to enable
+        // ImplicitUsings. Declaring the dependency here makes the emitted file
+        // self-contained instead of silently inheriting the consumer's setting.
+        sb.AppendLine("using System;");
+        sb.AppendLine();
         sb.Append("namespace ").Append(ns).AppendLine(";");
         sb.AppendLine();
         sb.Append("public interface I").Append(entityName).AppendLine();
@@ -164,6 +170,9 @@ public static class EntityPairRenderer
         sb.AppendLine(Header);
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
+        // See RenderInterface: mapped field types (Guid/DateTimeOffset/DateOnly/
+        // TimeOnly) and DefaultInitializer's Array.Empty<byte>() are BCL names.
+        sb.AppendLine("using System;");
         sb.AppendLine("using System.ComponentModel.DataAnnotations;");
         sb.AppendLine("using System.ComponentModel.DataAnnotations.Schema;");
         sb.AppendLine();

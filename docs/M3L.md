@@ -678,9 +678,15 @@ Relationships can have additional attributes:
 ```
 
 **What this generator implements**: the `@reference(Target)` attribute, and only that. Foreign keys,
-navigation properties and lookup redirects are all built from it. Neither the `### Relations` section
-nor the `@relation(...)` attribute is read by any target — declaring a relationship that way produces
-no output, and the build reports the section as unconsumed.
+navigation properties and lookup redirects are all built from it. Nothing else on this page is read
+by any target — not the `### Relations` section, not the `@relation(...)` entries inside it, and not
+the field-level relationship notation of the next subsection (`- >category`, `- <posts: one-to-many`,
+`- <>tags: many-to-many`).
+
+Declaring a relationship any of those ways produces no output, and the build says so rather than
+failing: each unread declaration is listed as unconsumed, and the field-level form names
+`@reference(Target)` as the notation that is read. A field written in that notation is dropped
+before rendering, so it never reaches a target as a column.
 
 ### 3.3 Index Definition
 

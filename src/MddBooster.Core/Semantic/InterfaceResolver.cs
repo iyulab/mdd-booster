@@ -1,4 +1,5 @@
 using M3L.Native;
+using MddBooster.Core.Ast;
 
 namespace MddBooster.Core.Semantic;
 
@@ -54,6 +55,12 @@ public sealed class InterfaceResolver
         var merged = new List<FieldNode>(ownFields.Count + inheritedFields.Count);
         merged.AddRange(ownFields);
         merged.AddRange(inheritedFields);
+
+        // Step 4: 이 생성기가 읽지 않는 관계 표기 필드를 떨군다. AstAccounting 이 로드
+        // 시점에 이미 경고로 가시화했으므로 조용한 탈락이 아니다 — 흘려보내면 렌더러가
+        // 「타입이 없습니다」라는 다른 층위의 오류를 내고, 명세대로 쓴 사람은 「관계는
+        // @reference 로만 읽는다」를 끝내 못 듣는다. 상세: M3lRelationNotation.
+        merged.RemoveAll(f => M3lRelationNotation.IsRelationNotation(f));
 
         return new ResolvedModel
         {

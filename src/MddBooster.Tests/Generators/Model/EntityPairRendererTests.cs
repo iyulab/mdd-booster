@@ -170,4 +170,55 @@ public class EntityPairRendererTests
         Assert.DoesNotContain(tree.GetDiagnostics(),
             d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error);
     }
+
+    /// <summary>
+    /// 2026-09-09 회귀 — 방출된 파일이 BCL 단순 이름(Guid/DateTimeOffset/DateOnly/
+    /// TimeOnly/Array)을 쓰면서 <c>using System;</c> 을 선언하지 않아, 해석이 소비
+    /// 프로젝트의 <c>ImplicitUsings</c> 설정에 암묵적으로 걸려 있었다. 그 설정을 끈
+    /// 소비자에서 <c>CS0246: 'Guid' could not be found</c> 로 세 파일이 동시에 깨졌다
+    /// (인터페이스·쓰기 엔티티·Ext). 방출 파일은 자기 BCL 의존을 스스로 선언해야 한다.
+    /// </summary>
+    [Fact]
+    public void Emitted_files_declare_their_BCL_dependency_rather_than_inheriting_ImplicitUsings()
+    {
+        // 필드 축을 BCL 이름이 실제로 나오는 것들로 채운다 — identifier(Guid) ·
+        // datetime(DateTimeOffset) · date(DateOnly) · time(TimeOnly) · binary
+        // (DefaultInitializer 가 Array.Empty<byte>() 를 낸다).
+        var model = ResolveInline("""
+            ## Owner
+            - id: identifier @primary
+
+            ## Probe
+            - id: identifier @primary
+            - owner_id: identifier @reference(Owner)
+            - happened_at: datetime
+            - on_day: date
+            - at_time: time
+            - blob: binary
+            """, "Probe");
+
+        var pair = EntityPairRenderer.Render(model, "Test.Probe");
+
+        // 세 산출물 전부 — Ext(Read)까지 포함해야 한다. 하나만 고치면 소비자는
+        // 여전히 깨지고, 그것이 이 결함이 처음 관측된 형태다.
+        foreach (var (name, emitted) in new[]
+                 {
+                     ("Interface", pair.Interface),
+                     ("Write", pair.Write),
+                     ("Read", pair.Read),
+                 })
+        {
+            Assert.True(
+                emitted.Contains("using System;", StringComparison.Ordinal),
+                $"{name} 산출물이 'using System;' 을 선언하지 않는다. " +
+                "BCL 이름 해석이 소비자의 ImplicitUsings 에 걸리게 된다.");
+        }
+
+        // 계측기 생존 확인 — 이 픽스처가 실제로 BCL 이름을 방출하고 있어야 위 단언이
+        // 의미를 갖는다. 방출이 사라지면 단언은 조용히 공허하게 참이 된다.
+        Assert.Contains("Guid", pair.Write, StringComparison.Ordinal);
+        Assert.Contains("DateTimeOffset", pair.Write, StringComparison.Ordinal);
+        Assert.Contains("DateOnly", pair.Write, StringComparison.Ordinal);
+        Assert.Contains("TimeOnly", pair.Write, StringComparison.Ordinal);
+    }
 }

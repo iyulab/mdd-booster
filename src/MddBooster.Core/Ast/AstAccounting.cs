@@ -28,6 +28,16 @@ public static class AstAccounting
         // is a feature question, not a name nobody can act on.
         foreach (var model in ast.Models)
         {
+            // 필드 축의 첫 항목 — 관계 표기(`- <>tags: many-to-many` 등, 명세 §3.2.2·§3.2.4).
+            // 파서가 이것을 관계로 모델링하지 않고 줄 전체를 필드 이름으로 남기므로, 여기서
+            // 잡지 않으면 렌더러가 「타입이 없습니다」라는 «다른 층위»의 오류로 죽는다.
+            // 섹션 축(### Relations)이 이미 받는 대우를 같은 구문의 필드 형태에도 준다.
+            foreach (var field in model.Fields ?? [])
+            {
+                if (M3lRelationNotation.IsRelationNotation(field))
+                    unconsumed.Add(M3lRelationNotation.Describe(model.Name, field));
+            }
+
             var sections = model.Sections;
             if (sections is null) continue;
 
