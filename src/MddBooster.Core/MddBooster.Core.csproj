@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="M3L.Native" Version="0.7.2" />
+    <PackageReference Include="M3L.Native" Version="0.8.0" />
   </ItemGroup>
 
 </Project>

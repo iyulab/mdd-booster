@@ -44,13 +44,13 @@ public class InterfaceResolverTests
     }
 
     /// <summary>
-    /// 2026-09-09 — 명세 §3.2.4 의 관계 표기 필드가 해석 결과에 남아 렌더러까지 흘러가
-    /// <i>「필드 '…'에 타입이 없습니다」</i>로 빌드를 죽였다. 이 생성기는 관계를
-    /// <c>@reference</c> 로만 읽으므로 그 필드는 컬럼이 아니다 — <c>AstAccounting</c> 이
-    /// 로드 시점에 경고로 가시화한 뒤(조용한 탈락이 아니다) 여기서 떨어져야 한다.
+    /// 2026-09-09 — M3L.Native 0.8.0부터 파서가 관계 표기(명세 §3.2.4)를 필드 목록이
+    /// 아니라 <c>sections.relations</c>로 낸다. 이 생성기는 관계를 <c>@reference</c>
+    /// 로만 읽으므로, 그 표기가 애초에 <c>model.Fields</c>에 들어오지 않는 것을 여기서
+    /// 확인한다 — 렌더러가 「필드 '…'에 타입이 없습니다」를 볼 일이 없다.
     /// </summary>
     [Fact]
-    public void Relation_notation_fields_are_dropped_so_renderers_never_see_a_typeless_column()
+    public void Relation_notation_never_reaches_resolved_fields()
     {
         var tmp = Path.Combine(Path.GetTempPath(), $"mdd-res-rel-{Guid.NewGuid():N}.m3l.md");
         File.WriteAllText(tmp, """
@@ -66,10 +66,6 @@ public class InterfaceResolverTests
             var resolved = new InterfaceResolver(new M3lLoader().LoadFile(tmp))
                 .ResolveAll().Single(m => m.Name == "Post");
 
-            Assert.DoesNotContain(resolved.Fields,
-                f => M3lRelationNotation.IsRelationNotation(f));
-
-            // 남은 필드는 그대로여야 한다 — 떨구기가 정상 컬럼까지 먹으면 안 된다.
             Assert.Equal(["id", "title"], resolved.Fields.Select(f => f.Name));
         }
         finally { File.Delete(tmp); }

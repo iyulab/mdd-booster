@@ -140,12 +140,12 @@ public class AstAccountingTests
     }
 
     /// <summary>
-    /// 2026-09-09 — 회계가 «섹션 축»만 덮고 있어, 같은 구문의 «필드 축»은 조용했다.
-    /// 명세 §3.2.2·§3.2.4 의 관계 표기(<c>- &gt;x</c> · <c>- &lt;&gt;x: many-to-many</c>)를
-    /// 파서는 관계로 모델링하지 않고 줄 전체를 필드 이름으로 남긴다(type=null). 그대로
-    /// 흘러가면 렌더러가 <i>「필드 '…'에 타입이 없습니다」</i>로 죽었다 — <c>docs/M3L.md</c>
-    /// §3.2 는 「<c>@reference</c> 만 읽는다」를 정확히 적어 뒀는데 <b>진단이 다른 층위를
-    /// 가리켰다.</b> 경고는 무엇이 안 읽히는지에 더해 «무엇을 쓰면 되는지»까지 말해야 한다.
+    /// 2026-09-09 — M3L.Native 0.8.0부터 파서 자신이 관계 표기(<c>- &gt;x</c> ·
+    /// <c>- &lt;&gt;x: many-to-many</c>, 명세 §3.2.2·§3.2.4)를 필드 목록이 아니라
+    /// <c>sections.relations</c>로 구조화해 내고(<c>declaredIn: "fields"</c>로 표시),
+    /// <c>M3L-W009</c>로도 경고한다. 그 구조화 덕에 이 회계는 더 이상 필드 이름을 직접
+    /// 판별할 필요가 없다 — 어떤 표기였는지는 파서가 낸 <c>raw</c>에서 그대로 읽는다.
+    /// 문구는 종전과 같다: 무엇을 썼는지, 그리고 관계는 <c>@reference</c>로만 읽는다는 것.
     /// </summary>
     [Theory]
     [InlineData("- <>tags: many-to-many")]   // §3.2.4 many-to-many
@@ -173,24 +173,38 @@ public class AstAccountingTests
             // 「무엇이」 — 사용자가 쓴 줄을 그대로 되돌려 준다.
             Assert.Contains("관계 표기", entry, StringComparison.Ordinal);
 
-            // 「무엇을 쓰면 되는지」 — 이 한마디가 없는 것이 원 결함이었다.
-            Assert.Contains(M3lRelationNotation.ReadForm, entry, StringComparison.Ordinal);
+            // 「무엇을 쓰면 되는지」.
+            Assert.Contains(AstAccounting.RelationReadForm, entry, StringComparison.Ordinal);
         }
         finally { File.Delete(tmp); }
     }
 
     /// <summary>
-    /// 판별자가 «진짜 결함»까지 삼키면 안 된다 — 관계 기호로 시작하지 않는 타입-없는
-    /// 필드는 종전대로 렌더러 가드가 잡아야 하고, 회계가 미리 흡수해서는 안 된다.
+    /// <c>### Relations</c> 섹션 자체(필드 축이 아니라)는 여전히 이 일반 문구로만 보고된다 —
+    /// 그 섹션은 어떤 개별 항목을 이름 대지 않아도 될 만큼 이미 자기 위치를 말하고 있다.
     /// </summary>
     [Fact]
-    public void A_typeless_field_that_is_not_relation_notation_is_left_to_the_renderer_guard()
+    public void Relations_section_itself_is_still_reported_generically()
     {
-        Assert.False(M3lRelationNotation.IsRelationNotation(
-            new M3L.Native.FieldNode { Name = "broken_field", Type = null }));
+        var tmp = Path.Combine(Path.GetTempPath(), $"mdd-acct-relsec-{Guid.NewGuid():N}.m3l.md");
+        File.WriteAllText(tmp, """
+            # Namespace: x
 
-        // 그리고 타입이 있는 필드는 이름이 무엇이든 관계 표기가 아니다.
-        Assert.False(M3lRelationNotation.IsRelationNotation(
-            new M3L.Native.FieldNode { Name = ">looks_like_one", Type = "string" }));
+            ## Post
+            - id: identifier @primary
+            - title: string(200)
+
+            ### Relations
+            - author: >Author
+            """);
+        try
+        {
+            var ast = new M3lLoader().LoadFile(tmp);
+            var unconsumed = AstAccounting.ListUnconsumed(ast);
+
+            var entry = Assert.Single(unconsumed);
+            Assert.Equal("Post: ### Relations", entry);
+        }
+        finally { File.Delete(tmp); }
     }
 }

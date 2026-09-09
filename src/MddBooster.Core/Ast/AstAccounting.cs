@@ -1,3 +1,4 @@
+using System.Text.Json;
 using M3L.Native;
 
 namespace MddBooster.Core.Ast;
@@ -11,6 +12,9 @@ namespace MddBooster.Core.Ast;
 /// </summary>
 public static class AstAccounting
 {
+    /// <summary>이 생성기가 관계를 읽는 유일한 형태.</summary>
+    public const string RelationReadForm = "@reference(Target)";
+
     /// <summary>생성 파이프라인이 소비하지 않는 요소들의 표시명 목록.</summary>
     public static IReadOnlyList<string> ListUnconsumed(M3lAst ast)
     {
@@ -28,24 +32,31 @@ public static class AstAccounting
         // is a feature question, not a name nobody can act on.
         foreach (var model in ast.Models)
         {
-            // 필드 축의 첫 항목 — 관계 표기(`- <>tags: many-to-many` 등, 명세 §3.2.2·§3.2.4).
-            // 파서가 이것을 관계로 모델링하지 않고 줄 전체를 필드 이름으로 남기므로, 여기서
-            // 잡지 않으면 렌더러가 「타입이 없습니다」라는 «다른 층위»의 오류로 죽는다.
-            // 섹션 축(### Relations)이 이미 받는 대우를 같은 구문의 필드 형태에도 준다.
-            foreach (var field in model.Fields ?? [])
-            {
-                if (M3lRelationNotation.IsRelationNotation(field))
-                    unconsumed.Add(M3lRelationNotation.Describe(model.Name, field));
-            }
-
             var sections = model.Sections;
             if (sections is null) continue;
+
+            // `sections.relations` mixes two origins: a `### Relations` section
+            // (§3.2.3) and relationship notation the parser lifted out of the
+            // field list (§3.2.2/§3.2.4, e.g. `- <>tags: many-to-many`) — the
+            // latter carries `declaredIn: "fields"`, the former does not. Report
+            // the field-position kind by its own text, the way a misplaced field
+            // used to be named, so the reader still learns what to change and
+            // not just that something in the model went unread.
+            var relations = sections.Relations ?? [];
+            var fieldNotations = relations
+                .Where(r => r.TryGetProperty("declaredIn", out var d) && d.GetString() == "fields")
+                .ToList();
+            foreach (var r in fieldNotations)
+            {
+                var raw = r.TryGetProperty("raw", out var rw) ? rw.GetString() : r.ToString();
+                unconsumed.Add($"{model.Name}: 관계 표기 '{raw}' (관계는 {RelationReadForm} 로만 읽는다)");
+            }
 
             // Indexes is the one section a target reads. The other three the
             // language defines are read by nothing — the same model generated with
             // and without all three produces byte-identical output across every
             // target (Sql in both dialects, Model, Api, TypeScript; measured).
-            if (sections.Relations?.Count > 0) unconsumed.Add($"{model.Name}: ### Relations");
+            if (relations.Count > fieldNotations.Count) unconsumed.Add($"{model.Name}: ### Relations");
             if (sections.Behaviors?.Count > 0) unconsumed.Add($"{model.Name}: ### Behaviors");
             if (sections.Metadata?.Count > 0) unconsumed.Add($"{model.Name}: ### Metadata");
 
