@@ -385,6 +385,12 @@ dotnet run --project src/MddBooster.Cli -- build ./samples
 [iyu-framework-v5](https://github.com/iyulab/iyu-framework-v5#readme) 소비 시 "Namespaces a
 consumer needs" 절). 빠뜨리면 `CS0246`으로 드러난다.
 
+**반면 Api 타깃 출력은 엔티티를 «한정 이름»으로 참조한다** — `entitiesNamespace`(위 「복수 타깃
+게이트」)로 한정해 방출하고 `using` 을 내지 않는다. 그래서 소비 프로젝트의 `ImplicitUsings` 설정과
+무관하게 컴파일된다. 임포트에 기대면 모델명이 BCL 타입과 겹치는 순간(예: `Task`) `CS0104` 가
+나는데, 방출 파일은 `DO NOT EDIT` 이라 소비자가 그 자리를 고칠 수 없다. 한정 대상은 소비자 자신의
+네임스페이스일 뿐이며, 런타임 타입은 위 문단대로 여전히 단순명이다.
+
 **Sql 타깃의 `Scripts_gen/`은 SSDT post-deployment 관례다.** `Tables_gen`·`Views_gen`(선언적
 DDL)과 달리, desired-state 스타일 스키마 관리 도구(예: 선언형 diff/apply 도구)는 선언적 DDL만
 기대하므로 이 스크립트를 그대로 desired-state 디렉터리에 두면 스킵된다 — 별도 배포 단계(또는

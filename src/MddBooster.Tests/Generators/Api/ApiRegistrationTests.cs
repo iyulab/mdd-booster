@@ -73,22 +73,28 @@ public class ApiRegistrationTests
     }
 
     [Fact]
-    public void ApiRegistration_emits_using_when_entities_namespace_differs()
+    public void ApiRegistration_qualifies_entity_references_when_the_entities_namespace_differs()
     {
         var ast = new M3lLoader().LoadFile(FixturePath("order-with-derived.m3l.md"));
         var models = new InterfaceResolver(ast).ResolveAll().ToList();
 
         var src = ApiRegistrationRenderer.Render(models, "Sample.Server", entitiesNamespace: "Sample.Entities");
 
-        Assert.Contains("using Sample.Entities;", src);
-        // using 이 namespace 선언보다 먼저 나와야 함
-        var usingIndex = src.IndexOf("using Sample.Entities;");
-        var nsIndex = src.IndexOf("namespace Sample.Server;");
-        Assert.True(usingIndex < nsIndex);
+        // 한정 이름으로 가리킨다 — 단순 이름 + using 조합은 소비자의 ImplicitUsings 와 충돌할 수
+        // 있고, 방출 파일은 DO NOT EDIT 이라 소비자가 그 자리를 고칠 수 없다.
+        Assert.Contains(
+            "options.ODataModel.AddEntityPair<Sample.Entities.OrderExt, Sample.Entities.Order>(\"Orders\");",
+            src);
+        Assert.Contains(
+            "options.GraphQL.AddEntityPair<Sample.Entities.OrderExt, Sample.Entities.Order>(\"orders\", \"order\");",
+            src);
+        // 그리고 임포트는 더 이상 방출하지 않는다 — 한정이 그 일을 대신하므로 남기면
+        // 다른 단순 이름이 여전히 충돌 가능한 상태로 남는다.
+        Assert.DoesNotContain("using Sample.Entities;", src);
     }
 
     [Fact]
-    public void ApiRegistration_skips_using_when_entities_namespace_matches()
+    public void ApiRegistration_leaves_entity_references_bare_when_the_namespaces_match()
     {
         var ast = new M3lLoader().LoadFile(FixturePath("order-with-derived.m3l.md"));
         var models = new InterfaceResolver(ast).ResolveAll().ToList();
@@ -96,6 +102,10 @@ public class ApiRegistrationTests
         var src = ApiRegistrationRenderer.Render(models, "Sample.Entities", entitiesNamespace: "Sample.Entities");
 
         Assert.DoesNotContain("using Sample.Entities;", src);
+        // 한정하지 «않는» 것이 옳다: 엔티티가 둘러싼 네임스페이스에 있으면 임포트가 아니라
+        // 그 네임스페이스에서 찾아지고, 그 경로는 임포트보다 먼저 해석돼 충돌이 성립하지 않는다.
+        Assert.Contains("options.ODataModel.AddEntityPair<OrderExt, Order>(\"Orders\");", src);
+        Assert.DoesNotContain("Sample.Entities.OrderExt", src);
     }
 
     [Fact]
@@ -108,11 +118,11 @@ public class ApiRegistrationTests
 
         // 반드시 포함: Orders/OrderItems/Customers 각 controller
         Assert.Contains("public sealed partial class OrdersController", src);
-        Assert.Contains("IyuODataController<OrderExt, Order>", src);
+        Assert.Contains("IyuODataController<Sample.Entities.OrderExt, Sample.Entities.Order>", src);
         Assert.Contains("public sealed partial class OrderItemsController", src);
         Assert.Contains("public sealed partial class CustomersController", src);
-        // using 지시자
-        Assert.Contains("using Sample.Entities;", src);
+        // 임포트가 아니라 한정 — ApiRegistrationRenderer 와 같은 규약이다.
+        Assert.DoesNotContain("using Sample.Entities;", src);
         // Controllers 서브네임스페이스
         Assert.Contains("namespace Sample.Server.Controllers;", src);
     }

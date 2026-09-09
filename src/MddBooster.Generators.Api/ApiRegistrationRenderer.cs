@@ -44,11 +44,8 @@ public static class ApiRegistrationRenderer
         sb.AppendLine(Header);
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
-        if (!string.IsNullOrWhiteSpace(entitiesNamespace) && entitiesNamespace != ns)
-        {
-            sb.Append("using ").Append(entitiesNamespace).AppendLine(";");
-            sb.AppendLine();
-        }
+        // 엔티티는 using 임포트가 아니라 한정 이름으로 가리킨다 — 이유는 EntityTypeRef 참조.
+        var entityPrefix = EntityTypeRef.PrefixFor(ns, entitiesNamespace);
         sb.Append("namespace ").Append(ns).AppendLine(";");
         sb.AppendLine();
         sb.AppendLine("public static partial class ApiRegistration");
@@ -84,10 +81,12 @@ public static class ApiRegistrationRenderer
             var queryName = Pluralizer.Pluralize(mutationPrefix);   // e.g. "orders"
 
             sb.Append("        options.ODataModel.AddEntityPair<")
-              .Append(entity).Append("Ext, ").Append(entity).Append(">(\"")
+              .Append(entityPrefix).Append(entity).Append("Ext, ")
+              .Append(entityPrefix).Append(entity).Append(">(\"")
               .Append(setName).AppendLine("\");");
             sb.Append("        options.GraphQL.AddEntityPair<")
-              .Append(entity).Append("Ext, ").Append(entity).Append(">(\"")
+              .Append(entityPrefix).Append(entity).Append("Ext, ")
+              .Append(entityPrefix).Append(entity).Append(">(\"")
               .Append(queryName).Append("\", \"").Append(mutationPrefix).AppendLine("\");");
         }
 

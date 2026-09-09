@@ -86,9 +86,9 @@ public class BuildCommandFullFixtureTests
 
             // ApiRegistration emits a line for every entity
             var apiSrc = File.ReadAllText(Path.Combine(apiDir, "Api_gen", "ApiRegistration_gen.cs"));
-            Assert.Contains("AddEntityPair<OrderExt, Order>(\"Orders\")", apiSrc);
-            Assert.Contains("AddEntityPair<CustomerExt, Customer>(\"Customers\")", apiSrc);
-            Assert.Contains("AddEntityPair<OrderItemExt, OrderItem>(\"OrderItems\")", apiSrc);
+            Assert.Contains("AddEntityPair<X.Entities.OrderExt, X.Entities.Order>(\"Orders\")", apiSrc);
+            Assert.Contains("AddEntityPair<X.Entities.CustomerExt, X.Entities.Customer>(\"Customers\")", apiSrc);
+            Assert.Contains("AddEntityPair<X.Entities.OrderItemExt, X.Entities.OrderItem>(\"OrderItems\")", apiSrc);
 
             // Parse every generated .cs file
             var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);

@@ -87,8 +87,8 @@ public class BuildCommandE2ETests
             Assert.True(File.Exists(apiFile));
             var apiSrc = File.ReadAllText(apiFile);
             Assert.Contains("namespace Test.Server", apiSrc);
-            Assert.Contains("options.ODataModel.AddEntityPair<BankAccountExt, BankAccount>(\"BankAccounts\")", apiSrc);
-            Assert.Contains("options.GraphQL.AddEntityPair<BankAccountExt, BankAccount>(\"bankAccounts\", \"bankAccount\")", apiSrc);
+            Assert.Contains("options.ODataModel.AddEntityPair<Test.Entities.BankAccountExt, Test.Entities.BankAccount>(\"BankAccounts\")", apiSrc);
+            Assert.Contains("options.GraphQL.AddEntityPair<Test.Entities.BankAccountExt, Test.Entities.BankAccount>(\"bankAccounts\", \"bankAccount\")", apiSrc);
         }
         finally
         {

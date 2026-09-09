@@ -33,11 +33,11 @@ public static class ODataControllerRenderer
         sb.AppendLine(Header);
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
-        if (!string.IsNullOrWhiteSpace(entitiesNamespace) && entitiesNamespace != ns)
-        {
-            sb.Append("using ").Append(entitiesNamespace).AppendLine(";");
-            sb.AppendLine();
-        }
+        // 엔티티는 using 임포트가 아니라 한정 이름으로 가리킨다 — 이유는 EntityTypeRef 참조.
+        // 파일의 네임스페이스는 `{ns}.Controllers` 이지만 판별 기준은 `ns` 다: entitiesNamespace 가
+        // `ns` 와 같으면 엔티티는 «둘러싼» 네임스페이스에 있어 임포트 없이 찾아지고, 둘러싼
+        // 네임스페이스는 임포트보다 먼저 해석되므로 그 경우에도 충돌이 성립하지 않는다.
+        var entityPrefix = EntityTypeRef.PrefixFor(ns, entitiesNamespace);
         sb.Append("namespace ").Append(ns).AppendLine(".Controllers;");
         sb.AppendLine();
 
@@ -51,7 +51,8 @@ public static class ODataControllerRenderer
 
             sb.Append("public sealed partial class ").Append(setName).AppendLine("Controller");
             sb.Append("    : IyuODataController<")
-              .Append(entity).Append("Ext, ").Append(entity).AppendLine(">");
+              .Append(entityPrefix).Append(entity).Append("Ext, ")
+              .Append(entityPrefix).Append(entity).AppendLine(">");
             sb.AppendLine("{");
             sb.Append("    public ").Append(setName).AppendLine("Controller(IyuDbContext context)");
             sb.AppendLine("        : base(context) { }");

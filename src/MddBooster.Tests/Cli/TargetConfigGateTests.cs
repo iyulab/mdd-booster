@@ -77,7 +77,7 @@ public class TargetConfigGateTests
 
             var reg = File.ReadAllText(Path.Combine(root, "api", "Api_gen", "ApiRegistration_gen.cs"));
             // 명시한 쪽을 쓴다 — 첫 Model 타깃이 아니다.
-            Assert.Contains("using B.Entities;", reg);
+            Assert.Contains("AddEntityPair<B.Entities.", reg);
             Assert.DoesNotContain("using A.Entities;", reg);
         }
         finally { Cleanup(root); }
@@ -95,7 +95,7 @@ public class TargetConfigGateTests
             Assert.Equal(0, new BuildCommand().Run(mddDir));
 
             var reg = File.ReadAllText(Path.Combine(root, "api", "Api_gen", "ApiRegistration_gen.cs"));
-            Assert.Contains("using A.Entities;", reg);
+            Assert.Contains("AddEntityPair<A.Entities.", reg);
         }
         finally { Cleanup(root); }
     }
@@ -111,7 +111,7 @@ public class TargetConfigGateTests
             Assert.Equal(0, new BuildCommand().Run(mddDir));
 
             var reg = File.ReadAllText(Path.Combine(root, "api", "Api_gen", "ApiRegistration_gen.cs"));
-            Assert.Contains("using Custom.Entities;", reg);
+            Assert.Contains("AddEntityPair<Custom.Entities.", reg);
         }
         finally { Cleanup(root); }
     }

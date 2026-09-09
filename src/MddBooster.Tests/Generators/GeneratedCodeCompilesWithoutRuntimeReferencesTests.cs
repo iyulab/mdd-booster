@@ -212,17 +212,20 @@ public class GeneratedCodeCompilesWithoutRuntimeReferencesTests
     }
 
     /// <summary>
-    /// <b>기록된 공백(recorded gap) — 이것은 「통과」가 아니라 「아직 안 고쳤다」의 고정이다.</b>
-    /// 소비 프로젝트가 <c>ImplicitUsings</c> 를 켜면(= SDK 기본값) <c>System.Threading.Tasks</c>
-    /// 가 스코프에 들어오고, 모델명이 <c>Task</c> 인 순간 생성 컨트롤러가 <c>CS0104</c> 로 깨진다.
-    /// 그 처분은 사람 결정이라 아직 열려 있다(`ROADMAP.md` <c>MB-R1</c>⒞).
-    /// ⚠ 이 테스트가 «실패»하기 시작하면 그것은 결함이 아니라 <b>공백이 닫혔다는 신호</b>다 —
-    /// 그때 이 테스트를 지우고 위 본 게이트에 그 축을 편입한다.
+    /// <b>편입된 축 — 종전에는 「기록된 공백」이었다.</b> 소비 프로젝트가 <c>ImplicitUsings</c> 를
+    /// 켜면(= SDK 기본값) <c>System.Threading.Tasks</c> 가 스코프에 들어오고, 모델명이
+    /// <c>Task</c> 이면 생성 컨트롤러가 <c>CS0104</c> 로 깨졌다. Api 타깃이 엔티티를 한정 이름으로
+    /// 방출하게 되면서 닫혔고(<c>EntityTypeRef</c>), 이 테스트는 그 공백의 고정에서
+    /// <b>닫힘의 고정</b>으로 뒤집혔다.
+    /// <para>
+    /// ⚠ <c>Task</c> 는 억지 사례가 아니라 이 리포가 배포하는 샘플 모델의 이름이다.
+    /// 되돌리면(한정을 걷어내고 <c>using</c> 으로 돌아가면) 여기가 빨개진다.
+    /// </para>
     /// </summary>
     [Fact]
-    public void RecordedGap_entity_named_like_a_BCL_type_still_collides_when_the_consumer_enables_implicit_usings()
+    public void An_entity_named_like_a_BCL_type_compiles_even_when_the_consumer_enables_implicit_usings()
     {
-        var root = Path.Combine(Path.GetTempPath(), $"mdd-gap-{Guid.NewGuid():N}");
+        var root = Path.Combine(Path.GetTempPath(), $"mdd-bclname-{Guid.NewGuid():N}");
         var mddDir = Path.Combine(root, "mdd");
         var modelDir = Path.Combine(root, "src", "X.Entities");
         var apiDir = Path.Combine(root, "src", "X.Server");
@@ -252,12 +255,33 @@ public class GeneratedCodeCompilesWithoutRuntimeReferencesTests
             Assert.Equal(0, new BuildCommand().Run(mddDir));
 
             var covered = AllGenerated(modelDir, apiDir).Where(IsCovered).ToList();
+            Assert.NotEmpty(covered);
 
             // 소비자가 ImplicitUsings 를 켠 상태를 흉내낸다(그 설정이 끌어오는 것 중
-            // 이 충돌을 만드는 것 하나만).
+            // 이 충돌을 만들던 것 하나만).
             var errors = Compile(covered, extraGlobalUsings: "global using System.Threading.Tasks;");
 
-            Assert.Contains(errors, d => d.Id == "CS0104");
+            Assert.True(errors.Count == 0,
+                "ImplicitUsings 를 켠 소비자에게서도 컴파일되어야 한다. 실패:\n" +
+                string.Join("\n", errors.Select(d =>
+                    $"  {Path.GetFileName(d.Location.SourceTree?.FilePath ?? "?")}: {d.Id} {d.GetMessage()}")));
+
+            // 계측기 생존 — 그 충돌을 실제로 만들 수 있는 픽스처인지 확인한다. 한정을 걷어낸
+            // 형태(단순 이름)를 직접 세워 CS0104 가 나오는지 본다: 안 나오면 이 테스트가
+            // 검사하는 축 자체가 사라진 것이고, 초록은 공허하다.
+            var naive = CSharpSyntaxTree.ParseText(
+                "namespace X.Server.Naive; public class Probe { public Task? P; }",
+                CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest), path: "naive.cs");
+            var probe = CSharpCompilation.Create("Probe",
+                new[]
+                {
+                    naive,
+                    CSharpSyntaxTree.ParseText("namespace X.Entities; public class Task { }"),
+                    CSharpSyntaxTree.ParseText("global using X.Entities;\nglobal using System.Threading.Tasks;"),
+                },
+                BclReferences(),
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            Assert.Contains(probe.GetDiagnostics(), d => d.Id == "CS0104");
         }
         finally { try { Directory.Delete(root, recursive: true); } catch { } }
     }
