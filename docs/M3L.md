@@ -965,7 +965,8 @@ Behaviors define events and actions associated with a model.
 ```
 
 **What this generator implements**: nothing. Neither the `### Behaviors` section nor `@behavior` is
-read by any target; the section is reported as unconsumed. Behaviour belongs to the application
+read by any target; the section is reported as unconsumed, but the bare `@behavior` attribute form
+is not — nothing surfaces if a target starts reading it. Behaviour belongs to the application
 running on the generated model, not to the generated model.
 
 ### 4.4 Computed Fields
