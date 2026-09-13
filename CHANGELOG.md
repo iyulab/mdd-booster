@@ -16,6 +16,33 @@
 
 ---
 
+## 0.27.0
+
+### `M3L.Native` 0.9.0 — 복합 `@unique`의 NULL 정책 선언(`nulls: "not_distinct"`)
+
+기본적으로 nullable 컬럼이 섞인 복합 `@unique`는 filtered unique index로 방출된다 — NULL이
+"미설정"을 뜻할 때는 맞지만, 폴백/오버라이드 테이블처럼 NULL이 "나머지 범위 전체"를 뜻해 그
+자체로 유일성 경쟁에 참여해야 하는 경우에는 틀렸다. `nulls: "not_distinct"`(SQL:2023 `UNIQUE
+NULLS NOT DISTINCT` 어휘)를 붙이면 그 필터를 만들지 않는다 — SQL Server는 plain `UNIQUE`가
+이미 이 의미라 필터 없는 inline `CONSTRAINT UNIQUE`, PostgreSQL 15+는 `UNIQUE NULLS NOT
+DISTINCT` 네이티브 구문을 쓴다.
+
+Model 타깃도 같은 선언을 EF Core fluent API로 반영한다(SQL Server `.HasFilter(null)`, PostgreSQL
+`.AreNullsDistinct(false)`) — 그 김에, Model 타깃이 `### Indexes` 섹션의 **복합** `@unique`/
+`@index` 선언 자체를 지금까지 전혀 배선하지 않고 있던 것(필드 단위 단일 컬럼만 처리)도 함께
+바로잡았다.
+
+### `@rollup`의 `where:` 절이 상관 서브쿼리 자신의 행 별칭을 더 이상 오염시키지 않는다
+
+`where:` 절이 서브쿼리 자신의 상관 별칭을 직접 참조하면(예: `b.field = ...`) 그 별칭 토큰이
+식별자 정규화 과정에서 다른 컬럼명과 똑같이 대소문자가 바뀌어 실제 별칭과 어긋났다 — 대소문자
+구분 없는 콜레이션에서만 우연히 동작하던 상태. 별칭처럼 `.`으로 바로 이어지는 소문자 토큰은
+더 이상 다시 쓰지 않는 일반 규칙으로 고쳤다.
+
+같은 김에 부모 행(집계 대상 테이블 자신)의 컬럼을 참조하는 문서화된 방법
+`$parent.<field>`(`field`는 m3l 필드명, snake_case)를 추가했다 — 렌더러가 실제로 쓰는 SQL
+별칭에 의존하지 않는다.
+
 ## 0.26.0
 
 ### `M3L.Native` 0.8.0 — 관계 표기가 더 이상 타입 없는 필드로 새지 않는다
