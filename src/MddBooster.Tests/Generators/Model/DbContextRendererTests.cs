@@ -1,3 +1,4 @@
+using M3L.Native;
 using MddBooster.Core.Ast;
 using MddBooster.Core.Semantic;
 using MddBooster.Generators.Model;
@@ -140,5 +141,150 @@ public class DbContextRendererTests
         var extBlockStart = output.IndexOf("modelBuilder.Entity<IndexSampleExt>", StringComparison.Ordinal);
         Assert.True(extBlockStart > 0);
         Assert.DoesNotContain("HasIndex", output[extBlockStart..]);
+    }
+
+    // ---------------------------------------------- `### Indexes` composite → HasIndex(x => new {..})
+    //
+    // Before this, the Model target never emitted anything for a composite `@unique(...)`/
+    // `@index(...)` declared in `### Indexes` — only single-field attributes above. Discovered
+    // while wiring docket #271's `nulls: "not_distinct"` (its own repro case is composite), so
+    // both land together. The current M3L.Native pin (0.8.0) doesn't emit `nulls` yet, so these
+    // build a synthetic `ResolvedModel` — same reason `TableSectionsIndexesTests` /
+    // `PgTableRendererTests` do on the SQL side.
+
+    private static ResolvedModel EnterpriseChannelDefaultFixture(
+        string? nulls, bool partNullable = false) =>
+        new()
+        {
+            Name = "EnterpriseChannelDefault",
+            Fields =
+            [
+                new FieldNode { Name = "enterprise_id", Type = "identifier", Nullable = true },
+                new FieldNode { Name = "channel", Type = "string", Nullable = true },
+                new FieldNode { Name = "part", Type = "string", Nullable = partNullable },
+            ],
+            Source = new ModelNode
+            {
+                Name = "EnterpriseChannelDefault",
+                Sections = new Sections
+                {
+                    Indexes =
+                    [
+                        System.Text.Json.JsonDocument.Parse(
+                            $$"""
+                            {
+                              "type": "directive",
+                              "unique": true,
+                              "args": ["enterprise_id", "channel", "part"]
+                              {{(nulls is null ? "" : $""", "nulls": "{nulls}" """)}}
+                            }
+                            """).RootElement.Clone(),
+                    ],
+                },
+            },
+        };
+
+    [Fact]
+    public void Section_composite_unique_emits_HasIndex_with_anonymous_type_lambda()
+    {
+        var output = DbContextRenderer.Render(
+            [EnterpriseChannelDefaultFixture(nulls: null)], "TestDbContext", "Test.Ns");
+
+        Assert.Contains(
+            "modelBuilder.Entity<EnterpriseChannelDefault>()"
+                + ".HasIndex(x => new { x.EnterpriseId, x.Channel, x.Part })"
+                + ".IsUnique()"
+                + ".HasDatabaseName(\"UK_EnterpriseChannelDefault_EnterpriseId_Channel_Part\");",
+            output);
+    }
+
+    [Fact]
+    public void Section_composite_nulls_not_distinct_overrides_the_sql_server_auto_filter()
+    {
+        // At least one nullable column (default fixture) → SqlServerIndexConvention would filter
+        // by convention, so `nulls: "not_distinct"` must explicitly turn that off.
+        var output = DbContextRenderer.Render(
+            [EnterpriseChannelDefaultFixture(nulls: "not_distinct")], "TestDbContext", "Test.Ns");
+
+        Assert.Contains(
+            "modelBuilder.Entity<EnterpriseChannelDefault>()"
+                + ".HasIndex(x => new { x.EnterpriseId, x.Channel, x.Part })"
+                + ".IsUnique().HasFilter(null)"
+                + ".HasDatabaseName(\"UK_EnterpriseChannelDefault_EnterpriseId_Channel_Part\");",
+            output);
+    }
+
+    [Fact]
+    public void Section_composite_nulls_not_distinct_is_a_no_op_when_no_column_is_nullable()
+    {
+        // No nullable column → SQL Server's convention never applies a filter in the first
+        // place, so `.HasFilter(null)` would just be redundant noise on top of what `.IsUnique()`
+        // already does — TableRenderer's own gate (`anyNullable`) skips it for the same reason.
+        var allNotNull = new ResolvedModel
+        {
+            Name = "EnterpriseChannelDefault",
+            Fields =
+            [
+                new FieldNode { Name = "enterprise_id", Type = "identifier", Nullable = false },
+                new FieldNode { Name = "channel", Type = "string", Nullable = false },
+                new FieldNode { Name = "part", Type = "string", Nullable = false },
+            ],
+            Source = EnterpriseChannelDefaultFixture(nulls: "not_distinct").Source,
+        };
+        var output = DbContextRenderer.Render([allNotNull], "TestDbContext", "Test.Ns");
+
+        Assert.Contains(
+            "modelBuilder.Entity<EnterpriseChannelDefault>()"
+                + ".HasIndex(x => new { x.EnterpriseId, x.Channel, x.Part })"
+                + ".IsUnique()"
+                + ".HasDatabaseName(\"UK_EnterpriseChannelDefault_EnterpriseId_Channel_Part\");",
+            output);
+        Assert.DoesNotContain("HasFilter", output);
+    }
+
+    [Fact]
+    public void Section_composite_nulls_not_distinct_emits_AreNullsDistinct_false_on_postgres()
+    {
+        var output = DbContextRenderer.Render(
+            [EnterpriseChannelDefaultFixture(nulls: "not_distinct")], "TestDbContext", "Test.Ns",
+            postgresNaming: true);
+
+        Assert.Contains(
+            "e.HasIndex(x => new { x.EnterpriseId, x.Channel, x.Part })"
+                + ".IsUnique().AreNullsDistinct(false)"
+                + ".HasDatabaseName(\"uq_enterprise_channel_default_enterprise_id_channel_part\");",
+            output);
+    }
+
+    [Fact]
+    public void Section_composite_index_non_unique_emits_plain_HasIndex()
+    {
+        var model = new ResolvedModel
+        {
+            Name = "EnterpriseChannelDefault",
+            Fields = EnterpriseChannelDefaultFixture(nulls: null).Fields,
+            Source = new ModelNode
+            {
+                Name = "EnterpriseChannelDefault",
+                Sections = new Sections
+                {
+                    Indexes =
+                    [
+                        System.Text.Json.JsonDocument.Parse(
+                            """{"type":"directive","unique":false,"args":["enterprise_id","channel"]}""")
+                            .RootElement.Clone(),
+                    ],
+                },
+            },
+        };
+
+        var output = DbContextRenderer.Render([model], "TestDbContext", "Test.Ns");
+
+        Assert.Contains(
+            "modelBuilder.Entity<EnterpriseChannelDefault>()"
+                + ".HasIndex(x => new { x.EnterpriseId, x.Channel })"
+                + ".HasDatabaseName(\"IX_EnterpriseChannelDefault_EnterpriseId_Channel\");",
+            output);
+        Assert.DoesNotContain("IsUnique", output);
     }
 }

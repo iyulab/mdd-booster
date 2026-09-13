@@ -124,6 +124,7 @@ public static class DbContextRenderer
         foreach (var model in ordered)
         {
             AppendIndexes(sb, model, NameCasing.ToPascalCase(model.Name), model.Name, isPostgres: false);
+            AppendSectionIndexes(sb, model, NameCasing.ToPascalCase(model.Name), model.Name, isPostgres: false);
         }
         sb.AppendLine("    }");
 
@@ -171,6 +172,60 @@ public static class DbContextRenderer
     }
 
     /// <summary>
+    /// <c>### Indexes</c> 섹션의 복합 <c>@unique(...)</c>/<c>@index(...)</c> directive를
+    /// <c>HasIndex(x =&gt; new { ... })</c>로 emit한다 — <see cref="AppendIndexes"/>는 필드
+    /// 레벨(단일 컬럼) attribute만 훑으므로 별개다. 명명은 SQL/PG 렌더러(<c>TableRenderer</c>/
+    /// <c>PgTableRenderer</c>)의 <c>AppendSectionIndexes</c>와 맞춘다 — SQL Server는
+    /// PascalCase 컬럼 조인(<c>UK_</c>/<c>IX_</c>), PG는 원문 snake_case 컬럼 조인
+    /// (<c>uq_</c>/<c>ix_</c>). <c>nulls: "not_distinct"</c>(docket #271)가 선언된 unique
+    /// entry는 SQL Server에서 <c>SqlServerIndexConvention</c>의 자동 filtered-index를
+    /// <c>.HasFilter(null)</c>로 해제하고(<see cref="AppendIndexes"/> 헤더 주석이 이미 설명하는
+    /// 그 자동 필터), PG에서는 <c>.AreNullsDistinct(false)</c>(PG15+, Npgsql EF Core provider)로
+    /// 같은 의미를 낸다 — 둘 다 SQL 타깃 렌더러가 이미 하는 방언 매핑을 그대로 반복할 뿐이다.
+    /// </summary>
+    private static void AppendSectionIndexes(
+        StringBuilder sb, ResolvedModel model, string entityName, string indexNamePrefix, bool isPostgres)
+    {
+        var receiver = isPostgres ? "e" : $"modelBuilder.Entity<{entityName}>()";
+        var indent = isPostgres ? "            " : "        ";
+
+        var columnNullability = BaseColumnsOf(model).ToDictionary(
+            f => f.Name, f => f.Nullable, StringComparer.Ordinal);
+
+        foreach (var entry in SectionIndexParser.Parse(model))
+        {
+            var properties = entry.Columns.Select(NameCasing.ToPascalCase).ToList();
+            var propertyAccess = string.Join(", ", properties.Select(p => $"x.{p}"));
+            var nameTokens = isPostgres ? entry.Columns : properties;
+            var nameJoined = string.Join("_", nameTokens);
+
+            sb.Append(indent).Append(receiver).Append(".HasIndex(x => new { ").Append(propertyAccess)
+              .Append(" })");
+
+            if (entry.IsUnique)
+            {
+                sb.Append(".IsUnique()");
+
+                var anyNullable = entry.Columns.Any(c =>
+                    columnNullability.TryGetValue(c, out var n) && n);
+                if (entry.Nulls == "not_distinct")
+                {
+                    sb.Append(isPostgres ? ".AreNullsDistinct(false)"
+                        : anyNullable ? ".HasFilter(null)" : "");
+                }
+
+                sb.Append(".HasDatabaseName(\"").Append(isPostgres ? "uq_" : "UK_")
+                  .Append(indexNamePrefix).Append('_').Append(nameJoined).AppendLine("\");");
+            }
+            else
+            {
+                sb.Append(".HasDatabaseName(\"").Append(isPostgres ? "ix_" : "IX_")
+                  .Append(indexNamePrefix).Append('_').Append(nameJoined).AppendLine("\");");
+            }
+        }
+    }
+
+    /// <summary>
     /// PG 방언의 엔티티별 명시 매핑 블록. 쓰기 엔티티는 snake 테이블로, Ext 읽기 모델은
     /// 뷰 backing이 없으면 같은 snake 테이블을 뷰로 읽는다. 뷰 backing이 있으면 PG Sql
     /// 타깃(<c>PostgresSqlGenerator</c>)이 실제로 방출하는 이름과 맞춘다 — Lookup/Rollup
@@ -209,6 +264,7 @@ public static class DbContextRenderer
             sb.Append("            e.ToTable(\"").Append(table).AppendLine("\");");
             AppendPostgresColumns(sb, model, pk);
             AppendIndexes(sb, model, name, table, isPostgres: true);
+            AppendSectionIndexes(sb, model, name, table, isPostgres: true);
             sb.AppendLine("        });");
 
             sb.Append("        modelBuilder.Entity<").Append(name).AppendLine("Ext>(e =>");
