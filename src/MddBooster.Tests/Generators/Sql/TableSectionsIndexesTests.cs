@@ -1,3 +1,5 @@
+using System.Text.Json;
+using M3L.Native;
 using MddBooster.Core.Ast;
 using MddBooster.Core.Semantic;
 using MddBooster.Generators.Sql;
@@ -85,6 +87,76 @@ public class TableSectionsIndexesTests
             sql);
         Assert.Contains(
             "CONSTRAINT [UK_Order_CustomerId_Season] UNIQUE NONCLUSTERED ([CustomerId], [Season])",
+            sql);
+    }
+
+    // ---- `nulls: "not_distinct"` (docket #271) ----
+    //
+    // 현재 핀(M3L.Native 0.8.0)은 아직 `nulls` 필드를 내지 않는다 — m3l 0.9.0이 게시되고
+    // 핀이 올라갈 때까지는 합성 `ResolvedModel`로 이 분기를 고정한다
+    // (`SectionIndexParserTests.WithEntries`와 같은 이유).
+
+    private static ResolvedModel EnterpriseChannelDefaultFixture(string? nulls) =>
+        new()
+        {
+            Name = "EnterpriseChannelDefault",
+            Fields =
+            [
+                new FieldNode { Name = "enterprise_id", Type = "identifier", Nullable = true },
+                new FieldNode { Name = "channel", Type = "string", Nullable = true },
+                new FieldNode { Name = "part", Type = "string", Nullable = false },
+            ],
+            Source = new ModelNode
+            {
+                Name = "EnterpriseChannelDefault",
+                Sections = new Sections
+                {
+                    Indexes =
+                    [
+                        JsonDocument.Parse(
+                            $$"""
+                            {
+                              "type": "directive",
+                              "unique": true,
+                              "args": ["enterprise_id", "channel", "part"]
+                              {{(nulls is null ? "" : $""", "nulls": "{nulls}" """)}}
+                            }
+                            """).RootElement.Clone(),
+                    ],
+                },
+            },
+        };
+
+    [Fact]
+    public void Nulls_not_distinct_emits_inline_constraint_despite_nullable_columns()
+    {
+        // 기본값(위 두 테스트)과 정반대 요구 — NULL이 "범위 전체"를 뜻하는 폴백 테이블은
+        // filtered index로 NULL 행을 제외하면 유일성이 약해진다(docket #271 원 신고). SQL
+        // Server의 plain UNIQUE는 NULL을 값으로 취급해 이미 NULLS NOT DISTINCT를 구현하므로,
+        // 필터 없는 inline CONSTRAINT로 충분하다 — 새 SQL 문법을 발명하지 않는다.
+        var sql = TableRenderer.Render(
+            EnterpriseChannelDefaultFixture(nulls: "not_distinct"), schema: "dbo");
+
+        Assert.Contains(
+            "CONSTRAINT [UK_EnterpriseChannelDefault_EnterpriseId_Channel_Part] UNIQUE NONCLUSTERED ([EnterpriseId], [Channel], [Part])",
+            sql);
+        Assert.DoesNotContain(
+            "CREATE UNIQUE NONCLUSTERED INDEX [UK_EnterpriseChannelDefault_EnterpriseId_Channel_Part]",
+            sql);
+    }
+
+    [Fact]
+    public void Absent_nulls_field_keeps_default_filtered_index_behavior()
+    {
+        // 회귀 차단 — `nulls` 필드가 아예 없으면(현재 핀의 실제 산출물 형태) 기존 필터드
+        // 인덱스 기본값이 그대로여야 한다. `Directive_unique_with_nullable_columns_emits_filtered_index`
+        // 와 같은 주장을 합성 픽스처로도 한 번 더 고정한다 — 실제 파서가 `nulls` 필드 자체를
+        // 내지 않는 상황을 정확히 재현하는 유일한 테스트다.
+        var sql = TableRenderer.Render(
+            EnterpriseChannelDefaultFixture(nulls: null), schema: "dbo");
+
+        Assert.Contains(
+            "CREATE UNIQUE NONCLUSTERED INDEX [UK_EnterpriseChannelDefault_EnterpriseId_Channel_Part] ON [dbo].[EnterpriseChannelDefault] ([EnterpriseId], [Channel], [Part]) WHERE [EnterpriseId] IS NOT NULL AND [Channel] IS NOT NULL AND [Part] IS NOT NULL;",
             sql);
     }
 

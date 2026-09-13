@@ -11,7 +11,18 @@ namespace MddBooster.Generators.Sql;
 /// meaningful: a composite index on <c>(a, b)</c> also serves a lookup on <c>a</c>.
 /// </param>
 /// <param name="IsUnique">Whether the entry declared a uniqueness constraint.</param>
-public sealed record SectionIndexEntry(IReadOnlyList<string> Columns, bool IsUnique);
+/// <param name="Nulls">
+/// The declared NULL-handling policy for a unique entry (currently only
+/// <c>"not_distinct"</c> — SQL:2023 <c>UNIQUE NULLS NOT DISTINCT</c>), or <see langword="null"/>
+/// when the model didn't declare one. Absence means the pre-existing default: NULL is treated as
+/// distinct, so a row carrying it is excluded from uniqueness enforcement (SQL Server's own
+/// native behavior for a nullable unique column). Meaningless when <see cref="IsUnique"/> is
+/// <see langword="false"/> — a plain index has no uniqueness to attach a NULL policy to.
+/// </param>
+public sealed record SectionIndexEntry(
+    IReadOnlyList<string> Columns,
+    bool IsUnique,
+    string? Nulls = null);
 
 /// <summary>
 /// Reads a model's <c>### Indexes</c> section into column lists.
@@ -58,7 +69,11 @@ public static class SectionIndexParser
 
             var isUnique = entry.TryGetProperty("unique", out var uniqueProp)
                            && uniqueProp.ValueKind == JsonValueKind.True;
-            parsed.Add(new SectionIndexEntry(columns, isUnique));
+            var nulls = entry.TryGetProperty("nulls", out var nullsProp)
+                        && nullsProp.ValueKind == JsonValueKind.String
+                ? nullsProp.GetString()
+                : null;
+            parsed.Add(new SectionIndexEntry(columns, isUnique, nulls));
         }
         return parsed;
     }

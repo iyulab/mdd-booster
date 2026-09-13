@@ -141,6 +141,44 @@ public class SectionIndexParserTests
         Assert.Empty(entries);
     }
 
+    [Fact]
+    public void Nulls_is_read_when_declared()
+    {
+        // 현재 핀(0.8.0)에서는 나오지 않는 형태다 — m3l 0.9.0(`@unique(..., nulls: "not_distinct")`)
+        // 이 게시되고 핀이 올라가야 실제 파서가 이 필드를 낸다. 소비처(SQL Server/PG 렌더러) 구현은
+        // 그 게시를 기다리지 않는다 — 여기서 형태를 먼저 고정한다.
+        var entries = SectionIndexParser.Parse(WithEntries(
+            """{"type":"directive","args":["enterprise_id","channel","part"],"unique":true,"nulls":"not_distinct"}"""));
+
+        var entry = Assert.Single(entries);
+        Assert.Equal("not_distinct", entry.Nulls);
+        Assert.Equal(["enterprise_id", "channel", "part"], entry.Columns);
+    }
+
+    [Fact]
+    public void Nulls_is_null_when_the_entry_does_not_declare_it()
+    {
+        // 절대다수 — 기본값(현행 filtered-index 동작)을 바꾸지 않는 게 이 필드의 요점이다.
+        var entries = SectionIndexParser.Parse(
+            WithEntries("""{"type":"directive","args":["customer_id","season"],"unique":true}"""));
+
+        Assert.Null(Assert.Single(entries).Nulls);
+    }
+
+    [Fact]
+    public void Nulls_is_ignored_when_not_a_json_string()
+    {
+        // 컬럼 args 의 "scalar 단일 인자" 관용(위 `Scalar_args_are_read_as_a_single_column`)과
+        // 같은 이유 — 디코딩 실패를 조용히 흡수한다. 잘못된 모양의 `nulls` 하나 때문에 인덱스
+        // 전체가 탈락하면 §3 안쪽 한계가 하나 더 늘어나는 셈이라, 컬럼은 그대로 살리고 정책만 null.
+        var entries = SectionIndexParser.Parse(WithEntries(
+            """{"type":"directive","args":["part"],"unique":true,"nulls":true}"""));
+
+        var entry = Assert.Single(entries);
+        Assert.Null(entry.Nulls);
+        Assert.Equal(["part"], entry.Columns);
+    }
+
     [Theory]
     [InlineData("\"just a string\"")]                        // entry 가 객체가 아님
     [InlineData("""{"args":["customer_id"]}""")]             // type 없음

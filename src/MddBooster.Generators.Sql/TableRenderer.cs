@@ -141,9 +141,9 @@ public static class TableRenderer
         var entries = SectionIndexParser.Parse(model);
         if (entries.Count == 0) return;
 
-        // PascalCase 컬럼명 → nullable 매핑. 다중 컬럼 UK에 nullable 컬럼이 끼면
-        // SQL Server UNIQUE 제약은 NULL을 값으로 취급(다중 NULL 허용 안 됨)하므로
-        // filtered unique index로 변환해 NULL 행을 제약 평가에서 제외해야 한다.
+        // PascalCase 컬럼명 → nullable 매핑. 다중 컬럼 UK에 nullable 컬럼이 끼면 기본적으로
+        // filtered unique index로 변환해 NULL 행을 제약 평가에서 제외한다 — `nulls:
+        // "not_distinct"` 선언 시의 예외는 분기 본체(아래) 참조.
         var columnNullability = storedFields.ToDictionary(
             f => NameCasing.ToPascalCase(f.Name),
             f => f.Nullable,
@@ -158,11 +158,17 @@ public static class TableRenderer
 
             if (isUnique)
             {
-                // 컬럼 중 하나라도 nullable이면 filtered unique index로 emit.
-                // 모두 NOT NULL이면 inline UK constraint(테이블 본문에 함께 emit).
+                // 컬럼 중 하나라도 nullable이면 filtered unique index로 emit — SQL Server의
+                // plain UNIQUE는 NULL을 값으로 취급해 다중 NULL을 막으므로, "NULL은 미설정"
+                // 의미(NULLS DISTINCT, 기본값)를 내려면 NULL 행을 제약 평가에서 걸러내야 한다.
+                // `nulls: "not_distinct"`(docket #271, m3l `@unique(..., nulls: "not_distinct")`)
+                // 를 선언했다면 정반대다 — NULL도 다른 값처럼 유일성 경쟁에 참여해야 하고,
+                // 그건 SQL Server의 plain UNIQUE가 **이미 기본으로 하는 일**이라 필터가 필요
+                // 없다: 모두 NOT NULL인 경우와 같은 inline 제약으로 충분하다.
                 var anyNullable = cols.Any(c =>
                     columnNullability.TryGetValue(c, out var n) && n);
-                if (anyNullable)
+                var needsFilteredIndex = anyNullable && entry.Nulls != "not_distinct";
+                if (needsFilteredIndex)
                 {
                     var notNullPredicate = string.Join(" AND ",
                         cols.Select(c => $"[{c}] IS NOT NULL"));
