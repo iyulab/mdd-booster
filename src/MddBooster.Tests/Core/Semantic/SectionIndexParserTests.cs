@@ -2,9 +2,8 @@ using System.Text.Json;
 using M3L.Native;
 using MddBooster.Core.Ast;
 using MddBooster.Core.Semantic;
-using MddBooster.Generators.Sql;
 
-namespace MddBooster.Tests.Generators.Sql;
+namespace MddBooster.Tests.Core.Semantic;
 
 /// <summary>
 /// `### Indexes` 항목을 컬럼 목록 + unique 여부로 읽어내는 공유 파서.

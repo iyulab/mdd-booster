@@ -1,7 +1,6 @@
 using System.Text.Json;
-using MddBooster.Core.Semantic;
 
-namespace MddBooster.Generators.Sql;
+namespace MddBooster.Core.Semantic;
 
 /// <summary>
 /// One index declared in a model's <c>### Indexes</c> section, as written.
@@ -28,11 +27,14 @@ public sealed record SectionIndexEntry(
 /// Reads a model's <c>### Indexes</c> section into column lists.
 /// </summary>
 /// <remarks>
-/// Both dialect renderers and the foreign-key index planner need these entries, and each
-/// needs something different from them — every column or only the leading one, the source
-/// casing or a converted one. What none of them differ on is how an entry is <em>read</em>,
-/// so that part lives here: an entry shape the upstream AST changes is then one edit, not
-/// three, and the three cannot silently disagree about which declarations exist.
+/// Both SQL dialect renderers, the foreign-key index planner, and the Model (EF) target's
+/// <c>DbContextRenderer</c> need these entries, and each needs something different from
+/// them — every column or only the leading one, the source casing or a converted one. What
+/// none of them differ on is how an entry is <em>read</em>, so that part lives here: an
+/// entry shape the upstream AST changes is then one edit, not four, and the four cannot
+/// silently disagree about which declarations exist. It lives in <c>MddBooster.Core</c>
+/// rather than the Sql project precisely because it is not a Sql-only concern — the Model
+/// target has no reason to reference dialect-rendering code to read the same AST shape.
 /// <para>
 /// Column names come back exactly as the model wrote them. Converting here would mean
 /// picking one dialect's casing and making the other convert back.
