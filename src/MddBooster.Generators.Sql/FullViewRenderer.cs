@@ -260,7 +260,11 @@ public static class FullViewRenderer
 
         var whereClause = $"[{fkColumn}] = {baseAlias}.[Id]";
         if (!string.IsNullOrWhiteSpace(def.Where))
-            whereClause += $" AND ({NormalizeComputedExpression(def.Where)})";
+        {
+            var where = ParentReferenceToken.Substitute(
+                def.Where, field => $"{baseAlias}.[{NameCasing.ToPascalCase(field)}]");
+            whereClause += $" AND ({NormalizeComputedExpression(where)})";
+        }
 
         return $"(SELECT {innerExpr} FROM [{schema}].[{fromTarget}] WHERE {whereClause})";
     }
@@ -327,7 +331,11 @@ public static class FullViewRenderer
             int start = i;
             while (i < expr.Length && expr[i] != '\'' && expr[i] != '[') i++;
             var slice = expr.AsSpan(start, i - start).ToString();
-            sb.Append(Regex.Replace(slice, @"\b[a-z][a-z0-9_]*\b", m =>
+            // A lowercase identifier immediately followed by `.` is a table/view alias
+            // qualifying the column after it (e.g. `b.[ProductionState]`), not itself a
+            // column reference — the alias must pass through unmangled or it stops matching
+            // whatever alias the renderer actually emitted for that row.
+            sb.Append(Regex.Replace(slice, @"\b[a-z][a-z0-9_]*\b(?!\s*\.)", m =>
             {
                 var ident = m.Value;
                 if (IsSqlKeyword(ident)) return ident;

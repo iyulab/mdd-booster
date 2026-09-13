@@ -375,6 +375,47 @@ public class FullViewRendererTests
         Assert.DoesNotContain("AND", sql);
     }
 
+    [Fact]
+    public void Rollup_where_clause_referencing_the_base_alias_does_not_mangle_its_case()
+    {
+        // Regression: the identifier-bracketing pass used to match `b` itself (a
+        // word-boundary lowercase token like any other) and rewrite it to `[B]`,
+        // which only happened to still work under a case-insensitive collation.
+        var def = new RollupDef
+        {
+            Target = "Order",
+            Fk = "customer_id",
+            Aggregate = "count",
+            Where = "b.production_state = 'active'",
+        };
+
+        var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", derivedFieldsByModel: null);
+
+        Assert.Equal(
+            "(SELECT COUNT(*) FROM [dbo].[Order] WHERE [CustomerId] = b.[Id] AND (b.[ProductionState] = 'active'))",
+            sql);
+    }
+
+    [Fact]
+    public void Rollup_where_clause_dollar_parent_token_resolves_to_the_base_alias()
+    {
+        // `$parent.<snake_field>` is the documented way to reach the parent row —
+        // it must render identically to a hand-written base-alias reference.
+        var def = new RollupDef
+        {
+            Target = "Order",
+            Fk = "customer_id",
+            Aggregate = "count",
+            Where = "$parent.production_state = 'active'",
+        };
+
+        var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", derivedFieldsByModel: null);
+
+        Assert.Equal(
+            "(SELECT COUNT(*) FROM [dbo].[Order] WHERE [CustomerId] = b.[Id] AND (b.[ProductionState] = 'active'))",
+            sql);
+    }
+
     // Now routed through `M3lLoader`, unlike the three tests above — with the
     // `M3L.Native` pin actually carrying the parser's `where:` fix (docket #174),
     // this closes the integration gap those tests deliberately left open.

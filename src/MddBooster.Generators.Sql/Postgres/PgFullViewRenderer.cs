@@ -183,7 +183,10 @@ public static class PgFullViewRenderer
 
         var whereClause = $"{fkColumn} = {baseAlias}.{basePkName}";
         if (!string.IsNullOrWhiteSpace(def.Where))
-            whereClause += $" AND ({def.Where})";
+        {
+            var where = ParentReferenceToken.Substitute(def.Where, field => $"{baseAlias}.{field}");
+            whereClause += $" AND ({where})";
+        }
 
         return $"(SELECT {innerExpr} FROM {schema}.{fromRelation} WHERE {whereClause})";
     }
