@@ -184,41 +184,6 @@ CREATE TABLE public.asset_maintenance_profile
     }
 
     // ---- `nulls: "not_distinct"` (docket #271) ----
-    //
-    // 현재 핀(M3L.Native 0.8.0)은 아직 `nulls` 필드를 내지 않는다 — m3l 0.9.0이 게시되고
-    // 핀이 올라갈 때까지는 합성 `ResolvedModel`로 이 분기를 고정한다(SQL Server 쪽
-    // `TableSectionsIndexesTests`와 같은 이유·같은 픽스처 모양).
-
-    private static ResolvedModel EnterpriseChannelDefaultFixture(string? nulls) =>
-        new()
-        {
-            Name = "EnterpriseChannelDefault",
-            Fields =
-            [
-                new FieldNode { Name = "enterprise_id", Type = "identifier", Nullable = true },
-                new FieldNode { Name = "channel", Type = "string", Nullable = true },
-                new FieldNode { Name = "part", Type = "string", Nullable = false },
-            ],
-            Source = new ModelNode
-            {
-                Name = "EnterpriseChannelDefault",
-                Sections = new Sections
-                {
-                    Indexes =
-                    [
-                        System.Text.Json.JsonDocument.Parse(
-                            $$"""
-                            {
-                              "type": "directive",
-                              "unique": true,
-                              "args": ["enterprise_id", "channel", "part"]
-                              {{(nulls is null ? "" : $""", "nulls": "{nulls}" """)}}
-                            }
-                            """).RootElement.Clone(),
-                    ],
-                },
-            },
-        };
 
     [Fact]
     public void Render_NullsNotDistinct_EmitsUniqueNullsNotDistinct()
@@ -226,9 +191,8 @@ CREATE TABLE public.asset_maintenance_profile
         // PG의 기본값(위 두 테스트)은 이미 NULLS DISTINCT라 T-SQL 같은 필터드 인덱스
         // 우회가 필요 없었다 — `not_distinct`는 그 반대를 요구하는 선언이라 PG15+ 네이티브
         // 구문(`UNIQUE NULLS NOT DISTINCT`)이 필요하다(docket #271, 폴백/오버라이드 테이블).
-        var model = EnterpriseChannelDefaultFixture(nulls: "not_distinct");
-        var tableNames = PostgresIdentifiers.BuildTableNameMap([model.Name]);
-        var lookup = new Dictionary<string, ResolvedModel>(StringComparer.Ordinal) { [model.Name] = model };
+        var (_, lookup, tableNames, _) = Load("table-with-nulls-not-distinct.m3l.md");
+        var model = lookup["EnterpriseChannelDefault"];
 
         var artifact = PgTableRenderer.Render(model, "public", tableNames, lookup);
 
@@ -240,11 +204,10 @@ CREATE TABLE public.asset_maintenance_profile
     [Fact]
     public void Render_AbsentNulls_KeepsPlainUniqueConstraint()
     {
-        // 회귀 차단 — `nulls` 필드가 아예 없으면(현재 핀의 실제 산출물 형태) 기존 PG 기본값
-        // (NULLS DISTINCT, 즉 옵션 없는 plain UNIQUE)이 그대로여야 한다.
-        var model = EnterpriseChannelDefaultFixture(nulls: null);
-        var tableNames = PostgresIdentifiers.BuildTableNameMap([model.Name]);
-        var lookup = new Dictionary<string, ResolvedModel>(StringComparer.Ordinal) { [model.Name] = model };
+        // 회귀 차단 — `nulls` 키워드를 쓰지 않은 선언은 기존 PG 기본값(NULLS DISTINCT,
+        // 즉 옵션 없는 plain UNIQUE)이 그대로여야 한다.
+        var (_, lookup, tableNames, _) = Load("table-with-composite-unique.m3l.md");
+        var model = lookup["EnterpriseChannelDefault"];
 
         var artifact = PgTableRenderer.Render(model, "public", tableNames, lookup);
 

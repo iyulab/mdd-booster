@@ -143,9 +143,10 @@ public class SectionIndexParserTests
     [Fact]
     public void Nulls_is_read_when_declared()
     {
-        // 현재 핀(0.8.0)에서는 나오지 않는 형태다 — m3l 0.9.0(`@unique(..., nulls: "not_distinct")`)
-        // 이 게시되고 핀이 올라가야 실제 파서가 이 필드를 낸다. 소비처(SQL Server/PG 렌더러) 구현은
-        // 그 게시를 기다리지 않는다 — 여기서 형태를 먼저 고정한다.
+        // `M3L.Native` 0.9.0+(`@unique(..., nulls: "not_distinct")`)이 실제로 내는 형태 —
+        // 디코딩 계약을 파서 JSON 자체가 아니라 이 계약 선에서 고정한다(다른 테스트는
+        // `M3lLoader`로 실제 파서를 태우지만, 이 파일은 `SectionIndexParser.Parse` 자체의
+        // 디코딩 규칙을 겨냥한 단위 테스트라 의도적으로 합성 JSON을 유지한다).
         var entries = SectionIndexParser.Parse(WithEntries(
             """{"type":"directive","args":["enterprise_id","channel","part"],"unique":true,"nulls":"not_distinct"}"""));
 

@@ -148,47 +148,20 @@ public class DbContextRendererTests
     // Before this, the Model target never emitted anything for a composite `@unique(...)`/
     // `@index(...)` declared in `### Indexes` — only single-field attributes above. Discovered
     // while wiring docket #271's `nulls: "not_distinct"` (its own repro case is composite), so
-    // both land together. The current M3L.Native pin (0.8.0) doesn't emit `nulls` yet, so these
-    // build a synthetic `ResolvedModel` — same reason `TableSectionsIndexesTests` /
-    // `PgTableRendererTests` do on the SQL side.
+    // both land together. `M3L.Native` 0.9.0+ actually emits `nulls`, so these go through a real
+    // `.m3l.md` fixture + `M3lLoader`, the same seam every other test in this file uses.
 
-    private static ResolvedModel EnterpriseChannelDefaultFixture(
-        string? nulls, bool partNullable = false) =>
-        new()
-        {
-            Name = "EnterpriseChannelDefault",
-            Fields =
-            [
-                new FieldNode { Name = "enterprise_id", Type = "identifier", Nullable = true },
-                new FieldNode { Name = "channel", Type = "string", Nullable = true },
-                new FieldNode { Name = "part", Type = "string", Nullable = partNullable },
-            ],
-            Source = new ModelNode
-            {
-                Name = "EnterpriseChannelDefault",
-                Sections = new Sections
-                {
-                    Indexes =
-                    [
-                        System.Text.Json.JsonDocument.Parse(
-                            $$"""
-                            {
-                              "type": "directive",
-                              "unique": true,
-                              "args": ["enterprise_id", "channel", "part"]
-                              {{(nulls is null ? "" : $""", "nulls": "{nulls}" """)}}
-                            }
-                            """).RootElement.Clone(),
-                    ],
-                },
-            },
-        };
+    private static ResolvedModel LoadEnterpriseChannelDefault(string fixtureName)
+    {
+        var ast = new M3lLoader().LoadFile(FixturePath(fixtureName));
+        return new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "EnterpriseChannelDefault");
+    }
 
     [Fact]
     public void Section_composite_unique_emits_HasIndex_with_anonymous_type_lambda()
     {
         var output = DbContextRenderer.Render(
-            [EnterpriseChannelDefaultFixture(nulls: null)], "TestDbContext", "Test.Ns");
+            [LoadEnterpriseChannelDefault("table-with-composite-unique.m3l.md")], "TestDbContext", "Test.Ns");
 
         Assert.Contains(
             "modelBuilder.Entity<EnterpriseChannelDefault>()"
@@ -201,10 +174,10 @@ public class DbContextRendererTests
     [Fact]
     public void Section_composite_nulls_not_distinct_overrides_the_sql_server_auto_filter()
     {
-        // At least one nullable column (default fixture) → SqlServerIndexConvention would filter
-        // by convention, so `nulls: "not_distinct"` must explicitly turn that off.
+        // At least one nullable column (enterprise_id/channel) → SqlServerIndexConvention would
+        // filter by convention, so `nulls: "not_distinct"` must explicitly turn that off.
         var output = DbContextRenderer.Render(
-            [EnterpriseChannelDefaultFixture(nulls: "not_distinct")], "TestDbContext", "Test.Ns");
+            [LoadEnterpriseChannelDefault("table-with-nulls-not-distinct.m3l.md")], "TestDbContext", "Test.Ns");
 
         Assert.Contains(
             "modelBuilder.Entity<EnterpriseChannelDefault>()"
@@ -220,18 +193,9 @@ public class DbContextRendererTests
         // No nullable column → SQL Server's convention never applies a filter in the first
         // place, so `.HasFilter(null)` would just be redundant noise on top of what `.IsUnique()`
         // already does — TableRenderer's own gate (`anyNullable`) skips it for the same reason.
-        var allNotNull = new ResolvedModel
-        {
-            Name = "EnterpriseChannelDefault",
-            Fields =
-            [
-                new FieldNode { Name = "enterprise_id", Type = "identifier", Nullable = false },
-                new FieldNode { Name = "channel", Type = "string", Nullable = false },
-                new FieldNode { Name = "part", Type = "string", Nullable = false },
-            ],
-            Source = EnterpriseChannelDefaultFixture(nulls: "not_distinct").Source,
-        };
-        var output = DbContextRenderer.Render([allNotNull], "TestDbContext", "Test.Ns");
+        var output = DbContextRenderer.Render(
+            [LoadEnterpriseChannelDefault("table-with-nulls-not-distinct-not-nullable.m3l.md")],
+            "TestDbContext", "Test.Ns");
 
         Assert.Contains(
             "modelBuilder.Entity<EnterpriseChannelDefault>()"
@@ -246,7 +210,7 @@ public class DbContextRendererTests
     public void Section_composite_nulls_not_distinct_emits_AreNullsDistinct_false_on_postgres()
     {
         var output = DbContextRenderer.Render(
-            [EnterpriseChannelDefaultFixture(nulls: "not_distinct")], "TestDbContext", "Test.Ns",
+            [LoadEnterpriseChannelDefault("table-with-nulls-not-distinct.m3l.md")], "TestDbContext", "Test.Ns",
             postgresNaming: true);
 
         Assert.Contains(
@@ -259,26 +223,8 @@ public class DbContextRendererTests
     [Fact]
     public void Section_composite_index_non_unique_emits_plain_HasIndex()
     {
-        var model = new ResolvedModel
-        {
-            Name = "EnterpriseChannelDefault",
-            Fields = EnterpriseChannelDefaultFixture(nulls: null).Fields,
-            Source = new ModelNode
-            {
-                Name = "EnterpriseChannelDefault",
-                Sections = new Sections
-                {
-                    Indexes =
-                    [
-                        System.Text.Json.JsonDocument.Parse(
-                            """{"type":"directive","unique":false,"args":["enterprise_id","channel"]}""")
-                            .RootElement.Clone(),
-                    ],
-                },
-            },
-        };
-
-        var output = DbContextRenderer.Render([model], "TestDbContext", "Test.Ns");
+        var output = DbContextRenderer.Render(
+            [LoadEnterpriseChannelDefault("table-with-composite-index.m3l.md")], "TestDbContext", "Test.Ns");
 
         Assert.Contains(
             "modelBuilder.Entity<EnterpriseChannelDefault>()"

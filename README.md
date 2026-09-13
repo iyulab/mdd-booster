@@ -423,12 +423,16 @@ MDD_DEBUG=1 mdd build ./mdd
 | `@rollup(Target.fk, aggregate)` → `_ext` 뷰 서브쿼리 + `[Rollup]` | ✅ |
 | `@computed("expr")` → `_ext` 뷰 표현식 컬럼 + `[Computed]` | ✅ |
 | `@indexed` + rollup → `WITH SCHEMABINDING` | ✅ |
-| `@unique(col1, col2)` 복합 | ✅ — 널 허용 컬럼이 섞이면 filtered unique index (`WHERE … IS NOT NULL`)로 방출한다. 그러지 않으면 두 번째 전체-NULL 행이 거부된다 |
+| `@unique(col1, col2)` 복합 | ✅ — 널 허용 컬럼이 섞이면 filtered unique index (`WHERE … IS NOT NULL`)로 방출한다. 그러지 않으면 두 번째 전체-NULL 행이 거부된다. `nulls: "not_distinct"`를 붙이면 그 필터를 만들지 않고 SQL:2023 `UNIQUE NULLS NOT DISTINCT` 의미(NULL도 그 자체로 유일성 경쟁에 참여)로 방출한다 — SQL Server는 필터 없는 inline `CONSTRAINT UNIQUE`(plain `UNIQUE`가 이미 이 의미), PostgreSQL 15+는 `UNIQUE NULLS NOT DISTINCT` 문법을 그대로 쓴다 |
 | `### Indexes` 섹션 (`- @unique(...)` / `- @index(...)`) | ✅ |
 | `@inherits(FQN)` → C# 베이스클래스 오버라이드 (도메인 중립, verbatim) | ✅ |
 | `@implements(FQN, ...)` → C# 인터페이스 append (도메인 중립, verbatim) | ✅ |
 | enum 값의 `@system` → 생성 폼 선택지에서 제외 (아래) | ✅ |
 | 널 허용 여부 · `string(n)` · `= <value>` → C# 검증 어트리뷰트 + 초기화자 (아래) | ✅ |
+
+`@rollup`의 `where:` 절은 상관 서브쿼리 필터로 렌더된다. 부모 행(집계가 걸린 대상 테이블 자신)의
+컬럼을 참조하려면 `$parent.<field>`를 쓴다(`field`는 m3l 필드명, snake_case) — 서브쿼리가 부모
+행을 correlate하는 실제 SQL 별칭은 렌더러 내부 구현 세부사항이라 문서화된 계약이 아니다.
 
 ### 선언된 제약 → C# 엔티티 (Model 타깃)
 
@@ -448,8 +452,10 @@ MDD_DEBUG=1 mdd build ./mdd
 기준은 `@not_null` 을 적었는지가 **아니라 필드가 실제로 널을 허용하는지**다. `- name: string(50)`
 처럼 속성 없이 선언한 필드도 컬럼이 `NOT NULL` 이므로 동일하게 방출된다.
 
-`@unique`/`@index`는 **필드 단위 선언만** 방출한다. 섹션 레벨 복합 선언(`@unique(c1, c2)` ·
-`@index(c1)`)은 아직 이 타깃에 닿지 않는다 — 별도 축이다.
+필드 단위 `@unique`/`@index`뿐 아니라 `### Indexes` 섹션의 **복합** 선언(`@unique(c1, c2)` ·
+`@index(c1)`)도 같은 방식으로 `HasIndex(x => new { ... })`로 방출된다. `nulls: "not_distinct"`가
+붙은 복합 `@unique`는 SQL Server에서 `.HasFilter(null)`(널 허용 컬럼이 섞였을 때만), PostgreSQL에서
+`.AreNullsDistinct(false)`를 함께 방출한다 — SQL 타깃의 같은 선언과 동일한 의미(§"SQL 타깃" 참조).
 
 **`[Required]` 는 `NOT NULL` 보다 좁다.** SQL `NOT NULL` 컬럼은 빈 문자열을 허용하지만
 `[Required]` 는 거부하고, 판정 전에 trim 하므로 공백만 있는 값도 거부한다. 널 허용하지 않는
