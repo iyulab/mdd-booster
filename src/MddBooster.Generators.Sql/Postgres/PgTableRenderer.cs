@@ -269,7 +269,10 @@ public static class PgTableRenderer
 
     /// <summary>
     /// `### Indexes` 섹션 — `@unique(...)`는 UNIQUE 제약으로 방출한다(PG는 NULL을 distinct로
-    /// 취급하므로 널 허용 컬럼이 섞여도 제약 하나로 정확하다). `@index(...)`는 인덱스로 방출한다.
+    /// 취급하므로 널 허용 컬럼이 섞여도 제약 하나로 정확하다 — 이것이 SQL:2023의 기본값
+    /// <c>NULLS DISTINCT</c>다). `nulls: "not_distinct"`가 선언되면 정반대 의미(NULL도
+    /// 유일성 경쟁에 참여, docket #271 폴백/오버라이드 테이블)를 <c>UNIQUE NULLS NOT
+    /// DISTINCT</c>(PostgreSQL 15+ 네이티브 구문)로 방출한다. `@index(...)`는 인덱스로 방출한다.
     /// </summary>
     private static void AppendSectionIndexes(
         ResolvedModel model, string tableName,
@@ -280,9 +283,12 @@ public static class PgTableRenderer
             var cols = entry.Columns;
             if (entry.IsUnique)
             {
+                var uniqueKeyword = entry.Nulls == "not_distinct"
+                    ? "UNIQUE NULLS NOT DISTINCT"
+                    : "UNIQUE";
                 constraints.Add((
                     $"uq_{tableName}_{string.Join("_", cols)}",
-                    $"UNIQUE ({string.Join(", ", cols)})"));
+                    $"{uniqueKeyword} ({string.Join(", ", cols)})"));
             }
             else
             {
