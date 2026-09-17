@@ -15,6 +15,11 @@
   2. A composite unique declaration over nullable columns — without a filtered
      index the second all-NULL row is rejected.
   3. A nullable 64-bit column, which regressed to a non-nullable mapping once.
+  4. A field description spanning lines (an indented blockquote) whose text
+     carries a double quote and an ampersand. The description is also the
+     field's display label, so it lands in C# attribute strings, TypeScript
+     string literals and JSX attributes — a raw line break or quote in any of
+     them is a compile error in the generated code.
 
   Keep those shapes when editing. Growing the model is fine; flattening it is
   what makes the gate stop earning its runtime.
@@ -148,6 +153,8 @@
 - code: string(20) @not_null @unique "사업장 코드"
 - name: string(80) @not_null "사업장명"
 - address: string(200)? "주소"
+  > 도로명 주소 — 지번은 "비고"에 적는다.
+  > 건물 & 층은 별도 모델로 분리한다.
 - contact_email: email? "대표 메일"
 - homepage: url? "홈페이지"
 - opened_on: date? "개소일"

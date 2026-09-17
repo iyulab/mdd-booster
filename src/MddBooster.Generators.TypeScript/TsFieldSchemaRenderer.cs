@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using M3L.Native;
+using MddBooster.Core.Generation;
 using MddBooster.Core.Semantic;
 using MddBooster.Core.Naming;
 
@@ -65,15 +66,9 @@ public static class TsFieldSchemaRenderer
                 if (constraints.Min.HasValue)        parts.Add($"min: {constraints.Min.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
                 if (constraints.Max.HasValue)        parts.Add($"max: {constraints.Max.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
                 if (constraints.Label != null)
-                {
-                    var escapedLabel = constraints.Label.Replace("\\", "\\\\").Replace("'", "\\'");
-                    parts.Add($"label: '{escapedLabel}'");
-                }
+                    parts.Add($"label: {SourceLiteral.TypeScriptString(constraints.Label)}");
                 if (constraints.Group != null)
-                {
-                    var escapedGroup = constraints.Group.Replace("\\", "\\\\").Replace("'", "\\'");
-                    parts.Add($"group: '{escapedGroup}'");
-                }
+                    parts.Add($"group: {SourceLiteral.TypeScriptString(constraints.Group)}");
                 if (constraints.Derived != null)
                 {
                     parts.Add($"derived: '{constraints.Derived}'");

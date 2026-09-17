@@ -1,5 +1,6 @@
 using System.Text;
 using M3L.Native;
+using MddBooster.Core.Generation;
 using MddBooster.Core.Naming;
 
 namespace MddBooster.Generators.TypeScript;
@@ -66,7 +67,7 @@ public static class TsEnumRenderer
                     else sb.Append("  ");
                     // Wire form, matching [EnumMember(Value = "...")] on the C# side (EnumRenderer):
                     // m3l "supplier" → C# [EnumMember(Value = "supplier")] EnumType.Supplier → JSON "supplier"
-                    sb.Append("'").Append(EscapeString(v.Name ?? string.Empty)).Append("'");
+                    sb.Append(SourceLiteral.TypeScriptString(v.Name ?? string.Empty));
                 }
                 sb.AppendLine();
             }
@@ -76,6 +77,4 @@ public static class TsEnumRenderer
 
         return sb.ToString();
     }
-
-    private static string EscapeString(string s) => s.Replace("\\", "\\\\").Replace("'", "\\'");
 }

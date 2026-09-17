@@ -1,5 +1,6 @@
 using System.Text;
 using M3L.Native;
+using MddBooster.Core.Generation;
 using MddBooster.Core.Naming;
 
 namespace MddBooster.Generators.Model;
@@ -68,7 +69,7 @@ public static class EnumRenderer
                 AppendXmlDocLines(sb, v.Description!, indent: "    ");
                 sb.AppendLine("    /// </summary>");
             }
-            sb.Append("    [EnumMember(Value = \"").Append(EscapeString(v.Name)).AppendLine("\")]");
+            sb.Append("    [EnumMember(Value = ").Append(SourceLiteral.CSharpString(v.Name ?? string.Empty)).AppendLine(")]");
             sb.Append("    ").Append(memberName);
             sb.AppendLine(i < enumNode.Values.Count - 1 ? "," : string.Empty);
         }
@@ -76,8 +77,6 @@ public static class EnumRenderer
         sb.AppendLine("}");
         return sb.ToString();
     }
-
-    private static string EscapeString(string? s) => (s ?? string.Empty).Replace("\\", "\\\\").Replace("\"", "\\\"");
 
     private static string EscapeXmlDoc(string s) =>
         s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");

@@ -293,13 +293,13 @@ public static class EntityPairRenderer
                 var lookupArg = GetAttributeFirstParam(f, "lookup")
                     ?? f.Lookup?.Path
                     ?? string.Empty;
-                sb.Append("    [Lookup(\"")
-                  .Append(EscapeStringLiteral(lookupArg)).AppendLine("\")]");
+                sb.Append("    [Lookup(")
+                  .Append(SourceLiteral.CSharpString(lookupArg)).AppendLine(")]");
                 break;
             case FieldKind.Rollup:
                 var rollupExpr = GetRollupExpression(f);
-                sb.Append("    [Rollup(\"")
-                  .Append(EscapeStringLiteral(rollupExpr)).Append('"');
+                sb.Append("    [Rollup(")
+                  .Append(SourceLiteral.CSharpString(rollupExpr));
                 if (HasAttribute(f, "indexed"))
                     sb.Append(", Indexed = true");
                 sb.AppendLine(")]");
@@ -311,8 +311,8 @@ public static class EntityPairRenderer
                 // Strip surrounding backticks that M3L uses to fence expressions
                 if (computedExpr.Length >= 2 && computedExpr.StartsWith('`') && computedExpr.EndsWith('`'))
                     computedExpr = computedExpr[1..^1];
-                sb.Append("    [Computed(\"")
-                  .Append(EscapeStringLiteral(computedExpr)).AppendLine("\")]");
+                sb.Append("    [Computed(")
+                  .Append(SourceLiteral.CSharpString(computedExpr)).AppendLine(")]");
                 break;
         }
 
@@ -367,9 +367,9 @@ public static class EntityPairRenderer
         {
             sb.Append("    [Display(");
             var displayParts = new List<string>();
-            if (displayLabel != null) displayParts.Add($"Name = \"{EscapeStringLiteral(displayLabel)}\"");
-            if (displayGroup != null) displayParts.Add($"GroupName = \"{EscapeStringLiteral(displayGroup)}\"");
-            if (displayHelp != null) displayParts.Add($"Description = \"{EscapeStringLiteral(displayHelp)}\"");
+            if (displayLabel != null) displayParts.Add($"Name = {SourceLiteral.CSharpString(displayLabel)}");
+            if (displayGroup != null) displayParts.Add($"GroupName = {SourceLiteral.CSharpString(displayGroup)}");
+            if (displayHelp != null) displayParts.Add($"Description = {SourceLiteral.CSharpString(displayHelp)}");
             sb.Append(string.Join(", ", displayParts));
             sb.AppendLine(")]");
         }
@@ -445,7 +445,7 @@ public static class EntityPairRenderer
             "double" => IsNumericLiteral(raw) ? $" = {raw};" : null,
             "decimal" => IsNumericLiteral(raw) ? $" = {raw}m;" : null,
             "string" or "text" or "json" or "phone" or "email" or "url"
-                => $" = \"{EscapeStringLiteral(raw)}\";",
+                => $" = {SourceLiteral.CSharpString(raw)};",
             // date/time/timestamp/datetime/identifier/binary have no literal form.
             _ => null,
         };
@@ -488,9 +488,6 @@ public static class EntityPairRenderer
         }
         return string.Empty;
     }
-
-    private static string EscapeStringLiteral(string s) =>
-        s.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
     private static string? GetAttributeFirstParam(FieldNode field, string name)
     {

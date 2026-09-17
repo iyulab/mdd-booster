@@ -707,7 +707,7 @@ public class TsFormRendererTests
         var models = LoadFixture("slot-label-with-braces.m3l.md");
         var content = TsFormRenderer.RenderAll(models, [], TestImports)["Item"];
 
-        Assert.Contains("\"분류 목록 [{a, b}] slot\"", content);
+        Assert.Contains("'분류 목록 [{a, b}] slot'", content);
         Assert.DoesNotContain("{a, b}] slot</span>", content);
     }
 
@@ -776,7 +776,7 @@ public class TsFormRendererTests
         Assert.Contains("fieldOverrides?.OrderNumber ? fieldOverrides.OrderNumber({", line);
         Assert.Contains("value: form.OrderNumber", line);
         Assert.Contains("onChange: v => onChange({ OrderNumber: v })", line);
-        Assert.Contains("label: \"주문번호\"", line);
+        Assert.Contains("label: '주문번호'", line);
         Assert.Contains("required: true", line);
         Assert.Contains("error: errors?.OrderNumber", line);
         // The generated control is the else branch, not replaced text.

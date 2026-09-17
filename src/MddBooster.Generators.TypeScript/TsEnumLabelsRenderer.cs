@@ -1,5 +1,6 @@
 using System.Text;
 using M3L.Native;
+using MddBooster.Core.Generation;
 using MddBooster.Core.Naming;
 
 namespace MddBooster.Generators.TypeScript;
@@ -68,9 +69,7 @@ public static class TsEnumLabelsRenderer
                 var label = !string.IsNullOrWhiteSpace(v.Description)
                     ? v.Description
                     : NameCasing.ToPascalCase(key);
-                // Escape single quotes inside label
-                var escaped = label.Replace("\\", "\\\\").Replace("'", "\\'");
-                sb.Append("  ").Append(key).Append(": '").Append(escaped).AppendLine("',");
+                sb.Append("  ").Append(key).Append(": ").Append(SourceLiteral.TypeScriptString(label)).AppendLine(",");
             }
 
             sb.AppendLine("} as const");
@@ -102,7 +101,7 @@ public static class TsEnumLabelsRenderer
 
         var excluded = enumNode.Values
             .Where(EnumValueVisibility.IsExcludedFromChoices)
-            .Select(v => "'" + (v.Name ?? string.Empty) + "'")
+            .Select(v => SourceLiteral.TypeScriptString(v.Name ?? string.Empty))
             .ToList();
 
         sb.AppendLine("/** Input choices — excludes values marked @system or @deprecated in the model. */");
@@ -114,8 +113,7 @@ public static class TsEnumLabelsRenderer
         {
             var key = v.Name ?? string.Empty;
             var label = !string.IsNullOrWhiteSpace(v.Description) ? v.Description : NameCasing.ToPascalCase(key);
-            var escaped = label.Replace("\\", "\\\\").Replace("'", "\\'");
-            sb.Append("  ").Append(key).Append(": '").Append(escaped).AppendLine("',");
+            sb.Append("  ").Append(key).Append(": ").Append(SourceLiteral.TypeScriptString(label)).AppendLine(",");
         }
 
         sb.AppendLine("} as const");
