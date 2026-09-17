@@ -122,8 +122,9 @@ public static class TsFieldSchemaRenderer
         // bounded by its type without the declaration saying so.
         int? maxLength = isDerived ? null : MddBooster.Core.Ast.FieldAttributes.EffectiveMaxLength(field);
 
-        double? min = isDerived ? null : GetAttributeNumber(field, "min");
-        double? max = isDerived ? null : GetAttributeNumber(field, "max");
+        // Shared with the Model target's [Range] — see FieldAttributes.Number.
+        double? min = isDerived ? null : MddBooster.Core.Ast.FieldAttributes.Number(field, "min");
+        double? max = isDerived ? null : MddBooster.Core.Ast.FieldAttributes.Number(field, "max");
         // @label(text) overrides the description; unlike FieldAttributes.EffectiveLabel this
         // does NOT fall back to the PascalCase field name — presence of a label here signals
         // authored, meaningful text, and every field mechanically has a PascalCase name.
@@ -144,18 +145,6 @@ public static class TsFieldSchemaRenderer
         string? group = GetAttributeString(field, "group");
 
         return new FieldConstraints(required, maxLength, min, max, label, group, derived);
-    }
-
-    private static double? GetAttributeNumber(FieldNode field, string attrName)
-    {
-        var attr = MddBooster.Core.Ast.FieldAttributes.Find(field, attrName);
-        if (attr?.Args is { Count: > 0 }
-            && attr.Args[0].ValueKind == JsonValueKind.Number
-            && attr.Args[0].TryGetDouble(out var value))
-        {
-            return value;
-        }
-        return null;
     }
 
     private static string? GetAttributeString(FieldNode field, string attrName)

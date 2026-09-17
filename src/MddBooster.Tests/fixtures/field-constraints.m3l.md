@@ -56,3 +56,18 @@
 - tag: string(30) @index "index만"
 - serial_no: string(40) @not_null @unique @index "동시 선언 — unique만 방출되어야 한다(제약이 이미 인덱스를 소유)"
 - plain_ref: string(20)? "대조군 — 어느 축도 없다"
+
+## RangeSample
+
+> `@min`/`@max` → Model 타깃 `[Range]` 방출 검증(cycle-157). `Sample`과 분리한 이유는
+> `IndexSample`과 같다 — 대조군(선언 없는 필드·숫자가 아닌 필드)을 함께 두려면 별도 모델이 읽기 쉽다.
+
+- id: identifier @pk @generated
+- qty_min: integer @min(0) "아래쪽만 선언 — 위쪽은 CLR 상한으로 열린다"
+- qty_max: integer @max(100) "위쪽만 선언"
+- qty_both: integer @min(1) @max(10) "양쪽 선언"
+- price: decimal @min(0) "decimal — RangeAttribute 의 double 생성자를 탄다"
+- ratio_d: double @min(-1) @max(1) "double"
+- big: long @min(0) "long — decimal 과 같은 이유로 double 한계"
+- label: string(20) @max(5) "숫자가 아니다 — 길이는 [StringLength] 가 나른다"
+- plain_qty: integer "대조군 — 어느 축도 없다"

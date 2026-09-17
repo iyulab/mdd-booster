@@ -84,9 +84,11 @@ public class ModelTargetAxisCoverageTests
             ["unique"] = (Disposition.Carried, "DbContextRenderer.AppendIndexes emits modelBuilder.Entity<T>().HasIndex(...).IsUnique().HasDatabaseName(...) on the write entity (cycle-93), field-for-field parity with TableRenderer/PgTableRenderer's own UK_/uq_ naming. Nullable needs no extra code — the SQL Server provider's own SqlServerIndexConvention adds the WHERE ... IS NOT NULL filter automatically, matching TableRenderer's manual filtered-index branch; Postgres's UNIQUE already treats NULL as distinct, matching PgTableRenderer with no filter either"),
             ["index"] = (Disposition.Carried, "same AppendIndexes call as unique (cycle-93), IX_/ix_ naming; a field declaring both wins as unique-only, mirroring TableRenderer's own @unique @index exclusion"),
 
+            ["min"] = (Disposition.Carried, "[Range(min, max)] on numeric fields (cycle-157). Both ends are always written because RangeAttribute has no open-ended form, so an undeclared side becomes the CLR type's own limit. FieldAttributes.Number is the shared reader the TypeScript field schema uses for the same declaration"),
+            ["max"] = (Disposition.Carried, "as min — the two are read and emitted together"),
+
             // ---- asymmetric: another target carries it, this one does not ----
-            ["min"] = (Disposition.AsymmetricGap, "reaches the TypeScript field schema; [Range] would be the C# counterpart"),
-            ["max"] = (Disposition.AsymmetricGap, "reaches the TypeScript field schema; [Range] would be the C# counterpart"),
+            // (none at present)
 
             // ---- parsed, then dropped by every target ----
             ["fk"] = (Disposition.UnimplementedEverywhere, "@reference is the spelling the generators read"),
@@ -141,7 +143,7 @@ public class ModelTargetAxisCoverageTests
             .OrderBy(k => k, StringComparer.Ordinal)
             .ToList();
 
-        Assert.Equal(["max", "min"], asymmetric);
+        Assert.Empty(asymmetric);
     }
 
     /// <summary>

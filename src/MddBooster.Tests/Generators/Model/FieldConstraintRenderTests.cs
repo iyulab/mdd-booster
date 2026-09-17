@@ -181,6 +181,62 @@ public class FieldConstraintRenderTests
         Assert.True(required.IsValid("x"));
     }
 
+    // ---------------------------------------------------------------- [Range]
+
+    private static Dictionary<string, List<string>> RangeSampleAttributes()
+    {
+        var ast = new M3lLoader().LoadFile(FixturePath("field-constraints.m3l.md"));
+        var model = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "RangeSample");
+        var enums = new HashSet<string>(ast.Enums.Select(e => e.Name), StringComparer.Ordinal);
+        return AttributesByProperty(EntityPairRenderer.Render(model, "Test.Entities", enums).Write);
+    }
+
+    /// <summary>
+    /// A declared numeric bound reached the generated TypeScript field schema and stopped
+    /// there, so the same declaration was honoured in one artifact and silently absent from
+    /// the other. Both ends are always emitted — RangeAttribute has no open-ended form — and
+    /// the undeclared side is the CLR type's own limit, which constrains nothing further.
+    /// </summary>
+    [Fact]
+    public void Range_carries_the_declared_numeric_bounds_to_the_entity()
+    {
+        var attrs = RangeSampleAttributes();
+
+        Assert.Contains("[Range(1, 10)]", attrs["QtyBoth"]);
+        Assert.Contains("[Range(0, int.MaxValue)]", attrs["QtyMin"]);
+        Assert.Contains("[Range(int.MinValue, 100)]", attrs["QtyMax"]);
+        Assert.Contains("[Range(-1, 1)]", attrs["RatioD"]);
+    }
+
+    /// <summary>
+    /// `decimal` and `long` take double limits: RangeAttribute's numeric constructor is
+    /// (double, double), and `decimal.MaxValue` has no implicit conversion to double — writing
+    /// the type's own constant there would not compile in the generated code.
+    /// </summary>
+    [Fact]
+    public void Range_opens_wide_types_with_double_limits()
+    {
+        var attrs = RangeSampleAttributes();
+
+        Assert.Contains("[Range(0, double.MaxValue)]", attrs["Price"]);
+        Assert.Contains("[Range(0, double.MaxValue)]", attrs["Big"]);
+    }
+
+    /// <summary>
+    /// Not every field a bound is declared on is one `[Range]` applies to. A string's limit is
+    /// a length, which `[StringLength]` already carries; emitting `[Range]` beside it would
+    /// reject values the model permits.
+    /// </summary>
+    [Fact]
+    public void Range_is_not_emitted_where_it_does_not_apply()
+    {
+        var attrs = RangeSampleAttributes();
+
+        Assert.DoesNotContain(attrs["Label"], a => a.StartsWith("[Range(", StringComparison.Ordinal));
+        Assert.Contains("[StringLength(20)]", attrs["Label"]);
+        Assert.DoesNotContain(attrs["PlainQty"], a => a.StartsWith("[Range(", StringComparison.Ordinal));
+    }
+
     // ---------------------------------------------------------------- [StringLength]
 
     [Fact]

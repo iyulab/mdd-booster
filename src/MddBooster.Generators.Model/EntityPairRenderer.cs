@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using M3L.Native;
@@ -345,6 +346,19 @@ public static class EntityPairRenderer
             if (MddBooster.Core.Ast.FieldAttributes.EffectiveMaxLength(f) is { } maxLength)
                 sb.Append("    [StringLength(").Append(maxLength).AppendLine(")]");
 
+            // [Range(min, max)] — the numeric bounds the model declares, which until now
+            // reached the generated TypeScript field schema and stopped there: the same
+            // declaration was honoured in one artifact and silently absent from the other.
+            // Numeric types only — @min/@max are read as numbers (FieldAttributes.Number, the
+            // same reader the TypeScript schema uses), and a string's bound is already carried
+            // by [StringLength] above.
+            //
+            // A one-sided declaration still emits both ends, because RangeAttribute has no
+            // open-ended form: the undeclared side becomes the widest value the CLR type can
+            // hold, which constrains nothing it did not already constrain.
+            if (RangeBounds(f) is { } range)
+                sb.Append("    [Range(").Append(range.Min).Append(", ").Append(range.Max).AppendLine(")]");
+
             // [Editable(false)] — mirrors TS's `disabled` (TsFormRenderer, cycle-91).
             // Metadata only, like [Required]/[StringLength] above: nothing in this
             // repo's generated API layer enforces it. An actual write-blocking
@@ -528,4 +542,33 @@ public static class EntityPairRenderer
         string.Equals(fieldName, "created_at", StringComparison.OrdinalIgnoreCase)
         || string.Equals(fieldName, "updated_at", StringComparison.OrdinalIgnoreCase);
 
+
+    /// <summary>
+    /// The `[Range]` ends for a field that declares `@min` and/or `@max`, or null when the
+    /// declaration does not apply — a non-numeric field, or neither bound declared.
+    /// </summary>
+    /// <remarks>
+    /// The open side is the CLR type's own limit written as a C# constant, so the emitted
+    /// attribute stays readable and exact rather than repeating a magic number. `decimal` and
+    /// the 64-bit types take `double` limits: RangeAttribute's numeric constructor is
+    /// `(double, double)`, and `decimal.MaxValue` has no implicit conversion to it.
+    /// </remarks>
+    private static (string Min, string Max)? RangeBounds(FieldNode f)
+    {
+        var min = MddBooster.Core.Ast.FieldAttributes.Number(f, "min");
+        var max = MddBooster.Core.Ast.FieldAttributes.Number(f, "max");
+        if (min is null && max is null) return null;
+
+        (string Lower, string Upper)? limits = f.Type switch
+        {
+            "byte" or "short" or "integer" => ("int.MinValue", "int.MaxValue"),
+            "long" or "float" or "double" or "decimal" => ("double.MinValue", "double.MaxValue"),
+            _ => null,
+        };
+        if (limits is not { } clrLimits) return null;
+
+        return (Literal(min) ?? clrLimits.Lower, Literal(max) ?? clrLimits.Upper);
+
+        static string? Literal(double? value) => value?.ToString("R", CultureInfo.InvariantCulture);
+    }
 }

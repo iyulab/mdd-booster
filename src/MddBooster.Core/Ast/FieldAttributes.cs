@@ -145,6 +145,26 @@ public static class FieldAttributes
         return StringMaxLength(field) ?? Types.M3lPrimitives.ImplicitMaxLengthOf(field.Type);
     }
 
+    /// <summary>
+    /// 속성의 첫 «숫자» 인자 — 예: <c>@min(0)</c>의 0. 숫자가 아니거나 없으면 null.
+    /// </summary>
+    /// <remarks>
+    /// Model 타깃의 <c>[Range]</c>와 TypeScript 필드 스키마의 <c>min</c>/<c>max</c>가 같은 선언을
+    /// 읽는다 — 읽는 코드를 타깃마다 따로 두면 그 둘이 같은 숫자를 다르게 해석하는 날이 온다
+    /// (<see cref="EffectiveMaxLength"/>를 한 곳에 둔 것과 같은 이유).
+    /// </remarks>
+    public static double? Number(FieldNode field, string name)
+    {
+        var attr = Find(field, name);
+        if (attr?.Args is { Count: > 0 }
+            && attr.Args[0].ValueKind == System.Text.Json.JsonValueKind.Number
+            && attr.Args[0].TryGetDouble(out var value))
+        {
+            return value;
+        }
+        return null;
+    }
+
     /// <summary>속성의 첫 문자열 인자 — 예: <c>@reference(Target)</c>의 Target. 없으면 null.</summary>
     public static string? FirstArg(FieldNode field, string name)
     {
