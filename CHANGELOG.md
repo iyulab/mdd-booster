@@ -16,6 +16,25 @@
 
 ---
 
+## 0.28.0
+
+### `M3L.Native` 0.10.1 — enum 값에 대한 `::attribute` 레지스트리 검증(재적용) + 필드 사이 블록인용 귀속 수정
+
+`0.10.0` 이후 `M3L.Native` 를 곧바로 `0.10.1` 로 올렸다. 두 릴리스는 함께 소비된다: `target: [value]`
+를 지원해 `::attribute` 레지스트리가 enum 값에도 M3L-W005~W008 검증을 적용하고(`0.10.0`), 필드
+사이에 놓인 들여쓰지 않은 블록인용을 그 필드가 아니라 모델 설명으로 귀속시킨다(`0.10.1`).
+
+### 여러 줄(들여쓴 블록인용) 필드 설명이 생성 코드를 컴파일 불가로 만드는 결함 수정
+
+필드 설명에 개행이 있으면 C# `[Display(Name/GroupName/Description)]`, `[Lookup]`/`[Rollup]`/
+`[Computed]` 인자, TypeScript `field_schema_gen.ts` 의 `label`/`group`, 생성 폼의 `label`/
+`description`/`placeholder`/섹션 제목이 이스케이프되지 않은 생 개행을 문자열 리터럴에 그대로
+내보내 C# 컴파일 오류·`tsc` 구문 오류를 냈다. 모든 문자열 리터럴 방출을 언어별 공용 이스케이퍼
+하나로 통일해 개행·따옴표·제어문자를 안전하게 처리한다.
+
+**부수 변화(호환성 영향 없음, 재생성 시 diff 발생)**: 생성 폼의 슬롯 문구와 field-override
+`label` 리터럴이 `"…"` 에서 `'…'` 로 바뀐다 — 나머지 TypeScript 출력과 같은 따옴표 스타일이다.
+
 ## 0.27.0
 
 ### `M3L.Native` 0.9.0 — 복합 `@unique`의 NULL 정책 선언(`nulls: "not_distinct"`)
