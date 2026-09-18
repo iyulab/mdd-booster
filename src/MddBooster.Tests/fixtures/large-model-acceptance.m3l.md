@@ -221,7 +221,7 @@
 - status: AssetStatus = "planned" @group("상태") "상태"
 - criticality: Priority = "normal" @group("상태") @display_labels(PriorityShortLabel) "중요도"
 - installed_on: date? "설치일"
-- decommissioned_at: datetime? "폐기시각"
+- decommissioned_at: timestamp? "폐기시각"
 - purchase_cost: decimal(14,2)? "취득원가"
 - rated_power: float? "정격출력(kW)"
 - efficiency: double? "효율"
@@ -308,8 +308,8 @@
 - priority: Priority = "normal" @group("진행") "우선순위"
 - kind: MaintenanceKind @not_null @group("진행") "정비 구분"
 - requested_at: timestamp = now() "요청시각"
-- due_at: datetime? "기한"
-- closed_at: datetime? "종료시각"
+- due_at: timestamp? "기한"
+- closed_at: timestamp? "종료시각"
 - labor_hours: decimal(8,2) = 0 "작업시간"
 - description: text? "상세"
 
@@ -399,7 +399,7 @@
 - work_order_id: identifier @reference(WorkOrder) @not_null
 - approver_id: identifier @reference(Employee) @not_null
 - decision: ApprovalDecision = "pending" "결재"
-- decided_at: datetime? "결재시각"
+- decided_at: timestamp? "결재시각"
 - comment: text? "의견"
 
 - @unique(work_order_id, approver_id)

@@ -37,6 +37,35 @@ public sealed class BuildCommand
             Console.Error.WriteLine($"[m3l] 경고 [{w.Code}] {w.File}:{w.Line}:{w.Col} {w.Message}");
         }
 
+        // 검증기 진단 표면화 — 파서와 «다른 층»이다. 등록된 `::attribute` 의 오용
+        // (M3L-W005~W008) 같은 규칙은 검증기에만 있어서, 파서 경고만 찍던 동안 mdd 소비자는
+        // `::attribute` 를 등록해도 오용을 볼 방법이 없었다. 같은 파일 집합을 한 단위로 넘긴다
+        // — 다른 파일에 선언된 레지스트리를 그 파일 혼자서는 알 수 없다.
+        var m3lDiagnostics = loader.ValidateFiles(sourcePaths);
+        foreach (var w in m3lDiagnostics.Warnings)
+        {
+            Console.Error.WriteLine($"[m3l] 경고 [{w.Code}] {w.File}:{w.Line}:{w.Col} {w.Message}");
+        }
+        // 검증기 «에러»는 표면화하되 **아직 빌드를 세우지 않는다**.
+        //
+        // 세워야 마땅해 보이지만, 켜 보니 이 리포 자신의 수용 픽스처가 8건을 낸다 — 전부
+        // M3L-E009("Undefined type") 이고 대상은 `short`·`byte`·`double` 이다. 이 셋은 M3L
+        // 타입 카탈로그(스펙 §10.4)에 없는데 mdd 는 의도적으로 지원한다(`CSharpTypeMapper`,
+        // `SqlTypeMapper`의 `short → SMALLINT`, 그리고 `numeric-types.m3l.md` 픽스처 전용
+        // 항목까지). 즉 «스펙에 없는 타입을 생성기가 지원한다»는 실재하는 불일치이고,
+        // 어느 쪽을 고칠지는 제품 결정이다 — 카탈로그를 넓히거나(m3l 스펙 변경), mdd 가 지원을
+        // 거두거나(소비자에게 breaking). 그 결정 전에 여기서 빌드를 세우면 «지금 잘 빌드되는
+        // 모델»이 업그레이드만으로 실패한다.
+        //
+        // 그래서 지금은 보이게만 한다. 결정이 나면 이 분기를 `return 3` 으로 바꾸는 것이
+        // 남은 절반이다.
+        if (m3lDiagnostics.Errors.Count > 0)
+        {
+            Console.Error.WriteLine($"[m3l] 에러 {m3lDiagnostics.Errors.Count}건 (아직 빌드를 세우지 않는다):");
+            foreach (var e in m3lDiagnostics.Errors)
+                Console.Error.WriteLine($"  [{e.Code}] {e.File}:{e.Line}:{e.Col} {e.Message}");
+        }
+
         var allUnconsumed = new List<string>(AstAccounting.ListUnconsumed(mergedAst));
 
         var allModels = new List<ResolvedModel>(new InterfaceResolver(mergedAst).ResolveAll());
