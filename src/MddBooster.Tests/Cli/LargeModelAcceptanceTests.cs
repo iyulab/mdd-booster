@@ -205,38 +205,18 @@ public class LargeModelAcceptanceTests
         }
         finally { Cleanup(layout); }
 
-        // One divergence is known and pinned rather than hidden: the m3l validator, which the
-        // build started surfacing once a multi-file validation entry point existed, reports
-        // M3L-E009 for `short`, `byte` and `double`. Those three are absent from the M3L type
-        // catalog (spec 10.4) and supported on purpose by this repo generators, so the fixture
-        // is not wrong and neither is the validator - which side moves is a product decision.
-        // Pinning the set here keeps the gate meaningful meanwhile, and fails the moment the
-        // decision lands or anything *else* appears on stderr.
-        var unexpected = stderr.Text
+        // Nothing is allow-listed. The fixture declares every numeric width the generators
+        // map (`byte`, `short` and `double` included), and the m3l type catalog covers all of
+        // them, so any line here - parser, validator or semantic - is a regression.
+        var lines = stderr.Text
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(l => l.Trim())
-            .Where(l => l.Length > 0 && !IsKnownTypeCatalogDivergence(l))
+            .Where(l => l.Length > 0)
             .ToList();
 
-        Assert.True(unexpected.Count == 0,
-            "Building the acceptance fixture wrote unexpected lines to stderr:\n"
-            + string.Join(Environment.NewLine, unexpected));
-    }
-
-    /// <summary>
-    /// The short/byte/double divergence described above - the header line the build prints
-    /// before the list, and the M3L-E009 lines themselves. Anything narrower would let an
-    /// unrelated E009 through; anything wider would stop this gate noticing a new kind.
-    /// </summary>
-    private static bool IsKnownTypeCatalogDivergence(string line)
-    {
-        if (line.StartsWith("[m3l] ", StringComparison.Ordinal) && line.Contains("M3L-E009", StringComparison.Ordinal)) return true;
-        if (line.StartsWith("[m3l] ", StringComparison.Ordinal) && line.Contains("건 (", StringComparison.Ordinal)) return true;
-        if (!line.StartsWith("[M3L-E009]", StringComparison.Ordinal)) return false;
-
-        return line.Contains("Undefined type \"short\"", StringComparison.Ordinal)
-            || line.Contains("Undefined type \"byte\"", StringComparison.Ordinal)
-            || line.Contains("Undefined type \"double\"", StringComparison.Ordinal);
+        Assert.True(lines.Count == 0,
+            "Building the acceptance fixture wrote to stderr:\n"
+            + string.Join(Environment.NewLine, lines));
     }
 
     private static void Expect(List<string> missing, string directory, string fileName)

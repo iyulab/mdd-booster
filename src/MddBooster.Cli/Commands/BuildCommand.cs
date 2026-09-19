@@ -46,24 +46,15 @@ public sealed class BuildCommand
         {
             Console.Error.WriteLine($"[m3l] 경고 [{w.Code}] {w.File}:{w.Line}:{w.Col} {w.Message}");
         }
-        // 검증기 «에러»는 표면화하되 **아직 빌드를 세우지 않는다**.
-        //
-        // 세워야 마땅해 보이지만, 켜 보니 이 리포 자신의 수용 픽스처가 8건을 낸다 — 전부
-        // M3L-E009("Undefined type") 이고 대상은 `short`·`byte`·`double` 이다. 이 셋은 M3L
-        // 타입 카탈로그(스펙 §10.4)에 없는데 mdd 는 의도적으로 지원한다(`CSharpTypeMapper`,
-        // `SqlTypeMapper`의 `short → SMALLINT`, 그리고 `numeric-types.m3l.md` 픽스처 전용
-        // 항목까지). 즉 «스펙에 없는 타입을 생성기가 지원한다»는 실재하는 불일치이고,
-        // 어느 쪽을 고칠지는 제품 결정이다 — 카탈로그를 넓히거나(m3l 스펙 변경), mdd 가 지원을
-        // 거두거나(소비자에게 breaking). 그 결정 전에 여기서 빌드를 세우면 «지금 잘 빌드되는
-        // 모델»이 업그레이드만으로 실패한다.
-        //
-        // 그래서 지금은 보이게만 한다. 결정이 나면 이 분기를 `return 3` 으로 바꾸는 것이
-        // 남은 절반이다.
+        // 검증기 «에러»는 빌드를 세운다 — 의미 분석 에러와 같은 종료 코드(3). 모델이 언어
+        // 규칙을 어긴 채로 생성을 진행하면, 그 위반(예: 어디에도 정의되지 않은 타입 이름)이
+        // 생성물 어딘가에서 조용히 다른 무엇으로 바뀌어 나온다.
         if (m3lDiagnostics.Errors.Count > 0)
         {
-            Console.Error.WriteLine($"[m3l] 에러 {m3lDiagnostics.Errors.Count}건 (아직 빌드를 세우지 않는다):");
+            Console.Error.WriteLine($"[m3l] 에러 {m3lDiagnostics.Errors.Count}건:");
             foreach (var e in m3lDiagnostics.Errors)
                 Console.Error.WriteLine($"  [{e.Code}] {e.File}:{e.Line}:{e.Col} {e.Message}");
+            return 3;
         }
 
         var allUnconsumed = new List<string>(AstAccounting.ListUnconsumed(mergedAst));
