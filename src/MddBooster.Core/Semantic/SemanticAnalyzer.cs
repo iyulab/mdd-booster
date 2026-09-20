@@ -49,6 +49,8 @@ public sealed class SemanticAnalyzer
             }
         }
 
+        ExtensionRules.Check(_models, diagnostics);
+
         return diagnostics;
     }
 
