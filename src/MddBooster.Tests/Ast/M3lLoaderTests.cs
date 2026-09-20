@@ -1,4 +1,5 @@
 using MddBooster.Core.Ast;
+using MddBooster.Tests.TestSupport;
 
 namespace MddBooster.Tests.Ast;
 
@@ -95,5 +96,32 @@ public class M3lLoaderTests
 
         var ex = Assert.Throws<M3lLoadException>(() => loader.LoadFile(missingPath));
         Assert.Equal(missingPath, ex.SourceFile);
+    }
+
+    [Fact]
+    public void LoadFiles_MergesExtendBlockIntoItsTarget_WithOrigin()
+    {
+        var (ast, models) = TwoFileModel.Load(
+            ("base.m3l.md", "## Asset\n- id: identifier @pk\n- name: string(100)\n"),
+            ("insp.m3l.md", "# Namespace: ex.insp\n# Prefix: insp\n\n## Asset ::extend\n- insp_grade: string(20)?\n"));
+
+        var asset = Assert.Single(models);
+        Assert.Equal(["id", "name", "insp_grade"], asset.Fields.Select(f => f.Name));
+        Assert.Equal("insp", asset.Fields[2].Origin?.Prefix);
+        Assert.Null(asset.Fields[1].Origin);
+        Assert.Equal("insp", Assert.Single(asset.Source.ExtendedBy).Prefix);
+        Assert.DoesNotContain("extend", ast.Extensions.Keys);
+        Assert.Empty(AstAccounting.ListUnconsumed(ast));
+    }
+
+    // A resolver error must fail the load, not vanish into the generic extension bucket —
+    // an extend block naming a target the loaded files don't define is M3L-E011.
+    [Fact]
+    public void LoadFiles_ExtendBlockWithUnknownTarget_FailsTheLoad()
+    {
+        var ex = Assert.Throws<M3lLoadException>(() => TwoFileModel.Load(
+            ("base.m3l.md", "## Asset\n- id: identifier @pk\n"),
+            ("typo.m3l.md", "# Prefix: insp\n\n## Aset ::extend\n- insp_grade: string(20)?\n")));
+        Assert.Contains("M3L-E011", ex.Message);
     }
 }
