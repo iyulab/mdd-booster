@@ -416,6 +416,7 @@ MDD_DEBUG=1 mdd build ./mdd
 |---|---|
 | Primitive 타입 18종 (identifier/string/decimal/phone/email/...) | ✅ |
 | Enum (C# enum + `[EnumMember]`; SQL CHECK는 `emitEnumCheckConstraints` opt-in) | ✅ |
+| enum 멤버의 표시명(`- planned: "계획됨"`) → C# `[Display(Name)]` · TS `enum_labels_gen.ts` · XML 주석 | ✅ — 어트리뷰트라 **런타임에 읽힌다**(`GetField(v.ToString())?.GetCustomAttribute<DisplayAttribute>()?.Name`). 서버가 문서를 그리는 경로(보고서·내보내기·메일 본문)가 화면과 같은 표시명을 쓴다. 표시명을 선언하지 않은 멤버에는 붙지 않는다 — 멤버 이름의 재진술이 아니라 「사람이 써 넣은 텍스트」라는 표시다 |
 | `phone`/`email`/`url` → 검증 문자열 (plain `string`, `NVARCHAR(30/320/2048)` — 상한은 언어 명세 §10.4.2가 정한다. `phone`만 명세의 20 대신 30을 쓰며 그 이탈은 코드에 기록돼 있다). **값객체 struct 매핑 아님** — `ODataConventionModelBuilder`가 값객체 struct를 EDM 복합 타입으로 등록하지 못해 직렬화가 깨지기 때문. 막힌 지점은 OData 직렬화 계층 한정이라 데이터 계층에서의 변환은 자유롭다 | ✅ |
 | `@reference(Target)` → SQL FK + C# `[Reference]` 속성 | ✅ |
 | `@unique` (단일 컬럼) | ✅ |

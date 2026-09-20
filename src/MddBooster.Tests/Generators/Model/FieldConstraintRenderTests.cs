@@ -398,9 +398,7 @@ public class FieldConstraintRenderTests
         var compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create(
             "InitializerProbe",
             [Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(source)],
-            AppDomain.CurrentDomain.GetAssemblies()
-                .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
-                .Select(a => Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(a.Location)),
+            MddBooster.Tests.TestSupport.BclReferences.All(),
             new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(
                 Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary));
 

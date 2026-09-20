@@ -126,12 +126,6 @@ public class GeneratedCodeCompilesWithoutRuntimeReferencesTests
             path.Contains(Path.DirectorySeparatorChar + dir + Path.DirectorySeparatorChar, StringComparison.Ordinal)
             || Path.GetFileNameWithoutExtension(path).Equals(dir, StringComparison.Ordinal));
 
-    private static IEnumerable<MetadataReference> BclReferences() =>
-        ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? string.Empty)
-            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
-            .Where(p => p.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
-            .Select(p => (MetadataReference)MetadataReference.CreateFromFile(p));
-
     private static IReadOnlyList<Diagnostic> Compile(IEnumerable<string> sourceFiles, string extraGlobalUsings)
     {
         var parse = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);
@@ -144,7 +138,7 @@ public class GeneratedCodeCompilesWithoutRuntimeReferencesTests
         var compilation = CSharpCompilation.Create(
             "GeneratedOutput",
             trees,
-            BclReferences(),
+            MddBooster.Tests.TestSupport.BclReferences.All(),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         return compilation.GetDiagnostics()
@@ -279,7 +273,7 @@ public class GeneratedCodeCompilesWithoutRuntimeReferencesTests
                     CSharpSyntaxTree.ParseText("namespace X.Entities; public class Task { }"),
                     CSharpSyntaxTree.ParseText("global using X.Entities;\nglobal using System.Threading.Tasks;"),
                 },
-                BclReferences(),
+                MddBooster.Tests.TestSupport.BclReferences.All(),
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
             Assert.Contains(probe.GetDiagnostics(), d => d.Id == "CS0104");
         }

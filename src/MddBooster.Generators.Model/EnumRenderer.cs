@@ -26,7 +26,12 @@ namespace MddBooster.Generators.Model;
 /// <para>
 /// The enum's XML doc comment carries the M3L enum description (if any) and
 /// each member's doc comment carries the value label for tooling surfaces
-/// (IntelliSense, GraphQL schema docs).
+/// (IntelliSense, GraphQL schema docs). The same label is also emitted as
+/// <c>[Display(Name = "…")]</c> so it can be read at run time — a doc comment
+/// is compiled away, and a host that renders a document server-side (a report,
+/// an export, a mail body) has no way back to the declared text. The
+/// TypeScript target has carried that text in a runtime map since its label
+/// map existed; this is the C# half of the same declaration.
 /// </para>
 /// </remarks>
 public static class EnumRenderer
@@ -43,6 +48,7 @@ public static class EnumRenderer
         sb.AppendLine(Header);
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
+        sb.AppendLine("using System.ComponentModel.DataAnnotations;");
         sb.AppendLine("using System.Runtime.Serialization;");
         sb.AppendLine();
         sb.Append("namespace ").Append(ns).AppendLine(";");
@@ -69,6 +75,16 @@ public static class EnumRenderer
                 AppendXmlDocLines(sb, v.Description!, indent: "    ");
                 sb.AppendLine("    /// </summary>");
             }
+            // [Display(Name)] — the declared label, readable at run time.
+            // Omitted when the member declares no label, matching the field path's rule
+            // (EntityPairRenderer's No_Display_when_field_has_no_label_or_group): the
+            // presence of Name means authored text, not a restatement of the member's own
+            // name. A reader falls back to the member name itself, the way
+            // DisplayAttribute consumers already do. The TypeScript label map takes the
+            // opposite default, and has to — a Record<T, string> must be total.
+            if (!string.IsNullOrWhiteSpace(v.Description))
+                sb.Append("    [Display(Name = ").Append(SourceLiteral.CSharpString(v.Description!)).AppendLine(")]");
+
             sb.Append("    [EnumMember(Value = ").Append(SourceLiteral.CSharpString(v.Name ?? string.Empty)).AppendLine(")]");
             sb.Append("    ").Append(memberName);
             sb.AppendLine(i < enumNode.Values.Count - 1 ? "," : string.Empty);

@@ -104,6 +104,79 @@ public class EnumRendererTests
     }
 
     [Fact]
+    public void Emits_Display_name_for_members_that_declare_a_label()
+    {
+        // 선언된 표시명은 런타임에 읽혀야 한다 — XML 주석은 컴파일되며 사라져,
+        // 서버가 문서를 그리는 경로(보고서·내보내기·메일 본문)에서는 되찾을 길이 없다.
+        // TypeScript 축은 같은 텍스트를 진작 런타임 맵으로 내고 있었다.
+        var ast = LoadFixture();
+        var priority = ast.Enums.Single(e => e.Name == "Priority");
+
+        var rendered = EnumRenderer.Render(priority, "Test.Orders");
+
+        Assert.Contains("using System.ComponentModel.DataAnnotations;", rendered);
+        Assert.Contains("[Display(Name = \"낮음\")]", rendered);
+        Assert.Contains("[Display(Name = \"보통\")]", rendered);
+        Assert.Contains("[Display(Name = \"높음\")]", rendered);
+
+        // wire 값을 나르는 [EnumMember] 와 역할이 갈린다 — 둘 다 같은 멤버에 붙는다.
+        Assert.Contains("[EnumMember(Value = \"low\")]", rendered);
+    }
+
+    [Fact]
+    public void No_Display_when_the_member_declares_no_label()
+    {
+        // 필드 축과 같은 규칙(EntityPairRenderer 의 No_Display_when_field_has_no_label_or_group):
+        // Name 이 있다는 것은 사람이 써 넣은 텍스트라는 뜻이지, 멤버 자기 이름의 재진술이 아니다.
+        // TypeScript 라벨 맵은 반대 기본값을 쓰고, 써야 한다 — Record<T, string> 은 전사여야 한다.
+        var enumNode = new EnumNode
+        {
+            Name = "Direction",
+            Values =
+            [
+                new EnumValue { Name = "up", Description = null },
+                new EnumValue { Name = "down", Description = "  " }
+            ]
+        };
+
+        var rendered = EnumRenderer.Render(enumNode, "Test.X");
+
+        Assert.DoesNotContain("[Display(", rendered);
+        Assert.Contains("    Up,", rendered);
+        Assert.Contains("    Down", rendered);
+    }
+
+    [Fact]
+    public void Display_name_escapes_a_label_that_could_not_sit_in_a_literal()
+    {
+        // 라벨은 자유 텍스트다 — 따옴표·역슬래시·줄바꿈이 들어오면 이스케이프 없이는
+        // 생성물이 컴파일되지 않는다. SourceLiteral 이 그 한 자리다.
+        var enumNode = new EnumNode
+        {
+            Name = "Quirk",
+            Values =
+            [
+                new EnumValue { Name = "quoted", Description = "고객\"s 주문" },
+                new EnumValue { Name = "wrapped", Description = "첫 줄" + "\n" + "둘째 줄" },
+                new EnumValue { Name = "escaped", Description = @"경로\값" }
+            ]
+        };
+
+        var rendered = EnumRenderer.Render(enumNode, "Test.X");
+
+        Assert.Contains("[Display(Name = \"고객\\\"s 주문\")]", rendered);
+        Assert.Contains("[Display(Name = \"첫 줄\\n둘째 줄\")]", rendered);
+        Assert.Contains("[Display(Name = \"경로\\\\값\")]", rendered);
+
+        var tree = CSharpSyntaxTree.ParseText(rendered,
+            CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest));
+        var errors = tree.GetDiagnostics()
+            .Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error).ToList();
+        Assert.True(errors.Count == 0,
+            $"라벨 이스케이프 실패: {string.Join("; ", errors.Select(d => d.GetMessage()))}\n---\n{rendered}");
+    }
+
+    [Fact]
     public void OrderWithEnum_fixture_end_to_end_parses_clean()
     {
         var ast = LoadFixture();
