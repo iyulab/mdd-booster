@@ -832,6 +832,11 @@ view and extend block defined in the file, as `prefix`. Files without the header
 owner: no prefix. M3L records ownership; it does not enforce a naming policy for how a
 `prefix` relates to the model and field names built on it — that is a generator concern.
 
+The `Prefix:` keyword is matched case-insensitively; the value after it is not — it must
+still match `[a-z][a-z0-9]*`. A value that does not match, a second `# Prefix:` header in
+the same file, or a header that appears after the file's first declaration is reported as
+`M3L-E019` rather than silently ignored.
+
 ```markdown
 # Namespace: example.inspection
 # Prefix: insp
@@ -854,6 +859,10 @@ alike).
 - insp_grade: string(20)?
 - insp_last_checked_at: timestamp?
 ```
+
+Extension is not inherited: a model that inherits `Target` does not receive `Target`'s
+extension fields — inheritance is resolved before extend blocks are merged, and an extend
+block targets the one model it names, not its descendants.
 
 Not to be confused with §8 Extensions, which is about Markdown-level extensibility, nor with
 the generic `extensions` map that unrecognized `::kind` words land in.

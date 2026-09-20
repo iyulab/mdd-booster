@@ -12,10 +12,11 @@ namespace MddBooster.Core.Semantic;
 /// caller (typically <c>BuildCommand</c>) decides whether to abort.
 /// </summary>
 /// <remarks>
-/// Current scope (Cycle 24): reference integrity + enum resolution. Deeper
-/// checks (lookup dotted-path navigation, rollup aggregate compatibility,
-/// circular inheritance) are reserved for a later cycle so this stays a
-/// focused, fast pass.
+/// Current scope: field type checks, reference integrity, enum resolution,
+/// lookup-path and rollup-target checks, binding checks, attribute-name typo
+/// detection, and the extension rules for <c>::extend</c> blocks and models
+/// that name a base. Deeper checks (rollup aggregate compatibility, circular
+/// inheritance) are reserved for later so this stays a focused, fast pass.
 /// </remarks>
 public sealed class SemanticAnalyzer
 {
