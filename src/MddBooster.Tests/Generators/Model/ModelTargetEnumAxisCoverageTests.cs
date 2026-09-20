@@ -67,7 +67,10 @@ public class ModelTargetEnumAxisCoverageTests
                 "[Display(Name)] and the member's XML doc comment. The attribute is the run-time half: a doc " +
                 "comment is compiled away, so a host rendering a document server-side had no way back to the " +
                 "declared text while the TypeScript label map had carried it all along. Omitted when the member " +
-                "declares no label, matching the field path's [Display] rule"),
+                "declares no label, matching the field path's [Display] rule. Only the inline quoted text " +
+                "reaches this property: an indented blockquote under a member does not attach to it the way " +
+                "one under a field does (measured), so the attribute never carries a paragraph — and the " +
+                "question of how the two forms combine, open for fields, does not arise here"),
             ["Attributes"] = (Disposition.AsymmetricGap,
                 "@system and @deprecated reach the TypeScript target, which drops those values from a generated " +
                 "form's choices (EnumValueVisibility). The C# enum emits nothing for either. [Obsolete] is the " +
@@ -78,8 +81,9 @@ public class ModelTargetEnumAxisCoverageTests
                 "the per-member value type of `- pending: integer = 100`. No target reads it; see Value"),
             ["Value"] = (Disposition.UnimplementedEverywhere,
                 "the explicit stored value of `- pending: integer = 100`. No target reads it, and the axis is " +
-                "inert rather than merely unimplemented: enums persist as their declared name (the SQL CHECK " +
-                "literal, EF's HasConversion<string>), so a declared number has nowhere to land. The generated " +
+                "inert rather than merely unimplemented: enums persist as their declared name (EF's " +
+                "HasConversion<string>, and the SQL CHECK literal where that opt-in is on), so a declared " +
+                "number has nowhere to land. The generated " +
                 "C# member takes its ordinal instead, which is not the declared number"),
         };
 
@@ -90,9 +94,9 @@ public class ModelTargetEnumAxisCoverageTests
             ["Values"] = (Disposition.Carried, "the members; see the per-value axes above"),
             ["Description"] = (Disposition.Carried, "the type's XML doc comment"),
             ["Inherits"] = (Disposition.UnimplementedEverywhere,
-                "`## ExtendedStatus ::enum : BasicStatus`. The parser records the parent name and flattens " +
-                "nothing, so Values holds only the members declared in the block itself; no target reads " +
-                "Inherits, and the generated enum silently lacks the inherited members"),
+                "`## ExtendedStatus ::enum : BasicStatus`. No target reads it, and the measured consequence " +
+                "is that the generated enum silently lacks the inherited members — Values holds only what the " +
+                "block itself declares, so nothing upstream of this renderer has flattened them in either"),
             ["Label"] = (Disposition.UnimplementedEverywhere,
                 "a display name for the enum type itself. No target reads it; the type's own label has no " +
                 "counterpart in any generated artifact, unlike a member's"),
