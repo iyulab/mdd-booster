@@ -375,7 +375,7 @@ public static class EntityPairRenderer
         // @help(text) maps to Description — the same free-text field TsFormRenderer's helpText
         // already reads, so this mirrors an existing, established mapping rather than inventing one.
         var displayLabel = GetAttributeFirstParam(f, "label") ?? f.Description;
-        var displayGroup = GetAttributeString(f, "group");
+        var displayGroup = MddBooster.Core.Ast.FieldAttributes.EffectiveGroup(f);
         var displayHelp = GetAttributeString(f, "help");
         if (displayLabel != null || displayGroup != null || displayHelp != null)
         {

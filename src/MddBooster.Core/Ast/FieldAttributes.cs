@@ -192,6 +192,22 @@ public static class FieldAttributes
     }
 
     /// <summary>
+    /// 필드가 표시될 그룹 — <c>@group("…")</c>가 명시돼 있으면 그 첫 문자열 인자, 없으면
+    /// <c>::extend</c> 블록이 이 필드를 들여온 소유자 접두어(<see cref="FieldNode.Origin"/>)로
+    /// 대체된다. Model 타깃의 <c>[Display(GroupName)]</c>과 TypeScript 필드 스키마의
+    /// <c>group</c>이 이 정본을 공유해, 한쪽 확장에 추가된 필드가 다른 쪽에서는 소유자별로
+    /// 묶이지 않는 일이 생기지 않는다.
+    /// </summary>
+    public static string? EffectiveGroup(FieldNode field)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        var attr = Find(field, "group");
+        if (attr?.Args is { Count: > 0 } args && args[0].ValueKind == System.Text.Json.JsonValueKind.String)
+            return args[0].GetString();
+        return field.Origin?.Prefix;
+    }
+
+    /// <summary>
     /// 알려진 속성 어휘 — 스펙 §10.8 표준 카탈로그 + mdd-booster가 소비하는 확장 속성.
     /// 카탈로그 밖 속성은 스펙상 합법 custom이므로 이 집합은 "오타 의심" 판정
     /// (SemanticAnalyzer MDD006)의 기준으로만 쓰이고, 미포함이 오류를 뜻하지 않는다.

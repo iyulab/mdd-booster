@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json;
 using M3L.Native;
 using MddBooster.Core.Generation;
 using MddBooster.Core.Semantic;
@@ -142,20 +141,9 @@ public static class TsFieldSchemaRenderer
             if (target is not null)
                 label = MddBooster.Core.Ast.FieldAttributes.FirstArg(target, "label") ?? target.Description;
         }
-        string? group = GetAttributeString(field, "group");
+        string? group = MddBooster.Core.Ast.FieldAttributes.EffectiveGroup(field);
 
         return new FieldConstraints(required, maxLength, min, max, label, group, derived);
-    }
-
-    private static string? GetAttributeString(FieldNode field, string attrName)
-    {
-        var attr = MddBooster.Core.Ast.FieldAttributes.Find(field, attrName);
-        if (attr?.Args is { Count: > 0 }
-            && attr.Args[0].ValueKind == JsonValueKind.String)
-        {
-            return attr.Args[0].GetString();
-        }
-        return null;
     }
 
     private static bool HasAttribute(FieldNode field, string name) =>
