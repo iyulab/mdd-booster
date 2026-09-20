@@ -55,4 +55,22 @@ public class ExtensionCrossTargetTests
         Assert.True(match.Success, $"no <FormSection title=\"{sectionTitle}\"> in rendered form");
         return match.Groups[1].Value;
     }
+
+    [Fact]
+    public void Extension_fields_reach_the_table_the_entity_and_the_ts_type_as_ordinary_columns()
+    {
+        var (_, models) = TwoFileModel.Load(Files);
+        var asset = models.Single();
+
+        var sql = MddBooster.Generators.Sql.TableRenderer.Render(asset, "dbo");
+        Assert.Contains("[InspGrade] NVARCHAR(20) NULL", sql);
+
+        var pair = EntityPairRenderer.Render(asset, "Ex.Entities");
+        Assert.Contains("public string? InspGrade { get; set; }", pair.Write);
+        Assert.Contains("public string? InspGrade { get; set; }", pair.Read);
+        Assert.Contains("string? InspGrade { get; }", pair.Interface);
+
+        var ts = MddBooster.Generators.TypeScript.TsInterfaceRenderer.RenderAll(models, new HashSet<string>());
+        Assert.Contains("InspGrade: string | null", ts);
+    }
 }

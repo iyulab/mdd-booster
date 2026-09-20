@@ -429,6 +429,9 @@ MDD_DEBUG=1 mdd build ./mdd
 | `@implements(FQN, ...)` → C# 인터페이스 append (도메인 중립, verbatim) | ✅ |
 | enum 값의 `@system` → 생성 폼 선택지에서 제외 (아래) | ✅ |
 | 널 허용 여부 · `string(n)` · `= <value>` → C# 검증 어트리뷰트 + 초기화자 (아래) | ✅ |
+| `# Prefix:` → 파일이 선언하는 모든 모델·enum·인터페이스·`::extend` 블록의 소유자 | ✅ |
+| `::extend` → 대상 모델 필드 목록 끝에 병합, 모든 타깃에서 보통 필드로 취급 (아래 「모델 확장과 소유자 접두어」) | ✅ |
+| `::aspect(Base)` / `::subtype(Base)` — 베이스를 갖는 모델 | ❌ — 파싱은 되지만 생성은 빌드를 `MDD016`으로 세운다 |
 
 `@rollup`의 `where:` 절은 상관 서브쿼리 필터로 렌더된다. 부모 행(집계가 걸린 대상 테이블 자신)의
 컬럼을 참조하려면 `$parent.<field>`를 쓴다(`field`는 m3l 필드명, snake_case) — 서브쿼리가 부모
@@ -811,9 +814,19 @@ consumer-repo/
 | MDD003 | `@lookup` 경로가 `fk.col` 형태가 아님 |
 | MDD004 | `@lookup(fk.col)`의 fk가 동일 모델에 없음 |
 | MDD005 | 해당 fk에 `@reference` 없음 |
-| MDD006 | lookup target 엔티티에 `col` 필드 없음 |
+| MDD006 | lookup target 엔티티에 `col` 필드 없음(에러) — 또는(경고) 속성 이름이 알려진 어휘의 편집거리 ≤2로 가까움(오타 의심) |
 | MDD007-9 | `@rollup` 대응 검증 |
+| MDD010 | `# Entity.Column` 바인딩 대상 엔티티 없음 |
+| MDD011 | `# Entity.Column` 바인딩 대상에 그 이름의 저장 필드 없음 |
 | MDD012 | `@reference` 대상이 스킴을 사용(`external://…` 등) — 이 생성기는 스킴 붙은 참조를 해석하지 않는다 |
+| MDD013 | 확장 필드가 대상 모델과 다른 소유자에 속하는데 확장자의 `<prefix>_` 로 시작하지 않음 |
+| MDD014 | 접두어 없는 파일이 `# Prefix:` 를 선언한 파일 소유 모델을 확장 |
+| MDD015 | 확장 저장 필드가 nullable 도 기본값도 아님 |
+| MDD016 | 베이스를 갖는 모델(`::aspect`/`::subtype`) — 이 생성기는 아직 지원하지 않음 |
+| MDD017(경고) | 접두어 파일의 모델명이 그 접두어(PascalCase)로 시작하지 않음 |
+
+같은 코드가 서로 다른 두 조건에 쓰이는 자리는 MDD006 하나뿐이다 — lookup 대상 컬럼 부재(에러)와
+속성 이름 오타 의심(경고)이 같은 번호를 공유한다.
 
 에러 발생 시 exitcode 3으로 종료.
 
@@ -838,6 +851,28 @@ consumer-repo/
 경고이지 오류가 아니므로 빌드는 계속된다. 속성(attribute) 축은 이 회계 대상이 아니다 —
 읽히지 않는 속성은 경고 없이 지나간다.
 
+#### 모델 확장과 소유자 접두어
+
+`# Prefix:`를 선언한 파일은 그 안에서 정의하는 모든 모델·enum·인터페이스·`::extend` 블록의
+소유자가 된다. `::extend`는 다른 파일이 정의한 모델에 필드를 더하는 선언이고, 소유자 규칙은
+다음 네 가지다.
+
+- 다른 소유자의 모델을 확장하는 필드는 확장하는 쪽의 접두어로 시작해야 한다 (`<prefix>_`, 위반 시 `MDD013`).
+- 접두어를 선언하지 않은 파일들은 전부 하나의 소유자("표준")를 공유한다 — 그런 파일이 접두어를 가진 모델을 확장하면 `MDD014`.
+- 확장이 더하는 저장 필드는 nullable이거나 기본값을 가져야 한다 — 확장이 적용될 때 대상 모델의 행은 이미 존재하기 때문이다 (`MDD015`).
+- 접두어 파일의 모델명이 그 접두어(PascalCase)로 시작하지 않으면 경고한다 (`MDD017`) — 소유자가 이름에서 드러나도록 하는 규칙이라 오류로 세우지 않는다.
+
+빌드는 어느 모델이 누구에게 얼마나 확장됐는지 한 줄로 보고한다(병합 순서대로, 접두어 없는
+출처는 `(standard)`):
+
+```
+[m3l] 확장: Asset ← insp(2), (standard)(1)
+```
+
+확장 필드는 타깃별로 특수 취급되지 않는다 — SQL 컬럼, C# 속성, TypeScript 타입 멤버 어디서나
+그 모델의 다른 필드와 똑같은 보통 필드다. 확장 필드를 뺀 소스로 다시 생성하면 그 컬럼은
+desired-state에서 사라진다 — 컬럼 drop의 승인은 스키마 적용 도구의 몫이다.
+
 ## 프로젝트 구조
 
 ```
@@ -847,7 +882,7 @@ src/
 ├── MddBooster.Generators.Model/  CSharpTypeMapper, EnumRenderer, EntityPairRenderer, DbContextRenderer
 ├── MddBooster.Generators.Api/    ApiRegistrationRenderer (OData + GraphQL)
 ├── MddBooster.Cli/               BuildCommand (mdd.json 소비)
-└── MddBooster.Tests/             467 xUnit tests (Roslyn 구문/의미 검증 포함)
+└── MddBooster.Tests/             746 xUnit tests (Roslyn 구문/의미 검증 포함)
 ```
 
 ## 테스트 실행

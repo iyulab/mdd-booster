@@ -824,7 +824,64 @@ When inheriting conflicting fields:
 - updated_at: timestamp @override  # Explicitly overrides the field from base
 ```
 
-#### 3.4.6 Emitting a C# Base Class / Interfaces (`@inherits` / `@implements`)
+#### 3.4.6 File Owner (# Prefix:)
+
+A file header, sibling of `# Namespace:`, that declares the owner of everything the file
+declares. `<word>` matches `[a-z][a-z0-9]*`. It is stamped on every model, enum, interface,
+view and extend block defined in the file, as `prefix`. Files without the header share one
+owner: no prefix. M3L records ownership; it does not enforce a naming policy for how a
+`prefix` relates to the model and field names built on it — that is a generator concern.
+
+```markdown
+# Namespace: example.inspection
+# Prefix: insp
+```
+
+**What this generator implements**: implemented. The prefix is read as declared, and the
+naming policy the language leaves open is enforced here as a warning — MDD017, a model
+defined in a prefixed file whose name does not start with that prefix (in PascalCase).
+
+#### 3.4.7 Extending a Model (::extend)
+
+Adds the block's fields to the end of `Target`'s field list, after inherited and own fields,
+in source-file order. Each added field carries `origin { prefix, namespace, source }`, and
+`Target` carries `extended_by[]`. The block is not a model: it has no name of its own, no
+parents, no sections, no model-level directives — fields only (stored and derived kinds
+alike).
+
+```markdown
+## Asset ::extend
+- insp_grade: string(20)?
+- insp_last_checked_at: timestamp?
+```
+
+Not to be confused with §8 Extensions, which is about Markdown-level extensibility, nor with
+the generic `extensions` map that unrecognized `::kind` words land in.
+
+**What this generator implements**: implemented, on every target — SQL, Model, and TypeScript
+each render an extension field as an ordinary field, with no target-specific handling of
+`origin`/`extended_by`. The naming policy from §3.4.6 is enforced here as MDD013 (a field
+extending another owner's model must carry the extender's prefix), MDD014 (a prefix-less file
+may not extend a model a prefixed file owns), and MDD015 (a stored extension field must be
+nullable or have a default — the target's existing rows have no value for a new required
+column).
+
+#### 3.4.8 Models with a Base (::aspect, ::subtype)
+
+Ordinary models that additionally name one base model: `base { kind, model }`. `aspect` says
+"an optional companion of one Base row, existing or not as a unit"; `subtype` says "a kind of
+Base". M3L records the declaration and checks that the base model exists and is not itself
+an aspect. How a generator stores either is not part of the language. A parent list may
+follow the base argument.
+
+```markdown
+## AssetMaintenanceProfile ::aspect(Asset) : Timestampable
+```
+
+**What this generator implements**: parsed, not generated. `base { kind, model }` reaches the
+model, but no target emits anything for it — a model with a base fails the build with MDD016.
+
+#### 3.4.9 Emitting a C# Base Class / Interfaces (`@inherits` / `@implements`)
 
 The `: Base` syntax above is a **field mixin** — it flattens fields from an M3L
 interface/model into this model. It does **not** control the generated C# type's
