@@ -16,6 +16,46 @@
 
 ---
 
+## 0.31.0
+
+### enum 멤버의 표시명이 C# 쪽에서도 런타임에 읽힌다 — `[Display(Name)]`
+
+모델이 enum 멤버에 선언한 표시명(`- planned: "계획됨"`)이 이제 C# 에서도
+어트리뷰트로 나간다. 그동안 이 텍스트는 TypeScript 타깃에서는 런타임 맵
+(`enum_labels_gen.ts`)으로, C# 에서는 **XML 문서 주석으로만** 나갔다. 주석은 컴파일되며
+사라지므로, 서버가 문서를 그리는 경로(보고서·내보내기·메일 본문)에서는 선언된 표시명으로
+돌아갈 방법이 없어 멤버 이름이 그대로 찍혔다 — 같은 개념이 화면에서는 표시명으로,
+문서에서는 영문 식별자로 보였다.
+
+```csharp
+public enum WorkOrderStatus
+{
+    /// <summary>계획됨</summary>
+    [Display(Name = "계획됨")]
+    [EnumMember(Value = "planned")]
+    Planned,
+    ...
+}
+```
+
+`[EnumMember]`(wire 값)과 역할이 갈린다. 방출 파일에
+`using System.ComponentModel.DataAnnotations;` 가 함께 나간다. 읽는 방법:
+
+```csharp
+typeof(T).GetField(value.ToString())?.GetCustomAttribute<DisplayAttribute>()?.Name
+    ?? value.ToString()
+```
+
+**표시명을 선언하지 않은 멤버에는 어트리뷰트가 붙지 않는다** — 필드 라벨과 같은
+규칙로, `Name` 이 있다는 것은 사람이 써 넣은 텍스트라는 뜻이지 멤버 이름의 재진술이
+아니기 때문이다. 위 폴백이 그 자리를 덤는다. (TypeScript 라벨 맵은 반대 기본값을 쓰고
+그래야 한다 — `Record<T, string>` 은 전사여야 한다.)
+
+멤버 아래에 들여쓴 블록인용을 둔 경우, 그 텍스트는 표시명에 섞이지 않는다 —
+어트리뷰트는 인라인 라벨만 나른다(필드 쪽과 다르다).
+
+---
+
 ## 0.30.0
 
 ### 모델 확장(::extend)과 소유자 접두어
