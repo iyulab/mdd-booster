@@ -177,7 +177,7 @@ public static class TsFormRenderer
         var sections = new Dictionary<string, List<FieldNode>>(StringComparer.Ordinal);
         foreach (var field in storedFields)
         {
-            var group = GetAttributeString(field, "group") ?? "기타";
+            var group = MddBooster.Core.Ast.FieldAttributes.EffectiveGroup(field) ?? "기타";
             if (!sections.ContainsKey(group))
                 sections[group] = [];
             sections[group].Add(field);

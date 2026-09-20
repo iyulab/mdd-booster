@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using MddBooster.Generators.Model;
 using MddBooster.Generators.TypeScript;
+using MddBooster.Tests.Generators.TypeScript;
 using MddBooster.Tests.TestSupport;
 
 namespace MddBooster.Tests.Generators;
@@ -27,5 +28,31 @@ public class ExtensionCrossTargetTests
         var ts = TsFieldSchemaRenderer.RenderAll(models);
         Assert.Contains("group: 'insp'", ts.Replace('"', '\''));
         Assert.Contains("group: 'Location'", ts.Replace('"', '\''));
+    }
+
+    [Fact]
+    public void Extension_fields_default_to_their_owner_as_form_section_too()
+    {
+        var (_, models) = TwoFileModel.Load(Files);
+
+        var form = TsFormRenderer.RenderAll(models, [], FormImportFixtures.TestImports)["Asset"];
+
+        var inspSection = SectionBody(form, "insp");
+        Assert.Contains("onChange({ InspGrade: v })", inspSection);
+        Assert.DoesNotContain("onChange({ Name: v })", inspSection);
+
+        var locationSection = SectionBody(form, "Location");
+        Assert.Contains("onChange({ InspZone: v })", locationSection);
+    }
+
+    /// <summary>Isolates one rendered &lt;FormSection title="..."&gt; block's body for assertions.</summary>
+    private static string SectionBody(string form, string sectionTitle)
+    {
+        var match = Regex.Match(
+            form,
+            $@"<FormSection title=""{Regex.Escape(sectionTitle)}"".*?>(.*?)</FormSection>",
+            RegexOptions.Singleline);
+        Assert.True(match.Success, $"no <FormSection title=\"{sectionTitle}\"> in rendered form");
+        return match.Groups[1].Value;
     }
 }
