@@ -8,21 +8,30 @@ namespace MddBooster.Tests.TestSupport;
 /// Writes each (name, content) pair to a temp directory and loads them through the real
 /// parser as one cross-file unit, resolving every model. Test-only helper for scenarios
 /// that need more than one source file (e.g. a base model in one file, an extend block in
-/// another).
+/// another). The temp directory does not outlive the call — it is removed before returning
+/// (and before propagating a load failure), since the AST is fully materialized by the time
+/// <see cref="M3lLoader.LoadFiles"/> returns and nothing keeps reading the files afterward.
 /// </summary>
 internal static class TwoFileModel
 {
     public static (M3lAst Ast, List<ResolvedModel> Models) Load(params (string Name, string Content)[] files)
     {
         var dir = Directory.CreateTempSubdirectory("mdd-ext-").FullName;
-        var paths = new List<string>();
-        foreach (var (name, content) in files)
+        try
         {
-            var path = Path.Combine(dir, name);
-            File.WriteAllText(path, content);
-            paths.Add(path);
+            var paths = new List<string>();
+            foreach (var (name, content) in files)
+            {
+                var path = Path.Combine(dir, name);
+                File.WriteAllText(path, content);
+                paths.Add(path);
+            }
+            var ast = new M3lLoader().LoadFiles(paths);
+            return (ast, new InterfaceResolver(ast).ResolveAll().ToList());
         }
-        var ast = new M3lLoader().LoadFiles(paths);
-        return (ast, new InterfaceResolver(ast).ResolveAll().ToList());
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
     }
 }
