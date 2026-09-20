@@ -814,7 +814,7 @@ consumer-repo/
 | MDD003 | `@lookup` 경로가 `fk.col` 형태가 아님 |
 | MDD004 | `@lookup(fk.col)`의 fk가 동일 모델에 없음 |
 | MDD005 | 해당 fk에 `@reference` 없음 |
-| MDD006 | lookup target 엔티티에 `col` 필드 없음(에러) — 또는(경고) 속성 이름이 알려진 어휘의 편집거리 ≤2로 가까움(오타 의심) |
+| MDD006 | lookup target 엔티티에 `col` 필드 없음 |
 | MDD007-9 | `@rollup` 대응 검증 |
 | MDD010 | `# Entity.Column` 바인딩 대상 엔티티 없음 |
 | MDD011 | `# Entity.Column` 바인딩 대상에 그 이름의 저장 필드 없음 |
@@ -824,9 +824,10 @@ consumer-repo/
 | MDD015 | 확장 저장 필드가 nullable 도 기본값도 아님 |
 | MDD016 | 베이스를 갖는 모델(`::aspect`/`::subtype`) — 이 생성기는 아직 지원하지 않음 |
 | MDD017(경고) | 접두어 파일의 모델명이 그 접두어(PascalCase)로 시작하지 않음 |
+| MDD018(경고) | 속성 이름이 알려진 어휘와 편집거리 ≤2 로 가까움(오타 의심). 의도한 custom 속성이면 무시해도 된다 |
 
-같은 코드가 서로 다른 두 조건에 쓰이는 자리는 MDD006 하나뿐이다 — lookup 대상 컬럼 부재(에러)와
-속성 이름 오타 의심(경고)이 같은 번호를 공유한다.
+코드 하나는 조건 하나만 뜻한다. `0.30.0` 이전에는 속성 오타 경고가 `MDD006` 을 lookup 대상 컬럼 부재
+오류와 함께 쓰고 있었다 — 지금은 `MDD018` 이다.
 
 에러 발생 시 exitcode 3으로 종료.
 

@@ -6,7 +6,7 @@ namespace MddBooster.Tests.Semantic;
 /// <summary>
 /// 2026-07-22 — 미인식 속성 경고. 스펙 §10.8은 카탈로그 밖 속성을 custom으로
 /// 허용하므로 무차별 경고는 오탐이다. 알려진 어휘와 편집거리 ≤2인 이름만
-/// "오타 의심" Warning(MDD006)으로 보고하고, 그 외 custom은 침묵한다.
+/// "오타 의심" Warning(MDD018)으로 보고하고, 그 외 custom은 침묵한다.
 /// Warning은 빌드를 실패시키지 않는다 (Error만 exit≠0).
 /// </summary>
 public class AttributeTypoTests
@@ -24,7 +24,7 @@ public class AttributeTypoTests
     {
         var diagnostics = Analyze();
 
-        var typo = Assert.Single(diagnostics, d => d.Code == "MDD006");
+        var typo = Assert.Single(diagnostics, d => d.Code == "MDD018");
         Assert.Equal(SemanticSeverity.Warning, typo.Severity);
         Assert.Contains("uniqe", typo.Message);
         Assert.Contains("unique", typo.Message);
@@ -45,6 +45,10 @@ public class AttributeTypoTests
         var diagnostics = Analyze();
 
         Assert.DoesNotContain(diagnostics,
-            d => d.Code == "MDD006" && d.Severity == SemanticSeverity.Error);
+            d => d.Code == "MDD018" && d.Severity == SemanticSeverity.Error);
+
+        // The code the typo warning used to share is an error-only code again.
+        Assert.DoesNotContain(diagnostics,
+            d => d.Code == "MDD006" && d.Severity == SemanticSeverity.Warning);
     }
 }

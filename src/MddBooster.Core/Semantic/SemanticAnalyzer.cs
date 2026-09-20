@@ -230,7 +230,7 @@ public sealed class SemanticAnalyzer
     }
 
     /// <summary>
-    /// MDD006 — 오타 의심 속성 경고. 스펙 §10.8은 카탈로그 밖 속성을 custom으로
+    /// MDD018 — 오타 의심 속성 경고. 스펙 §10.8은 카탈로그 밖 속성을 custom으로
     /// 허용하므로, 알려진 어휘(<see cref="Ast.FieldAttributes.KnownNames"/>)와
     /// 편집거리 ≤2로 가까운 이름만 Warning으로 보고한다 (합법 custom은 침묵).
     /// </summary>
@@ -250,7 +250,7 @@ public sealed class SemanticAnalyzer
             if (suggestion is null) continue;
 
             diagnostics.Add(new SemanticDiagnostic(
-                "MDD006",
+                "MDD018",
                 $"'{model.Name}.{field.Name}'의 속성 '@{name}'은 알려진 속성이 아닙니다 — '@{suggestion}'의 오타일 수 있습니다. " +
                 "(의도한 custom 속성이라면 무시해도 됩니다)",
                 field.Loc,

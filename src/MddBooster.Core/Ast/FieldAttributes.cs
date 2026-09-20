@@ -210,7 +210,7 @@ public static class FieldAttributes
     /// <summary>
     /// 알려진 속성 어휘 — 스펙 §10.8 표준 카탈로그 + mdd-booster가 소비하는 확장 속성.
     /// 카탈로그 밖 속성은 스펙상 합법 custom이므로 이 집합은 "오타 의심" 판정
-    /// (SemanticAnalyzer MDD006)의 기준으로만 쓰이고, 미포함이 오류를 뜻하지 않는다.
+    /// (SemanticAnalyzer MDD018)의 기준으로만 쓰이고, 미포함이 오류를 뜻하지 않는다.
     /// </summary>
     public static readonly IReadOnlySet<string> KnownNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
