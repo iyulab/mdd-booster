@@ -67,6 +67,25 @@ public sealed class BuildCommand
         foreach (var line in ExtensionCoverage.Describe(allModels))
             Console.WriteLine($"[m3l] 확장: {line}");
 
+        // A declared one-to-one is reported the same way composition is: silently producing a unique
+        // index and nothing else is how the author finds out from the output instead of the build.
+        // Conflicting reverse names stop the build rather than letting one of them win invisibly.
+        var oneToOne = OneToOneRelationships.Describe(allModels);
+        foreach (var line in OneToOneRelationships.Describe(oneToOne))
+            Console.WriteLine($"[m3l] 1:1 {line}");
+        var conflicts = oneToOne.Where(r => r.ReverseNameConflict is not null).ToList();
+        if (conflicts.Count > 0)
+        {
+            Console.Error.WriteLine(
+                $"[m3l] 에러 {conflicts.Count}건: 같은 대상에 대한 1:1 참조가 역방향 이름을 공유한다 — "
+                + "한쪽의 필드명을 바꾸거나 대상을 나누십시오.");
+            foreach (var r in conflicts)
+                Console.Error.WriteLine(
+                    $"  {r.DependentModel}.{r.ForeignKeyField} 와 {r.DependentModel}.{r.ReverseNameConflict} "
+                    + $"가 {r.TargetModel}.{r.ReverseName} 을 함께 요구한다");
+            return 3;
+        }
+
         // 로더 회계 — 파싱은 되지만 생성 파이프라인이 소비하지 않는 요소를 가시화한다.
         // (standalone ::view / ::flow / extension, 그리고 언어가 정의하지 않은 ### 섹션은
         //  현재 어떤 타깃도 산출하지 않는다.)
