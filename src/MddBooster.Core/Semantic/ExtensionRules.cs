@@ -20,9 +20,20 @@ internal static class ExtensionRules
         }
     }
 
+    /// <summary>
+    /// base 를 가진 모델 중 <b>이 생성기가 아직 내지 못하는 것</b>을 거절한다.
+    /// </summary>
+    /// <remarks>
+    /// <c>::aspect</c> 는 열렸다 — PK 가 곧 base FK 인 테이블로 낸다. <c>::subtype</c> 은
+    /// 아직이다: is-a 의 저장 전략(단일 테이블 / 클래스별 테이블 / 구체 클래스별 테이블)이
+    /// 정해지지 않았고, 하나를 고르는 것은 이 생성기가 낼 스키마의 모양을 정하는 일이라
+    /// 조용히 하나를 고르는 대신 거절한다. 🔴 <b>kind 로 갈라 두는 것이 요점이다</b> —
+    /// 검사를 통째로 걷으면 <c>::subtype</c> 의 보류가 함께 우회된다.
+    /// </remarks>
     private static void CheckBase(ResolvedModel model, List<SemanticDiagnostic> diagnostics)
     {
         if (model.Source.Base is not { } b) return;
+        if (string.Equals(b.Kind, "aspect", StringComparison.Ordinal)) return;
         diagnostics.Add(new SemanticDiagnostic("MDD016",
             $"'{model.Name}' ::{b.Kind}({b.Model}): 이 생성기는 아직 ::{b.Kind} 모델을 지원하지 않습니다.",
             model.Source.Loc));

@@ -52,7 +52,7 @@ internal static class AspectRules
             // base 가 없는 모델은 M3L-E017 이 이미 거절했으므로 여기까지 오지 않는다.
             if (!byName.TryGetValue(b.Model, out var baseModel)) continue;
 
-            foreach (var declared in model.Fields.Where(IsDeclaredKey))
+            foreach (var declared in (model.Source.Fields ?? []).Where(IsDeclaredKey))
             {
                 diagnostics.Add(new SemanticDiagnostic("MDD021",
                     $"'{model.Name}.{declared.Name}': 이 생성기는 ::aspect 를 'PK 가 곧 base FK' 인 테이블로 냅니다 — 키를 따로 선언하지 마십시오. ::aspect({b.Model}) 가 그것을 만듭니다.",
@@ -94,6 +94,11 @@ internal static class AspectRules
         }
     }
 
+    /// <summary>
+    /// <b>작성자가 쓴</b> 키인가. <c>ResolvedModel.Fields</c> 가 아니라 <c>Source.Fields</c> 를
+    /// 보는 이유가 이것이다 — 전자에는 <c>::aspect</c> 가 만든 키가 이미 들어 있어서, 그것을
+    /// 보면 <b>모든</b> aspect 가 자기 자신 때문에 거절된다.
+    /// </summary>
     private static bool IsDeclaredKey(FieldNode field)
         => FieldAttributes.Has(field, "pk") || FieldAttributes.Has(field, "primary");
 }

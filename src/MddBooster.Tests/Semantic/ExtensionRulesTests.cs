@@ -77,15 +77,34 @@ public class ExtensionRulesTests
         Assert.Empty(d);
     }
 
-    [Theory]
-    [InlineData("aspect")]
-    [InlineData("subtype")]
-    public void MDD016_models_with_a_base_are_not_supported_yet(string kind)
+    /// <summary>
+    /// <c>::subtype</c> 은 아직 거절한다 — is-a 의 저장 전략이 정해지지 않았고, 조용히 하나를
+    /// 고르는 것은 이 생성기가 낼 스키마의 모양을 말없이 정하는 일이다.
+    /// </summary>
+    /// <remarks>
+    /// 🔴 아래 <c>::aspect</c> 짝과 <b>일부러 두 개의 테스트</b>다. 종전에는 두 kind 를 한
+    /// <c>[Theory]</c> 가 같이 보고 있었고, 그 상태로 <c>MDD016</c> 을 걷으면 <c>::subtype</c> 의
+    /// 보류가 <b>함께</b> 우회되면서도 한 줄 삭제로 초록이 된다. 이름이 이유를 나르는 두 개로
+    /// 갈라 두면 그 삭제가 눈에 띈다.
+    /// </remarks>
+    [Fact]
+    public void MDD016_still_refuses_a_subtype()
     {
-        var d = Analyze(("base.m3l.md", Base + $"\n## AssetProfile ::{kind}(Asset)\n- level: integer?\n"));
+        var d = Analyze(("base.m3l.md", Base + "\n## AssetProfile ::subtype(Asset)\n- level: integer?\n"));
         var e = Assert.Single(d);
         Assert.Equal("MDD016", e.Code);
-        Assert.Contains(kind, e.Message);
+        Assert.Contains("subtype", e.Message);
+    }
+
+    /// <summary>
+    /// <c>::aspect</c> 는 더 이상 거절되지 않는다 — PK 가 곧 base FK 인 테이블로 낸다.
+    /// </summary>
+    [Fact]
+    public void MDD016_no_longer_refuses_an_aspect()
+    {
+        var d = Analyze(("base.m3l.md", Base + "\n## AssetProfile ::aspect(Asset)\n- level: integer?\n"));
+
+        Assert.DoesNotContain(d, x => x.Code == "MDD016");
     }
 
     [Fact]

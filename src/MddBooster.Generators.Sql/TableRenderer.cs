@@ -29,7 +29,12 @@ public static class TableRenderer
         // appear as physical columns here. BaseColumns is the shared authority so
         // the views project exactly the columns this table emits.
         var storedFields = BaseColumns.StoredFields(model).ToList();
-        var columnLines = storedFields.Select(f => ColumnRenderer.Render(f, enumLookup)).ToList();
+        // ::aspect 가 만든 키만 cascade 한다 — 이름은 AspectNaming 이 한 곳에서 정한다.
+        var cascadingKey = model.AspectBase is { } aspectBase ? AspectNaming.KeyFieldName(aspectBase) : null;
+        var columnLines = storedFields
+            .Select(f => ColumnRenderer.Render(
+                f, enumLookup, cascadeOnDelete: cascadingKey is not null && f.Name == cascadingKey))
+            .ToList();
 
         // Unique 제약 분기: nullable은 filtered unique index(CREATE INDEX ... WHERE IS NOT NULL)로
         // 테이블 뒤에 별도 statement로 emit. non-nullable만 inline CONSTRAINT.
@@ -161,7 +166,7 @@ public static class TableRenderer
                 // 컬럼 중 하나라도 nullable이면 filtered unique index로 emit — SQL Server의
                 // plain UNIQUE는 NULL을 값으로 취급해 다중 NULL을 막으므로, "NULL은 미설정"
                 // 의미(NULLS DISTINCT, 기본값)를 내려면 NULL 행을 제약 평가에서 걸러내야 한다.
-                // `nulls: "not_distinct"`(docket #271, m3l `@unique(..., nulls: "not_distinct")`)
+                // `nulls: "not_distinct"`(m3l `@unique(..., nulls: "not_distinct")`)
                 // 를 선언했다면 정반대다 — NULL도 다른 값처럼 유일성 경쟁에 참여해야 하고,
                 // 그건 SQL Server의 plain UNIQUE가 **이미 기본으로 하는 일**이라 필터가 필요
                 // 없다: 모두 NOT NULL인 경우와 같은 inline 제약으로 충분하다.

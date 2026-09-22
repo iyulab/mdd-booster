@@ -6,7 +6,16 @@ namespace MddBooster.Generators.Sql;
 
 public static class ColumnRenderer
 {
-    public static string Render(FieldNode field, IReadOnlyDictionary<string, EnumNode>? enumLookup = null)
+    /// <param name="cascadeOnDelete">
+    /// 이 필드의 FK 가 <c>ON DELETE CASCADE</c> 인가. 오늘 이것이 참인 경우는 하나뿐이다 —
+    /// <c>::aspect</c> 가 만든 키. aspect 는 base 행과 «한 단위로» 존재하므로 base 가 사라지면
+    /// 딸린 행도 사라지는 것이 그 선언의 뜻이고, 남겨 두면 base 없는 aspect 행이 된다.
+    /// 보통 <c>@reference</c> 는 <see langword="false"/> — 삭제 동작을 모델이 아직 말하지 못한다.
+    /// </param>
+    public static string Render(
+        FieldNode field,
+        IReadOnlyDictionary<string, EnumNode>? enumLookup = null,
+        bool cascadeOnDelete = false)
     {
         ArgumentNullException.ThrowIfNull(field);
 
@@ -18,13 +27,13 @@ public static class ColumnRenderer
 
         var nullability = field.Nullable ? "NULL" : "NOT NULL";
 
-        var suffix = BuildSuffix(field, m3lType, columnName, enumLookup);
+        var suffix = BuildSuffix(field, m3lType, columnName, enumLookup, cascadeOnDelete);
 
         var core = $"[{columnName}] {sqlType} {nullability}";
         return string.IsNullOrEmpty(suffix) ? core : $"{core} {suffix}";
     }
 
-    private static string BuildSuffix(FieldNode field, string m3lType, string columnName, IReadOnlyDictionary<string, EnumNode>? enumLookup)
+    private static string BuildSuffix(FieldNode field, string m3lType, string columnName, IReadOnlyDictionary<string, EnumNode>? enumLookup, bool cascadeOnDelete)
     {
         var parts = new List<string>();
 
@@ -45,7 +54,8 @@ public static class ColumnRenderer
         var referenceTarget = GetAttributeFirstParam(field, "reference");
         if (!string.IsNullOrEmpty(referenceTarget))
         {
-            parts.Add($"REFERENCES [dbo].[{referenceTarget}]([Id])");
+            parts.Add($"REFERENCES [dbo].[{referenceTarget}]([Id])"
+                + (cascadeOnDelete ? " ON DELETE CASCADE" : ""));
         }
 
         // Enum CHECK 제약은 여기(inline)가 아니라 TableRenderer의 table-level 경로에서

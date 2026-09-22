@@ -46,4 +46,15 @@ public static class AspectNaming
     /// <summary>파일이 선언한 <c># Prefix:</c> 를 PascalCase 로. 없으면 빈 문자열.</summary>
     public static string PascalPrefix(ResolvedModel model)
         => model.Source.Prefix is { Length: > 0 } p ? NameCasing.ToPascalCase(p) : "";
+
+    /// <summary>
+    /// <c>::aspect(Base)</c> 가 만드는 키 필드의 이름 — <c>&lt;base&gt;_id</c>.
+    /// </summary>
+    /// <remarks>
+    /// 이 생성기의 필드명은 snake 이고 물리 컬럼명은 방언이 정한다(T-SQL 은 PascalCase, PG 는
+    /// 그대로). 작성자가 쓰지 않은 필드이므로 이름을 <b>한 곳에서</b> 정해야 한다 — 합성하는
+    /// 쪽과 「이것이 그 키인가」를 묻는 쪽이 각자 만들면 어긋나는 순간 FK 가 조용히 사라진다.
+    /// </remarks>
+    public static string KeyFieldName(string baseName)
+        => PostgresIdentifiers.ToSnakeCase(baseName) + "_id";
 }
