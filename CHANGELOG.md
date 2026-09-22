@@ -18,7 +18,7 @@
 
 ## [Unreleased]
 
-### `::aspect` 의 navigation 이름 규칙 (MDD019 경고 · MDD020 오류)
+### `::aspect` 가 이 생성기에 지우는 규칙 (MDD019 경고 · MDD020·MDD021 오류)
 
 `::aspect(Base)` 는 base 쪽에 navigation 하나를 만든다. 그 이름은 모델명에서 `<Base>` 를 뗀
 나머지이고 파일의 `# Prefix:` 는 보존된다 — `AssetMaintenanceProfile` → `Asset.MaintenanceProfile`,
@@ -28,6 +28,13 @@
 
 한 base 에 같은 navigation 이름을 내는 aspect 가 둘이거나, 그 이름이 base 의 기존 필드와
 겹치면 **MDD020 오류**다 — 이쪽은 «덜 좋은 이름»이 아니라 컴파일되지 않는 코드다.
+
+`::aspect` 모델이 **자기 키를 선언하면 MDD021 오류**다. 이 생성기는 aspect 를 「PK 가 곧 base
+FK」인 테이블로 내므로 키를 따로 선언할 자리가 없다. ⚠ 이것이 **언어의 규칙이 아니라는 점**이
+중요하다 — M3L 명세 §3.4.8 은 `::aspect` 를 정의하면서 *「How a generator stores either is not
+part of the language」* 로 저장 방식을 명시적으로 언어 밖에 둔다. 대리 키 + 유니크 FK 로 저장하는
+생성기도 그 정의를 만족하고, 그런 생성기에서는 `@pk` 가 모순이 아니다. 모순은 **이 생성기가
+PK=FK 를 고른 뒤에** 생긴다.
 
 **base 자체의 규칙은 여기 없다.** base 가 실재하는지, aspect 가 다른 aspect 의 base 가 될 수
 있는지는 언어의 규칙이고 M3L 이 이미 거절한다(`M3L-E016`–`E018`). 이 생성기는 그 판정을

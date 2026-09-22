@@ -1,3 +1,6 @@
+using M3L.Native;
+using MddBooster.Core.Ast;
+
 namespace MddBooster.Core.Semantic;
 
 /// <summary>
@@ -13,8 +16,13 @@ namespace MddBooster.Core.Semantic;
 /// 먼저 썼다가 M3L 이 이미 거절하는 것을 실측으로 확인하고 걷어냈다.
 /// </para>
 /// <para>
-/// 남은 둘은 언어가 답할 수 없는 것이다 — <c>&lt;Base&gt;&lt;Name&gt;</c> 약속과 navigation
-/// 이름 충돌은 <b>생성되는 코드</b>에 대한 사실이고, 모델만 보아서는 문제가 아니다.
+/// 남은 셋은 언어가 답할 <b>수</b> 없는 것이다. 이름 약속과 navigation 충돌은 <b>생성되는
+/// 코드</b>에 대한 사실이라 모델만 보아서는 문제가 아니다. 선언된 <c>@pk</c> 도 마찬가지인데
+/// 이유가 덜 자명하다 — M3L 명세 §3.4.8 이 <c>::aspect</c> 를 정의하면서
+/// <i>「How a generator stores either is not part of the language」</i> 라고 <b>저장 방식을
+/// 명시적으로 언어 밖에 둔다.</b> 그래서 「aspect 의 키는 base 의 키다」는 언어의 진술이 아니라
+/// <b>이 생성기의 선택</b>이고(대리 키 + 유니크 FK 로 저장하는 생성기도 그 정의를 만족한다),
+/// 그 선택과 모순되는 선언을 거절하는 것도 이 생성기의 몫이다.
 /// </para>
 /// <para>
 /// 이름 약속이 경고인 이유: 오류로 막으면 기존 테이블의 개명을 강요하고, is-a 성격이라 임시로
@@ -43,6 +51,13 @@ internal static class AspectRules
 
             // base 가 없는 모델은 M3L-E017 이 이미 거절했으므로 여기까지 오지 않는다.
             if (!byName.TryGetValue(b.Model, out var baseModel)) continue;
+
+            foreach (var declared in model.Fields.Where(IsDeclaredKey))
+            {
+                diagnostics.Add(new SemanticDiagnostic("MDD021",
+                    $"'{model.Name}.{declared.Name}': 이 생성기는 ::aspect 를 'PK 가 곧 base FK' 인 테이블로 냅니다 — 키를 따로 선언하지 마십시오. ::aspect({b.Model}) 가 그것을 만듭니다.",
+                    declared.Loc));
+            }
 
             var (nav, matchesConvention) = AspectNaming.ReverseNavigation(model, b.Model);
 
@@ -78,4 +93,7 @@ internal static class AspectRules
             taken[nav] = model.Name;
         }
     }
+
+    private static bool IsDeclaredKey(FieldNode field)
+        => FieldAttributes.Has(field, "pk") || FieldAttributes.Has(field, "primary");
 }

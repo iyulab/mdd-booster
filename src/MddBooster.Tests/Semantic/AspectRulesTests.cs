@@ -31,7 +31,7 @@ public class AspectRulesTests
     }
 
     private static IEnumerable<SemanticDiagnostic> Aspect(IReadOnlyList<SemanticDiagnostic> all)
-        => all.Where(d => d.Code is "MDD019" or "MDD020");
+        => all.Where(d => d.Code is "MDD019" or "MDD020" or "MDD021");
 
     /// <summary>
     /// 약속대로 쓴 aspect 는 aspect 규칙을 하나도 건드리지 않는다. 아래가 전부 거절이라,
@@ -51,6 +51,26 @@ public class AspectRulesTests
     /// <summary>
     /// 이름 약속은 경고다 — 모델이 여전히 성립하고, 오류로 막으면 기존 테이블의 개명을 강요한다.
     /// </summary>
+    /// <summary>
+    /// aspect 가 자기 키를 선언하면 거절한다 — 그런데 <b>이것은 언어의 규칙이 아니다</b>.
+    /// </summary>
+    /// <remarks>
+    /// M3L 명세 §3.4.8 이 <c>::aspect</c> 를 정의하면서 <i>「How a generator stores either is
+    /// not part of the language」</i> 로 저장 방식을 언어 밖에 둔다 — 대리 키 + 유니크 FK 로
+    /// 저장하는 생성기도 그 정의를 만족하므로, 모델에 <c>@pk</c> 가 있다는 것만으로는 언어가
+    /// 모순을 말할 수 없다. 모순은 <b>이 생성기가 PK=FK 를 고른 뒤에</b> 생긴다. 그래서 여기다.
+    /// </remarks>
+    [Fact]
+    public void MDD021_an_aspect_that_declares_its_own_key()
+    {
+        var d = Analyze(("m.m3l.md",
+            Base + "\n## AssetMaintenanceProfile ::aspect(Asset)\n- asset_id: identifier @pk\n- level: integer?\n"));
+
+        var e = Assert.Single(Aspect(d), x => x.Code == "MDD021");
+        Assert.Equal(SemanticSeverity.Error, e.Severity);
+        Assert.Contains("asset_id", e.Message);
+    }
+
     [Fact]
     public void MDD019_a_name_that_does_not_follow_the_convention_is_only_a_warning()
     {
