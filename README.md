@@ -473,6 +473,57 @@ MDD_DEBUG=1 mdd build ./mdd
 널 허용 필드는 선언된 기본값이 있어도 초기화자를 받지 않는다 — 선택 속성을 채우면 "미설정"의
 의미가 바뀌기 때문이다.
 
+### 1:1 연관 → 읽기 타입의 navigation 쌍 (Model 타깃)
+
+`@reference(X)` 와 `@unique` 를 **같은 필드에** 선언하면 그 관계는 1:1 이다(unique FK 이므로 대상
+한 행에 의존 행이 최대 하나). 이때 Model 타깃이 **읽기(`Ext`) 타입에 navigation 을 쌍으로** 방출한다.
+
+```markdown
+## AssetMaintenanceProfile
+
+- id: identifier @pk @generated
+- asset_id: identifier @not_null @reference(Asset) @unique "자산"
+```
+
+```csharp
+// AssetMaintenanceProfileExt.cs — 의존 쪽 (forward)
+public AssetExt Asset { get; set; } = null!;
+
+// AssetExt.cs — 대상 쪽 (reverse)
+public AssetMaintenanceProfileExt? MaintenanceProfile { get; set; }
+```
+
+규칙 네 가지:
+
+| | |
+|---|---|
+| **가리키는 것은 «읽기» 타입** | `AssetExt` 이지 `Asset` 이 아니다. 읽기 타입이 쓰기 타입을 가리키면 모든 프로젝션이 쓰기 모델을 끌고 온다 |
+| **쓰기 엔티티는 그대로** | `AssetMaintenanceProfile.cs` 는 아무것도 얻지 않는다. 쓰기 축의 navigation 은 삽입 순서 추론용으로 이미 따로 있다 |
+| **널 허용은 양쪽이 다르다** | forward 는 FK 를 따른다(`@not_null` 이면 비-널, `identifier?` 면 널 허용). **reverse 는 언제나 널 허용** — 대상 행에 의존 행이 없을 수 있다 |
+| **정방향 이름** | **FK 필드명**에서 온다 — 끝의 `_id` 를 떼고 PascalCase(`asset_id` → `Asset`, `owner_id` → `Owner`). 대상 모델명이 아니다. FK 속성(`OwnerId`)과 navigation(`Owner`)을 이 생성기가 **둘 다** 만들고 후자를 전자에서 유도하므로 EF 관례가 요구하는 짝이 어긋날 수 없다 |
+| **역방향 이름** | 의존 모델명이 대상 모델명으로 시작하면 그 접두를 뗀 나머지(`AssetMaintenanceProfile` → `MaintenanceProfile`), 아니면 모델명 전체(`Contractor` → `Contractor`) |
+
+**관계 구성 코드(`HasOne`/`WithOne`)는 방출하지 않는다.** EF 관례가 FK 이름과 navigation 이름으로
+이미 1:1 을 추론하기 때문이다(위 「정방향 이름」 참조). 방언과도 무관하다 — `dialect: "postgres"`
+에서 생성되는 엔티티 파일은 기본 방언의 것과 **바이트 단위로 같다**(스네이크 매핑은 `DbContext`
+쪽에서만 일어난다).
+
+**이름이 충돌하면 빌드가 멈춘다(exit 3).** 두 의존 모델이 같은 대상을 가리키면서 같은 역방향
+이름을 요구하는 경우다 — 경고로 두면 한쪽 navigation 이 조용히 사라지거나 엉뚱한 쪽을 가리킨다.
+빌드는 충돌한 쌍을 이름까지 찍어 알린다. **해소는 한쪽의 FK 필드명을 바꾸거나 대상을 나누는
+것이다.** 빌드 로그는 충돌 여부와 무관하게 발견한 1:1 관계를 **한 줄씩 전부** 찍는다 — 선언한
+관계가 빌드 출력에서 보이지 않는 상태를 만들지 않기 위한 것이다.
+
+> ℹ️ `### Relations` 의 `@relation(...)` 으로 이름을 명시해 충돌을 푸는 형태는 **아직 없다.**
+> 그 섹션은 현재 어떤 타깃도 읽지 않으며, 빌드는 이를 「소비되지 않는 요소」로 보고한다
+> (§"소비되지 않는 요소 회계"). 지금 쓸 수 있는 해소는 위 두 가지뿐이다.
+
+> ⚠️ **N:1 `$expand` 는 이것으로 열리지 않는다.** 여기서 생기는 것은 **1:1 선언(`@reference` +
+> `@unique`)에 한정된** navigation 이다. `@unique` 없는 일반 `@reference`(N:1)는 읽기 타입에
+> navigation 을 얻지 않으므로, 그쪽을 기대하고 `$expand` 를 쓰면 여전히 실패한다. 「navigation
+> 기반이 열렸다」를 「`$expand` 가 열렸다」로 읽지 말 것 — N:1 은 별도 수요가 생길 때 같은 기반
+> 위에 연다.
+
 ### ⚠️ 소비 프로젝트 계약 (TypeScript 타깃)
 
 생성된 `*Form_gen.tsx`는 **소비 프로젝트가 제공해야 하는 모듈**을 import한다.
