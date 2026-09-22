@@ -96,7 +96,11 @@ public class ModelTargetEnumAxisCoverageTests
             ["Inherits"] = (Disposition.UnimplementedEverywhere,
                 "`## ExtendedStatus ::enum : BasicStatus`. No target reads it, and the measured consequence " +
                 "is that the generated enum silently lacks the inherited members — Values holds only what the " +
-                "block itself declares, so nothing upstream of this renderer has flattened them in either"),
+                "block itself declares, so nothing upstream of this renderer has flattened them in either. " +
+                "No longer silent: the loader accounting reports the parent list as an unread axis, because an " +
+                "artifact that is wrong is worse than one that was never produced. Flattening belongs where the " +
+                "specification defines inheritance as a union of values, which is not this repository — so what " +
+                "changes here when that lands is this note, not the disposition"),
             ["Label"] = (Disposition.UnimplementedEverywhere,
                 "a display name for the enum type itself. No target reads it; the type's own label has no " +
                 "counterpart in any generated artifact, unlike a member's"),

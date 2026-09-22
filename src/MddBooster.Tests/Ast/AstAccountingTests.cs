@@ -207,4 +207,43 @@ public class AstAccountingTests
         }
         finally { File.Delete(tmp); }
     }
+    /// <summary>
+    /// An enum header's parent list is reported, and the reason it is worth its own case is that it
+    /// is the one entry in this list where the artifact is produced and <em>wrong</em>: the
+    /// specification defines inheritance as a union of the parent's values, nothing flattens them,
+    /// and the generated enum holds only its own block's members. Before this, that combination was
+    /// completely silent — the declaration parsed and the build succeeded.
+    /// </summary>
+    [Fact]
+    public void An_enums_parent_list_is_reported_unconsumed()
+    {
+        var ast = new M3lLoader().LoadFile(
+            Path.Combine(AppContext.BaseDirectory, "fixtures", "enum-unread-axes.m3l.md"));
+
+        // The parser records the parent name and does not merge the values — the premise of the report.
+        var extended = Assert.Single(ast.Enums, e => e.Name == "ExtendedStatus");
+        Assert.Equal(["BasicStatus"], extended.Inherits);
+        Assert.Equal(["archived"], extended.Values.Select(v => v.Name));
+
+        var unconsumed = AstAccounting.ListUnconsumed(ast);
+
+        Assert.Contains(
+            $"::enum ExtendedStatus : BasicStatus ({AstAccounting.EnumInheritanceUnreadNote})",
+            unconsumed);
+    }
+
+    /// <summary>
+    /// An enum that declares no parent contributes nothing — otherwise every model with enums would
+    /// carry a line and the warning would stop being read, which is the same failure
+    /// <see cref="A_consumed_section_is_not_reported_unconsumed"/> guards on the section axis.
+    /// </summary>
+    [Fact]
+    public void An_enum_without_a_parent_is_not_reported()
+    {
+        var ast = new M3lLoader().LoadFile(
+            Path.Combine(AppContext.BaseDirectory, "fixtures", "order-with-enum.m3l.md"));
+
+        Assert.NotEmpty(ast.Enums);
+        Assert.Empty(AstAccounting.ListUnconsumed(ast));
+    }
 }
