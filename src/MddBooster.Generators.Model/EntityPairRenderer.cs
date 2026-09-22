@@ -424,10 +424,10 @@ public static class EntityPairRenderer
             if (RangeBounds(f) is { } range)
                 sb.Append("    [Range(").Append(range.Min).Append(", ").Append(range.Max).AppendLine(")]");
 
-            // [Editable(false)] — mirrors TS's `disabled` (TsFormRenderer, cycle-91).
+            // [Editable(false)] — mirrors TS's `disabled` (TsFormRenderer).
             // Metadata only, like [Required]/[StringLength] above: nothing in this
             // repo's generated API layer enforces it. An actual write-blocking
-            // guard is docket #42's separate, still-open request.
+            // guard is a separate capability, and this repository does not provide one.
             if (MddBooster.Core.Ast.FieldAttributes.Has(f, "immutable"))
                 sb.AppendLine("    [Editable(false)]");
         }

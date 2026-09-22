@@ -6,7 +6,7 @@ using MddBooster.Generators.Sql;
 namespace MddBooster.Tests.Generators.Sql;
 
 /// <summary>
-/// Regression coverage for docket #101 — a chained Lookup and a reverse Rollup can each pass
+/// Regression coverage — a chained Lookup and a reverse Rollup can each pass
 /// <see cref="FullViewRenderer"/>'s own per-model redirection check and still add up to a
 /// cross-model cycle that neither render call can see by itself. These tests exercise the
 /// cross-model graph directly; <see cref="FullViewRendererTests"/> covers the (non-cyclic)
@@ -39,7 +39,7 @@ public class FullViewCycleDetectorTests
         // Order.supply_total rolls up OrderItem.line_total — a Computed field, so the subquery
         // must source OrderItemFullView. OrderItem.customer_name chains through Order's own
         // Lookup field of the same name, so its JOIN must target OrderFullView. Independently
-        // each redirection is correct; together they form Order ⇄ OrderItem (docket #101).
+        // each redirection is correct; together they form Order ⇄ OrderItem.
         var tmp = WriteInlineM3l(
             "## Enterprise\n" +
             "- id: identifier @pk @generated\n" +

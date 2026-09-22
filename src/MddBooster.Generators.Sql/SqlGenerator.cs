@@ -55,7 +55,7 @@ public sealed class SqlGenerator : IArtifactGenerator
 
         // Fail the build, not the deployment: two models can each redirect a JOIN/subquery to
         // the other's FullView for independently valid reasons and still add up to a cycle
-        // neither one's own render step can see on its own (docket #101).
+        // neither one's own render step can see on its own.
         var cycle = FullViewCycleDetector.Detect(allPlans, derivedFieldsByModel);
         if (cycle != null)
         {

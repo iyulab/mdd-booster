@@ -32,7 +32,7 @@ public sealed class SqlGeneratorTests : IDisposable
     public void Generate_throws_a_build_time_error_naming_both_models_when_full_views_form_a_cycle()
     {
         // Same fixture as FullViewCycleDetectorTests — asserts the detector is actually wired
-        // into SqlGenerator.Generate, not just correct in isolation (docket #101).
+        // into SqlGenerator.Generate, not just correct in isolation.
         var srcPath = WriteInlineM3l(
             _root,
             "## Enterprise\n" +

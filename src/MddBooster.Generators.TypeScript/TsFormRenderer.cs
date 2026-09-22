@@ -287,9 +287,9 @@ public static class TsFormRenderer
 
         // Section props type — lets the consumer inject per-section className/style, keyed by
         // the same title string rendered onto <FormSection title="...">. Only className/style
-        // are exposed (docket #101 mdd-booster #102): the scoped request was a passthrough for
-        // consumer-side CSS-driven layout (e.g. collapsing a section), not a new built-in
-        // collapsible semantic — that stays a separate, undecided design question.
+        // are exposed: what this answers is consumer-side CSS-driven layout (e.g. collapsing a
+        // section), not a new built-in collapsible semantic — that stays a separate, undecided
+        // design question.
         sb.Append("export type ").Append(entityName).AppendLine("FormSectionProps = Partial<Record<string, {");
         sb.AppendLine("  className?: string");
         sb.AppendLine("  style?: CSSProperties");
@@ -649,7 +649,7 @@ public static class TsFormRenderer
         // consumer-supplied component form (input/textarea/select/checkbox) can be expected to
         // support natively, unlike `readOnly`, which checkboxes and selects do not honor consistently.
         var disabledAttr = HasAttribute(field, "immutable") ? " disabled" : "";
-        // A per-field validation message from the caller (docket #176) — the model has no
+        // A per-field validation message from the caller — the model has no
         // opinion on this, so it is emitted unconditionally rather than gated by an
         // attribute like disabledAttr/descAttr above. The control decides how to surface it
         // (this generator does not assume setCustomValidity/reportValidity or any other

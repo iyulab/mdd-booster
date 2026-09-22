@@ -264,11 +264,11 @@ public class FieldConstraintRenderTests
     // ---------------------------------------------------------------- [Editable(false)]
 
     /// <summary>
-    /// Mirrors TS's `disabled` (TsFormRenderer, cycle-91) — write protection
+    /// Mirrors TS's `disabled` (TsFormRenderer) — write protection
     /// against an accidental edit, not an enforced boundary. Nothing in this
     /// repo's generated API layer checks <c>EditableAttribute</c>, the same way
     /// nothing here enforces it for TS's `disabled` prop either; an actual
-    /// write-blocking guard is docket #42's separate, still-open request.
+    /// write-blocking guard is a separate capability, and this repository does not provide one.
     /// </summary>
     [Fact]
     public void Editable_false_is_emitted_for_immutable_fields()

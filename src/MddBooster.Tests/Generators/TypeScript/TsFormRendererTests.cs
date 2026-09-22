@@ -61,7 +61,7 @@ public class TsFormRendererTests
     [Fact]
     public void Emits_a_section_props_type_and_wires_it_through_FormBase()
     {
-        // docket #102 — a passthrough for consumer-side per-section className/style, so a
+        // A passthrough for consumer-side per-section className/style, so a
         // consumer can (e.g.) collapse or otherwise style one section without forking the
         // generated FormBase. Scoped to className/style only; no built-in collapse semantic.
         var models = LoadFixture("order-with-group.m3l.md");
@@ -394,7 +394,7 @@ public class TsFormRendererTests
         Assert.Contains("onChange={v => onChange({ Token: v })}", line);
     }
 
-    // --- runtime field errors (docket #176) ---
+    // --- runtime field errors ---
 
     [Fact]
     public void Emits_an_errors_prop_and_wires_it_through_FormBase()
@@ -651,7 +651,7 @@ public class TsFormRendererTests
 
         Assert.Contains("<UTextarea label=\"요약\" required", content);
         // The nullable one stays unmarked. Matched by line rather than a literal adjacent
-        // substring — docket #176's `error` attribute now sits between the label and
+        // substring — the `error` attribute now sits between the label and
         // `minRows`, same as it sits between every other optional attribute pair below.
         var nullableLine = content.Split('\n').Single(l => l.Contains("label=\"내용\""));
         // Sliced to the control itself rather than matched across the whole line: the per-field

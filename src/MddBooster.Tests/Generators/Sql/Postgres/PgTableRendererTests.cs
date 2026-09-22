@@ -183,14 +183,14 @@ CREATE TABLE public.asset_maintenance_profile
             artifact.Sql);
     }
 
-    // ---- `nulls: "not_distinct"` (docket #271) ----
+    // ---- `nulls: "not_distinct"` ----
 
     [Fact]
     public void Render_NullsNotDistinct_EmitsUniqueNullsNotDistinct()
     {
         // PG의 기본값(위 두 테스트)은 이미 NULLS DISTINCT라 T-SQL 같은 필터드 인덱스
         // 우회가 필요 없었다 — `not_distinct`는 그 반대를 요구하는 선언이라 PG15+ 네이티브
-        // 구문(`UNIQUE NULLS NOT DISTINCT`)이 필요하다(docket #271, 폴백/오버라이드 테이블).
+        // 구문(`UNIQUE NULLS NOT DISTINCT`)이 필요하다(폴백/오버라이드 테이블).
         var (_, lookup, tableNames, _) = Load("table-with-nulls-not-distinct.m3l.md");
         var model = lookup["EnterpriseChannelDefault"];
 

@@ -89,7 +89,7 @@ public class TableSectionsIndexesTests
             sql);
     }
 
-    // ---- `nulls: "not_distinct"` (docket #271) ----
+    // ---- `nulls: "not_distinct"` ----
 
     private static ResolvedModel LoadEnterpriseChannelDefault(string fixtureName)
     {
@@ -101,7 +101,7 @@ public class TableSectionsIndexesTests
     public void Nulls_not_distinct_emits_inline_constraint_despite_nullable_columns()
     {
         // 기본값(위 두 테스트)과 정반대 요구 — NULL이 "범위 전체"를 뜻하는 폴백 테이블은
-        // filtered index로 NULL 행을 제외하면 유일성이 약해진다(docket #271 원 신고). SQL
+        // filtered index로 NULL 행을 제외하면 유일성이 약해진다(원 신고 시나리오). SQL
         // Server의 plain UNIQUE는 NULL을 값으로 취급해 이미 NULLS NOT DISTINCT를 구현하므로,
         // 필터 없는 inline CONSTRAINT로 충분하다 — 새 SQL 문법을 발명하지 않는다.
         var sql = TableRenderer.Render(

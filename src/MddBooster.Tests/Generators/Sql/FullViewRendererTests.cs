@@ -417,7 +417,7 @@ public class FullViewRendererTests
     }
 
     // Now routed through `M3lLoader`, unlike the three tests above — with the
-    // `M3L.Native` pin actually carrying the parser's `where:` fix (docket #174),
+    // `M3L.Native` pin actually carrying the parser's `where:` fix,
     // this closes the integration gap those tests deliberately left open.
     [Fact]
     public void Rollup_where_clause_parsed_from_m3l_source_reaches_the_rendered_subquery()

@@ -147,7 +147,7 @@ public class DbContextRendererTests
     //
     // Before this, the Model target never emitted anything for a composite `@unique(...)`/
     // `@index(...)` declared in `### Indexes` — only single-field attributes above. Discovered
-    // while wiring docket #271's `nulls: "not_distinct"` (its own repro case is composite), so
+    // while wiring `nulls: "not_distinct"` (whose own repro case is composite), so
     // both land together. `M3L.Native` 0.9.0+ actually emits `nulls`, so these go through a real
     // `.m3l.md` fixture + `M3lLoader`, the same seam every other test in this file uses.
 

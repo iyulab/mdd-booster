@@ -14,7 +14,7 @@ namespace MddBooster.Generators.Sql;
 /// chains a Lookup through a derived field on A. Each of A's and B's views renders without error
 /// on its own; only together do they form <c>AFullView ⇄ BFullView</c>, a shape SQL Server refuses
 /// to deploy (SQL72009). <c>mdd build</c> previously had no way to see this, so it only surfaced
-/// once a declarative schema tool tried to deploy the generated views (docket #101).
+/// once a declarative schema tool tried to deploy the generated views.
 /// </para>
 /// </summary>
 public static class FullViewCycleDetector
