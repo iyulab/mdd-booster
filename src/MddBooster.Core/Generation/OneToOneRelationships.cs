@@ -26,6 +26,20 @@ namespace MddBooster.Core.Generation;
 /// further would be inventing one.
 /// </para>
 /// <para>
+/// <b>Who configures the relationship, and why the answer differs.</b> For an ordinary one-to-one
+/// — a foreign-key property plus a reciprocal pair of reference navigations — EF Core discovers
+/// the relationship by convention, so this generator emits no <c>HasOne</c>/<c>WithOne</c>: the
+/// foreign-key property and the navigation are both produced here from the same field name, so the
+/// pair convention looks for cannot be mismatched. Where the dependent's key <em>is</em> its
+/// foreign key, EF states the opposite: such a relationship is not discovered, and the principal
+/// and dependent ends have to be indicated with <c>HasForeignKey</c>. The two dispositions are the
+/// same rule applied to two shapes, not an exception — and the second one is why a shared-key pair
+/// does get explicit configuration. <i>(EF Core docs, "One-to-one relationships": bidirectional
+/// reference navigations are discovered by convention; "Any one-to-one relationship where the
+/// foreign key is not discovered by convention must be configured to indicate the principal and
+/// dependent ends.")</i>
+/// </para>
+/// <para>
 /// <b>Ambiguity is reported, never guessed.</b> Two references from the same model to the same target
 /// would derive the same reverse name, and one would silently win. Both are returned with
 /// <see cref="Relationship.ReverseNameConflict"/> set so the caller can refuse the build and say
