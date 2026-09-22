@@ -18,6 +18,25 @@
 
 ## [Unreleased]
 
+### `::aspect` 의 navigation 이름 규칙 (MDD019 경고 · MDD020 오류)
+
+`::aspect(Base)` 는 base 쪽에 navigation 하나를 만든다. 그 이름은 모델명에서 `<Base>` 를 뗀
+나머지이고 파일의 `# Prefix:` 는 보존된다 — `AssetMaintenanceProfile` → `Asset.MaintenanceProfile`,
+`FsaAssetFacilityProfile` → `Asset.FsaFacilityProfile`. 이름이 약속을 따르지 않으면 navigation 은
+**모델명 전체**가 되고(`Contractor` → `Organization.Contractor`), 그때 **MDD019 경고**가 그 사실을
+알린다. 오류가 아닌 이유는 기존 테이블의 개명을 강요하지 않기 위해서다.
+
+한 base 에 같은 navigation 이름을 내는 aspect 가 둘이거나, 그 이름이 base 의 기존 필드와
+겹치면 **MDD020 오류**다 — 이쪽은 «덜 좋은 이름»이 아니라 컴파일되지 않는 코드다.
+
+**base 자체의 규칙은 여기 없다.** base 가 실재하는지, aspect 가 다른 aspect 의 base 가 될 수
+있는지는 언어의 규칙이고 M3L 이 이미 거절한다(`M3L-E016`–`E018`). 이 생성기는 그 판정을
+되풀이하지 않는다.
+
+<sub>⚠ `::aspect` 모델의 생성은 아직 `MDD016` 이 막고 있다. 위 규칙은 그 문이 열릴 때를 위해
+먼저 선 것이다 — 규칙 없는 aspect 가 생성 경로에 들어가지 않도록.</sub>
+
+
 <sub>아직 게시되지 않은 변경. 번호는 릴리스 시점에 정해진다 — 다음 릴리스가 무엇을 담을지가
 아직 열려 있어, 지금 번호를 적으면 그 번호가 틀릴 수 있다.</sub>
 
