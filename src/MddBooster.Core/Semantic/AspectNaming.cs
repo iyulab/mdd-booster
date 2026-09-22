@@ -23,24 +23,18 @@ public static class AspectNaming
     /// <summary>
     /// base 쪽 navigation 이름과, 그것이 이름 약속에서 나온 것인지.
     /// </summary>
+    /// <remarks>
+    /// 🔴 이름 «자체»는 <see cref="Generation.OneToOneRelationships.ReverseNameFor"/> 가 정한다 —
+    /// 여기서 다시 계산하지 않는다. 같은 질문을 진단과 렌더러가 각자 답하면 어느 한쪽만 바뀌는
+    /// 날 어긋나고, 그것을 말해 주는 것이 없다(이 메서드는 실제로 한동안 그 두 번째 구현이었다).
+    /// 여기가 더하는 것은 <b>약속에서 나온 이름인가</b> 하나뿐이고, 그것도 따로 계산하지 않는다:
+    /// 줄일 것이 없으면 모델명이 그대로 돌아오므로 <b>결과가 모델명과 같다</b>는 사실이 곧
+    /// 약속에 맞지 않았다는 뜻이다.
+    /// </remarks>
     public static (string Name, bool MatchesConvention) ReverseNavigation(ResolvedModel model, string baseName)
     {
-        var prefix = PascalPrefix(model);
-
-        if (prefix.Length > 0
-            && model.Name.StartsWith(prefix + baseName, StringComparison.Ordinal)
-            && model.Name.Length > prefix.Length + baseName.Length)
-        {
-            return (prefix + model.Name[(prefix.Length + baseName.Length)..], true);
-        }
-
-        if (model.Name.StartsWith(baseName, StringComparison.Ordinal)
-            && model.Name.Length > baseName.Length)
-        {
-            return (model.Name[baseName.Length..], true);
-        }
-
-        return (model.Name, false);
+        var name = Generation.OneToOneRelationships.ReverseNameFor(model.Name, baseName, PascalPrefix(model));
+        return (name, !string.Equals(name, model.Name, StringComparison.Ordinal));
     }
 
     /// <summary>파일이 선언한 <c># Prefix:</c> 를 PascalCase 로. 없으면 빈 문자열.</summary>

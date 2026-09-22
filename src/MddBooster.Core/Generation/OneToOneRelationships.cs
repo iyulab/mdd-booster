@@ -78,7 +78,11 @@ public static class OneToOneRelationships
         {
             foreach (var field in model.Fields)
             {
-                if (!FieldAttributes.Has(field, "unique")) continue;
+                // `@unique` is one way a model says "at most one of these per target". A primary key
+                // that is also a foreign key says it more strongly — it cannot repeat at all — and
+                // that is the shape `::aspect` produces. Reading only `@unique` would leave every
+                // aspect without the navigation the relationship exists to provide.
+                if (!FieldAttributes.Has(field, "unique") && !FieldAttributes.Has(field, "pk")) continue;
 
                 var target = FieldAttributes.FirstArg(field, "reference");
                 if (string.IsNullOrEmpty(target) || !known.Contains(target)) continue;
@@ -92,7 +96,7 @@ public static class OneToOneRelationships
                     TargetModel: target,
                     ForeignKeyField: field.Name,
                     ForwardName: ForwardNameFrom(field.Name),
-                    ReverseName: ReverseNameFor(model.Name, target),
+                    ReverseName: ReverseNameFor(model.Name, target, AspectNaming.PascalPrefix(model)),
                     IsOptional: field.Nullable,
                     ReverseNameConflict: null));
             }
@@ -120,15 +124,41 @@ public static class OneToOneRelationships
     /// full name otherwise. <c>AssetMaintenanceProfile</c> on <c>Asset</c> gives
     /// <c>MaintenanceProfile</c>; <c>Contractor</c> on <c>Organization</c> gives <c>Contractor</c>.
     /// </summary>
+    /// <param name="pascalPrefix">
+    /// The owning file's <c># Prefix:</c> in PascalCase, or empty. A prefixed file names its models
+    /// <c>&lt;Prefix&gt;&lt;Target&gt;&lt;Rest&gt;</c>, and the prefix is the part that says who owns
+    /// the declaration — stripping it along with the target would produce a navigation whose name no
+    /// longer says that, and two owners extending the same target would then collide on a name
+    /// neither of them wrote. <c>FsaAssetFacilityProfile</c> on <c>Asset</c> gives
+    /// <c>FsaFacilityProfile</c>.
+    /// </param>
     /// <remarks>
+    /// <para>
+    /// 🔴 <b>This is the single home of the rule.</b> The same question is asked by the
+    /// <c>::aspect</c> diagnostics, by the entity renderers, and by the EF configuration — a second
+    /// implementation existed briefly and is gone, because two of them agree until the day one is
+    /// changed and nothing says the other was not.
+    /// </para>
+    /// <para>
     /// Stripping leaves nothing when the two names are equal, and a navigation cannot be nameless —
     /// that case returns the full name too. It cannot arise from <see cref="Describe"/>, which
     /// excludes self-references, but this method is callable on its own.
+    /// </para>
     /// </remarks>
-    public static string ReverseNameFor(string dependentModel, string targetModel)
+    public static string ReverseNameFor(string dependentModel, string targetModel, string pascalPrefix = "")
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dependentModel);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetModel);
+
+        if (pascalPrefix.Length > 0)
+        {
+            var prefixed = pascalPrefix + targetModel;
+            if (dependentModel.StartsWith(prefixed, StringComparison.Ordinal)
+                && dependentModel.Length > prefixed.Length)
+            {
+                return pascalPrefix + dependentModel[prefixed.Length..];
+            }
+        }
 
         if (!dependentModel.StartsWith(targetModel, StringComparison.Ordinal)) return dependentModel;
         var rest = dependentModel[targetModel.Length..];

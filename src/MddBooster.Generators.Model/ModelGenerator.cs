@@ -87,7 +87,8 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
             _options.DbContextName,
             _options.Namespace,
             customExtViewModels,
-            _options.PostgresNaming);
+            _options.PostgresNaming,
+            oneToOne);
         File.WriteAllText(Path.Combine(contextDir, $"{_options.DbContextName}.cs"), dbContext);
     }
 

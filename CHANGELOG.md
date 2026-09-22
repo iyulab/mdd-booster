@@ -51,6 +51,12 @@ base 가 사라지면 딸린 행도 사라진다.
 취급하지 않고 공유 PK 확장 테이블을 이미 다루던 경로를 그대로 탄다. 보통 `@reference` 의
 삭제 동작은 바뀌지 않는다 — cascade 는 `::aspect` 가 만든 키에만 붙는다.
 
+**EF 도 그 관계를 안다.** 생성되는 읽기 타입이 navigation 쌍을 싣고(`AssetMaintenanceProfileExt.Asset`
+↔ `Asset.MaintenanceProfile`), `DbContext` 가 `HasOne().WithOne().HasForeignKey<>().OnDelete(Cascade)`
+를 **명시 구성**한다. ⚠ 보통 1:1 에는 여전히 구성 코드를 내지 않는다 — 관례가 추론하기 때문이고,
+aspect 는 PK 가 곧 FK 라 알아볼 `<Principal>Id` 프로퍼티가 없어 **그 근거가 성립하지 않는다.**
+두 처분이 갈리는 이유가 그것이지 예외가 아니다. 두 방언이 같은 구성을 낸다.
+
 ⚠ **`::subtype` 은 여전히 `MDD016` 으로 거절된다.** is-a 의 저장 전략(단일 테이블 / 클래스별
 테이블 / 구체 클래스별 테이블)이 정해지지 않았고, 하나를 조용히 고르는 것은 이 생성기가 낼
 스키마의 모양을 말없이 정하는 일이다.

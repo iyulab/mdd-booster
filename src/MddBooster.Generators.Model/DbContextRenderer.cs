@@ -27,7 +27,8 @@ public static class DbContextRenderer
         string contextName,
         string ns,
         IReadOnlySet<string>? customExtViewModels = null,
-        bool postgresNaming = false)
+        bool postgresNaming = false,
+        IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne = null)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentException.ThrowIfNullOrWhiteSpace(contextName);
@@ -76,6 +77,33 @@ public static class DbContextRenderer
         sb.AppendLine("    protected override void OnModelCreating(ModelBuilder modelBuilder)");
         sb.AppendLine("    {");
         sb.AppendLine("        base.OnModelCreating(modelBuilder);");
+
+        // 🔴 방언 분기 «앞»이다. 관계는 CLR 축의 사실이라 방언이 바꿀 것이 아닌데, 아래
+        // postgresNaming 갈래는 이른 return 을 한다 — 뒤에 두면 PG 소비자만 관계를 잃고
+        // 그 손실은 생성이 아니라 $expand 가 빈 값을 돌려줄 때 나타난다. 두 방언을 돌려
+        // 같은지 보는 테스트가 실제로 이것을 잡았다.
+        // ::aspect 의 1:1 만 «명시 구성»한다. 보통 1:1 은 관례가 찾아내므로 이 생성기가 구성
+        // 코드를 내지 않기로 했고, 그 결정의 근거가 「관례가 이미 추론한다」였다 — aspect 는
+        // PK 가 곧 FK 라 알아볼 `<Principal>Id` 프로퍼티가 없고, 그래서 그 근거가 성립하지
+        // 않는다. 두 처분이 갈리는 이유가 그것이지 예외를 둔 것이 아니다.
+        var aspectBases = ordered
+            .Where(m => m.AspectBase is not null)
+            .ToDictionary(m => m.Name, m => m.AspectBase!, StringComparer.Ordinal);
+
+        foreach (var r in oneToOne ?? [])
+        {
+            if (r.ReverseNameConflict is not null) continue;
+            if (!aspectBases.TryGetValue(r.DependentModel, out var baseName)) continue;
+            if (!string.Equals(baseName, r.TargetModel, StringComparison.Ordinal)) continue;
+
+            var dependent = NameCasing.ToPascalCase(r.DependentModel) + "Ext";
+            sb.Append("        modelBuilder.Entity<").Append(dependent).Append(">()")
+              .Append(".HasOne(e => e.").Append(r.ForwardName).Append(')')
+              .Append(".WithOne(e => e.").Append(r.ReverseName).Append(')')
+              .Append(".HasForeignKey<").Append(dependent).Append(">(e => e.Id)")
+              .AppendLine(".OnDelete(DeleteBehavior.Cascade);");
+        }
+
 
         if (postgresNaming)
         {
@@ -177,7 +205,7 @@ public static class DbContextRenderer
     /// 레벨(단일 컬럼) attribute만 훑으므로 별개다. 명명은 SQL/PG 렌더러(<c>TableRenderer</c>/
     /// <c>PgTableRenderer</c>)의 <c>AppendSectionIndexes</c>와 맞춘다 — SQL Server는
     /// PascalCase 컬럼 조인(<c>UK_</c>/<c>IX_</c>), PG는 원문 snake_case 컬럼 조인
-    /// (<c>uq_</c>/<c>ix_</c>). <c>nulls: "not_distinct"</c>(docket #271)가 선언된 unique
+    /// (<c>uq_</c>/<c>ix_</c>). <c>nulls: "not_distinct"</c>가 선언된 unique
     /// entry는 SQL Server에서 <c>SqlServerIndexConvention</c>의 자동 filtered-index를
     /// <c>.HasFilter(null)</c>로 해제하고(<see cref="AppendIndexes"/> 헤더 주석이 이미 설명하는
     /// 그 자동 필터), PG에서는 <c>.AreNullsDistinct(false)</c>(PG15+, Npgsql EF Core provider)로
