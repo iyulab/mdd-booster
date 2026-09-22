@@ -45,10 +45,14 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
         // 런타임 계약 게이트 — 생성은 되지만 런타임에 파탄나는 모델을 여기서 명시적으로 거른다.
         ModelTargetValidator.Validate(context.Models);
 
+        // Computed once for the whole set, not per model: the navigation a read type gains on the
+        // target side comes from a declaration in some other model, so no model can derive its own.
+        var oneToOne = OneToOneRelationships.Describe(context.Models);
+
         foreach (var model in context.Models)
         {
             var backing = DetermineExtBacking(model, customExtViewModels);
-            var rendered = EntityPairRenderer.Render(model, _options.Namespace, enumNames, backing);
+            var rendered = EntityPairRenderer.Render(model, _options.Namespace, enumNames, backing, oneToOne);
             var baseName = model.Name;
             File.WriteAllText(Path.Combine(entityDir, $"I{baseName}.cs"), rendered.Interface);
             File.WriteAllText(Path.Combine(entityDir, $"{baseName}.cs"), rendered.Write);

@@ -37,11 +37,19 @@ public static class EntityPairRenderer
     /// </summary>
     public enum ExtBacking { None, Ud, Full, Ext }
 
+    /// <param name="oneToOne">
+    /// The one-to-one relationships the whole model set declares
+    /// (<see cref="OneToOneRelationships.Describe(IReadOnlyList{ResolvedModel})"/>). A model cannot
+    /// derive these alone: the navigation on the <em>target</em> side is created by a declaration in
+    /// some other model, so the set has to be computed once and handed in. Omitted, the read type
+    /// carries no navigation and the output is what it was before this parameter existed.
+    /// </param>
     public static RenderedPair Render(
         ResolvedModel model,
         string ns,
         IReadOnlySet<string>? knownEnumNames = null,
-        ExtBacking extBacking = ExtBacking.None)
+        ExtBacking extBacking = ExtBacking.None,
+        IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne = null)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentException.ThrowIfNullOrWhiteSpace(ns);
@@ -89,8 +97,8 @@ public static class EntityPairRenderer
 
         return new RenderedPair(
             Interface: RenderInterface(entityName, readOnlyStoredFields, ns, knownEnumNames),
-            Write: RenderClass(entityName, storedFields, derivedFields: null, ns, isExt: false, knownEnumNames, extBacking, model.Source),
-            Read: RenderClass(entityName, readOnlyStoredFields, readOnlyDerivedFields, ns, isExt: true, knownEnumNames, extBacking, model.Source));
+            Write: RenderClass(entityName, storedFields, derivedFields: null, ns, isExt: false, knownEnumNames, extBacking, model.Source, model.Name, oneToOne),
+            Read: RenderClass(entityName, readOnlyStoredFields, readOnlyDerivedFields, ns, isExt: true, knownEnumNames, extBacking, model.Source, model.Name, oneToOne));
     }
 
     private static string RenderInterface(string entityName, IReadOnlyList<FieldNode> fields, string ns, IReadOnlySet<string>? knownEnumNames)
@@ -129,7 +137,9 @@ public static class EntityPairRenderer
         bool isExt,
         IReadOnlySet<string>? knownEnumNames,
         ExtBacking extBacking,
-        ModelNode source)
+        ModelNode source,
+        string modelName,
+        IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne)
     {
         var className = isExt ? entityName + "Ext" : entityName;
         // Ext classes route to the SQL layer that actually exposes their
@@ -202,8 +212,63 @@ public static class EntityPairRenderer
                 RenderProperty(sb, f, knownEnumNames, storedNullability, isExt);
             }
         }
+        if (isExt) RenderOneToOneNavigation(sb, modelName, oneToOne);
         sb.AppendLine("}");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// The one-to-one navigation pair on a read type: the reference to the target, and on the target
+    /// the reference back.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both halves, always, and that is the point rather than thoroughness — EF infers the
+    /// multiplicity from a <em>reciprocal</em> pair of reference navigations, so a single side would
+    /// leave the relationship a many-to-one and quietly wrong. Measured in the runtime library
+    /// against two view-mapped types, which is what these read types are.
+    /// </para>
+    /// <para>
+    /// The forward side follows the key's optionality: a required foreign key cannot point at a
+    /// missing row. The reverse side is always optional, because a target row exists whether or not
+    /// anything points at it.
+    /// </para>
+    /// <para>
+    /// Names are not derived here. They come from the model set alongside the relationship, where
+    /// they are checked for collisions — a reverse name shared by two references to one target fails
+    /// the build rather than letting one navigation win, and such a relationship is skipped here so
+    /// this method never emits the duplicate that would result.
+    /// </para>
+    /// </remarks>
+    private static void RenderOneToOneNavigation(
+        StringBuilder sb, string modelName, IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne)
+    {
+        if (oneToOne is null || oneToOne.Count == 0) return;
+
+        foreach (var r in oneToOne)
+        {
+            if (r.ReverseNameConflict is not null) continue;
+
+            if (string.Equals(r.DependentModel, modelName, StringComparison.Ordinal))
+            {
+                var target = NameCasing.ToPascalCase(r.TargetModel) + "Ext";
+                sb.AppendLine();
+                if (r.IsOptional)
+                    sb.Append("    public ").Append(target).Append("? ").Append(r.ForwardName)
+                      .AppendLine(" { get; set; }");
+                else
+                    sb.Append("    public ").Append(target).Append(' ').Append(r.ForwardName)
+                      .AppendLine(" { get; set; } = null!;");
+            }
+
+            if (string.Equals(r.TargetModel, modelName, StringComparison.Ordinal))
+            {
+                var dependent = NameCasing.ToPascalCase(r.DependentModel) + "Ext";
+                sb.AppendLine();
+                sb.Append("    public ").Append(dependent).Append("? ").Append(r.ReverseName)
+                  .AppendLine(" { get; set; }");
+            }
+        }
     }
 
     private static void RenderProperty(
