@@ -73,10 +73,16 @@ public class ModelTargetEnumAxisCoverageTests
                 "question of how the two forms combine, open for fields, does not arise here"),
             ["Attributes"] = (Disposition.AsymmetricGap,
                 "@system and @deprecated reach the TypeScript target, which drops those values from a generated " +
-                "form's choices (EnumValueVisibility). The C# enum emits nothing for either. [Obsolete] is the " +
-                "candidate counterpart for @deprecated and is not a free choice — a consumer building with " +
-                "warnings-as-errors would stop compiling against a value its own rows still hold, so whether to " +
-                "emit it, and with what severity, is a decision rather than an oversight"),
+                "form's choices (EnumValueVisibility). The C# enum emits nothing for either. That decision is " +
+                "settled for [Obsolete] specifically, and settled as no: the specification states that an " +
+                "attribute constrains authoring and never storage, and that the value remains a fully valid " +
+                "stored value in every case, while [Obsolete] is a compile-time constraint on every use " +
+                "including reading a row that still holds it — a consumer building with warnings-as-errors " +
+                "would stop compiling. The asymmetry itself stays open and stays recorded here; what form a C# " +
+                "counterpart should take (a compile-inert marker, or the mirror of the TypeScript choices " +
+                "function) waits on a consumer that actually needs the distinction on that axis, because the " +
+                "form follows how it is consumed. The reason is stated in the README next to the TypeScript " +
+                "output, which is where a consumer looking for the C# half will be"),
             ["Type"] = (Disposition.UnimplementedEverywhere,
                 "the per-member value type of `- pending: integer = 100`. No target reads it; see Value"),
             ["Value"] = (Disposition.UnimplementedEverywhere,

@@ -759,6 +759,20 @@ export function paymentMethodChoices(current?: string | null): Record<string, st
 options={enumToOptions(paymentMethodChoices(form.Method))}
 ```
 
+⚠ **이 두 attribute 는 TypeScript 축에만 닿는다 — C# enum 은 아무것도 내지 않는다.** 생성 C# 멤버는
+`@system`/`@deprecated` 가 붙은 값과 안 붙은 값이 구별되지 않는다. 서버에서 선택지를 그리신다면 그
+필터는 지금 손으로 쓰셔야 한다.
+
+**`[Obsolete]` 를 내지 않는 것은 누락이 아니라 판단이다.** M3L 은 *「an attribute constrains authoring,
+never storage」* 라고 명시하고, 그 값이 **여전히 완전히 유효한 저장값**임을 못 박는다 — 폐지된 선택지도
+기존 행에는 남아 있어야 하고, 그것이 위 「표시 라벨은 전체 유지」의 이유다. 그런데 `[Obsolete]` 는
+**읽기까지 포함한 모든 사용**에 걸리는 컴파일 시점 제약이라 그 진술과 어긋난다: `TreatWarningsAsErrors`
+로 빌드하는 소비자는 **자기 행이 아직 들고 있는 값을 읽는 코드** 때문에 빌드가 멈춘다. 저장값을 읽지
+못하게 만드는 것은 authoring 제약이 할 일이 아니다.
+
+C# 축에서 이 구분이 실제로 필요하시면 알려 주십시오 — 어떤 형태가 맞는지(컴파일에 무해한 마커냐,
+TypeScript 쪽 `…Choices` 함수의 거울상이냐)는 실제 소비 형태를 보고 정하는 것이 낫습니다.
+
 **좁힘이 맵이 아니라 함수를 거치는 이유는 편집 때문이다.** 같은 생성 폼이 기존 행도 바인딩하고
 (`paymentFromEntity(row)`), 그 행이 이미 `@system` 값을 들고 있을 수 있다. 좁혀진 맵을 그대로
 넘기면 컨트롤이 자기 선택지에 없는 값을 받아 **현재 값이 표시되지 않고 저장 시 바뀐다.** 이

@@ -530,6 +530,13 @@ Example:
 - cancelled: integer = 400 "Cancelled order"
 ```
 
+**What this generator implements**: the members and their labels, not the numbers. An explicit value
+is read by no target, and the axis is inert rather than merely unimplemented: an enum persists as its
+declared *name* — EF converts it to a string, and the opt-in SQL CHECK constraint lists the same text
+— so a declared number has nowhere to land. The generated C# member takes its ordinal instead, which
+is not the number written here. Write the value type and number for a reader if you like; nothing
+downstream will disagree with it, because nothing downstream reads it.
+
 #### 3.1.4 Grouping Enum Values
 
 ```markdown
@@ -579,6 +586,13 @@ Enums can inherit values from other enums:
 - suspended: "Suspended"
 - banned: "Banned"
 ```
+
+**What this generator implements**: nothing, and the build says so rather than leaving you to find
+out from the output. The parent's name is recorded and its values are never merged in, so the enum
+generated for `UserStatus` above holds `suspended` and `banned` only — `active` and `inactive` are
+absent from every target. This is the one unread axis where the artifact is produced and *wrong*
+instead of missing, which is why the build reports it as unconsumed. Until inheritance is resolved
+where the union of values is defined, declare the values you need in the block itself.
 
 #### 3.1.7 Inline Enum Definition
 
