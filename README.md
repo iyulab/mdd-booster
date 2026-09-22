@@ -501,10 +501,12 @@ public AssetMaintenanceProfileExt? MaintenanceProfile { get; set; }
 | **쓰기 엔티티는 그대로** | `AssetMaintenanceProfile.cs` 는 아무것도 얻지 않는다. 쓰기 축의 navigation 은 삽입 순서 추론용으로 이미 따로 있다 |
 | **널 허용은 양쪽이 다르다** | forward 는 FK 를 따른다(`@not_null` 이면 비-널, `identifier?` 면 널 허용). **reverse 는 언제나 널 허용** — 대상 행에 의존 행이 없을 수 있다 |
 | **정방향 이름** | **FK 필드명**에서 온다 — 끝의 `_id` 를 떼고 PascalCase(`asset_id` → `Asset`, `owner_id` → `Owner`). 대상 모델명이 아니다. FK 속성(`OwnerId`)과 navigation(`Owner`)을 이 생성기가 **둘 다** 만들고 후자를 전자에서 유도하므로 EF 관례가 요구하는 짝이 어긋날 수 없다 |
-| **역방향 이름** | 의존 모델명이 대상 모델명으로 시작하면 그 접두를 뗀 나머지(`AssetMaintenanceProfile` → `MaintenanceProfile`), 아니면 모델명 전체(`Contractor` → `Contractor`) |
+| **역방향 이름** | 의존 모델명이 대상 모델명으로 시작하면 그 접두를 뗀 나머지(`AssetMaintenanceProfile` → `MaintenanceProfile`), 아니면 모델명 전체(`Contractor` → `Contractor`). 파일이 `# Prefix:` 를 선언했으면 **그 접두는 보존한다**(`fsa` + `FsaAssetFacilityProfile` → `FsaFacilityProfile`) — 접두는 누가 선언했는지를 나르므로, 그것까지 떼면 두 소유자가 아무도 쓰지 않은 이름에서 충돌한다 |
 
 **관계 구성 코드(`HasOne`/`WithOne`)는 방출하지 않는다.** EF 관례가 FK 이름과 navigation 이름으로
-이미 1:1 을 추론하기 때문이다(위 「정방향 이름」 참조). 방언과도 무관하다 — `dialect: "postgres"`
+이미 1:1 을 추론하기 때문이다(위 「정방향 이름」 참조). ⚠️ **`::aspect` 는 예외가 아니라 «같은
+근거의 다른 결론»이다** — 거기서는 PK 가 곧 FK 라 관례가 알아볼 `<대상>Id` 프로퍼티가 없고,
+그래서 구성 코드를 낸다(아래 절). 방언과도 무관하다 — `dialect: "postgres"`
 에서 생성되는 엔티티 파일은 기본 방언의 것과 **바이트 단위로 같다**(스네이크 매핑은 `DbContext`
 쪽에서만 일어난다).
 
@@ -523,6 +525,60 @@ public AssetMaintenanceProfileExt? MaintenanceProfile { get; set; }
 > navigation 을 얻지 않으므로, 그쪽을 기대하고 `$expand` 를 쓰면 여전히 실패한다. 「navigation
 > 기반이 열렸다」를 「`$expand` 가 열렸다」로 읽지 말 것 — N:1 은 별도 수요가 생길 때 같은 기반
 > 위에 연다.
+
+### `::aspect` → PK 가 곧 base FK 인 테이블
+
+한 모델이 다른 모델의 **한 행에 딸리는 선택적 정보**를 나를 때 쓴다. 컬렉션이 아니라 0..1 이고,
+그래서 그 행의 키는 **자기 것이 아니다**.
+
+```markdown
+## Asset : Timestampable
+- id: identifier @pk @generated
+- name: string(100)
+
+## AssetMaintenanceProfile ::aspect(Asset) : Timestampable
+- level: integer?
+```
+
+**작성자는 키를 쓰지 않는다.** `::aspect(Asset)` 가 만든다:
+
+```sql
+-- T-SQL
+[AssetId] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY REFERENCES [dbo].[Asset]([Id]) ON DELETE CASCADE
+
+-- PostgreSQL
+CONSTRAINT pk_asset_maintenance_profile PRIMARY KEY (asset_id),
+CONSTRAINT fk_asset_maintenance_profile_asset_id
+  FOREIGN KEY (asset_id) REFERENCES public.asset (id) ON DELETE CASCADE
+```
+
+```csharp
+// AssetMaintenanceProfileExt.cs / AssetExt.cs — 1:1 절과 같은 모양의 navigation 쌍
+public AssetExt Asset { get; set; } = null!;
+public AssetMaintenanceProfileExt? MaintenanceProfile { get; set; }
+
+// DbContext — 여기서는 «명시 구성»을 낸다
+modelBuilder.Entity<AssetMaintenanceProfileExt>()
+    .HasOne(e => e.Asset).WithOne(e => e.MaintenanceProfile)
+    .HasForeignKey<AssetMaintenanceProfileExt>(e => e.Id)
+    .OnDelete(DeleteBehavior.Cascade);
+```
+
+| | |
+|---|---|
+| **키를 선언하면 오류(MDD021)** | 키는 base 의 것이다. ⚠️ 이것은 **이 생성기의 규칙**이지 언어의 규칙이 아니다 — M3L 명세 §3.4.8 은 *「How a generator stores either is not part of the language」* 로 저장 방식을 언어 밖에 둔다. 대리 키 + 유니크 FK 로 저장하는 생성기라면 모순이 아니다 |
+| **이름 약속은 경고(MDD019)** | 모델명은 `<Base><Name>` 또는 `<Prefix><Base><Name>`. 어기면 base 쪽 navigation 이 **모델명 전체**가 되고 경고가 그 사실을 알린다. 오류가 아닌 이유는 기존 테이블의 개명을 강요하지 않기 위해서다 |
+| **navigation 이름 충돌은 오류(MDD020)** | 한 base 에 같은 이름을 내는 aspect 가 둘이거나, base 의 기존 필드와 겹칠 때. 이쪽은 「덜 좋은 이름」이 아니라 컴파일되지 않는 코드다 |
+| **`ON DELETE CASCADE`** | aspect 는 base 행과 **한 단위로** 존재한다. 보통 `@reference` 는 cascade 하지 않는다 |
+| **두 방언이 같다** | 관계는 CLR 축의 사실이다. `dialect: "postgres"` 에서도 같은 구성이 나간다 |
+
+> ⚠️ **`::subtype` 은 아직 거절된다(MDD016).** is-a 의 저장 전략(단일 테이블 / 클래스별 테이블 /
+> 구체 클래스별 테이블)이 정해지지 않았고, 하나를 조용히 고르는 것은 이 생성기가 낼 스키마의
+> 모양을 말없이 정하는 일이다. `::aspect` 만 열려 있다.
+
+> ℹ️ **aspect 는 다른 aspect 의 base 가 될 수 없다.** 이것은 언어가 거절한다(`M3L-E018`) —
+> 연쇄는 키의 주인이 하나로 정해지지 않는다. base 가 실재하지 않는 경우도 마찬가지다
+> (`M3L-E017`). 이 생성기는 그 판정을 되풀이하지 않는다.
 
 ### ⚠️ 소비 프로젝트 계약 (TypeScript 타깃)
 

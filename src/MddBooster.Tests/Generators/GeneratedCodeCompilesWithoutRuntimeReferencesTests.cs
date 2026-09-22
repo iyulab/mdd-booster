@@ -85,7 +85,8 @@ public class GeneratedCodeCompilesWithoutRuntimeReferencesTests
             "위와 같은 이유로 이름만으로는 세울 수 없다.",
     };
 
-    private static (string ModelDir, string ApiDir, string Root) Generate()
+    private static (string ModelDir, string ApiDir, string Root) Generate(
+        string fixture = "order-with-derived.m3l.md")
     {
         var root = Path.Combine(Path.GetTempPath(), $"mdd-compile-{Guid.NewGuid():N}");
         var mddDir = Path.Combine(root, "mdd");
@@ -98,7 +99,7 @@ public class GeneratedCodeCompilesWithoutRuntimeReferencesTests
         // 파생 필드(Lookup/Rollup/Computed)·enum·복합 타입이 실제로 방출되는 픽스처를 쓴다 —
         // 방출되지 않으면 이 게이트는 조용히 공허하게 참이 된다.
         File.Copy(
-            Path.Combine(AppContext.BaseDirectory, "fixtures", "order-with-derived.m3l.md"),
+            Path.Combine(AppContext.BaseDirectory, "fixtures", fixture),
             Path.Combine(mddDir, "tables.m3l.md"));
 
         File.WriteAllText(Path.Combine(mddDir, "mdd.json"), """
@@ -276,6 +277,46 @@ public class GeneratedCodeCompilesWithoutRuntimeReferencesTests
                 MddBooster.Tests.TestSupport.BclReferences.All(),
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
             Assert.Contains(probe.GetDiagnostics(), d => d.Id == "CS0104");
+        }
+        finally { try { Directory.Delete(root, recursive: true); } catch { } }
+    }
+    /// <summary>
+    /// <c>::aspect</c> 가 만든 navigation 쌍이 «컴파일되는 이름»인지, 그리고 <c>DbContext</c> 가
+    /// 그 이름들을 그대로 쓰는지.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// 🔴 두 단언이 짝이어야 하는 이유: <c>DbContext_gen</c> 은 EF 실물이 필요해
+    /// <see cref="NotCovered"/> 에 있고, 그래서 <c>HasOne(e =&gt; e.Asset)</c> 의 람다는 여기서
+    /// 컴파일되지 <b>않는다</b>. 엔티티만 컴파일하면 프로퍼티가 «있다»는 것까지만 알고,
+    /// <c>DbContext</c> 가 <b>같은 이름</b>을 쓰는지는 모른다. 그래서 컴파일 뒤에 그 이름들이
+    /// 실제로 방출된 텍스트에 있는지 대조한다 — 둘을 잇는 것이 이 테스트의 일이다.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void An_aspects_navigation_pair_compiles_and_the_context_uses_those_same_names()
+    {
+        var (modelDir, apiDir, root) = Generate("aspect-shared-key.m3l.md");
+        try
+        {
+            var all = AllGenerated(modelDir, apiDir);
+            var covered = all.Where(IsCovered).ToList();
+            Assert.NotEmpty(covered);
+
+            var errors = Compile(covered, extraGlobalUsings: string.Empty);
+            Assert.True(errors.Count == 0,
+                "aspect 생성물이 런타임 참조 없이 컴파일되어야 한다. 실패:\n" +
+                string.Join("\n", errors.Select(d =>
+                    $"  {Path.GetFileName(d.Location.SourceTree?.FilePath ?? "?")}: {d.Id} {d.GetMessage()}")));
+
+            var entities = string.Join("\n", covered.Select(File.ReadAllText));
+            Assert.Contains("public AssetExt Asset { get; set; } = null!;", entities);
+            Assert.Contains("public AssetMaintenanceProfileExt? MaintenanceProfile { get; set; }", entities);
+
+            // 컴파일된 엔티티의 이름과 DbContext 가 쓰는 이름을 잇는다.
+            var context = File.ReadAllText(
+                all.Single(p => Path.GetFileNameWithoutExtension(p).EndsWith("DbContext", StringComparison.Ordinal)));
+            Assert.Contains(".HasOne(e => e.Asset).WithOne(e => e.MaintenanceProfile)", context);
         }
         finally { try { Directory.Delete(root, recursive: true); } catch { } }
     }
