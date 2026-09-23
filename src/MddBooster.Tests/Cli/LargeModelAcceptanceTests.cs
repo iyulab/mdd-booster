@@ -219,6 +219,36 @@ public class LargeModelAcceptanceTests
             + string.Join(Environment.NewLine, lines));
     }
 
+    /// <summary>
+    /// The fixture's two-hop lookups (shape 5 in its header) reach every target in the form the
+    /// view gives them: a join per hop in the view, and a generated property that is optional
+    /// exactly when a key along the path is. Runs against the fixture itself, as the stderr gate
+    /// does — the claim is about a shape the fixture declares.
+    /// </summary>
+    [Fact]
+    public void The_fixtures_two_hop_lookups_reach_every_target_with_their_nullability()
+    {
+        var layout = Scaffold(AcceptanceModel.FixturePath);
+        try
+        {
+            Assert.Equal(0, new BuildCommand().Run(layout.MddDir));
+
+            var view = File.ReadAllText(Path.Combine(layout.DbDir, "dbo", "Views_gen", "WorkOrderFullView.sql"));
+            Assert.Contains("ON j_asset_id.[FloorId] = j_asset_id__floor_id.[Id]", view);
+            Assert.Contains("ON j_asset_id.[DepartmentId] = j_asset_id__department_id.[Id]", view);
+            Assert.Contains("j_asset_id__floor_id.[Level] AS [AssetFloorLevel]", view);
+
+            var ext = File.ReadAllText(Directory.GetFiles(layout.ModelDir, "WorkOrderExt.cs", SearchOption.AllDirectories).Single());
+            Assert.Matches(@"public int AssetFloorLevel \{", ext);
+            Assert.Matches(@"public string\? AssetDepartmentName \{", ext);
+
+            var ts = File.ReadAllText(Directory.GetFiles(layout.TsDir, "entities_gen.ts", SearchOption.AllDirectories).Single());
+            Assert.Matches(@"AssetFloorLevel\?: number\r?\n", ts);
+            Assert.Contains("AssetDepartmentName?: string | null", ts);
+        }
+        finally { Cleanup(layout); }
+    }
+
     private static void Expect(List<string> missing, string directory, string fileName)
     {
         if (!File.Exists(Path.Combine(directory, fileName)))

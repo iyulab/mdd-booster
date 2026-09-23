@@ -20,6 +20,12 @@
      field's display label, so it lands in C# attribute strings, TypeScript
      string literals and JSX attributes — a raw line break or quote in any of
      them is a compile error in the generated code.
+  5. Two-hop lookups (`asset_id.floor_id.level`, `asset_id.department_id.name`)
+     on WorkOrder. The first reads through required keys, so its generated
+     property is non-nullable; the second passes an optional key at its second
+     hop, so its property must be nullable even though the first key is
+     required. Each hop is its own join in the view, and the compile gates are
+     what prove the generated types agree with that.
 
   Keep those shapes when editing. Growing the model is fine; flattening it is
   what makes the gate stop earning its runtime.
@@ -316,6 +322,8 @@
 - asset_tag: string @lookup(asset_id.tag) "설비 태그"
 - asset_name: string @lookup(asset_id.name) "설비명"
 - requester_name: string @lookup(requester_id.name) "요청자"
+- asset_floor_level: integer @lookup(asset_id.floor_id.level) "설비 층"
+- asset_department_name: string @lookup(asset_id.department_id.name) "설비 관리 부서"
 - task_count: integer @rollup(WorkOrderTask.work_order_id, count) "세부작업 수"
 - part_cost: decimal(14,2) @rollup(WorkOrderPart.work_order_id, sum(line_total)) "부품비"
 - total_cost: decimal(14,2) @computed(`part_cost + labor_hours * 30000`) "총원가"
