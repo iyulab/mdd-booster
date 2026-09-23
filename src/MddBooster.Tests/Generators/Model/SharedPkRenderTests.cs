@@ -66,10 +66,11 @@ public class SharedPkRenderTests
         var pkField = profile.Fields.Single(f => f.Name == "asset_id");
 
         // SQL 타깃: PK 컬럼명 [AssetId] + 공유 PK REFERENCES.
-        var sqlLine = MddBooster.Generators.Sql.ColumnRenderer.Render(pkField);
-        Assert.Equal(
+        var tableSql = MddBooster.Generators.Sql.TableRenderer.Render(profile, "dbo", allModels: models);
+        Assert.Contains(
             "[AssetId] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY REFERENCES [dbo].[Asset]([Id])",
-            sqlLine);
+            tableSql);
+        Assert.Equal("asset_id", pkField.Name);
 
         // Model 타깃: 같은 컬럼명으로 Id 재매핑 — 두 타깃 산출물이 모순되지 않는다.
         var dbContext = DbContextRenderer.Render(models, "Ctx", "Ns");

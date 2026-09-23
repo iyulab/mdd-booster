@@ -38,7 +38,8 @@ public class ForeignKeyIndexTests
     });
 
     private static string Tsql(ResolvedModel model, bool on) =>
-        TableRenderer.Render(model, "dbo", Model.Value.Enums, false, emitForeignKeyIndexes: on);
+        TableRenderer.Render(model, "dbo", Model.Value.Enums, false, emitForeignKeyIndexes: on,
+            allModels: Model.Value.Models);
 
     private static string Pg(ResolvedModel model, bool on) =>
         PgTableRenderer.Render(model, "public", Model.Value.TableNames, Model.Value.Lookup,

@@ -18,10 +18,11 @@ public class BaseTableSkipsDerivedTests
     public void Base_table_excludes_lookup_rollup_and_computed_columns()
     {
         var ast = new M3lLoader().LoadFile(FixturePath("order-with-derived.m3l.md"));
-        var order = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Order");
+        var models = new InterfaceResolver(ast).ResolveAll();
+        var order = models.Single(m => m.Name == "Order");
         var lookup = ast.Enums.ToDictionary(e => e.Name, StringComparer.Ordinal);
 
-        var sql = TableRenderer.Render(order, "dbo", lookup);
+        var sql = TableRenderer.Render(order, "dbo", lookup, allModels: models);
 
         // Stored columns must be present
         Assert.Contains("[OrderNumber]", sql);

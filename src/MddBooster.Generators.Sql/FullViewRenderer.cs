@@ -57,9 +57,10 @@ public static class FullViewRenderer
     /// neither one's own JOIN needs, which SQL Server refuses to deploy (SQL72009).
     /// </param>
     /// <param name="allModels">
-    /// Every model being generated. Needed only by a multi-hop lookup
-    /// (<c>order_id.customer_id.name</c>), whose second key is read from the model the first
-    /// one references; a model with only one-hop lookups renders without it.
+    /// Every model being generated. A lookup JOIN matches on the target's own <c>@pk</c> column
+    /// (<see cref="TargetKey"/>), and a multi-hop lookup (<c>order_id.customer_id.name</c>) reads
+    /// its second key from the model the first one references — so any model with a lookup
+    /// needs it. A model with only rollups/computeds renders without it.
     /// </param>
     public static string Render(
         ViewPlan plan,
@@ -95,10 +96,12 @@ public static class FullViewRenderer
         var hasIndexed = rollups.Any(r => MddBooster.Core.Ast.FieldAttributes.Has(r, "indexed"));
 
         // --- Build JOIN list (one per lookup path prefix; see LookupJoinPlanner) ---
+        Func<string, ResolvedModel?> findModel =
+            name => allModels?.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.Ordinal));
         var (joins, lookupJoinColumns) = LookupJoinPlanner.Plan(
             plan.Model,
             lookups,
-            name => allModels?.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.Ordinal)),
+            findModel,
             derivedFieldsByModel);
         var lookupColumns = lookupJoinColumns
             .Select(c => ($"{c.JoinAlias}.[{NameCasing.ToPascalCase(c.Column)}]", NameCasing.ToPascalCase(c.Field.Name)))
@@ -112,7 +115,7 @@ public static class FullViewRenderer
                 ?? throw new InvalidOperationException(
                     $"Rollup field '{plan.Model.Name}.{rollup.Name}' has no parsed RollupDef.");
             rollupColumns.Add((
-                expr: RenderRollupSubquery(def, schema, baseAlias, derivedFieldsByModel),
+                expr: RenderRollupSubquery(def, schema, baseAlias, TargetKey.PkColumn(plan.Model), derivedFieldsByModel),
                 alias: NameCasing.ToPascalCase(rollup.Name)));
         }
 
@@ -148,7 +151,7 @@ public static class FullViewRenderer
             }
             sb.Append("FROM [").Append(schema).Append("].[").Append(sourceTable).Append("] AS ")
               .AppendLine(baseAlias);
-            AppendJoins(sb, schema, joins);
+            AppendJoins(sb, schema, joins, findModel);
             sb.AppendLine("GO");
             return sb.ToString();
         }
@@ -174,7 +177,7 @@ public static class FullViewRenderer
         }
         sb.Append("    FROM [").Append(schema).Append("].[").Append(sourceTable).Append("] AS ")
           .AppendLine(baseAlias);
-        AppendJoins(sb, schema, joins, indent: "    ");
+        AppendJoins(sb, schema, joins, findModel, indent: "    ");
 
         string prevLayer = "r";
         for (var i = 0; i < computedColumns.Count; i++)
@@ -198,20 +201,24 @@ public static class FullViewRenderer
         StringBuilder sb,
         string schema,
         IReadOnlyList<LookupJoin> joins,
+        Func<string, ResolvedModel?> findModel,
         string indent = "")
     {
         foreach (var join in joins)
         {
             var table = join.UsesFullView ? join.Target + "FullView" : join.Target;
+            var targetPk = TargetKey.PkColumn(
+                TargetKey.Resolve(join.Target, findModel, $"lookup JOIN {join.Alias}"));
             sb.Append(indent)
               .Append("LEFT JOIN [").Append(schema).Append("].[").Append(table)
               .Append("] AS ").Append(join.Alias)
               .Append(" ON ").Append(join.ParentAlias).Append(".[").Append(NameCasing.ToPascalCase(join.FkField)).Append("] = ")
-              .Append(join.Alias).AppendLine(".[Id]");
+              .Append(join.Alias).Append(".[").Append(targetPk).AppendLine("]");
         }
     }
 
-    internal static string RenderRollupSubquery(RollupDef def, string schema, string baseAlias,
+    /// <param name="basePkColumn">The owning model's PK column — what the target's FK points at.</param>
+    internal static string RenderRollupSubquery(RollupDef def, string schema, string baseAlias, string basePkColumn,
         IReadOnlyDictionary<string, IReadOnlySet<string>>? derivedFieldsByModel)
     {
         var target = def.Target;
@@ -239,7 +246,7 @@ public static class FullViewRenderer
                 $"Unsupported rollup: aggregate='{aggregate}' field='{field}'."),
         };
 
-        var whereClause = $"[{fkColumn}] = {baseAlias}.[Id]";
+        var whereClause = $"[{fkColumn}] = {baseAlias}.[{basePkColumn}]";
         if (!string.IsNullOrWhiteSpace(def.Where))
         {
             var where = ParentReferenceToken.Substitute(

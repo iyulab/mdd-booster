@@ -69,7 +69,8 @@ public class ForeignKeyIndexCrossTargetTests
     }
 
     private static string Tsql(ResolvedModel model, bool on) =>
-        TableRenderer.Render(model, "dbo", Fixture.Value.Enums, false, emitForeignKeyIndexes: on);
+        TableRenderer.Render(model, "dbo", Fixture.Value.Enums, false, emitForeignKeyIndexes: on,
+            allModels: Fixture.Value.Models);
 
     // ---- 기본값에서 두 타깃은 어긋난다 ----
 

@@ -16,6 +16,31 @@
 
 ---
 
+## [Unreleased]
+
+### 수정 — T-SQL 이 참조 대상의 키를 `[dbo]`·`[Id]` 로 가정했다
+
+Sql 타깃은 다른 모델의 키를 가리키는 세 자리 — `@reference` 의 FK · Lookup 의 `JOIN … ON` · Rollup 의 상관
+조건 — 에서 대상 컬럼을 늘 `[Id]` 로, FK 의 스키마를 늘 `[dbo]` 로 적었다. 그래서:
+
+- 대상의 `@pk` 가 `id` 가 아니면(`code: string(2) @pk` 같은 자연 키) **없는 컬럼을 가리키는 FK·JOIN** 이 나와
+  배포가 실패했다.
+- `schema` 를 `dbo` 가 아닌 값으로 두면 테이블은 그 스키마에, **FK 는 `[dbo]` 에** 걸렸고, 사후 배포 스크립트
+  (`Script.PostDeployment.RefreshViews.sql`)는 `[dbo]` 뷰만 찾아 **빈 채로** 나왔다.
+
+이제 세 자리 모두 대상 모델의 실제 `@pk` 컬럼과 설정된 `schema` 를 쓰고, 새로고침 스크립트는 뷰를
+`[schema].[name]` 으로 식별한다(손으로 관리하는 뷰가 다른 스키마에 있어도 된다). PostgreSQL 타깃은 이미 그렇게
+하고 있었다.
+
+**키가 `id` 이고 `schema` 가 `dbo` 인 모델의 산출물은 한 바이트도 바뀌지 않는다** — 바뀌는 것은 지금까지
+배포할 수 없던 출력뿐이다.
+
+라이브러리로 렌더러를 직접 부르는 경우: `TableRenderer.Render` 에 `allModels` 가 추가됐다. `@reference` 가 있는
+모델을 그것 없이 렌더하면 키를 짐작하지 않고 예외를 낸다(`FullViewRenderer.Render` 의 기존 `allModels` 도 이제
+한 단계 Lookup 에 필요하다).
+
+---
+
 ## 0.32.0
 
 ### 🔴 breaking — base 를 밝히지 않은 «키 = FK» 는 빌드 오류(`MDD022`)

@@ -14,7 +14,8 @@ public static class TableRenderer
         string schema,
         IReadOnlyDictionary<string, EnumNode>? enumLookup = null,
         bool emitEnumCheckConstraints = false,
-        bool emitForeignKeyIndexes = false)
+        bool emitForeignKeyIndexes = false,
+        IReadOnlyList<ResolvedModel>? allModels = null)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentException.ThrowIfNullOrWhiteSpace(schema);
@@ -31,9 +32,15 @@ public static class TableRenderer
         var storedFields = BaseColumns.StoredFields(model).ToList();
         // ::aspect 가 만든 키만 cascade 한다 — 이름은 AspectNaming 이 한 곳에서 정한다.
         var cascadingKey = model.AspectBase is { } aspectBase ? AspectNaming.KeyFieldName(aspectBase) : null;
+        // FK 는 대상 모델의 실제 PK 와 이 렌더의 스키마를 가리킨다(TargetKey). 참조가 없는 모델은
+        // 대상 목록 없이도 렌더된다.
+        Func<string, ResolvedModel?> findModel = name =>
+            allModels?.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.Ordinal));
         var columnLines = storedFields
             .Select(f => ColumnRenderer.Render(
-                f, enumLookup, cascadeOnDelete: cascadingKey is not null && f.Name == cascadingKey))
+                f, enumLookup,
+                cascadeOnDelete: cascadingKey is not null && f.Name == cascadingKey,
+                referencedKey: ReferencedKey(f, model, schema, findModel)))
             .ToList();
 
         // Unique 제약 분기: nullable은 filtered unique index(CREATE INDEX ... WHERE IS NOT NULL)로
@@ -200,4 +207,13 @@ public static class TableRenderer
     private static bool HasAttribute(FieldNode field, string name) =>
         MddBooster.Core.Ast.FieldAttributes.Has(field, name);
 
+    private static string? ReferencedKey(
+        FieldNode field, ResolvedModel owner, string schema, Func<string, ResolvedModel?> findModel)
+    {
+        var target = MddBooster.Core.Ast.FieldAttributes.FirstArg(field, "reference");
+        if (string.IsNullOrEmpty(target)) return null;
+
+        var targetModel = TargetKey.Resolve(target!, findModel, $"'{owner.Name}.{field.Name}'");
+        return $"[{schema}].[{targetModel.Name}]([{TargetKey.PkColumn(targetModel)}])";
+    }
 }

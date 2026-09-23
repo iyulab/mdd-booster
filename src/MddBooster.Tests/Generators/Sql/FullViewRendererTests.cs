@@ -46,9 +46,10 @@ public class FullViewRendererTests
         try
         {
             var ast = new M3lLoader().LoadFile(tmp);
-            var order = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Order");
+            var models = new InterfaceResolver(ast).ResolveAll();
+            var order = models.Single(m => m.Name == "Order");
             var plan = new ViewPlanner().Plan(order);
-            var sql = FullViewRenderer.Render(plan, "dbo");
+            var sql = FullViewRenderer.Render(plan, "dbo", allModels: models);
 
             Assert.Contains("CREATE VIEW [dbo].[OrderFullView]", sql);
             Assert.Contains("FROM [dbo].[Order] AS b", sql);
@@ -77,9 +78,10 @@ public class FullViewRendererTests
         try
         {
             var ast = new M3lLoader().LoadFile(tmp);
-            var order = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Order");
+            var models = new InterfaceResolver(ast).ResolveAll();
+            var order = models.Single(m => m.Name == "Order");
             var plan = new ViewPlanner().Plan(order);
-            var sql = FullViewRenderer.Render(plan, "dbo");
+            var sql = FullViewRenderer.Render(plan, "dbo", allModels: models);
 
             Assert.Contains("SELECT b.[Id], b.[CustomerId],", sql);
             Assert.DoesNotContain("[Secret]", sql);
@@ -101,9 +103,10 @@ public class FullViewRendererTests
         try
         {
             var ast = new M3lLoader().LoadFile(tmp);
-            var order = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Order");
+            var models = new InterfaceResolver(ast).ResolveAll();
+            var order = models.Single(m => m.Name == "Order");
             var plan = new ViewPlanner().Plan(order);
-            var sql = FullViewRenderer.Render(plan, "dbo");
+            var sql = FullViewRenderer.Render(plan, "dbo", allModels: models);
 
             Assert.DoesNotContain("CustomerName", sql);
             Assert.DoesNotContain("LEFT JOIN", sql);
@@ -142,7 +145,7 @@ public class FullViewRendererTests
             var derivedFieldsByModel = DerivedFieldsByModel(models, planner);
             var plan = planner.Plan(order);
 
-            var sql = FullViewRenderer.Render(plan, "dbo", derivedFieldsByModel);
+            var sql = FullViewRenderer.Render(plan, "dbo", derivedFieldsByModel, models);
 
             Assert.Contains("LEFT JOIN [dbo].[CustomerFullView] AS j_customer_id", sql);
             Assert.DoesNotContain("LEFT JOIN [dbo].[Customer] AS j_customer_id", sql);
@@ -185,8 +188,8 @@ public class FullViewRendererTests
             var orderPlan = planner.Plan(models.Single(m => m.Name == "Order"));
             var orderItemPlan = planner.Plan(models.Single(m => m.Name == "OrderItem"));
 
-            var orderSql = FullViewRenderer.Render(orderPlan, "dbo", derivedFieldsByModel);
-            var orderItemSql = FullViewRenderer.Render(orderItemPlan, "dbo", derivedFieldsByModel);
+            var orderSql = FullViewRenderer.Render(orderPlan, "dbo", derivedFieldsByModel, models);
+            var orderItemSql = FullViewRenderer.Render(orderItemPlan, "dbo", derivedFieldsByModel, models);
 
             // Order's own lookup reads Enterprise's raw base column — base table, not a FullView.
             Assert.Contains("LEFT JOIN [dbo].[Enterprise] AS j_enterprise_id", orderSql);
@@ -224,7 +227,7 @@ public class FullViewRendererTests
             var derivedFieldsByModel = DerivedFieldsByModel(models, planner);
             var plan = planner.Plan(category);
 
-            var sql = FullViewRenderer.Render(plan, "dbo", derivedFieldsByModel);
+            var sql = FullViewRenderer.Render(plan, "dbo", derivedFieldsByModel, models);
 
             Assert.Contains("LEFT JOIN [dbo].[Category] AS j_parent_id", sql);
             Assert.DoesNotContain("LEFT JOIN [dbo].[CategoryFullView] AS j_parent_id", sql);
@@ -261,8 +264,8 @@ public class FullViewRendererTests
             var parentPlan = planner.Plan(models.Single(m => m.Name == "Parent"));
             var childPlan = planner.Plan(models.Single(m => m.Name == "Child"));
 
-            var parentSql = FullViewRenderer.Render(parentPlan, "dbo", derivedFieldsByModel);
-            var childSql = FullViewRenderer.Render(childPlan, "dbo", derivedFieldsByModel);
+            var parentSql = FullViewRenderer.Render(parentPlan, "dbo", derivedFieldsByModel, models);
+            var childSql = FullViewRenderer.Render(childPlan, "dbo", derivedFieldsByModel, models);
 
             Assert.Contains("FROM [dbo].[Child] WHERE [ParentId] = b.[Id]", parentSql);
             Assert.DoesNotContain("[ChildFullView]", parentSql);
@@ -276,11 +279,12 @@ public class FullViewRendererTests
     public void Two_lookups_on_same_fk_produce_one_join()
     {
         var ast = new M3lLoader().LoadFile(FixturePath("order-with-derived.m3l.md"));
-        var order = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Order");
+        var models = new InterfaceResolver(ast).ResolveAll();
+        var order = models.Single(m => m.Name == "Order");
         var plan = new ViewPlanner().Plan(order);
 
         // order-with-derived has Computeds → CTE path; but still only one JOIN per FK.
-        var sql = FullViewRenderer.Render(plan, "dbo");
+        var sql = FullViewRenderer.Render(plan, "dbo", allModels: models);
 
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(sql, @"LEFT JOIN \[dbo\]\.\[Customer\]"));
     }
@@ -301,9 +305,10 @@ public class FullViewRendererTests
         try
         {
             var ast = new M3lLoader().LoadFile(tmp);
-            var foo = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Foo");
+            var models = new InterfaceResolver(ast).ResolveAll();
+            var foo = models.Single(m => m.Name == "Foo");
             var plan = new ViewPlanner().Plan(foo);
-            var sql = FullViewRenderer.Render(plan, "dbo");
+            var sql = FullViewRenderer.Render(plan, "dbo", allModels: models);
 
             Assert.Contains("CREATE VIEW [dbo].[FooFullView]", sql);
             Assert.Contains("FROM [dbo].[Foo] AS b", sql);
@@ -317,9 +322,10 @@ public class FullViewRendererTests
     public void Rollup_sum_emits_ISNULL_wrapped_subquery_and_indexed_triggers_schemabinding()
     {
         var ast = new M3lLoader().LoadFile(FixturePath("order-with-derived.m3l.md"));
-        var order = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Order");
+        var models = new InterfaceResolver(ast).ResolveAll();
+        var order = models.Single(m => m.Name == "Order");
         var plan = new ViewPlanner().Plan(order);
-        var sql = FullViewRenderer.Render(plan, "dbo");
+        var sql = FullViewRenderer.Render(plan, "dbo", allModels: models);
 
         Assert.Contains(
             "(SELECT ISNULL(SUM([LineTotal]), 0) FROM [dbo].[OrderItem] WHERE [OrderId] = b.[Id]) AS [TotalSum]",
@@ -337,7 +343,7 @@ public class FullViewRendererTests
     {
         var def = new RollupDef { Target = "Order", Fk = "customer_id", Aggregate = "count", Where = "status != 'cancelled'" };
 
-        var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", derivedFieldsByModel: null);
+        var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", "Id", derivedFieldsByModel: null);
 
         Assert.Equal(
             "(SELECT COUNT(*) FROM [dbo].[Order] WHERE [CustomerId] = b.[Id] AND ([Status] != 'cancelled'))",
@@ -355,7 +361,7 @@ public class FullViewRendererTests
             Where = "row_type IN ('product', 'print_order')",
         };
 
-        var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", derivedFieldsByModel: null);
+        var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", "Id", derivedFieldsByModel: null);
 
         Assert.Equal(
             "(SELECT COUNT(*) FROM [dbo].[OrderItem] WHERE [OrderId] = b.[Id] AND ([RowType] IN ('product', 'print_order')))",
@@ -369,7 +375,7 @@ public class FullViewRendererTests
         // is the pre-existing, still-supported plain form.
         var def = new RollupDef { Target = "Bar", Fk = "foo_id", Aggregate = "count" };
 
-        var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", derivedFieldsByModel: null);
+        var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", "Id", derivedFieldsByModel: null);
 
         Assert.Equal("(SELECT COUNT(*) FROM [dbo].[Bar] WHERE [FooId] = b.[Id])", sql);
         Assert.DoesNotContain("AND", sql);
@@ -389,7 +395,7 @@ public class FullViewRendererTests
             Where = "b.production_state = 'active'",
         };
 
-        var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", derivedFieldsByModel: null);
+        var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", "Id", derivedFieldsByModel: null);
 
         Assert.Equal(
             "(SELECT COUNT(*) FROM [dbo].[Order] WHERE [CustomerId] = b.[Id] AND (b.[ProductionState] = 'active'))",
@@ -409,7 +415,7 @@ public class FullViewRendererTests
             Where = "$parent.production_state = 'active'",
         };
 
-        var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", derivedFieldsByModel: null);
+        var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", "Id", derivedFieldsByModel: null);
 
         Assert.Equal(
             "(SELECT COUNT(*) FROM [dbo].[Order] WHERE [CustomerId] = b.[Id] AND (b.[ProductionState] = 'active'))",
@@ -433,9 +439,10 @@ public class FullViewRendererTests
         try
         {
             var ast = new M3lLoader().LoadFile(tmp);
-            var customer = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Customer");
+            var models = new InterfaceResolver(ast).ResolveAll();
+            var customer = models.Single(m => m.Name == "Customer");
             var plan = new ViewPlanner().Plan(customer);
-            var sql = FullViewRenderer.Render(plan, "dbo");
+            var sql = FullViewRenderer.Render(plan, "dbo", allModels: models);
 
             Assert.Contains("WHERE [CustomerId] = b.[Id] AND ([Status] != 'cancelled')", sql);
         }
@@ -451,9 +458,10 @@ public class FullViewRendererTests
     public void Computed_expressions_use_cte_layers()
     {
         var ast = new M3lLoader().LoadFile(FixturePath("order-with-derived.m3l.md"));
-        var order = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Order");
+        var models = new InterfaceResolver(ast).ResolveAll();
+        var order = models.Single(m => m.Name == "Order");
         var plan = new ViewPlanner().Plan(order);
-        var sql = FullViewRenderer.Render(plan, "dbo");
+        var sql = FullViewRenderer.Render(plan, "dbo", allModels: models);
 
         // CTE structure: r (lookups + rollups), c0 (tax_amount), c1 (grand_total)
         Assert.Contains("WITH", sql);
@@ -484,9 +492,10 @@ public class FullViewRendererTests
         try
         {
             var ast = new M3lLoader().LoadFile(tmp);
-            var foo = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Foo");
+            var models = new InterfaceResolver(ast).ResolveAll();
+            var foo = models.Single(m => m.Name == "Foo");
             var plan = new ViewPlanner().Plan(foo);
-            var sql = FullViewRenderer.Render(plan, "dbo");
+            var sql = FullViewRenderer.Render(plan, "dbo", allModels: models);
 
             Assert.Contains("'taxable'", sql);
             Assert.DoesNotContain("'[Taxable]'", sql);
@@ -511,9 +520,10 @@ public class FullViewRendererTests
         try
         {
             var ast = new M3lLoader().LoadFile(tmp);
-            var foo = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Foo");
+            var models = new InterfaceResolver(ast).ResolveAll();
+            var foo = models.Single(m => m.Name == "Foo");
             var plan = new ViewPlanner().Plan(foo);
-            var sql = FullViewRenderer.Render(plan, "dbo");
+            var sql = FullViewRenderer.Render(plan, "dbo", allModels: models);
 
             Assert.Contains("FROM [dbo].[FooUdView] AS b", sql);
             Assert.DoesNotContain("FROM [dbo].[Foo] AS b", sql);

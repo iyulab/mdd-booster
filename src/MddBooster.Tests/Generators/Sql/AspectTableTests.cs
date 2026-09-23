@@ -61,7 +61,7 @@ public class AspectTableTests
     {
         var (lookup, _, _) = Load();
 
-        var sql = TableRenderer.Render(lookup[Aspect], schema: "dbo");
+        var sql = TableRenderer.Render(lookup[Aspect], schema: "dbo", allModels: lookup.Values.ToList());
 
         Assert.Contains(
             "[AssetId] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY REFERENCES [dbo].[Asset]([Id]) ON DELETE CASCADE",
@@ -90,9 +90,10 @@ public class AspectTableTests
     public void An_ordinary_reference_does_not_cascade()
     {
         var ast = new M3lLoader().LoadFile(FixturePath("order-with-ref.m3l.md"));
-        var model = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Order");
+        var models = new InterfaceResolver(ast).ResolveAll();
+        var model = models.Single(m => m.Name == "Order");
 
-        var sql = TableRenderer.Render(model, schema: "dbo");
+        var sql = TableRenderer.Render(model, schema: "dbo", allModels: models);
 
         Assert.Contains("REFERENCES [dbo].[Customer]([Id])", sql);
         Assert.DoesNotContain("CASCADE", sql);

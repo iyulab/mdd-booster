@@ -12,10 +12,16 @@ public static class ColumnRenderer
     /// 딸린 행도 사라지는 것이 그 선언의 뜻이고, 남겨 두면 base 없는 aspect 행이 된다.
     /// 보통 <c>@reference</c> 는 <see langword="false"/> — 삭제 동작을 모델이 아직 말하지 못한다.
     /// </param>
+    /// <param name="referencedKey">
+    /// <c>@reference</c> 필드가 가리키는 키 — <c>[schema].[Table]([PkColumn])</c>. 대상 모델을 아는 쪽
+    /// (<see cref="TableRenderer"/>)이 해석해 넘긴다: 대상의 PK 가 <c>Id</c> 라는 보장이 없고
+    /// (공유 PK 확장 · <c>code @pk</c>), 스키마는 설정값이다. 참조 필드인데 비어 있으면 예외.
+    /// </param>
     public static string Render(
         FieldNode field,
         IReadOnlyDictionary<string, EnumNode>? enumLookup = null,
-        bool cascadeOnDelete = false)
+        bool cascadeOnDelete = false,
+        string? referencedKey = null)
     {
         ArgumentNullException.ThrowIfNull(field);
 
@@ -27,13 +33,13 @@ public static class ColumnRenderer
 
         var nullability = field.Nullable ? "NULL" : "NOT NULL";
 
-        var suffix = BuildSuffix(field, m3lType, columnName, enumLookup, cascadeOnDelete);
+        var suffix = BuildSuffix(field, m3lType, columnName, enumLookup, cascadeOnDelete, referencedKey);
 
         var core = $"[{columnName}] {sqlType} {nullability}";
         return string.IsNullOrEmpty(suffix) ? core : $"{core} {suffix}";
     }
 
-    private static string BuildSuffix(FieldNode field, string m3lType, string columnName, IReadOnlyDictionary<string, EnumNode>? enumLookup, bool cascadeOnDelete)
+    private static string BuildSuffix(FieldNode field, string m3lType, string columnName, IReadOnlyDictionary<string, EnumNode>? enumLookup, bool cascadeOnDelete, string? referencedKey)
     {
         var parts = new List<string>();
 
@@ -54,7 +60,11 @@ public static class ColumnRenderer
         var referenceTarget = GetAttributeFirstParam(field, "reference");
         if (!string.IsNullOrEmpty(referenceTarget))
         {
-            parts.Add($"REFERENCES [dbo].[{referenceTarget}]([Id])"
+            if (string.IsNullOrEmpty(referencedKey))
+                throw new ArgumentException(
+                    $"필드 '{field.Name}'은(는) @reference({referenceTarget}) 인데 참조 키가 해석되지 않았습니다.",
+                    nameof(referencedKey));
+            parts.Add($"REFERENCES {referencedKey}"
                 + (cascadeOnDelete ? " ON DELETE CASCADE" : ""));
         }
 
