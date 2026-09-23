@@ -120,6 +120,7 @@ public static class FullViewCycleDetector
     {
         var edges = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var via = new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal);
+        ResolvedModel? findModel(string name) => plans.FirstOrDefault(p => p.Model.Name == name)?.Model;
 
         foreach (var plan in plans)
         {
@@ -130,19 +131,13 @@ public static class FullViewCycleDetector
             var targetVia = new Dictionary<string, string>(StringComparer.Ordinal);
             via[plan.Model.Name] = targetVia;
 
-            foreach (var lookup in plan.Lookups.Where(f => !EntitySurface.IsFieldInternal(f)))
+            var lookups = plan.Lookups.Where(f => !EntitySurface.IsFieldInternal(f) && f.Lookup?.Path is not null);
+            foreach (var (target, lookup) in LookupJoinPlanner.FullViewDependencies(
+                         plan.Model, lookups, findModel, derivedFieldsByModel))
             {
-                var path = lookup.Lookup?.Path;
-                if (path is null) continue;
-                var (fkField, targetColumn) = FullViewRenderer.ParsePath(path);
-                var target = FullViewRenderer.ResolveReferenceTarget(plan.Model, fkField);
-                var targetColumnPascal = NameCasing.ToPascalCase(targetColumn);
-                if (FullViewRenderer.IsDerivedColumn(derivedFieldsByModel, target, targetColumnPascal)
-                    && !targets.Contains(target))
-                {
-                    targets.Add(target);
-                    targetVia[target] = $"{plan.Model.Name}.{NameCasing.ToPascalCase(lookup.Name)} lookup";
-                }
+                if (targets.Contains(target)) continue;
+                targets.Add(target);
+                targetVia[target] = $"{plan.Model.Name}.{NameCasing.ToPascalCase(lookup.Name)} lookup";
             }
 
             foreach (var rollup in plan.Rollups.Where(f => !EntitySurface.IsFieldInternal(f)))

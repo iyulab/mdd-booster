@@ -56,10 +56,16 @@ public static class FullViewRenderer
     /// (regardless of which column is being read) can chain two models into a cycle
     /// neither one's own JOIN needs, which SQL Server refuses to deploy (SQL72009).
     /// </param>
+    /// <param name="allModels">
+    /// Every model being generated. Needed only by a multi-hop lookup
+    /// (<c>order_id.customer_id.name</c>), whose second key is read from the model the first
+    /// one references; a model with only one-hop lookups renders without it.
+    /// </param>
     public static string Render(
         ViewPlan plan,
         string schema,
-        IReadOnlyDictionary<string, IReadOnlySet<string>>? derivedFieldsByModel = null)
+        IReadOnlyDictionary<string, IReadOnlySet<string>>? derivedFieldsByModel = null,
+        IReadOnlyList<ResolvedModel>? allModels = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentException.ThrowIfNullOrWhiteSpace(schema);
@@ -88,40 +94,15 @@ public static class FullViewRenderer
 
         var hasIndexed = rollups.Any(r => MddBooster.Core.Ast.FieldAttributes.Has(r, "indexed"));
 
-        // --- Build JOIN list (one per unique FK column) ---
-        // Grouped by fkField first (not built lazily field-by-field): two lookups can share
-        // the same FK while one reads a raw column and the other a chained/derived one, and
-        // the join's target table is a single choice for the whole group — it must go to
-        // FullView if *any* member needs it, decided before any join is created.
-        var lookupsByFk = lookups
-            .Select(lookup =>
-            {
-                var path = lookup.Lookup?.Path
-                    ?? throw new InvalidOperationException(
-                        $"Lookup field '{plan.Model.Name}.{lookup.Name}' has no parsed LookupDef.");
-                var (fkField, targetColumn) = ParsePath(path);
-                return (lookup, fkField, targetColumnPascal: NameCasing.ToPascalCase(targetColumn));
-            })
-            .GroupBy(x => x.fkField, StringComparer.Ordinal);
-
-        var joinsByFk = new Dictionary<string, JoinInfo>(StringComparer.Ordinal);
-        var lookupColumns = new List<(string expr, string alias)>();
-        foreach (var group in lookupsByFk)
-        {
-            var fkField = group.Key;
-            var target = ResolveReferenceTarget(plan.Model, fkField);
-            // Only chained lookup paths (e.g. `fk.some_lookup_field`) need the target's
-            // FullView — the base table doesn't carry that column. A lookup at a raw base
-            // column joins the base table, same as before this model gained any FullView.
-            var needsFullView = group.Any(x => IsDerivedColumn(derivedFieldsByModel, target, x.targetColumnPascal));
-            var targetTable = needsFullView ? target + "FullView" : target;
-            var alias = "j_" + fkField;
-            var join = new JoinInfo(TargetTable: targetTable, FkColumn: NameCasing.ToPascalCase(fkField), Alias: alias);
-            joinsByFk[fkField] = join;
-
-            foreach (var (lookup, _, targetColumnPascal) in group)
-                lookupColumns.Add(($"{join.Alias}.[{targetColumnPascal}]", NameCasing.ToPascalCase(lookup.Name)));
-        }
+        // --- Build JOIN list (one per lookup path prefix; see LookupJoinPlanner) ---
+        var (joins, lookupJoinColumns) = LookupJoinPlanner.Plan(
+            plan.Model,
+            lookups,
+            name => allModels?.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.Ordinal)),
+            derivedFieldsByModel);
+        var lookupColumns = lookupJoinColumns
+            .Select(c => ($"{c.JoinAlias}.[{NameCasing.ToPascalCase(c.Column)}]", NameCasing.ToPascalCase(c.Field.Name)))
+            .ToList();
 
         // --- Build rollup subquery list ---
         var rollupColumns = new List<(string expr, string alias)>();
@@ -167,7 +148,7 @@ public static class FullViewRenderer
             }
             sb.Append("FROM [").Append(schema).Append("].[").Append(sourceTable).Append("] AS ")
               .AppendLine(baseAlias);
-            AppendJoins(sb, schema, joinsByFk, baseAlias);
+            AppendJoins(sb, schema, joins);
             sb.AppendLine("GO");
             return sb.ToString();
         }
@@ -193,7 +174,7 @@ public static class FullViewRenderer
         }
         sb.Append("    FROM [").Append(schema).Append("].[").Append(sourceTable).Append("] AS ")
           .AppendLine(baseAlias);
-        AppendJoins(sb, schema, joinsByFk, baseAlias, indent: "    ");
+        AppendJoins(sb, schema, joins, indent: "    ");
 
         string prevLayer = "r";
         for (var i = 0; i < computedColumns.Count; i++)
@@ -216,16 +197,16 @@ public static class FullViewRenderer
     private static void AppendJoins(
         StringBuilder sb,
         string schema,
-        Dictionary<string, JoinInfo> joinsByFk,
-        string baseAlias,
+        IReadOnlyList<LookupJoin> joins,
         string indent = "")
     {
-        foreach (var join in joinsByFk.Values.OrderBy(j => j.Alias, StringComparer.Ordinal))
+        foreach (var join in joins)
         {
+            var table = join.UsesFullView ? join.Target + "FullView" : join.Target;
             sb.Append(indent)
-              .Append("LEFT JOIN [").Append(schema).Append("].[").Append(join.TargetTable)
+              .Append("LEFT JOIN [").Append(schema).Append("].[").Append(table)
               .Append("] AS ").Append(join.Alias)
-              .Append(" ON ").Append(baseAlias).Append(".[").Append(join.FkColumn).Append("] = ")
+              .Append(" ON ").Append(join.ParentAlias).Append(".[").Append(NameCasing.ToPascalCase(join.FkField)).Append("] = ")
               .Append(join.Alias).AppendLine(".[Id]");
         }
     }
@@ -352,14 +333,6 @@ public static class FullViewRenderer
         _ => false,
     };
 
-    internal static (string fk, string column) ParsePath(string path)
-    {
-        var idx = path.IndexOf('.');
-        if (idx <= 0 || idx >= path.Length - 1)
-            throw new InvalidOperationException($"Invalid lookup path '{path}'. Expected 'fk.column'.");
-        return (path[..idx], path[(idx + 1)..]);
-    }
-
     internal static string ResolveReferenceTarget(ResolvedModel model, string fkFieldName)
     {
         var field = model.Fields.FirstOrDefault(f =>
@@ -380,5 +353,4 @@ public static class FullViewRenderer
     }
 
 
-    private sealed record JoinInfo(string TargetTable, string FkColumn, string Alias);
 }

@@ -68,41 +68,15 @@ public static class PgFullViewRenderer
         var lookups = plan.Lookups.Where(f => !EntitySurface.IsFieldInternal(f)).ToList();
         var rollups = plan.Rollups.Where(f => !EntitySurface.IsFieldInternal(f)).ToList();
 
-        // --- JOIN (FK 하나당 하나, 같은 FK를 공유하는 여러 Lookup은 같은 JOIN을 공유) ---
-        var lookupsByFk = lookups
-            .Select(lookup =>
-            {
-                var path = lookup.Lookup?.Path
-                    ?? throw new InvalidOperationException(
-                        $"Lookup 필드 '{model.Name}.{lookup.Name}'에 파싱된 LookupDef가 없습니다.");
-                var (fkField, targetColumn) = FullViewRenderer.ParsePath(path);
-                return (lookup, fkField, targetColumn);
-            })
-            .GroupBy(x => x.fkField, StringComparer.Ordinal);
-
-        var joinsByFk = new Dictionary<string, (string TargetRelation, string Alias)>(StringComparer.Ordinal);
-        var lookupColumns = new List<(string expr, string alias)>();
-        foreach (var group in lookupsByFk)
-        {
-            var fkField = group.Key;
-            var targetModelName = FullViewRenderer.ResolveReferenceTarget(model, fkField);
-            var targetModel = modelLookup.TryGetValue(targetModelName, out var tm)
-                ? tm
-                : throw new InvalidOperationException($"참조 대상 모델 '{targetModelName}'을(를) 찾을 수 없습니다.");
-            var targetPk = ModelPrimaryKey.Find(targetModel)
-                ?? throw new InvalidOperationException($"참조 대상 모델 '{targetModelName}'에 PK가 없어 JOIN을 렌더할 수 없습니다.");
-
-            var needsFullView = group.Any(x =>
-                FullViewRenderer.IsDerivedColumn(derivedFieldsByModel, targetModelName, NameCasing.ToPascalCase(x.targetColumn)));
-            var targetTable = tableNameMap[targetModelName];
-            var targetRelation = needsFullView ? viewNameMap[targetModelName] : targetTable;
-
-            var alias = "j_" + fkField;
-            joinsByFk[fkField] = (targetRelation, alias);
-
-            foreach (var (lu, _, targetColumn) in group)
-                lookupColumns.Add(($"{alias}.{targetColumn}", lu.Name));
-        }
+        // --- JOIN (경로 접두사 하나당 하나 — 같은 접두사를 공유하는 Lookup 은 JOIN 을 공유. 규칙은 LookupJoinPlanner) ---
+        var (joins, lookupJoinColumns) = LookupJoinPlanner.Plan(
+            model,
+            lookups,
+            name => modelLookup.TryGetValue(name, out var m) ? m : null,
+            derivedFieldsByModel);
+        var lookupColumns = lookupJoinColumns
+            .Select(c => ($"{c.JoinAlias}.{c.Column}", c.Field.Name))
+            .ToList();
 
         // --- Rollup 상관 서브쿼리 ---
         var rollupColumns = new List<(string expr, string alias)>();
@@ -127,27 +101,23 @@ public static class PgFullViewRenderer
         }
         sb.AppendLine();
         sb.Append("FROM ").Append(schema).Append('.').Append(sourceRelation).AppendLine(" AS b");
-        foreach (var (fkField, join) in joinsByFk.OrderBy(kv => kv.Value.Alias, StringComparer.Ordinal))
+        foreach (var join in joins)
         {
-            var targetPkName = ResolveTargetPkName(model, fkField, modelLookup);
-            sb.Append("LEFT JOIN ").Append(schema).Append('.').Append(join.TargetRelation)
+            var targetModel = modelLookup.TryGetValue(join.Target, out var tm)
+                ? tm
+                : throw new InvalidOperationException($"참조 대상 모델 '{join.Target}'을(를) 찾을 수 없습니다.");
+            var targetPk = ModelPrimaryKey.Find(targetModel)
+                ?? throw new InvalidOperationException($"참조 대상 모델 '{join.Target}'에 PK가 없어 JOIN을 렌더할 수 없습니다.");
+            var relation = join.UsesFullView ? viewNameMap[join.Target] : tableNameMap[join.Target];
+            sb.Append("LEFT JOIN ").Append(schema).Append('.').Append(relation)
               .Append(" AS ").Append(join.Alias)
-              .Append(" ON b.").Append(fkField).Append(" = ").Append(join.Alias).Append('.').AppendLine(targetPkName);
+              .Append(" ON ").Append(join.ParentAlias).Append('.').Append(join.FkField)
+              .Append(" = ").Append(join.Alias).Append('.').AppendLine(targetPk.Name);
         }
         // FROM/JOIN 라인들은 전부 AppendLine으로 끝났다 — 마지막 개행을 지우고 문장을 종결한다.
         sb.Length -= Environment.NewLine.Length;
         sb.AppendLine(";");
         return sb.ToString();
-    }
-
-    private static string ResolveTargetPkName(
-        ResolvedModel model, string fkField, IReadOnlyDictionary<string, ResolvedModel> modelLookup)
-    {
-        var targetModelName = FullViewRenderer.ResolveReferenceTarget(model, fkField);
-        var targetModel = modelLookup[targetModelName];
-        var targetPk = ModelPrimaryKey.Find(targetModel)
-            ?? throw new InvalidOperationException($"참조 대상 모델 '{targetModelName}'에 PK가 없습니다.");
-        return targetPk.Name;
     }
 
     internal static string RenderRollupSubquery(

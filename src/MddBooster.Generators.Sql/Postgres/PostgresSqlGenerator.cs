@@ -141,15 +141,10 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
         foreach (var plan in allPlans.Where(p => p.NeedsFullView))
         {
             var targets = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var lookup in plan.Lookups.Where(f => !EntitySurface.IsFieldInternal(f)))
-            {
-                var path = lookup.Lookup?.Path;
-                if (path is null) continue;
-                var (fkField, targetColumn) = FullViewRenderer.ParsePath(path);
-                var target = FullViewRenderer.ResolveReferenceTarget(plan.Model, fkField);
-                if (FullViewRenderer.IsDerivedColumn(derivedFieldsByModel, target, NameCasing.ToPascalCase(targetColumn)))
-                    targets.Add(target);
-            }
+            var lookups = plan.Lookups.Where(f => !EntitySurface.IsFieldInternal(f) && f.Lookup?.Path is not null);
+            foreach (var (target, _) in LookupJoinPlanner.FullViewDependencies(
+                         plan.Model, lookups, name => allPlans.FirstOrDefault(p => p.Model.Name == name)?.Model, derivedFieldsByModel))
+                targets.Add(target);
             foreach (var rollup in plan.Rollups.Where(f => !EntitySurface.IsFieldInternal(f)))
             {
                 var def = rollup.Rollup;

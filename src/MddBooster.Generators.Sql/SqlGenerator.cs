@@ -86,7 +86,7 @@ public sealed class SqlGenerator : IArtifactGenerator
 
             if (plan.NeedsFullView)
             {
-                var sql = FullViewRenderer.Render(plan, _options.Schema, derivedFieldsByModel);
+                var sql = FullViewRenderer.Render(plan, _options.Schema, derivedFieldsByModel, context.Models);
                 var fileName = $"{plan.Model.Name}FullView.sql";
                 File.WriteAllText(Path.Combine(viewsGenDir, fileName), sql);
                 viewFileNames.Add(fileName);

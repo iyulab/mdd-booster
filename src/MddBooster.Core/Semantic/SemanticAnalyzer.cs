@@ -62,52 +62,40 @@ public sealed class SemanticAnalyzer
         var path = field.Lookup.Path;
         if (string.IsNullOrWhiteSpace(path)) return;
 
-        var dot = path.IndexOf('.');
-        if (dot <= 0 || dot >= path.Length - 1)
+        var walk = LookupPath.Walk(model, path, _models);
+        var at = walk.FailedAt?.Name;
+        var segment = walk.FailedSegment;
+        // A failure past the first hop names the model it happened on — in a two-hop path the
+        // second key is looked up on the model the first one references, not on this one.
+        var where = walk.Hops.Count == 0 ? "동일 모델" : $"'{at}'";
+
+        switch (walk.Failure)
         {
-            diagnostics.Add(new SemanticDiagnostic(
-                "MDD003",
-                $"'{model.Name}.{field.Name}' @lookup 경로 '{path}'가 'fk.column' 형태가 아닙니다.",
-                field.Loc));
-            return;
-        }
-
-        var fkFieldName = path[..dot];
-        var targetColumn = path[(dot + 1)..];
-
-        var fkField = model.Fields.FirstOrDefault(f => f.Name == fkFieldName);
-        if (fkField is null)
-        {
-            diagnostics.Add(new SemanticDiagnostic(
-                "MDD004",
-                $"'{model.Name}.{field.Name}' @lookup({path}): 동일 모델에 FK 필드 '{fkFieldName}'가 존재하지 않습니다.",
-                field.Loc));
-            return;
-        }
-
-        var refAttr = Ast.FieldAttributes.Find(fkField, "reference");
-        if (refAttr?.Args is null || refAttr.Args.Count == 0)
-        {
-            diagnostics.Add(new SemanticDiagnostic(
-                "MDD005",
-                $"'{model.Name}.{field.Name}' @lookup({path}): FK 필드 '{fkFieldName}'에 @reference(Target) 속성이 없습니다.",
-                field.Loc));
-            return;
-        }
-
-        var targetName = refAttr.Args[0].ValueKind == System.Text.Json.JsonValueKind.String
-            ? refAttr.Args[0].GetString()
-            : refAttr.Args[0].GetRawText();
-
-        if (string.IsNullOrEmpty(targetName) || !_modelNames.Contains(targetName)) return;
-
-        var targetModel = _models.First(m => m.Name == targetName);
-        if (!targetModel.Fields.Any(f => f.Name == targetColumn))
-        {
-            diagnostics.Add(new SemanticDiagnostic(
-                "MDD006",
-                $"'{model.Name}.{field.Name}' @lookup({path}): 대상 엔티티 '{targetName}'에 필드 '{targetColumn}'가 존재하지 않습니다.",
-                field.Loc));
+            case LookupPathFailure.Malformed:
+                diagnostics.Add(new SemanticDiagnostic(
+                    "MDD003",
+                    $"'{model.Name}.{field.Name}' @lookup 경로 '{path}'가 'fk.column' 형태가 아닙니다.",
+                    field.Loc));
+                break;
+            case LookupPathFailure.MissingFk:
+                diagnostics.Add(new SemanticDiagnostic(
+                    "MDD004",
+                    $"'{model.Name}.{field.Name}' @lookup({path}): {where}에 FK 필드 '{segment}'가 존재하지 않습니다.",
+                    field.Loc));
+                break;
+            case LookupPathFailure.NoReference:
+                diagnostics.Add(new SemanticDiagnostic(
+                    "MDD005",
+                    $"'{model.Name}.{field.Name}' @lookup({path}): FK 필드 '{(walk.Hops.Count == 0 ? segment : $"{at}.{segment}")}'에 @reference(Target) 속성이 없습니다.",
+                    field.Loc));
+                break;
+            case LookupPathFailure.MissingColumn:
+                diagnostics.Add(new SemanticDiagnostic(
+                    "MDD006",
+                    $"'{model.Name}.{field.Name}' @lookup({path}): 대상 엔티티 '{at}'에 필드 '{segment}'가 존재하지 않습니다.",
+                    field.Loc));
+                break;
+            // UnknownTarget: the reference itself is reported where references are checked.
         }
     }
 
