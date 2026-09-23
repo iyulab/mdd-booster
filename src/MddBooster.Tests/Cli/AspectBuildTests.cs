@@ -143,4 +143,92 @@ public class AspectBuildTests
             try { Directory.Delete(root, recursive: true); } catch { }
         }
     }
+
+    private const string Implicit = """
+# Namespace: test.aspect
+
+## Asset
+- id: identifier @pk @generated
+- name: string(100)
+
+## AssetMaintenanceProfile
+- asset_id: identifier @pk @reference(Asset)
+- level: integer?
+""";
+
+    /// <summary>
+    /// A key that is itself another model's key (<c>@pk @reference(X)</c>) without a declared base
+    /// stops the build, and the message names the form that builds — <c>::aspect(X)</c> — which the
+    /// test after it shows does build.
+    /// </summary>
+    [Fact]
+    public void A_key_that_references_another_model_without_a_declared_base_stops_the_build_and_names_the_aspect_form()
+    {
+        var mddDir = Scaffold(Implicit, out var root, out _);
+
+        using var stderr = new ConsoleErrorCapture(this);
+        try
+        {
+            Assert.Equal(3, new BuildCommand().Run(mddDir));
+            Assert.Contains("MDD022", stderr.Text);
+            Assert.Contains("## AssetMaintenanceProfile ::aspect(Asset)", stderr.Text);
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    /// <summary>
+    /// The form the MDD022 message names is the conventional aspect above, with the key line
+    /// removed — pinned here as text so the guidance and the working form cannot drift apart.
+    /// </summary>
+    [Fact]
+    public void The_form_MDD022_names_is_one_that_builds()
+    {
+        var suggested = Implicit.Replace(
+            "## AssetMaintenanceProfile\n- asset_id: identifier @pk @reference(Asset)\n",
+            "## AssetMaintenanceProfile ::aspect(Asset)\n");
+        Assert.NotEqual(Implicit, suggested);
+
+        var mddDir = Scaffold(suggested, out var root, out _);
+        using var stderr = new ConsoleErrorCapture(this);
+        try
+        {
+            Assert.Equal(0, new BuildCommand().Run(mddDir));
+            Assert.DoesNotContain("MDD022", stderr.Text);
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    /// <summary>A key that references nothing, and a reference that is not the key, are untouched.</summary>
+    [Fact]
+    public void An_ordinary_key_and_an_ordinary_reference_are_not_MDD022()
+    {
+        var mddDir = Scaffold("""
+# Namespace: test.aspect
+
+## Asset
+- id: identifier @pk @generated
+- name: string(100)
+
+## WorkOrder
+- id: identifier @pk @generated
+- asset_id: identifier @reference(Asset)
+""", out var root, out _);
+
+        using var stderr = new ConsoleErrorCapture(this);
+        try
+        {
+            Assert.Equal(0, new BuildCommand().Run(mddDir));
+            Assert.DoesNotContain("MDD022", stderr.Text);
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
 }

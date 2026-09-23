@@ -46,7 +46,12 @@ internal static class AspectRules
 
         foreach (var model in models)
         {
-            if (model.Source.Base is not { } b) continue;
+            if (model.Source.Base is null)
+            {
+                CheckImplicitAspect(model, diagnostics);
+                continue;
+            }
+            var b = model.Source.Base;
             if (!string.Equals(b.Kind, AspectKind, StringComparison.Ordinal)) continue;
 
             // base 가 없는 모델은 M3L-E017 이 이미 거절했으므로 여기까지 오지 않는다.
@@ -91,6 +96,29 @@ internal static class AspectRules
             }
 
             taken[nav] = model.Name;
+        }
+    }
+
+    /// <summary>
+    /// <c>MDD022</c> — base 를 밝히지 않은 채 키가 곧 다른 모델의 FK 인 형태
+    /// (<c>- asset_id: identifier @pk @reference(Asset)</c>).
+    /// </summary>
+    /// <remarks>
+    /// 이 모양은 두 가지를 뜻할 수 있다 — 다른 행에 딸린 선택적 정보(<c>::aspect</c>)이거나, 다른
+    /// 모델의 한 종류(장래 <c>::subtype</c>). 둘은 삭제·조회·navigation 이 다르게 생성되므로 어느 쪽인지를
+    /// 생성기가 짐작하지 않고 작성자가 밝히게 한다. <c>::aspect</c> 가 생성되기 «전»에는 이것을 막을 수
+    /// 없었다 — 안내할 대안이 없었다. 지금은 있다.
+    /// </remarks>
+    private static void CheckImplicitAspect(ResolvedModel model, List<SemanticDiagnostic> diagnostics)
+    {
+        foreach (var key in (model.Source.Fields ?? []).Where(IsDeclaredKey))
+        {
+            if (LookupPath.ReferenceTarget(key) is not { } target) continue;
+            diagnostics.Add(new SemanticDiagnostic("MDD022",
+                $"'{model.Name}.{key.Name}': 키가 곧 '{target}' 의 FK 입니다 — 그런 테이블은 무엇인지를 밝혀야 합니다. " +
+                $"'{target}' 한 행에 딸린 선택적 정보라면 '## {model.Name} ::aspect({target})' 로 선언하고 이 키 필드를 지우십시오 " +
+                "(키는 ::aspect 가 만들고, base 행이 지워지면 함께 지워집니다).",
+                key.Loc));
         }
     }
 

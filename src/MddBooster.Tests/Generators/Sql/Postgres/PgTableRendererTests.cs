@@ -74,7 +74,7 @@ CREATE TABLE public.asset_maintenance_profile
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT pk_asset_maintenance_profile PRIMARY KEY (asset_id),
-    CONSTRAINT fk_asset_maintenance_profile_asset_id FOREIGN KEY (asset_id) REFERENCES public.asset (id),
+    CONSTRAINT fk_asset_maintenance_profile_asset_id FOREIGN KEY (asset_id) REFERENCES public.asset (id) ON DELETE CASCADE,
     CONSTRAINT fk_asset_maintenance_profile_criticality_id FOREIGN KEY (criticality_id) REFERENCES public.asset_criticality (id)
 );
 """;

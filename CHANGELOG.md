@@ -18,6 +18,20 @@
 
 ## [Unreleased]
 
+### 🔴 breaking — base 를 밝히지 않은 «키 = FK» 는 빌드 오류(`MDD022`)
+
+`- asset_id: identifier @pk @reference(Asset)` 처럼 **키가 곧 다른 모델의 FK** 인데 모델이 `::aspect` 를 선언하지
+않으면 빌드가 선다. 그 모양은 base 한 행에 딸린 선택적 정보일 수도, base 의 한 종류일 수도 있고 둘은 다르게
+생성되므로(삭제 연쇄 · navigation) 생성기가 짐작하지 않는다. 안내문이 옮길 형태를 그대로 적는다:
+
+```markdown
+## AssetMaintenanceProfile ::aspect(Asset) : Timestampable
+- level: integer?          # 키 필드는 지운다 — ::aspect(Asset) 가 만든다
+```
+
+**옮기면 DDL 이 한 곳 바뀐다**: base 로의 FK 에 `ON DELETE CASCADE` 가 붙는다(aspect 는 base 행과 한 단위로
+존재한다). 칼럼 이름·PK 는 그대로다. 그 밖에 base 쪽에 역방향 navigation 이 생긴다(`Asset.MaintenanceProfile`).
+
 ### 다단 lookup — `@lookup(order_id.customer_id.name)`
 
 언어 명세 §4.5.1 이 정의하는 다단 경로를 구현한다. 종전에는 경로를 첫 `.` 에서 잘라 `customer_id.name`

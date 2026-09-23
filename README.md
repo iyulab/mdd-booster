@@ -432,7 +432,8 @@ MDD_DEBUG=1 mdd build ./mdd
 | 널 허용 여부 · `string(n)` · `= <value>` → C# 검증 어트리뷰트 + 초기화자 (아래) | ✅ |
 | `# Prefix:` → 파일이 선언하는 모든 모델·enum·인터페이스·`::extend` 블록의 소유자 | ✅ |
 | `::extend` → 대상 모델 필드 목록 끝에 병합, 모든 타깃에서 보통 필드로 취급 (아래 「모델 확장과 소유자 접두어」) | ✅ |
-| `::aspect(Base)` / `::subtype(Base)` — 베이스를 갖는 모델 | ❌ — 파싱은 되지만 생성은 빌드를 `MDD016`으로 세운다 |
+| `::aspect(Base)` — base 한 행에 딸린 선택적 정보(PK = base FK) | ✅ — 아래 「`::aspect` → PK 가 곧 base FK 인 테이블」 |
+| `::subtype(Base)` — base 의 한 종류 | ❌ — 파싱은 되지만 생성은 빌드를 `MDD016`으로 세운다(저장 전략 미정) |
 
 `@rollup`의 `where:` 절은 상관 서브쿼리 필터로 렌더된다. 부모 행(집계가 걸린 대상 테이블 자신)의
 컬럼을 참조하려면 `$parent.<field>`를 쓴다(`field`는 m3l 필드명, snake_case) — 서브쿼리가 부모
@@ -569,6 +570,7 @@ modelBuilder.Entity<AssetMaintenanceProfileExt>()
 | **키를 선언하면 오류(MDD021)** | 키는 base 의 것이다. ⚠️ 이것은 **이 생성기의 규칙**이지 언어의 규칙이 아니다 — M3L 명세 §3.4.8 은 *「How a generator stores either is not part of the language」* 로 저장 방식을 언어 밖에 둔다. 대리 키 + 유니크 FK 로 저장하는 생성기라면 모순이 아니다 |
 | **이름 약속은 경고(MDD019)** | 모델명은 `<Base><Name>` 또는 `<Prefix><Base><Name>`. 어기면 base 쪽 navigation 이 **모델명 전체**가 되고 경고가 그 사실을 알린다. 오류가 아닌 이유는 기존 테이블의 개명을 강요하지 않기 위해서다 |
 | **navigation 이름 충돌은 오류(MDD020)** | 한 base 에 같은 이름을 내는 aspect 가 둘이거나, base 의 기존 필드와 겹칠 때. 이쪽은 「덜 좋은 이름」이 아니라 컴파일되지 않는 코드다 |
+| **base 를 밝히지 않은 «키 = FK» 는 오류(MDD022)** | `- asset_id: identifier @pk @reference(Asset)` 처럼 키가 곧 다른 모델의 FK 인데 `::aspect` 가 없으면 빌드가 선다. 그 모양은 «한 행에 딸린 정보»(aspect)일 수도 «한 종류»(장래 `::subtype`)일 수도 있고 둘은 삭제·조회·navigation 이 다르게 생성되므로, 생성기가 짐작하지 않고 작성자가 밝힌다. 안내문이 `## <Model> ::aspect(<Base>)` 를 제시한다 — 키 필드는 지운다. ⚠️ 옮기면 DDL 이 한 곳 바뀐다: FK 에 `ON DELETE CASCADE` 가 붙는다(aspect 는 base 행과 한 단위다) |
 | **`ON DELETE CASCADE`** | aspect 는 base 행과 **한 단위로** 존재한다. 보통 `@reference` 는 cascade 하지 않는다 |
 | **두 방언이 같다** | 관계는 CLR 축의 사실이다. `dialect: "postgres"` 에서도 같은 구성이 나간다 |
 
@@ -944,9 +946,13 @@ consumer-repo/
 | MDD013 | 확장 필드가 대상 모델과 다른 소유자에 속하는데 확장자의 `<prefix>_` 로 시작하지 않음 |
 | MDD014 | 접두어 없는 파일이 `# Prefix:` 를 선언한 파일 소유 모델을 확장 |
 | MDD015 | 확장 저장 필드가 nullable 도 기본값도 아님 |
-| MDD016 | 베이스를 갖는 모델(`::aspect`/`::subtype`) — 이 생성기는 아직 지원하지 않음 |
+| MDD016 | `::subtype` — 이 생성기는 아직 지원하지 않음(저장 전략 미정). `::aspect` 는 지원한다 |
 | MDD017(경고) | 접두어 파일의 모델명이 그 접두어(PascalCase)로 시작하지 않음 |
 | MDD018(경고) | 속성 이름이 알려진 어휘와 편집거리 ≤2 로 가까움(오타 의심). 의도한 custom 속성이면 무시해도 된다 |
+| MDD019(경고) | `::aspect` 모델명이 `<Base><Name>` / `<Prefix><Base><Name>` 약속을 벗어남 — base 쪽 navigation 이 모델명 전체가 된다 |
+| MDD020 | `::aspect` 가 base 에 내는 navigation 이름이 다른 aspect 나 base 의 기존 필드와 충돌 |
+| MDD021 | `::aspect` 모델이 키를 직접 선언 — 키는 `::aspect` 가 만든다 |
+| MDD022 | base 를 밝히지 않은 채 키가 곧 다른 모델의 FK(`@pk @reference(X)`) — `::aspect(X)` 로 선언하라 |
 
 코드 하나는 조건 하나만 뜻한다. `0.30.0` 이전에는 속성 오타 경고가 `MDD006` 을 lookup 대상 컬럼 부재
 오류와 함께 쓰고 있었다 — 지금은 `MDD018` 이다.

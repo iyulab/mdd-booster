@@ -901,8 +901,14 @@ follow the base argument.
 ## AssetMaintenanceProfile ::aspect(Asset) : Timestampable
 ```
 
-**What this generator implements**: parsed, not generated. `base { kind, model }` reaches the
-model, but no target emits anything for it — a model with a base fails the build with MDD016.
+**What this generator implements**: `::aspect` in full, `::subtype` not at all. An aspect is
+stored as a table whose primary key is the base's key and a foreign key to it with
+`ON DELETE CASCADE`; the key is created for you (declaring one is MDD021), and the base gains a
+navigation named after the model with the base's name removed (MDD019 warns when the name does not
+follow that convention, MDD020 stops the build when two names collide). A key that is itself a
+reference to another model, in a model that declares no base, is MDD022 — the build asks you to
+say `::aspect(Base)` rather than guessing what the shape means. `::subtype` fails the build with
+MDD016: how a kind of Base is stored has not been decided.
 
 #### 3.4.9 Emitting a C# Base Class / Interfaces (`@inherits` / `@implements`)
 

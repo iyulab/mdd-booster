@@ -242,11 +242,10 @@
 
 - @index(floor_id, status)
 
-## AssetSpec : Timestampable
+## AssetSpec ::aspect(Asset) : Timestampable
 
-> 공유 PK 1:1 확장 — PK 필드가 곧 부모(Asset) FK다.
+> 공유 PK 1:1 확장 — `::aspect(Asset)` 가 키(`asset_id` = Asset FK)를 만든다.
 
-- asset_id: identifier @pk @reference(Asset)
 - manufacturer: string(80)? "제조사"
 - model_name: string(80)? "모델명"
 - weight_kg: decimal(10,3)? "중량"
