@@ -35,7 +35,9 @@ NO ACTION). 이제 두 SQL 방언이 쓴다:
   PostgreSQL 은 첫 삭제 시). 필드를 `identifier?` 로 하거나 다른 기호를 쓴다.
 - **기호 없는 `@reference` 는 그대로다** — 절을 쓰지 않는다. 명세의 «자동 결정»(nullable → SET NULL, 아니면 CASCADE)은 적용하지
   않는다: SQL Server 에서 자기참조나 같은 모델을 가리키는 키 둘은 둘 다 연쇄할 수 없어(오류 1785) 흔한 모델이 배포되지 않게 된다.
-- Model 타깃(EF Core)의 삭제 동작 구성은 아직 이 기호를 따르지 않는다.
+- **Model 타깃(EF Core)도 같은 동작을 구성한다** — 쓰기 엔티티의 navigation 에 `OnDelete(DeleteBehavior.NoAction | SetNull | Restrict)`.
+  종전에는 EF 관례(필수 키 = Cascade)가 추적 중인 자식 행을 지웠다 — DB 가 거절하라고 들은 삭제를 클라이언트가 먼저 수행한 셈이다. 기호 없는
+  키는 관례 그대로.
 
 라이브러리로 렌더러를 부르는 경우: `ColumnRenderer.Render` 의 `bool cascadeOnDelete` 가 `ReferentialAction? onDelete` 로 바뀌었다
 (`MddBooster.Core.Semantic.OnDeleteRule.For` 가 모델·필드에서 그 값을 준다).

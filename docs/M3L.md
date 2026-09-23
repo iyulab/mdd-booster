@@ -654,8 +654,10 @@ SQL Server, which has no RESTRICT and checks NO ACTION immediately. The automati
 (NO ACTION) holds. Applied as written, it would make common models undeployable on SQL Server — a
 self-reference, or two keys to the same model, cannot both cascade or set null there (error 1785).
 The attribute forms (`@cascade`, `@no_action`, `@set_null`, `@restrict`, `@cascade(X)`) are
-deprecated by the parser (M3L-W003) and are not read. The Model target (EF Core) does not yet
-configure a delete behavior for these keys.
+deprecated by the parser (M3L-W003) and are not read. The Model target (EF Core) configures the same
+action on the write entity's navigation (`OnDelete(DeleteBehavior.NoAction | SetNull | Restrict)`),
+so EF does not delete tracked rows the database was told to keep; a key with no symbol keeps EF's
+convention.
 
 **Mixed Syntax (Advanced Usage):**
 ```markdown

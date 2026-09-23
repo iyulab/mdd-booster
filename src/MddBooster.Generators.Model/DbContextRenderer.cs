@@ -104,6 +104,35 @@ public static class DbContextRenderer
               .AppendLine(".OnDelete(DeleteBehavior.Cascade);");
         }
 
+        // A declared delete action (`@reference(X)!`/`?`/`!!`) is configured on the write entity's
+        // navigation too. Without it EF applies its own convention to tracked rows — a required key
+        // cascades, an optional one is cleared client-side — and deletes children the database
+        // itself was told to refuse. A reference with no symbol keeps the convention, as it keeps
+        // the database default. The ::aspect key is configured above.
+        foreach (var model in ordered)
+        {
+            var entity = NameCasing.ToPascalCase(model.Name);
+            var aspectKey = model.AspectBase is { } b ? AspectNaming.KeyFieldName(b) : null;
+            foreach (var field in model.Fields)
+            {
+                if (field.Kind != FieldKind.Stored || field.Name == aspectKey) continue;
+                if (!EntityPairRenderer.HasWriteNavigation(field)) continue;
+                var behavior = OnDeleteRule.For(model, field) switch
+                {
+                    ReferentialAction.NoAction => "NoAction",
+                    ReferentialAction.Restrict => "Restrict",
+                    ReferentialAction.SetNull => "SetNull",
+                    _ => null,
+                };
+                if (behavior is null) continue;
+                sb.Append("        modelBuilder.Entity<").Append(entity).Append(">()")
+                  .Append(".HasOne(e => e.").Append(EntityPairRenderer.NavPropertyName(field.Name)).Append(')')
+                  .Append(".WithMany()")
+                  .Append(".HasForeignKey(e => e.").Append(NameCasing.ToPascalCase(field.Name)).Append(')')
+                  .Append(".OnDelete(DeleteBehavior.").Append(behavior).AppendLine(");");
+            }
+        }
+
 
         if (postgresNaming)
         {

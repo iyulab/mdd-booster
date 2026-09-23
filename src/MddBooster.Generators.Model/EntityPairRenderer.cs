@@ -457,8 +457,7 @@ public static class EntityPairRenderer
         // that follow the standard xxx_id naming convention.
         // EF Core uses nav properties to infer INSERT order; without them, bulk
         // SaveChanges calls with parent+child in the same batch produce FK violations.
-        if (!isExt && !string.IsNullOrEmpty(referenceTarget)
-            && f.Name.EndsWith("_id", StringComparison.OrdinalIgnoreCase))
+        if (!isExt && HasWriteNavigation(f))
         {
             var navName = NavPropertyName(f.Name);
             if (effectiveNullable)
@@ -471,12 +470,21 @@ public static class EntityPairRenderer
     }
 
     /// <summary>
+    /// Whether the write entity carries a reference navigation for this field — a <c>@reference</c>
+    /// key named by the <c>xxx_id</c> convention. <see cref="DbContextRenderer"/> configures the
+    /// relationship through that navigation, so both read the same rule.
+    /// </summary>
+    internal static bool HasWriteNavigation(FieldNode f) =>
+        !string.IsNullOrEmpty(MddBooster.Core.Ast.FieldAttributes.FirstArg(f, "reference"))
+        && f.Name.EndsWith("_id", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Derives the EF Core navigation property name from a FK field name ending in <c>_id</c>.
     /// Strips the <c>_id</c> suffix and converts the remainder to PascalCase.
     /// For example <c>customer_id</c> → <c>Customer</c>,
     /// <c>channel_partner_id</c> → <c>ChannelPartner</c>.
     /// </summary>
-    private static string NavPropertyName(string fkFieldName)
+    internal static string NavPropertyName(string fkFieldName)
     {
         var name = fkFieldName.EndsWith("_id", StringComparison.OrdinalIgnoreCase)
             ? fkFieldName[..^3]
