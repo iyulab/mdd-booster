@@ -101,8 +101,10 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
             throw new InvalidOperationException(
                 $"순환 FullView 의존성 발견: {path}. 두 모델의 뷰가 서로를 참조하면 배포할 수 없다. " +
                 "체이닝된 Lookup이 다른 모델의 파생(Lookup/Rollup/Computed) 컬럼을 거치는데, 그 대상 " +
-                "모델도 원 모델의 파생 컬럼을 Rollup으로 되읽을 때 발생한다. 체이닝된 Lookup을 원본 " +
-                "컬럼으로 바꾸거나, Rollup의 집계 대상을 원본 컬럼으로 바꿔 순환을 끊어야 한다.");
+                "모델도 원 모델의 파생 컬럼을 Rollup으로 되읽을 때 발생한다. 파생 컬럼 대신 저장된 키를 " +
+                "따라 읽도록 바꾸거나(예: @lookup(order_id.customer_name) 대신 " +
+                "@lookup(order_id.customer_id.name) — 다단 lookup 의 각 hop 은 FullView 가 아니라 테이블을 " +
+                "JOIN 한다), Rollup의 집계 대상을 원본 컬럼으로 바꿔 순환을 끊어야 한다.");
         }
 
         // 이번 렌더러가 직접 지원하는 것은 Lookup/Rollup 파생 컬럼뿐이다 — Computed(표현식 문법이

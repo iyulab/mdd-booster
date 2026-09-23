@@ -39,7 +39,9 @@ public sealed class MultiHopLookupTests : IDisposable
         "- id: identifier @pk @generated\n" +
         "- customer_id: identifier @reference(Enterprise) @not_null\n" +
         "- memo: string(50)\n" +
-        "- plain_id: identifier\n\n" +
+        "- plain_id: identifier\n" +
+        "- opt_customer_id: identifier? @reference(Enterprise)?\n" +
+        "- hidden_customer_id: identifier @reference(Enterprise) @internal\n\n" +
         "### Lookup\n" +
         "- customer_name: string @lookup(customer_id.name)\n\n" +
         "### Rollup\n" +
@@ -167,6 +169,47 @@ public sealed class MultiHopLookupTests : IDisposable
         Assert.DoesNotContain("j_order_id_base", sql);
     }
 
+    /// <summary>
+    /// The one case where a deeper hop cannot reuse a prefix that reads the FullView: the key it
+    /// needs is field-internal, so the FullView does not project it. It gets its own table join.
+    /// </summary>
+    [Fact]
+    public void A_field_internal_next_key_joins_the_table_beside_the_full_view()
+    {
+        var models = Load(
+            "- supply: decimal(12,0) @lookup(order_id.supply_total)\n" +
+            "- customer: string @lookup(order_id.hidden_customer_id.name)\n", out _);
+        var plan = new ViewPlanner().Plan(models.Single(m => m.Name == "OrderItem"));
+        var sql = FullViewRenderer.Render(plan, "dbo", Derived(models), models);
+
+        Assert.Contains("LEFT JOIN [dbo].[OrderFullView] AS j_order_id ON b.[OrderId] = j_order_id.[Id]", sql);
+        Assert.Contains("LEFT JOIN [dbo].[Order] AS j_order_id_base ON b.[OrderId] = j_order_id_base.[Id]", sql);
+        Assert.Contains("ON j_order_id_base.[HiddenCustomerId] = j_order_id__hidden_customer_id.[Id]", sql);
+    }
+
+    // ── Nullability on the generated types ──────────────────────────────────
+
+    /// <summary>
+    /// M3L §4.5.4: an optional key at any hop makes the result optional — each hop is a LEFT JOIN.
+    /// The key here is required on OrderItem and optional one model further along.
+    /// </summary>
+    [Fact]
+    public void An_optional_key_at_a_later_hop_makes_the_generated_property_optional()
+    {
+        var models = Load(
+            "- via_required: string @lookup(order_id.customer_id.name)\n" +
+            "- via_optional: string @lookup(order_id.opt_customer_id.name)\n", out _);
+        var item = models.Single(m => m.Name == "OrderItem");
+
+        var pair = MddBooster.Generators.Model.EntityPairRenderer.Render(item, "Test.Entities", allModels: models);
+        Assert.Contains("public string? ViaOptional", pair.Read);
+        Assert.DoesNotContain("public string? ViaRequired", pair.Read);
+
+        var ts = MddBooster.Generators.TypeScript.TsInterfaceRenderer.RenderAll(models);
+        Assert.Contains("ViaOptional?: string | null", ts);
+        Assert.Contains("ViaRequired?: string" + Environment.NewLine, ts);
+    }
+
     // ── The reported cycle ──────────────────────────────────────────────────
 
     private void Generate(string lookups)
@@ -176,13 +219,18 @@ public sealed class MultiHopLookupTests : IDisposable
             .Generate(new GeneratorContext { Models = models, Enums = ast.Enums, WorkingDirectory = _root });
     }
 
-    /// <summary>The control: the one-hop lookup of Order's own lookup still closes the cycle.</summary>
+    /// <summary>
+    /// The control: the one-hop lookup of Order's own lookup still closes the cycle — and the way
+    /// out the error names is the multi-hop form, which the next test shows builds. The guidance
+    /// used to name a way out this generator refused.
+    /// </summary>
     [Fact]
-    public void The_one_hop_path_through_a_derived_column_still_fails_as_a_cycle()
+    public void The_one_hop_path_through_a_derived_column_still_fails_as_a_cycle_and_names_a_way_out_that_builds()
     {
         var ex = Assert.Throws<InvalidOperationException>(
             () => Generate("- customer: string @lookup(order_id.customer_name)\n"));
         Assert.Contains("Circular FullView dependency", ex.Message);
+        Assert.Contains("@lookup(order_id.customer_id.name)", ex.Message);
     }
 
     /// <summary>The same value reached through raw keys builds — no view depends on another's.</summary>

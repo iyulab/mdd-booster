@@ -36,12 +36,6 @@ public sealed record LookupPathWalk(
 {
     /// <summary>The model the last hop lands on, or <c>null</c> when the walk failed before any hop.</summary>
     public ResolvedModel? Target => Hops.Count == 0 ? null : Hops[^1].Target;
-
-    /// <summary>
-    /// Whether any key along the way is optional — the lookup's result is then optional too
-    /// (M3L §4.5.4 nullable propagation): a missing link anywhere leaves nothing to read.
-    /// </summary>
-    public bool AnyHopNullable => Hops.Any(h => h.FkField.Nullable);
 }
 
 /// <summary>
@@ -109,6 +103,38 @@ public static class LookupPath
         return column is null
             ? new LookupPathWalk(hops, null, LookupPathFailure.MissingColumn, current, columnName)
             : new LookupPathWalk(hops, column, LookupPathFailure.None, null, null);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="lookupField"/>'s value can be absent: declared optional, or read
+    /// through an optional key at any hop (M3L §4.5.4 nullable propagation — the view joins each hop
+    /// with <c>LEFT JOIN</c>, so a missing link anywhere yields NULL). Walks as far as the path
+    /// resolves: a hop that does not resolve is the analyzer's to report, and the keys before it
+    /// still decide.
+    /// </summary>
+    public static bool ResultNullable(ResolvedModel owner, FieldNode lookupField, IReadOnlyList<ResolvedModel> allModels)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(lookupField);
+        ArgumentNullException.ThrowIfNull(allModels);
+
+        if (lookupField.Nullable) return true;
+        if (lookupField.Kind != FieldKind.Lookup || !TrySplit(lookupField.Lookup?.Path, out var fkSegments, out _))
+            return false;
+
+        var current = owner;
+        foreach (var segment in fkSegments)
+        {
+            var fkField = current.Fields.FirstOrDefault(f => f.Name == segment);
+            if (fkField is null) return false;
+            if (fkField.Nullable) return true;
+
+            var targetName = ReferenceTarget(fkField);
+            var target = targetName is null ? null : allModels.FirstOrDefault(m => m.Name == targetName);
+            if (target is null) return false;
+            current = target;
+        }
+        return false;
     }
 
     /// <summary>The model named by <paramref name="field"/>'s <c>@reference(Target)</c>, or <c>null</c>.</summary>

@@ -66,8 +66,10 @@ public sealed class SqlGenerator : IArtifactGenerator
                 "SQL Server cannot deploy views that reference each other (SQL72009). This happens " +
                 "when a chained Lookup passes through a derived (Lookup/Rollup/Computed) column on a " +
                 "model that also Rollups an aggregate sourced from a derived column back on the " +
-                "originating model. Break the cycle by pointing the chained Lookup at a raw base " +
-                "column, or by sourcing the Rollup's aggregated field from a raw column instead.");
+                "originating model. Break the cycle by reading the value through stored keys instead " +
+                "of through the derived column — e.g. @lookup(order_id.customer_id.name) in place of " +
+                "@lookup(order_id.customer_name): each hop of a multi-hop lookup joins a table, not a " +
+                "FullView — or by sourcing the Rollup's aggregated field from a raw column.");
         }
 
         var viewFileNames = new List<string>();

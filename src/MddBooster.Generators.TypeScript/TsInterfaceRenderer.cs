@@ -73,7 +73,7 @@ public static class TsInterfaceRenderer
 
         foreach (var model in models)
         {
-            RenderInterface(sb, model, knownEnumNames);
+            RenderInterface(sb, model, models, knownEnumNames);
         }
 
         return sb.ToString();
@@ -82,6 +82,7 @@ public static class TsInterfaceRenderer
     private static void RenderInterface(
         StringBuilder sb,
         ResolvedModel model,
+        IReadOnlyList<ResolvedModel> models,
         IReadOnlySet<string>? knownEnumNames)
     {
         var entityName = NameCasing.ToPascalCase(model.Name);
@@ -116,13 +117,12 @@ public static class TsInterfaceRenderer
         if (extFields.Count > 0)
         {
             sb.AppendLine("  // Ext");
-            // Build stored field nullability map for Lookup inheritance
-            var storedNullability = storedFields.ToDictionary(f => f.Name, f => f.Nullable, StringComparer.Ordinal);
 
             foreach (var f in extFields)
             {
                 var tsType = TypeScriptTypeMapper.MapFieldType(f.Type!, knownEnumNames);
-                var effectiveNullable = ResolveExtNullable(f, storedNullability);
+                // Optional when declared so, or when read through an optional key at any hop.
+                var effectiveNullable = LookupPath.ResultNullable(model, f, models);
                 var nullSuffix = effectiveNullable ? " | null" : string.Empty;
                 var prop = NameCasing.ToPascalCase(f.Name);
                 // Ext fields are always optional (may not be returned in write contexts)
@@ -132,23 +132,6 @@ public static class TsInterfaceRenderer
 
         sb.AppendLine("}");
         sb.AppendLine();
-    }
-
-    private static bool ResolveExtNullable(FieldNode f, Dictionary<string, bool> storedNullability)
-    {
-        if (f.Nullable) return true;
-        if (f.Kind == FieldKind.Lookup)
-        {
-            var path = f.Lookup?.Path;
-            if (!string.IsNullOrEmpty(path))
-            {
-                var dot = path.IndexOf('.');
-                var fkName = dot > 0 ? path[..dot] : path;
-                if (storedNullability.TryGetValue(fkName, out var fkNullable) && fkNullable)
-                    return true;
-            }
-        }
-        return false;
     }
 
     private static bool HasAttribute(FieldNode field, string name) =>

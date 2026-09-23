@@ -44,12 +44,18 @@ public static class EntityPairRenderer
     /// some other model, so the set has to be computed once and handed in. Omitted, the read type
     /// carries no navigation and the output is what it was before this parameter existed.
     /// </param>
+    /// <param name="allModels">
+    /// Every model being generated — a multi-hop lookup's later keys live on other models, and any
+    /// optional key along the path makes the lookup's property optional. Omitted, only the first
+    /// hop's key (on this model) is consulted.
+    /// </param>
     public static RenderedPair Render(
         ResolvedModel model,
         string ns,
         IReadOnlySet<string>? knownEnumNames = null,
         ExtBacking extBacking = ExtBacking.None,
-        IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne = null)
+        IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne = null,
+        IReadOnlyList<ResolvedModel>? allModels = null)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentException.ThrowIfNullOrWhiteSpace(ns);
@@ -95,10 +101,16 @@ public static class EntityPairRenderer
         var readOnlyStoredFields = storedFields.Where(f => !EntitySurface.IsFieldInternal(f)).ToList();
         var readOnlyDerivedFields = derivedFields.Where(f => !EntitySurface.IsFieldInternal(f)).ToList();
 
+        var models = allModels ?? [model];
+        var nullableLookups = derivedFields
+            .Where(f => f.Kind == FieldKind.Lookup && LookupPath.ResultNullable(model, f, models))
+            .Select(f => f.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
         return new RenderedPair(
             Interface: RenderInterface(entityName, readOnlyStoredFields, ns, knownEnumNames),
-            Write: RenderClass(entityName, storedFields, derivedFields: null, ns, isExt: false, knownEnumNames, extBacking, model.Source, model.Name, oneToOne),
-            Read: RenderClass(entityName, readOnlyStoredFields, readOnlyDerivedFields, ns, isExt: true, knownEnumNames, extBacking, model.Source, model.Name, oneToOne));
+            Write: RenderClass(entityName, storedFields, derivedFields: null, ns, isExt: false, knownEnumNames, extBacking, model.Source, model.Name, oneToOne, nullableLookups),
+            Read: RenderClass(entityName, readOnlyStoredFields, readOnlyDerivedFields, ns, isExt: true, knownEnumNames, extBacking, model.Source, model.Name, oneToOne, nullableLookups));
     }
 
     private static string RenderInterface(string entityName, IReadOnlyList<FieldNode> fields, string ns, IReadOnlySet<string>? knownEnumNames)
@@ -139,7 +151,8 @@ public static class EntityPairRenderer
         ExtBacking extBacking,
         ModelNode source,
         string modelName,
-        IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne)
+        IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne,
+        IReadOnlySet<string> nullableLookups)
     {
         var className = isExt ? entityName + "Ext" : entityName;
         // Ext classes route to the SQL layer that actually exposes their
@@ -196,20 +209,15 @@ public static class EntityPairRenderer
             sb.Append(", ").Append(iface);
         sb.AppendLine();
         sb.AppendLine("{");
-        // Build a map of stored FK field nullability so Lookup fields can
-        // inherit the correct optionality from their FK path's first hop.
-        // A lookup through a nullable FK produces NULL whenever the FK is NULL
-        // (LEFT JOIN) and the generated C# property must reflect that.
-        var storedNullability = BuildStoredNullabilityMap(storedFields);
         foreach (var f in storedFields)
         {
-            RenderProperty(sb, f, knownEnumNames, storedNullability, isExt);
+            RenderProperty(sb, f, knownEnumNames, nullableLookups, isExt);
         }
         if (derivedFields is { Count: > 0 })
         {
             foreach (var f in derivedFields)
             {
-                RenderProperty(sb, f, knownEnumNames, storedNullability, isExt);
+                RenderProperty(sb, f, knownEnumNames, nullableLookups, isExt);
             }
         }
         if (isExt) RenderOneToOneNavigation(sb, modelName, oneToOne);
@@ -275,26 +283,15 @@ public static class EntityPairRenderer
         StringBuilder sb,
         FieldNode f,
         IReadOnlySet<string>? knownEnumNames,
-        IReadOnlyDictionary<string, bool>? storedNullability,
+        IReadOnlySet<string>? nullableLookups,
         bool isExt = false)
     {
         var cs = CSharpTypeMapper.MapFieldType(f.Type!, knownEnumNames);
 
-        // Lookup fields inherit nullability from their FK path's first hop.
-        // A @lookup(fk.col) through a nullable FK yields NULL whenever the FK
-        // is NULL (LEFT JOIN). Propagate that to the generated C# type.
-        var effectiveNullable = f.Nullable;
-        if (f.Kind == FieldKind.Lookup && !effectiveNullable && storedNullability is not null)
-        {
-            var path = f.Lookup?.Path;
-            if (!string.IsNullOrEmpty(path))
-            {
-                var dot = path.IndexOf('.');
-                var fkName = dot > 0 ? path[..dot] : path;
-                if (storedNullability.TryGetValue(fkName, out var fkNullable) && fkNullable)
-                    effectiveNullable = true;
-            }
-        }
+        // A lookup read through an optional key at any hop yields NULL whenever that key is NULL
+        // (each hop is a LEFT JOIN) — LookupPath.ResultNullable decided which, for the whole path.
+        var effectiveNullable = f.Nullable
+            || (f.Kind == FieldKind.Lookup && nullableLookups is not null && nullableLookups.Contains(f.Name));
 
         var nullable = effectiveNullable ? "?" : string.Empty;
         var prop = NameCasing.ToPascalCase(f.Name);
@@ -537,17 +534,6 @@ public static class EntityPairRenderer
     private static bool IsNumericLiteral(string s) =>
         double.TryParse(s, System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture, out _);
-
-    private static IReadOnlyDictionary<string, bool> BuildStoredNullabilityMap(IReadOnlyList<FieldNode> storedFields)
-    {
-        var map = new Dictionary<string, bool>(StringComparer.Ordinal);
-        foreach (var f in storedFields)
-        {
-            if (!string.IsNullOrEmpty(f.Name))
-                map[f.Name] = f.Nullable;
-        }
-        return map;
-    }
 
     private static string GetRollupExpression(FieldNode f)
     {

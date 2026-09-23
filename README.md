@@ -420,7 +420,7 @@ MDD_DEBUG=1 mdd build ./mdd
 | `phone`/`email`/`url` → 검증 문자열 (plain `string`, `NVARCHAR(30/320/2048)` — 상한은 언어 명세 §10.4.2가 정한다. `phone`만 명세의 20 대신 30을 쓰며 그 이탈은 코드에 기록돼 있다). **값객체 struct 매핑 아님** — `ODataConventionModelBuilder`가 값객체 struct를 EDM 복합 타입으로 등록하지 못해 직렬화가 깨지기 때문. 막힌 지점은 OData 직렬화 계층 한정이라 데이터 계층에서의 변환은 자유롭다 | ✅ |
 | `@reference(Target)` → SQL FK + C# `[Reference]` 속성 | ✅ |
 | `@unique` (단일 컬럼) | ✅ |
-| `@lookup(fk.col)` → `_full` 뷰 LEFT JOIN + `[Lookup]` 속성 | ✅ |
+| `@lookup(fk.col)` → `_full` 뷰 LEFT JOIN + `[Lookup]` 속성 | ✅ — 다단 경로(`@lookup(order_id.customer_id.name)`, 언어 명세 §4.5.1)도 hop 마다 LEFT JOIN 을 잇는다. 마지막 hop 앞의 hop 은 대상의 **테이블**을 JOIN 하므로(다음 키만 읽는다) 다른 뷰에 의존하지 않는다 — 파생 칼럼을 거치는 1단 lookup 이 뷰 순환을 만드는 자리에서 같은 값을 저장 키로 따라 읽는 길이다. 경로의 어느 키든 널 허용이면 생성 속성도 널 허용이다(§4.5.4) |
 | `@rollup(Target.fk, aggregate)` → `_ext` 뷰 서브쿼리 + `[Rollup]` | ✅ |
 | `@computed("expr")` → `_ext` 뷰 표현식 컬럼 + `[Computed]` | ✅ |
 | `@indexed` + rollup → `WITH SCHEMABINDING` | ✅ |
@@ -933,10 +933,10 @@ consumer-repo/
 |---|---|
 | MDD001 | 필드 타입이 primitive/enum/model 어느 것도 아님 |
 | MDD002 | `@reference(X)` 대상 엔티티 없음 |
-| MDD003 | `@lookup` 경로가 `fk.col` 형태가 아님 |
-| MDD004 | `@lookup(fk.col)`의 fk가 동일 모델에 없음 |
-| MDD005 | 해당 fk에 `@reference` 없음 |
-| MDD006 | lookup target 엔티티에 `col` 필드 없음 |
+| MDD003 | `@lookup` 경로가 `fk.col`(또는 `fk.fk….col`) 형태가 아님 |
+| MDD004 | `@lookup` 경로의 fk가 그 hop 의 모델에 없음(첫 hop 은 동일 모델) |
+| MDD005 | 경로의 fk에 `@reference` 없음 — 둘째 hop 부터는 메시지가 `모델.필드` 로 지목 |
+| MDD006 | 경로 끝 모델에 `col` 필드 없음 |
 | MDD007-9 | `@rollup` 대응 검증 |
 | MDD010 | `# Entity.Column` 바인딩 대상 엔티티 없음 |
 | MDD011 | `# Entity.Column` 바인딩 대상에 그 이름의 저장 필드 없음 |
