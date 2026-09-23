@@ -99,14 +99,14 @@ public class ModelTargetEnumAxisCoverageTests
             ["Name"] = (Disposition.Carried, "the generated type name, PascalCased"),
             ["Values"] = (Disposition.Carried, "the members; see the per-value axes above"),
             ["Description"] = (Disposition.Carried, "the type's XML doc comment"),
-            ["Inherits"] = (Disposition.UnimplementedEverywhere,
-                "`## ExtendedStatus ::enum : BasicStatus`. No target reads it, and the measured consequence " +
-                "is that the generated enum silently lacks the inherited members — Values holds only what the " +
-                "block itself declares, so nothing upstream of this renderer has flattened them in either. " +
-                "No longer silent: the loader accounting reports the parent list as an unread axis, because an " +
-                "artifact that is wrong is worse than one that was never produced. Flattening belongs where the " +
-                "specification defines inheritance as a union of values, which is not this repository — so what " +
-                "changes here when that lands is this note, not the disposition"),
+            ["Inherits"] = (Disposition.Carried,
+                "`## ExtendedStatus ::enum : BasicStatus`. Carried through Values, not through this property: " +
+                "the parser joins the parent's values into the child's own, parent's first (the specification " +
+                "defines inheritance as a union of values), so the generated enum holds the inherited members " +
+                "and every target that reads Values agrees on them. The parent name itself has no C# " +
+                "counterpart — an enum cannot derive from another — and nothing here needs it. Until the parser " +
+                "did the joining this was UnimplementedEverywhere and the generated enum silently lacked the " +
+                "inherited members; the test below pins the members being present"),
             ["Label"] = (Disposition.UnimplementedEverywhere,
                 "a display name for the enum type itself. No target reads it; the type's own label has no " +
                 "counterpart in any generated artifact, unlike a member's"),
@@ -151,17 +151,17 @@ public class ModelTargetEnumAxisCoverageTests
     }
 
     /// <summary>
-    /// The two <c>UnimplementedEverywhere</c> claims above, pinned by behaviour rather
+    /// The <c>UnimplementedEverywhere</c> claim for a member's declared value, pinned by behaviour rather
     /// than by reading the code that would have to change.
     /// </summary>
     /// <remarks>
     /// A note asserting absence cannot be checked by reading a document — the same
     /// reason the bundled spec copy's absence notes are pinned by generating a model and
-    /// looking at the output. If either axis starts being carried, these fail and the
+    /// looking at the output. If the axis starts being carried, this fails and the
     /// disposition above is what has to move.
     /// </remarks>
     [Fact]
-    public void Declared_member_values_and_enum_inheritance_leave_no_trace_in_the_generated_enum()
+    public void Declared_member_values_leave_no_trace_in_the_generated_enum()
     {
         var ast = new M3lLoader().LoadFile(
             Path.Combine(AppContext.BaseDirectory, "fixtures", "enum-unread-axes.m3l.md"));
@@ -181,10 +181,25 @@ public class ModelTargetEnumAxisCoverageTests
             .ToList();
         Assert.Equal(2, memberLines.Count);
         Assert.All(memberLines, l => Assert.DoesNotContain("=", l, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The <c>Carried</c> claim for <c>Inherits</c>, pinned by behaviour: the generated
+    /// enum holds the parent's members ahead of its own. The order is the parser's
+    /// (parent first) and it decides the C# ordinals, so it is asserted, not just the set.
+    /// </summary>
+    [Fact]
+    public void Enum_inheritance_reaches_the_generated_enum_parent_members_first()
+    {
+        var ast = new M3lLoader().LoadFile(
+            Path.Combine(AppContext.BaseDirectory, "fixtures", "enum-unread-axes.m3l.md"));
 
         var extended = EnumRenderer.Render(ast.Enums.Single(e => e.Name == "ExtendedStatus"), "Probe");
-        Assert.Contains("Archived", extended, StringComparison.Ordinal);
-        Assert.DoesNotContain("Draft", extended, StringComparison.Ordinal);
-        Assert.DoesNotContain("Done", extended, StringComparison.Ordinal);
+
+        var draft = extended.IndexOf("Draft", StringComparison.Ordinal);
+        var done = extended.IndexOf("Done", StringComparison.Ordinal);
+        var archived = extended.IndexOf("Archived", StringComparison.Ordinal);
+        Assert.True(draft >= 0 && done > draft && archived > done,
+            $"expected Draft < Done < Archived in the generated enum:\n{extended}");
     }
 }

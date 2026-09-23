@@ -587,12 +587,11 @@ Enums can inherit values from other enums:
 - banned: "Banned"
 ```
 
-**What this generator implements**: nothing, and the build says so rather than leaving you to find
-out from the output. The parent's name is recorded and its values are never merged in, so the enum
-generated for `UserStatus` above holds `suspended` and `banned` only — `active` and `inactive` are
-absent from every target. This is the one unread axis where the artifact is produced and *wrong*
-instead of missing, which is why the build reports it as unconsumed. Until inheritance is resolved
-where the union of values is defined, declare the values you need in the block itself.
+**What this generator implements**: implemented, on every target. The parser joins the parent's
+values into the child's own — parent's first, then the child's — so the enum generated for
+`UserStatus` above holds `active`, `inactive`, `suspended` and `banned`, in that order, in the C#
+enum, the TypeScript union and — where that opt-in is on — the SQL CHECK literal alike. The order decides the C# ordinals; the
+stored value is the member's name, so reordering never changes what a row holds.
 
 #### 3.1.7 Inline Enum Definition
 
