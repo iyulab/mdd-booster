@@ -52,8 +52,7 @@ public class ProgramErrorSurfaceTests
     [Fact]
     public void Wrong_scalar_type_for_sources_prints_clean_message_no_stack_trace()
     {
-        // Acceptance criterion 3 (ISSUE-mdd-booster-20260827-config-loader-raw-exception.md ⑷):
-        // a *different* JSON schema mismatch must go through the same clean path, not just the
+        // A *different* JSON schema mismatch must go through the same clean path, not just the
         // originally-reproduced targets-shape case.
         var mddDir = CreateTempDir();
         File.WriteAllText(Path.Combine(mddDir, "mdd.json"), """

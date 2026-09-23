@@ -37,7 +37,7 @@ public class MddSchemaTests
     public void Target_level_option_left_at_the_config_root_is_rejected()
     {
         // The exact silent-ignore shape ConfigLoader let through — this is the schema's reason
-        // to exist. See ISSUE-mdd-booster-20260827-config-loader-raw-exception.md / ROADMAP §1.
+        // to exist.
         const string json = """
         {
           "sources": ["./tables.m3l.md"],

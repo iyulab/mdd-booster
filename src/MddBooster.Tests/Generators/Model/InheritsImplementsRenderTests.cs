@@ -7,7 +7,7 @@ using Xunit;
 namespace MddBooster.Tests.Generators.Model;
 
 /// <summary>
-/// Domain-neutral base-class / interface knobs (ROADMAP §5.2 T-92-2):
+/// Domain-neutral base-class / interface knobs:
 /// <c>@implements(FQN, ...)</c> appends verbatim fully-qualified interfaces,
 /// <c>@inherits(FQN)</c> overrides the default IyuEntity base class.
 /// mdd treats the argument as an opaque string, prefixing only <c>global::</c>.
