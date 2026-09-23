@@ -30,8 +30,6 @@ public static class TableRenderer
         // appear as physical columns here. BaseColumns is the shared authority so
         // the views project exactly the columns this table emits.
         var storedFields = BaseColumns.StoredFields(model).ToList();
-        // ::aspect 가 만든 키만 cascade 한다 — 이름은 AspectNaming 이 한 곳에서 정한다.
-        var cascadingKey = model.AspectBase is { } aspectBase ? AspectNaming.KeyFieldName(aspectBase) : null;
         // FK 는 대상 모델의 실제 PK 와 이 렌더의 스키마를 가리킨다(TargetKey). 참조가 없는 모델은
         // 대상 목록 없이도 렌더된다.
         Func<string, ResolvedModel?> findModel = name =>
@@ -39,7 +37,7 @@ public static class TableRenderer
         var columnLines = storedFields
             .Select(f => ColumnRenderer.Render(
                 f, enumLookup,
-                cascadeOnDelete: cascadingKey is not null && f.Name == cascadingKey,
+                onDelete: OnDeleteRule.For(model, f),
                 referencedKey: ReferencedKey(f, model, schema, findModel)))
             .ToList();
 

@@ -953,6 +953,7 @@ consumer-repo/
 | MDD020 | `::aspect` 가 base 에 내는 navigation 이름이 다른 aspect 나 base 의 기존 필드와 충돌 |
 | MDD021 | `::aspect` 모델이 키를 직접 선언 — 키는 `::aspect` 가 만든다 |
 | MDD022 | base 를 밝히지 않은 채 키가 곧 다른 모델의 FK(`@pk @reference(X)`) — `::aspect(X)` 로 선언하라 |
+| MDD023 | `@reference(X)?`(삭제 시 SET NULL)인데 키가 NULL 을 허용하지 않는다 — 필드를 nullable 로 하거나 다른 기호를 쓰라 |
 
 코드 하나는 조건 하나만 뜻한다. `0.30.0` 이전에는 속성 오타 경고가 `MDD006` 을 lookup 대상 컬럼 부재
 오류와 함께 쓰고 있었다 — 지금은 `MDD018` 이다.

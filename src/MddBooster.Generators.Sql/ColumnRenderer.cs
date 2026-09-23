@@ -1,16 +1,16 @@
 using System.Text.Json;
 using M3L.Native;
 using MddBooster.Core.Naming;
+using MddBooster.Core.Semantic;
 
 namespace MddBooster.Generators.Sql;
 
 public static class ColumnRenderer
 {
-    /// <param name="cascadeOnDelete">
-    /// 이 필드의 FK 가 <c>ON DELETE CASCADE</c> 인가. 오늘 이것이 참인 경우는 하나뿐이다 —
-    /// <c>::aspect</c> 가 만든 키. aspect 는 base 행과 «한 단위로» 존재하므로 base 가 사라지면
-    /// 딸린 행도 사라지는 것이 그 선언의 뜻이고, 남겨 두면 base 없는 aspect 행이 된다.
-    /// 보통 <c>@reference</c> 는 <see langword="false"/> — 삭제 동작을 모델이 아직 말하지 못한다.
+    /// <param name="onDelete">
+    /// 이 필드의 FK 가 선언한 삭제 동작(<see cref="OnDeleteRule"/>) — <see langword="null"/> 이면 절을 쓰지
+    /// 않는다(DB 기본값). SQL Server 에는 <c>RESTRICT</c> 가 없다: 그 <c>NO ACTION</c> 은 제약을 즉시
+    /// 검사하므로 같은 뜻이다.
     /// </param>
     /// <param name="referencedKey">
     /// <c>@reference</c> 필드가 가리키는 키 — <c>[schema].[Table]([PkColumn])</c>. 대상 모델을 아는 쪽
@@ -20,7 +20,7 @@ public static class ColumnRenderer
     public static string Render(
         FieldNode field,
         IReadOnlyDictionary<string, EnumNode>? enumLookup = null,
-        bool cascadeOnDelete = false,
+        ReferentialAction? onDelete = null,
         string? referencedKey = null)
     {
         ArgumentNullException.ThrowIfNull(field);
@@ -33,13 +33,13 @@ public static class ColumnRenderer
 
         var nullability = field.Nullable ? "NULL" : "NOT NULL";
 
-        var suffix = BuildSuffix(field, m3lType, columnName, enumLookup, cascadeOnDelete, referencedKey);
+        var suffix = BuildSuffix(field, m3lType, columnName, enumLookup, onDelete, referencedKey);
 
         var core = $"[{columnName}] {sqlType} {nullability}";
         return string.IsNullOrEmpty(suffix) ? core : $"{core} {suffix}";
     }
 
-    private static string BuildSuffix(FieldNode field, string m3lType, string columnName, IReadOnlyDictionary<string, EnumNode>? enumLookup, bool cascadeOnDelete, string? referencedKey)
+    private static string BuildSuffix(FieldNode field, string m3lType, string columnName, IReadOnlyDictionary<string, EnumNode>? enumLookup, ReferentialAction? onDelete, string? referencedKey)
     {
         var parts = new List<string>();
 
@@ -65,7 +65,13 @@ public static class ColumnRenderer
                     $"필드 '{field.Name}'은(는) @reference({referenceTarget}) 인데 참조 키가 해석되지 않았습니다.",
                     nameof(referencedKey));
             parts.Add($"REFERENCES {referencedKey}"
-                + (cascadeOnDelete ? " ON DELETE CASCADE" : ""));
+                + onDelete switch
+                {
+                    ReferentialAction.Cascade => " ON DELETE CASCADE",
+                    ReferentialAction.SetNull => " ON DELETE SET NULL",
+                    ReferentialAction.NoAction or ReferentialAction.Restrict => " ON DELETE NO ACTION",
+                    _ => "",
+                });
         }
 
         // Enum CHECK 제약은 여기(inline)가 아니라 TableRenderer의 table-level 경로에서

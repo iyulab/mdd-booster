@@ -90,13 +90,15 @@ public static class PgTableRenderer
                 ?? throw new InvalidOperationException(
                     $"참조 대상 모델 '{target}'에 PK가 없어 FK를 렌더할 수 없습니다.");
 
-            // ::aspect 가 만든 키만 cascade 한다 — base 행과 한 단위로 존재한다는 것이 그
-            // 선언의 뜻이고, 남겨 두면 base 없는 aspect 행이 된다. 이름은 AspectNaming 이
-            // 한 곳에서 정한다.
-            var cascade = model.AspectBase is { } aspectBase
-                          && field.Name == AspectNaming.KeyFieldName(aspectBase)
-                ? " ON DELETE CASCADE"
-                : "";
+            // 선언된 삭제 동작(OnDeleteRule) — 없으면 절을 쓰지 않는다(DB 기본값).
+            var cascade = OnDeleteRule.For(model, field) switch
+            {
+                ReferentialAction.Cascade => " ON DELETE CASCADE",
+                ReferentialAction.SetNull => " ON DELETE SET NULL",
+                ReferentialAction.NoAction => " ON DELETE NO ACTION",
+                ReferentialAction.Restrict => " ON DELETE RESTRICT",
+                _ => "",
+            };
 
             constraints.Add((
                 $"fk_{tableName}_{field.Name}",

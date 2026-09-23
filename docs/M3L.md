@@ -646,6 +646,17 @@ When no explicit symbol or attribute is provided, CASCADE behavior is determined
 - **Nullable FK** → SET NULL (safe cleanup)
 - **Non-nullable FK** → CASCADE (strong relationship)
 
+**What this generator implements**: the three symbols, on both SQL dialects — `!` writes
+`ON DELETE NO ACTION`, `?` writes `ON DELETE SET NULL` (on a key that cannot hold NULL the build
+stops with MDD023), and `!!` writes `ON DELETE RESTRICT` on PostgreSQL and `ON DELETE NO ACTION` on
+SQL Server, which has no RESTRICT and checks NO ACTION immediately. The automatic decision above is
+**not** applied: a reference without a symbol writes no `ON DELETE` clause, so the database default
+(NO ACTION) holds. Applied as written, it would make common models undeployable on SQL Server — a
+self-reference, or two keys to the same model, cannot both cascade or set null there (error 1785).
+The attribute forms (`@cascade`, `@no_action`, `@set_null`, `@restrict`, `@cascade(X)`) are
+deprecated by the parser (M3L-W003) and are not read. The Model target (EF Core) does not yet
+configure a delete behavior for these keys.
+
 **Mixed Syntax (Advanced Usage):**
 ```markdown
 - UserId: identifier @reference(User)! @cascade     # Override symbol with explicit

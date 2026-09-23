@@ -43,6 +43,7 @@ public sealed class SemanticAnalyzer
             {
                 CheckFieldType(model, field, diagnostics);
                 CheckReferenceTarget(model, field, diagnostics);
+                CheckSetNullOnRequiredKey(model, field, diagnostics);
                 CheckLookupPath(model, field, diagnostics);
                 CheckRollupTarget(model, field, diagnostics);
                 CheckBinding(model, field, diagnostics);
@@ -180,6 +181,21 @@ public sealed class SemanticAnalyzer
         diagnostics.Add(new SemanticDiagnostic(
             "MDD001",
             $"'{model.Name}.{field.Name}' 필드의 타입 '{type}'을 해석할 수 없습니다. primitive/enum/model 중 어느 것과도 매칭되지 않습니다.",
+            field.Loc));
+    }
+
+    /// <summary>
+    /// <c>MDD023</c> — <c>@reference(X)?</c> (SET NULL) on a key that cannot hold NULL. The
+    /// database refuses the constraint (SQL Server: at creation; PostgreSQL: on the first delete),
+    /// so the build stops here instead (M3L §8.4.1: SET NULL "requires nullable field").
+    /// </summary>
+    private static void CheckSetNullOnRequiredKey(ResolvedModel model, FieldNode field, List<SemanticDiagnostic> diagnostics)
+    {
+        if (field.Nullable || Ast.FieldAttributes.Find(field, "reference")?.Cascade != "?") return;
+        diagnostics.Add(new SemanticDiagnostic(
+            "MDD023",
+            $"'{model.Name}.{field.Name}' 의 @reference(…)? 는 삭제 시 NULL 로 두라는 뜻인데 이 키는 NULL 을 허용하지 않습니다. " +
+            "필드를 nullable(`identifier?`)로 하거나 다른 동작(`!` NO ACTION · `!!` RESTRICT)을 쓰십시오.",
             field.Loc));
     }
 

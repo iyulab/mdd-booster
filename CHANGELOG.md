@@ -18,6 +18,28 @@
 
 ## [Unreleased]
 
+### 🔴 breaking — `@reference` 뒤의 기호가 삭제 동작을 낸다
+
+`@reference(X)` 뒤의 `!`·`?`·`!!`(M3L §8.4.1)는 지금까지 **읽히지 않아** 어떤 FK 에도 `ON DELETE` 가 붙지 않았다(DB 기본값
+NO ACTION). 이제 두 SQL 방언이 쓴다:
+
+| 기호 | SQL Server | PostgreSQL |
+|---|---|---|
+| `!` | `ON DELETE NO ACTION` | `ON DELETE NO ACTION` |
+| `?` | `ON DELETE SET NULL` | `ON DELETE SET NULL` |
+| `!!` | `ON DELETE NO ACTION`(SQL Server 에는 RESTRICT 가 없고 NO ACTION 을 즉시 검사한다) | `ON DELETE RESTRICT` |
+
+- **`?` 를 쓴 모델은 삭제 동작이 바뀐다** — 참조된 행을 지우면 이제 이 키가 NULL 이 된다(전에는 삭제가 거절됐다). 재생성 후 DDL 의
+  차이를 확인할 것.
+- 🆕 **MDD023** — `?` 인데 키가 NULL 을 허용하지 않으면 빌드가 선다. DB 가 그 제약을 거절하기 때문이다(SQL Server 는 생성 시,
+  PostgreSQL 은 첫 삭제 시). 필드를 `identifier?` 로 하거나 다른 기호를 쓴다.
+- **기호 없는 `@reference` 는 그대로다** — 절을 쓰지 않는다. 명세의 «자동 결정»(nullable → SET NULL, 아니면 CASCADE)은 적용하지
+  않는다: SQL Server 에서 자기참조나 같은 모델을 가리키는 키 둘은 둘 다 연쇄할 수 없어(오류 1785) 흔한 모델이 배포되지 않게 된다.
+- Model 타깃(EF Core)의 삭제 동작 구성은 아직 이 기호를 따르지 않는다.
+
+라이브러리로 렌더러를 부르는 경우: `ColumnRenderer.Render` 의 `bool cascadeOnDelete` 가 `ReferentialAction? onDelete` 로 바뀌었다
+(`MddBooster.Core.Semantic.OnDeleteRule.For` 가 모델·필드에서 그 값을 준다).
+
 ### 수정 — T-SQL 이 참조 대상의 키를 `[dbo]`·`[Id]` 로 가정했다
 
 Sql 타깃은 다른 모델의 키를 가리키는 세 자리 — `@reference` 의 FK · Lookup 의 `JOIN … ON` · Rollup 의 상관
