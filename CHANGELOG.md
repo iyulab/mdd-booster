@@ -16,7 +16,7 @@
 
 ---
 
-## [Unreleased]
+## 0.32.0
 
 ### 🔴 breaking — base 를 밝히지 않은 «키 = FK» 는 빌드 오류(`MDD022`)
 
