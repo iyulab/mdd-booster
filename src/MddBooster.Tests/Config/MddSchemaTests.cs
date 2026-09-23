@@ -7,7 +7,7 @@ namespace MddBooster.Tests.Config;
 /// Ratchets `schemas/mdd.schema.json` against the actual mdd.json shape — same reasoning as
 /// <c>FormControlContractRatchetTests</c>: reads the published files themselves, not a copy kept
 /// in test code, so the two cannot silently drift apart while this test keeps passing.
-/// Regression target: docket-reported case where a target-level option
+/// Regression target: a reported case where a target-level option
 /// (<c>emitForeignKeyIndexes</c>) placed at the config root was silently ignored by
 /// <c>ConfigLoader</c> instead of surfacing as an error.
 /// </summary>

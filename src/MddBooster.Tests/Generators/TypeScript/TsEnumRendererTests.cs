@@ -12,7 +12,7 @@ public class TsEnumRendererTests
     [Fact]
     public void Renders_union_literal_members_as_the_wire_name_not_the_CLR_member_name()
     {
-        // Root defect (docket item 4d751cb9): the C# generator (EnumRenderer) already
+        // Root defect: the C# generator (EnumRenderer) already
         // emits [EnumMember(Value = "in_production")] as the wire name for member
         // `InProduction` — a server that honors [EnumMember] serializes/deserializes
         // using that lowercase form, not the CLR member name. The TS union type must

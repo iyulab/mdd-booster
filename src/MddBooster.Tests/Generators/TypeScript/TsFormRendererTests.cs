@@ -200,7 +200,7 @@ public class TsFormRendererTests
         var line = FieldLine(content, prop);
         Assert.Contains("type=\"number\"", line);
         Assert.Contains($"value={{form.{prop} != null ? String(form.{prop}) : ''}}", line);
-        // docket iyulab/mdd-booster#157: a nullable field must clear via `null` — `undefined`
+        // A nullable field must clear via `null` — `undefined`
         // is dropped by JSON.stringify, so OData PATCH reads the field as untouched and the
         // clear silently no-ops. Required fields keep `undefined` (Partial<T> semantics).
         var emptyToken = nullable ? "null" : "undefined";

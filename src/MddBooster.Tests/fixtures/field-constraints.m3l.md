@@ -47,7 +47,7 @@
 
 ## IndexSample
 
-> `@unique`/`@index` → Model 타깃 `HasIndex()` 방출 검증(cycle-93). `Sample`과 분리 — 대조를
+> `@unique`/`@index` → Model 타깃 `HasIndex()` 방출 검증. `Sample`과 분리 — 대조를
 > 위한 무속성 필드(`plain_ref`)를 섞어 두려면 별도 모델이 더 읽기 쉽다.
 
 - id: identifier @pk @generated @index "PK 위에 index 겹침 — 스킵되어야 한다(PK가 이미 유일 인덱스)"
@@ -59,7 +59,7 @@
 
 ## RangeSample
 
-> `@min`/`@max` → Model 타깃 `[Range]` 방출 검증(cycle-157). `Sample`과 분리한 이유는
+> `@min`/`@max` → Model 타깃 `[Range]` 방출 검증. `Sample`과 분리한 이유는
 > `IndexSample`과 같다 — 대조군(선언 없는 필드·숫자가 아닌 필드)을 함께 두려면 별도 모델이 읽기 쉽다.
 
 - id: identifier @pk @generated
