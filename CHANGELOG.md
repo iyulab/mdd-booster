@@ -16,7 +16,7 @@
 
 ---
 
-## [Unreleased]
+## 0.33.0
 
 ### 🔴 breaking — `@reference` 뒤의 기호가 삭제 동작을 낸다
 
