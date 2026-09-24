@@ -64,7 +64,7 @@ SSDT dacpac은 CHECK diff가 불안정하므로 선언형 스키마 관리 도�
 | 키 | 필수 | 기본값 | 의미 |
 |---|---|---|---|
 | `outputPath` | ✅ | — | 생성 `*_gen.ts` 5개가 나갈 디렉터리 |
-| `formsOutputPath` | | 없음 | `{Entity}Form_gen.tsx` 가 나갈 디렉터리. **생략하면 폼을 생성하지 않는다** |
+| `formsOutputPath` | | 없음 | `{Entity}Form_gen.tsx` 가 나갈 디렉터리. **생략하면 폼을 생성하지 않는다.** 빌드마다 이번에 내지 않은 생성 폼(헤더로 식별)을 지운다 — 그래서 **TypeScript 타깃마다 따로** 둔다(둘이 공유하면 빌드 오류) |
 | `formLayoutImport` | | `@iyulab/enterprise` | `FormSection`·`FormRow` 의 출처 |
 | `formControlsImport` | | `../components/ui` | 폼 컨트롤의 출처 |
 | `formSelectOptionsImport` | | `../lib/select-options` | `enumToOptions` 의 출처 |

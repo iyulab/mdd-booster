@@ -131,6 +131,22 @@ public sealed class BuildCommand
                 + "— 나중 것이 앞선 것의 산출물을 덮어씁니다. 경로를 분리하거나 중복을 제거하세요.");
         }
 
+        // 폼 디렉터리는 한 TypeScript 타깃만 소유한다 — 각 타깃은 자기가 이번에 내지 않은 생성 폼을
+        // 지우므로(TypeScriptGenerator.RemoveStaleForms), 두 타깃이 한 디렉터리를 나누면 서로의 폼을
+        // 지운다. 타입 출력 경로가 같은 경우는 위 검사가 이미 거른다.
+        foreach (var shared in cfg.Targets
+            .Where(t => t.Type == "TypeScript" && !string.IsNullOrWhiteSpace(t.FormsOutputPath))
+            .GroupBy(t => Path.GetFullPath(Path.IsPathRooted(t.FormsOutputPath!)
+                ? t.FormsOutputPath!
+                : Path.Combine(configDirectory, t.FormsOutputPath!)))
+            .Where(g => g.Count() > 1))
+        {
+            configViolations.Add(
+                $"TypeScript 타깃 {shared.Count()}개가 같은 formsOutputPath({shared.Key})를 씁니다 "
+                + "— 각 타깃은 이번 빌드가 내지 않은 생성 폼을 지우므로 서로의 폼을 지웁니다. "
+                + "폼 디렉터리를 타깃마다 분리하세요.");
+        }
+
         // Api 타깃이 entity 타입을 참조할 수 있도록 entity namespace를 결정한다.
         // 과거에는 `FirstOrDefault(Model)?.Namespace` 였다 — Model 타깃이 둘이면 둘째의 namespace가
         // **조용히 무시**되고 Api 타깃이 잘못된 `using`을 방출해 소비자 빌드가 깨졌다.

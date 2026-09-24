@@ -161,4 +161,36 @@ public class TargetConfigGateTests
         }
         finally { Cleanup(root); }
     }
+
+    // ---- ③ 폼 디렉터리 공유 ----
+
+    /// <summary>
+    /// 각 TypeScript 타깃은 자기가 이번에 내지 않은 생성 폼을 지운다 — 두 타깃이 폼 디렉터리를
+    /// 나누면 서로의 폼을 지우므로 설정 오류다.
+    /// </summary>
+    [Fact]
+    public void Two_typescript_targets_sharing_a_forms_directory_fail_the_build()
+    {
+        var mddDir = Scaffold(
+            """{ "type": "TypeScript", "outputPath": "../ts/a", "formsOutputPath": "../ts/forms" }, { "type": "TypeScript", "outputPath": "../ts/b", "formsOutputPath": "../ts/forms" }""",
+            out var root);
+        try
+        {
+            Assert.Equal(4, new BuildCommand().Run(mddDir));
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    public void Two_typescript_targets_with_their_own_forms_directories_succeed()
+    {
+        var mddDir = Scaffold(
+            """{ "type": "TypeScript", "outputPath": "../ts/a", "formsOutputPath": "../ts/forms-a" }, { "type": "TypeScript", "outputPath": "../ts/b", "formsOutputPath": "../ts/forms-b" }""",
+            out var root);
+        try
+        {
+            Assert.Equal(0, new BuildCommand().Run(mddDir));
+        }
+        finally { Cleanup(root); }
+    }
 }

@@ -42,6 +42,19 @@ NO ACTION). 이제 두 SQL 방언이 쓴다:
 라이브러리로 렌더러를 부르는 경우: `ColumnRenderer.Render` 의 `bool cascadeOnDelete` 가 `ReferentialAction? onDelete` 로 바뀌었다
 (`MddBooster.Core.Semantic.OnDeleteRule.For` 가 모델·필드에서 그 값을 준다).
 
+### 수정 — 더 이상 내지 않는 생성 폼이 `formsOutputPath` 에 남았다
+
+엔티티를 개명·삭제하거나 타깃 범위(`include/excludeEntities`·`forms…Entities`)에서 빼면, 다른 타깃의 출력(`Entity_gen/`·
+`tables_gen/` 등)에서는 옛 파일이 사라지는데 **폼 디렉터리의 옛 `{Entity}Form_gen.tsx` 는 남았다**. 생성물 표시를 단 채
+어느 빌드도 내지 않는 파일이라, 옛 타입을 import 해 다음 `tsc` 에서야 드러나거나 조용히 남았고, 재생성 후 diff 검사도
+그 파일을 건드리지 않아 잡지 못했다.
+
+- 이제 빌드마다 폼 디렉터리의 `*Form_gen.tsx` 중 **이번에 내지 않았고 첫 줄이 이 생성기의 헤더인 것**을 지우고, 지운 목록을
+  빌드 출력에 싣는다(`[ts] 이번 빌드가 내지 않은 생성 폼 N개 삭제: …`). 헤더 없는 손 파일과 다른 이름의 파일은 건드리지 않는다.
+- 🔴 **두 TypeScript 타깃이 같은 `formsOutputPath` 를 쓰면 빌드 오류**(종료 코드 4) — 각 타깃이 상대 타깃의 폼을 «내지 않은
+  것»으로 보고 지우게 되기 때문이다. 타깃마다 폼 디렉터리를 나눈다.
+- `formsOutputPath` 설정 자체를 지우거나 바꾼 경우의 옛 디렉터리는 생성기가 알 수 없어 그대로 남는다.
+
 ### 수정 — T-SQL 이 참조 대상의 키를 `[dbo]`·`[Id]` 로 가정했다
 
 Sql 타깃은 다른 모델의 키를 가리키는 세 자리 — `@reference` 의 FK · Lookup 의 `JOIN … ON` · Rollup 의 상관

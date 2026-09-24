@@ -83,10 +83,63 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
             var formModels = _options.FormsSurfaceFilter.Apply(models);
 
             var formFiles = TsFormRenderer.RenderAll(formModels, context.Enums, imports);
+            // The file system's own rule: on a case-insensitive one, a form renamed only in case is
+            // written into the existing file, which keeps its old spelling — comparing ordinally
+            // would then delete the form just written.
+            var written = new HashSet<string>(
+                OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+                    ? StringComparer.OrdinalIgnoreCase
+                    : StringComparer.Ordinal);
             foreach (var (entityName, content) in formFiles)
             {
-                File.WriteAllText(Path.Combine(formsDir, $"{entityName}Form_gen.tsx"), content);
+                var fileName = $"{entityName}Form_gen.tsx";
+                File.WriteAllText(Path.Combine(formsDir, fileName), content);
+                written.Add(fileName);
             }
+
+            RemovedStaleForms = RemoveStaleForms(formsDir, written);
+            if (RemovedStaleForms.Count > 0)
+                Console.WriteLine(
+                    $"[{Name}] 이번 빌드가 내지 않은 생성 폼 {RemovedStaleForms.Count}개 삭제: "
+                    + string.Join(", ", RemovedStaleForms));
         }
+    }
+
+    /// <summary>
+    /// Forms the last <see cref="Generate"/> deleted because this build no longer emits them —
+    /// an entity renamed, removed, or filtered out of the target since the previous build.
+    /// </summary>
+    public IReadOnlyList<string> RemovedStaleForms { get; private set; } = [];
+
+    /// <summary>
+    /// Deletes the forms in <paramref name="formsDir"/> this generator wrote on an earlier build
+    /// but did not write on this one.
+    /// </summary>
+    /// <remarks>
+    /// The other targets own a dedicated directory and empty it before writing. The forms directory
+    /// is the consumer's own source tree, so it cannot be emptied: a file is removed only when its
+    /// name has the form shape and its first line is the header this generator writes. A hand-written
+    /// file keeps its place whatever it is called. Without this a renamed entity leaves its old form
+    /// behind — a file marked generated that no build produces, importing a type that no longer
+    /// exists, and invisible to a regenerate-and-diff check because regeneration never touches it.
+    /// </remarks>
+    private static IReadOnlyList<string> RemoveStaleForms(string formsDir, IReadOnlySet<string> written)
+    {
+        var removed = new List<string>();
+        foreach (var path in Directory.GetFiles(formsDir, "*Form_gen.tsx"))
+        {
+            var fileName = Path.GetFileName(path);
+            if (written.Contains(fileName) || !StartsWithGeneratedHeader(path)) continue;
+            File.Delete(path);
+            removed.Add(fileName);
+        }
+        removed.Sort(StringComparer.Ordinal);
+        return removed;
+    }
+
+    private static bool StartsWithGeneratedHeader(string path)
+    {
+        using var reader = new StreamReader(path);
+        return string.Equals(reader.ReadLine(), TsFormRenderer.Header, StringComparison.Ordinal);
     }
 }
