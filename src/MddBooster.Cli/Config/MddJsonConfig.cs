@@ -9,6 +9,21 @@ public sealed class MddJsonConfig
 
     [JsonPropertyName("targets")]
     public List<MddJsonTarget> Targets { get; set; } = [];
+
+    /// <summary>
+    /// Report every coded warning (<c>MDDnnn</c>, <c>M3L-Wnnn</c>) as an error: the build stops with
+    /// exit code 3 before generating anything. Codes in <see cref="NoWarn"/> are still suppressed.
+    /// </summary>
+    [JsonPropertyName("treatWarningsAsErrors")]
+    public bool TreatWarningsAsErrors { get; set; }
+
+    /// <summary>Warning codes reported as errors, for promoting some rather than all.</summary>
+    [JsonPropertyName("warningsAsErrors")]
+    public List<string>? WarningsAsErrors { get; set; }
+
+    /// <summary>Warning codes not reported at all — a known, accepted case stated in the config.</summary>
+    [JsonPropertyName("noWarn")]
+    public List<string>? NoWarn { get; set; }
 }
 
 public sealed class MddJsonTarget

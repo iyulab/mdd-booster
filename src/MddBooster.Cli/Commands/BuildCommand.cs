@@ -18,6 +18,33 @@ public sealed class BuildCommand
         var cfgPath = Path.Combine(configDirectory, "mdd.json");
         var cfg = ConfigLoader.Load(cfgPath);
 
+        // 경고 정책은 진단이 하나라도 찍히기 «전»에 성립해야 한다 — 잘못 적힌 코드는 조용히 발화하지
+        // 않는 규칙이 되므로 다른 설정 오류와 같은 종료 코드(4)로 먼저 세운다.
+        var warningPolicy = WarningPolicy.From(cfg, out var policyViolations);
+        if (policyViolations.Count > 0)
+        {
+            Console.Error.WriteLine($"[config] 설정 오류 {policyViolations.Count}건:");
+            foreach (var v in policyViolations)
+                Console.Error.WriteLine("  " + v);
+            return 4;
+        }
+        var promotedWarnings = 0;
+        void ReportWarning(string channel, string code, string text)
+        {
+            switch (warningPolicy.For(code))
+            {
+                case WarningPolicy.Disposition.Suppress:
+                    return;
+                case WarningPolicy.Disposition.Error:
+                    promotedWarnings++;
+                    Console.Error.WriteLine($"[{channel}] 에러(경고 승격) {text}");
+                    return;
+                default:
+                    Console.Error.WriteLine($"[{channel}] 경고 {text}");
+                    return;
+            }
+        }
+
         // 1. M3L 소스 로드 — 전체 sources를 하나의 resolve 단위로 병합 파싱한다.
         // 파일별 독립 파싱은 cross-file 상속·인터페이스 참조를 E007로 오탐한다 (스펙 §2.1 Rule 3).
         var loader = new M3lLoader();
@@ -34,7 +61,7 @@ public sealed class BuildCommand
         // 파서 경고 표면화 — 조용히 삼키지 않는다.
         foreach (var w in mergedAst.Warnings)
         {
-            Console.Error.WriteLine($"[m3l] 경고 [{w.Code}] {w.File}:{w.Line}:{w.Col} {w.Message}");
+            ReportWarning("m3l", w.Code, $"[{w.Code}] {w.File}:{w.Line}:{w.Col} {w.Message}");
         }
 
         // 검증기 진단 표면화 — 파서와 «다른 층»이다. 등록된 `::attribute` 의 오용
@@ -44,7 +71,7 @@ public sealed class BuildCommand
         var m3lDiagnostics = loader.ValidateFiles(sourcePaths);
         foreach (var w in m3lDiagnostics.Warnings)
         {
-            Console.Error.WriteLine($"[m3l] 경고 [{w.Code}] {w.File}:{w.Line}:{w.Col} {w.Message}");
+            ReportWarning("m3l", w.Code, $"[{w.Code}] {w.File}:{w.Line}:{w.Col} {w.Message}");
         }
         // 검증기 «에러»는 빌드를 세운다 — 의미 분석 에러와 같은 종료 코드(3). 모델이 언어
         // 규칙을 어긴 채로 생성을 진행하면, 그 위반(예: 어디에도 정의되지 않은 타입 이름)이
@@ -101,12 +128,20 @@ public sealed class BuildCommand
         var warnings = diagnostics.Where(d => d.Severity == SemanticSeverity.Warning).ToList();
         var errors = diagnostics.Where(d => d.Severity == SemanticSeverity.Error).ToList();
         foreach (var w in warnings)
-            Console.Error.WriteLine("[semantic] 경고 " + w.Format());
+            ReportWarning("semantic", w.Code, w.Format());
         if (errors.Count > 0)
         {
             Console.Error.WriteLine($"[semantic] 에러 {errors.Count}건:");
             foreach (var d in errors)
                 Console.Error.WriteLine("  " + d.Format());
+            return 3;
+        }
+        // 승격된 경고는 m3l·의미 분석 두 층을 «다 모은 뒤» 한 번에 세운다 — 첫 층에서 멈추면
+        // 뒤 층의 경고를 고쳐 가며 재실행하게 된다.
+        if (promotedWarnings > 0)
+        {
+            Console.Error.WriteLine(
+                $"[config] 경고 {promotedWarnings}건을 에러로 올렸습니다(treatWarningsAsErrors/warningsAsErrors) — 빌드를 중단합니다.");
             return 3;
         }
 

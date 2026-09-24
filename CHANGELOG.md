@@ -42,6 +42,17 @@ NO ACTION). 이제 두 SQL 방언이 쓴다:
 라이브러리로 렌더러를 부르는 경우: `ColumnRenderer.Render` 의 `bool cascadeOnDelete` 가 `ReferentialAction? onDelete` 로 바뀌었다
 (`MddBooster.Core.Semantic.OnDeleteRule.For` 가 모델·필드에서 그 값을 준다).
 
+### 추가 — 경고를 에러로 올리는 `mdd.json` 키
+
+`mdd build` 는 경고가 있어도 종료 코드 0 이어서, «경고 0 빌드»를 지키려면 콘솔 문구(로캘·형식이 바뀔 수 있는)를 찾아야
+했다. MSBuild 와 같은 이름·같은 우선순위의 최상위 키 셋을 더했다:
+
+- `treatWarningsAsErrors: true` — 코드 있는 경고 전부를 에러로. `warningsAsErrors: ["MDD017", …]` — 나열한 코드만.
+  `noWarn: ["MDD018", …]` — 보고하지 않음(두 승격 키보다 우선).
+- 대상은 이 생성기의 `MDDnnn` 과 m3l 의 `M3L-Wnnn`. 승격된 경고가 있으면 두 층을 다 보고한 뒤 생성 전에 종료 코드 3.
+- 코드 형식이 아닌 값 · 두 목록에 함께 있는 코드는 설정 오류(종료 코드 4).
+- 키를 쓰지 않으면 동작은 그대로다.
+
 ### 수정 — 더 이상 내지 않는 생성 폼이 `formsOutputPath` 에 남았다
 
 엔티티를 개명·삭제하거나 타깃 범위(`include/excludeEntities`·`forms…Entities`)에서 빼면, 다른 타깃의 출력(`Entity_gen/`·
