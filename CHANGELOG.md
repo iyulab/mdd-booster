@@ -42,6 +42,15 @@ NO ACTION). 이제 두 SQL 방언이 쓴다:
 라이브러리로 렌더러를 부르는 경우: `ColumnRenderer.Render` 의 `bool cascadeOnDelete` 가 `ReferentialAction? onDelete` 로 바뀌었다
 (`MddBooster.Core.Semantic.OnDeleteRule.For` 가 모델·필드에서 그 값을 준다).
 
+### 파서 `M3L.Native` 0.15.0
+
+- **lookup 경로의 조각이 그 자리의 모델에 없는 필드이면** 이제 파서 검증기가 `M3L-E022` 로 먼저 세운다 — 첫 hop 의 키,
+  둘째 hop 부터의 키, 경로 끝 필드 모두. 종전에도 같은 모델은 이 생성기의 `MDD004`(키)·`MDD006`(끝 필드)로 멈췄으므로
+  **빌드되던 모델이 멈추는 일은 없다** — 바뀌는 것은 메시지의 층(`[m3l]` 대 `[semantic]`)과 코드뿐이다. 종료 코드는 둘 다 3.
+  빌드 로그에서 `MDD004`·`MDD006` 을 찾던 곳이 있다면 `M3L-E022` 도 함께 볼 것.
+- 파서가 내는 AST 의 맵 키(`sections.metadata`·사용자 정의 섹션·`extensions`) 순서가 실행·플랫폼마다 같아졌다. 이 생성기의
+  출력은 바뀌지 않는다(같은 모델의 재생성 결과가 바이트 단위로 같다).
+
 ### 추가 — 표면 타깃을 소유자(`# Prefix:`)로 고르는 `includeOwners` / `excludeOwners`
 
 한 정본을 베이스 파일과 모듈 파일로 나눠 두고 표면(Api·TypeScript)을 모듈 단위로 가르려면, 지금까지는 같은 엔티티
