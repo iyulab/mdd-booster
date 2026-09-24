@@ -662,7 +662,10 @@ The attribute forms (`@cascade`, `@no_action`, `@set_null`, `@restrict`, `@casca
 deprecated by the parser (M3L-W003) and are not read. The Model target (EF Core) configures the same
 action on the write entity's navigation (`OnDelete(DeleteBehavior.NoAction | SetNull | Restrict)`),
 so EF does not delete tracked rows the database was told to keep; a key with no symbol keeps EF's
-convention.
+convention. With `!` or `!!` on a required key, removing a row whose referencing rows are tracked by
+the same context throws at `Remove()` — EF's message then suggests configuring a cascade delete,
+which is the opposite of what the symbol declares. Delete or detach those rows first; an untracked
+reference is refused by the database when the delete is saved.
 
 **Mixed Syntax (Advanced Usage):**
 ```markdown
