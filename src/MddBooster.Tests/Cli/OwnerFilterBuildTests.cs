@@ -144,4 +144,120 @@ public class OwnerFilterBuildTests
         }
         finally { Cleanup(root); }
     }
+
+    // ---- enums follow the owner axis; sharedTypesImport re-exports instead of re-declaring ----
+
+    private const string BaseWithEnums = """
+# Namespace: test.owners
+
+## AssetKind ::enum
+
+- pump: "펌프"
+- valve: "밸브"
+
+## AssetColor ::enum
+
+- red: "빨강"
+
+## Asset
+
+- id: identifier @pk @generated
+- name: string(50) "이름"
+- kind: AssetKind "종류"
+- color: AssetColor? "색"
+""";
+
+    private const string ModuleWithEnums = """
+# Namespace: test.owners
+# Prefix: fsa
+
+## FsaGrade ::enum
+
+- a: "A"
+
+## FsaInspection
+
+- id: identifier @pk @generated
+- kind: AssetKind "종류"
+- grade: FsaGrade "등급"
+""";
+
+    private static string ScaffoldWithEnums(string targetsJson, out string root)
+    {
+        var mddDir = Scaffold(targetsJson, out root, ModuleWithEnums);
+        File.WriteAllText(Path.Combine(mddDir, "base.m3l.md"), BaseWithEnums);
+        return mddDir;
+    }
+
+    private static string Enums(string root, string target)
+        => File.ReadAllText(Path.Combine(root, target, "enums_gen.ts"));
+
+    /// <summary>
+    /// With an owner axis a target declares its owners' enums and, of the others, only those its
+    /// models reference — the base no longer carries the module's vocabulary, the module no longer
+    /// repeats the base's.
+    /// </summary>
+    [Fact]
+    public void Enums_are_split_by_owner_and_a_referenced_foreign_enum_is_still_declared()
+    {
+        var mddDir = ScaffoldWithEnums(SplitTargets, out var root);
+        try
+        {
+            Assert.Equal(0, new BuildCommand().Run(mddDir));
+
+            var baseEnums = Enums(root, "base");
+            Assert.Contains("export type AssetKind =", baseEnums);
+            Assert.Contains("export type AssetColor =", baseEnums);
+            Assert.DoesNotContain("FsaGrade", baseEnums);
+
+            var moduleEnums = Enums(root, "module");
+            Assert.Contains("export type FsaGrade =", moduleEnums);
+            Assert.Contains("export type AssetKind =", moduleEnums);
+            Assert.DoesNotContain("AssetColor", moduleEnums);
+            Assert.Contains("export interface IyuEntity", Entities(root, "module"));
+        }
+        finally { Cleanup(root); }
+    }
+
+    /// <summary>
+    /// Given a shared source, the module target re-exports what it would otherwise declare a second
+    /// time: <c>IyuEntity</c> and the referenced enums of other owners (with their label exports).
+    /// </summary>
+    [Fact]
+    public void A_shared_source_turns_the_foreign_declarations_into_re_exports()
+    {
+        var mddDir = ScaffoldWithEnums(
+            """{ "type": "TypeScript", "outputPath": "../module", "includeOwners": ["fsa"], "sharedTypesImport": "@acme/base/types" }""",
+            out var root);
+        try
+        {
+            Assert.Equal(0, new BuildCommand().Run(mddDir));
+
+            var moduleEnums = Enums(root, "module");
+            Assert.Contains("export type { AssetKind } from '@acme/base/types'", moduleEnums);
+            Assert.DoesNotContain("export type AssetKind =", moduleEnums);
+            Assert.Contains("export type FsaGrade =", moduleEnums);
+
+            var labels = File.ReadAllText(Path.Combine(root, "module", "enum_labels_gen.ts"));
+            Assert.Contains("export { AssetKindLabels } from '@acme/base/types'", labels);
+
+            var entities = Entities(root, "module");
+            Assert.Contains("import type { IyuEntity } from '@acme/base/types'", entities);
+            Assert.DoesNotContain("export interface IyuEntity", entities);
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Theory]
+    [InlineData("""{ "type": "TypeScript", "outputPath": "../t", "sharedTypesImport": "@acme/base/types" }""")]
+    [InlineData("""{ "type": "Api", "projectPath": "../t", "namespace": "T", "includeOwners": ["fsa"], "sharedTypesImport": "@acme/base/types" }""")]
+    public void A_shared_source_without_an_owner_axis_or_off_a_typescript_target_is_a_configuration_error(string targetJson)
+    {
+        var mddDir = ScaffoldWithEnums(targetJson, out var root);
+        try
+        {
+            Assert.Equal(4, new BuildCommand().Run(mddDir));
+        }
+        finally { Cleanup(root); }
+    }
 }

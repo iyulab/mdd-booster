@@ -95,6 +95,17 @@ public sealed class EntitySurfaceFilter
         return model.Source.Prefix ?? "";
     }
 
+    /// <summary>이 필터에 소유자 축(<c>includeOwners</c>/<c>excludeOwners</c>)이 있는지.</summary>
+    public bool HasOwnerFilter => _includeOwners is not null || _excludeOwners is not null;
+
+    /// <summary>
+    /// 소유자 축이 <paramref name="owner"/>(<c># Prefix:</c> 값, 없으면 빈 문자열)를 들이는지. 소유자 축이 없으면 늘 참.
+    /// 모델이 아닌 선언(enum)을 같은 축으로 가를 때 쓴다.
+    /// </summary>
+    public bool AdmitsOwner(string owner)
+        => (_includeOwners is null || _includeOwners.Contains(owner))
+           && (_excludeOwners is null || !_excludeOwners.Contains(owner));
+
     /// <summary>
     /// 필터를 만들고 동시에 검증한다. 반환된 <paramref name="violations"/>가 비어 있지 않으면
     /// 호출부가 빌드를 실패시켜야 한다 — 필터 자체는 그 경우에도 사용 가능한 상태로 돌려주지 않는다.

@@ -243,6 +243,16 @@ public sealed class BuildCommand
                 allModels, label, out var violations);
             configViolations.AddRange(violations);
 
+            if (!string.IsNullOrWhiteSpace(target.SharedTypesImport))
+            {
+                if (target.Type != "TypeScript")
+                    configViolations.Add($"{label}: sharedTypesImport 는 TypeScript 타깃에만 지정할 수 있습니다.");
+                else if (!(target.IncludeOwners?.Count > 0 || target.ExcludeOwners?.Count > 0))
+                    configViolations.Add(
+                        $"{label}: sharedTypesImport 는 includeOwners/excludeOwners 가 있는 타깃에만 뜻이 있습니다 "
+                        + "— 무엇을 다른 소유자의 타입으로 가져올지를 소유자 축이 정합니다.");
+            }
+
             // 1.7a. 권한 키 형식 — 자리표시자 오타는 어떤 정책과도 매칭 안 되는 리터럴 키를
             // 조용히 방출한다. 통과시키지 않는다.
             if (!string.IsNullOrWhiteSpace(target.PermissionKeyTemplate))
@@ -557,6 +567,7 @@ public sealed class BuildCommand
                     FormModules = FormModulesFor(target),
                     SurfaceFilter = surfaceFilter,
                     FormsSurfaceFilter = formsSurfaceFilter,
+                    SharedTypesImport = string.IsNullOrWhiteSpace(target.SharedTypesImport) ? null : target.SharedTypesImport,
                 }),
             _ => throw new NotSupportedException(
                 $"지원하지 않는 target type: '{target.Type}' (지원: Sql, Model, Api, TypeScript)"),

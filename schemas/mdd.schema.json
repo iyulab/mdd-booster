@@ -243,6 +243,10 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Omit the models declared in files whose # Prefix: is listed. The empty string means files with no prefix. Mutually exclusive with includeOwners."
+        },
+        "sharedTypesImport": {
+          "type": "string",
+          "description": "Module specifier of a barrel re-exporting another TypeScript target's entities_gen, enums_gen and enum_labels_gen. When set, this target re-exports IyuEntity and the enums of other owners from it instead of declaring them again. Requires includeOwners or excludeOwners, which decide what counts as another owner."
         }
       }
     }

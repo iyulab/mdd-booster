@@ -1,7 +1,9 @@
 {
   "sources": [
     "../form-control-contract.m3l.md",
-    "../large-model-acceptance.m3l.md"
+    "../large-model-acceptance.m3l.md",
+    "../split-owner-base.m3l.md",
+    "../split-owner-module.m3l.md"
   ],
   "targets": [
     {
@@ -11,6 +13,25 @@
       "formLayoutImport": "../../contract/layout",
       "formControlsImport": "../../contract/controls",
       "formSelectOptionsImport": "../../contract/select-options"
+    },
+    {
+      "type": "TypeScript",
+      "outputPath": "./generated/split-base-types",
+      "excludeOwners": [
+        "sv"
+      ]
+    },
+    {
+      "type": "TypeScript",
+      "outputPath": "./generated/split-module-types",
+      "formsOutputPath": "./generated/split-module-forms",
+      "formLayoutImport": "../../contract/layout",
+      "formControlsImport": "../../contract/controls",
+      "formSelectOptionsImport": "../../contract/select-options",
+      "includeOwners": [
+        "sv"
+      ],
+      "sharedTypesImport": "../../contract/split-shared"
     }
   ]
 }

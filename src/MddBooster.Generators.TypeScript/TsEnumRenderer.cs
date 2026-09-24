@@ -33,13 +33,26 @@ public static class TsEnumRenderer
     /// <summary>
     /// Renders all enums into a single <c>enums_gen.ts</c> file content.
     /// </summary>
-    public static string RenderAll(IReadOnlyList<EnumNode> enums)
+    /// <param name="shared">Enums this file re-exports from <paramref name="sharedTypesImport"/> instead of declaring.</param>
+    /// <param name="sharedTypesImport">The module the shared enums are declared in.</param>
+    public static string RenderAll(
+        IReadOnlyList<EnumNode> enums,
+        IReadOnlyList<EnumNode>? shared = null,
+        string? sharedTypesImport = null)
     {
         ArgumentNullException.ThrowIfNull(enums);
 
         var sb = new StringBuilder();
         sb.AppendLine(Header);
         sb.AppendLine();
+
+        if (shared is { Count: > 0 } && sharedTypesImport is not null)
+        {
+            sb.Append("export type { ")
+              .Append(string.Join(", ", shared.Select(e => NameCasing.ToPascalCase(e.Name)).Order(StringComparer.Ordinal)))
+              .Append(" } from ").Append(SourceLiteral.TypeScriptString(sharedTypesImport)).AppendLine();
+            sb.AppendLine();
+        }
 
         foreach (var enumNode in enums)
         {

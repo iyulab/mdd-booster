@@ -194,6 +194,15 @@ public sealed class MddJsonTarget
     public List<string>? ExcludeOwners { get; set; }
 
     /// <summary>
+    /// TypeScript 타깃: 다시 선언하지 않고 재수출할 공유 타입의 모듈 지정자 — 같은 정본의 다른 타깃 출력
+    /// (<c>entities_gen</c>·<c>enums_gen</c>·<c>enum_labels_gen</c>)을 재수출하는 배럴. 지정하면 <c>IyuEntity</c>
+    /// 와 다른 소유자의 enum 을 그 모듈에서 가져온다. 소유자 축(<see cref="IncludeOwners"/>/<see cref="ExcludeOwners"/>)
+    /// 이 필요하다 — 무엇이 «다른 소유자» 인지를 그것이 정한다.
+    /// </summary>
+    [JsonPropertyName("sharedTypesImport")]
+    public string? SharedTypesImport { get; set; }
+
+    /// <summary>
     /// TypeScript 타깃이 <b>폼만</b> 좁힐 화이트리스트. 생략하면 타깃 범위 전량(현행).
     /// <see cref="FormsExcludeEntities"/>와 함께 지정하면 빌드 오류.
     /// <para>

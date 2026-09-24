@@ -1,5 +1,6 @@
 using System.Text;
 using M3L.Native;
+using MddBooster.Core.Generation;
 using MddBooster.Core.Semantic;
 using MddBooster.Core.Naming;
 
@@ -30,9 +31,14 @@ public static class TsInterfaceRenderer
     /// Renders all models into a single <c>entities_gen.ts</c> file content.
     /// Enums used by the models are imported from <c>./enums_gen</c>.
     /// </summary>
+    /// <param name="sharedTypesImport">
+    /// 주어지면 <c>IyuEntity</c> 를 선언하지 않고 이 모듈에서 가져와 재수출한다 — 두 타깃이 같은 이름의 타입을 두 벌
+    /// 갖지 않게.
+    /// </param>
     public static string RenderAll(
         IReadOnlyList<ResolvedModel> models,
-        IReadOnlySet<string>? knownEnumNames = null)
+        IReadOnlySet<string>? knownEnumNames = null,
+        string? sharedTypesImport = null)
     {
         ArgumentNullException.ThrowIfNull(models);
 
@@ -63,13 +69,22 @@ public static class TsInterfaceRenderer
             sb.AppendLine();
         }
 
-        // IyuEntity base
-        sb.AppendLine("export interface IyuEntity {");
-        sb.AppendLine("  Id: string");
-        sb.AppendLine("  CreatedAt: string");
-        sb.AppendLine("  UpdatedAt: string");
-        sb.AppendLine("}");
-        sb.AppendLine();
+        // IyuEntity base — declared once per set of targets: a target given a shared source re-exports it.
+        if (sharedTypesImport is not null)
+        {
+            sb.Append("import type { IyuEntity } from ").Append(SourceLiteral.TypeScriptString(sharedTypesImport)).AppendLine();
+            sb.AppendLine("export type { IyuEntity }");
+            sb.AppendLine();
+        }
+        else
+        {
+            sb.AppendLine("export interface IyuEntity {");
+            sb.AppendLine("  Id: string");
+            sb.AppendLine("  CreatedAt: string");
+            sb.AppendLine("  UpdatedAt: string");
+            sb.AppendLine("}");
+            sb.AppendLine();
+        }
 
         foreach (var model in models)
         {

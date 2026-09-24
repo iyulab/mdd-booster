@@ -151,6 +151,29 @@ T-SQL `IX_{Model}_{Column}` · PostgreSQL `ix_{table}_{column}`. 대상 판정�
 - 규칙은 엔티티 목록과 같다: 표면 타깃 전용 · `includeOwners` 와 `excludeOwners` 동시 지정은 빌드 오류 ·
   선언된 적 없는 소유자는 빌드 오류(있는 소유자를 나열한다).
 - 엔티티 목록과 **함께** 쓰면 교집합이다 — 예: `includeOwners: ["fsa"]` + `excludeEntities: ["FsaDraft"]`.
+- **enum 도 같은 축으로 갈린다**(TypeScript 타깃). 소유자 축이 있는 타깃은 자기 소유자의 enum 을 전부, 다른 소유자의
+  enum 은 **자기 모델이 참조하는 것만** 낸다 — 베이스 타깃에 모듈 enum 이 새지 않고, 모듈 타깃이 베이스 어휘 전량을
+  되풀이하지 않는다. 소유자 축이 없는 타깃은 지금처럼 enum 전부를 낸다.
+
+**공유 타입을 한 벌로 — `sharedTypesImport`.** 모듈 타깃이 여전히 `IyuEntity` 와 참조하는 베이스 enum 을 **다시
+선언**하는 것이 싫다면, 베이스 타깃 출력을 재수출하는 배럴을 가리킨다:
+
+```json
+{ "type": "TypeScript", "outputPath": "../fsa/ui/src/types", "includeOwners": ["fsa"],
+  "sharedTypesImport": "@acme/base-ui/types" }
+```
+
+```ts
+// @acme/base-ui/types 가 가리키는 배럴 — 베이스 타깃의 세 파일을 재수출한다
+export * from './entities_gen'
+export * from './enums_gen'
+export * from './enum_labels_gen'
+```
+
+- 그러면 모듈 타깃은 `IyuEntity` 와 다른 소유자의 enum(타입·`…Labels`·선택지 export)을 그 모듈에서 **재수출**하고,
+  자기 소유 enum 만 선언한다. 파일 이름과 export 는 그대로라 생성 폼의 import 는 바뀌지 않는다.
+- 소유자 축(`includeOwners`/`excludeOwners`)이 있는 TypeScript 타깃에서만 쓸 수 있다(없으면 빌드 오류) — 무엇이
+  «다른 소유자의 타입» 인지를 그 축이 정한다.
 
 #### `field_schema_gen.ts` — 소비 계약
 

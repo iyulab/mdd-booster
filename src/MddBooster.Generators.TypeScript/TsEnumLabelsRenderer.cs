@@ -29,7 +29,12 @@ public static class TsEnumLabelsRenderer
     /// Renders all enums into a single <c>enum_labels_gen.ts</c> file content.
     /// Every enum value gets a label entry — the M3L description if present, otherwise the PascalCase key.
     /// </summary>
-    public static string RenderAll(IReadOnlyList<EnumNode> enums)
+    /// <param name="shared">Enums whose label exports this file re-exports from <paramref name="sharedTypesImport"/>.</param>
+    /// <param name="sharedTypesImport">The module the shared enums' labels are declared in.</param>
+    public static string RenderAll(
+        IReadOnlyList<EnumNode> enums,
+        IReadOnlyList<EnumNode>? shared = null,
+        string? sharedTypesImport = null)
     {
         ArgumentNullException.ThrowIfNull(enums);
 
@@ -48,6 +53,24 @@ public static class TsEnumLabelsRenderer
             sb.Append("import type { ")
               .Append(string.Join(", ", enumTypeNames))
               .AppendLine(" } from './enums_gen'");
+            sb.AppendLine();
+        }
+
+        if (shared is { Count: > 0 } && sharedTypesImport is not null)
+        {
+            // Every name a declaring target exports for an enum, so a module form that imports it from
+            // this file finds it here whichever target declared the enum.
+            var names = shared
+                .SelectMany(e =>
+                {
+                    var typeName = NameCasing.ToPascalCase(e.Name);
+                    return EnumValueVisibility.HasExcludedValues(e)
+                        ? new[] { typeName + "Labels", EnumValueVisibility.SelectableLabelsName(typeName), EnumValueVisibility.ChoicesFunctionName(typeName) }
+                        : new[] { typeName + "Labels" };
+                })
+                .Order(StringComparer.Ordinal);
+            sb.Append("export { ").Append(string.Join(", ", names))
+              .Append(" } from ").Append(SourceLiteral.TypeScriptString(sharedTypesImport)).AppendLine();
             sb.AppendLine();
         }
 

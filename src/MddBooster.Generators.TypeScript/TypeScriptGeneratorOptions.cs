@@ -29,11 +29,19 @@ public sealed class TypeScriptGeneratorOptions
     public TsFormModuleImports FormModules { get; init; } = new();
 
     /// <summary>
-    /// 이 타깃의 엔티티 부분집합 필터 (<c>includeEntities</c>/<c>excludeEntities</c>).
-    /// 기본값은 전량 통과. 엔티티 파생 산출물에만 적용되고 <c>enums_gen.ts</c>·
-    /// <c>enum_labels_gen.ts</c>는 필터하지 않는다 — 가지치기하면 임포트가 깨진다.
+    /// 이 타깃의 엔티티 부분집합 필터 (<c>includeEntities</c>/<c>excludeEntities</c>, <c>includeOwners</c>/<c>excludeOwners</c>).
+    /// 기본값은 전량 통과. 엔티티 이름 축은 엔티티 파생 산출물에만 적용된다. 소유자 축이 있으면
+    /// <c>enums_gen.ts</c>·<c>enum_labels_gen.ts</c> 도 그 축으로 갈린다(<c>TypeScriptGenerator.PartitionEnums</c>).
     /// </summary>
     public EntitySurfaceFilter SurfaceFilter { get; init; } = EntitySurfaceFilter.PassAll;
+
+    /// <summary>
+    /// 이 타깃이 선언하지 않고 가져올 공유 타입의 모듈 지정자(<c>sharedTypesImport</c>) — 보통 같은 정본을 내는
+    /// 다른 TypeScript 타깃의 출력을 재수출하는 배럴. 지정하면 <c>IyuEntity</c> 와 <b>다른 소유자의 enum</b> 을
+    /// 다시 선언하지 않고 그 모듈에서 재수출한다. 소유자 축(<see cref="SurfaceFilter"/>)이 있는 타깃에서만 뜻이
+    /// 있다 — «다른 소유자» 를 그것이 정한다.
+    /// </summary>
+    public string? SharedTypesImport { get; init; }
 
     /// <summary>
     /// 폼 전용 부분집합 필터 (<c>formsInclude</c>/<c>formsExclude</c>). 기본값은 전량 통과.

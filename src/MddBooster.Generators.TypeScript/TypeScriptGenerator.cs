@@ -1,4 +1,6 @@
+using M3L.Native;
 using MddBooster.Core.Generation;
+using MddBooster.Core.Semantic;
 
 namespace MddBooster.Generators.TypeScript;
 
@@ -32,14 +34,15 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
         // 타깃별 방출 범위 — 엔티티 파생 산출물에만 적용한다.
         var models = _options.SurfaceFilter.Apply(context.Models);
 
-        // enums_gen.ts — 필터하지 않는다. enum 은 엔티티 파생물이 아니고, 가지치기하면
-        // 남은 인터페이스/폼의 임포트가 깨진다.
-        var enumsContent = TsEnumRenderer.RenderAll(context.Enums);
+        // enums_gen.ts — 엔티티 필터(이름 목록)로는 가지치지 않는다: enum 은 엔티티 파생물이 아니고, 가지치면
+        // 소비자가 그 파일에서 가져오던 enum 이 사라진다. 소유자 축이 있으면 enum 도 그 축으로 가른다(PartitionEnums).
+        var (declaredEnums, sharedEnums) = PartitionEnums(context.Enums, models, enumNames);
+        var enumsContent = TsEnumRenderer.RenderAll(declaredEnums, sharedEnums, _options.SharedTypesImport);
         File.WriteAllText(Path.Combine(outDir, "enums_gen.ts"), enumsContent);
 
         // entities_gen.ts — @internal 은 존중하지 않는다(엔티티·필드 레벨 둘 다). 타입은
         // 데이터 API 전용이 아니며 전용 엔드포인트로 관리되는 인프라 엔티티에도 타입은 유용하다.
-        var entitiesContent = TsInterfaceRenderer.RenderAll(models, enumNames);
+        var entitiesContent = TsInterfaceRenderer.RenderAll(models, enumNames, _options.SharedTypesImport);
         File.WriteAllText(Path.Combine(outDir, "entities_gen.ts"), entitiesContent);
 
         // entity_names_gen.ts — @internal 을 **존중한다**. 이 목록은 OData entity set 이름의
@@ -49,8 +52,8 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
             [.. models.Where(m => !EntitySurface.IsInternal(m))]);
         File.WriteAllText(Path.Combine(outDir, "entity_names_gen.ts"), namesContent);
 
-        // enum_labels_gen.ts — enums_gen.ts 와 같은 이유로 필터하지 않는다.
-        var enumLabelsContent = TsEnumLabelsRenderer.RenderAll(context.Enums);
+        // enum_labels_gen.ts — enums_gen.ts 와 같은 분할.
+        var enumLabelsContent = TsEnumLabelsRenderer.RenderAll(declaredEnums, sharedEnums, _options.SharedTypesImport);
         File.WriteAllText(Path.Combine(outDir, "enum_labels_gen.ts"), enumLabelsContent);
 
         // field_schema_gen.ts — @internal 필드도 존중하지 않는다, entities_gen.ts 와 같은 이유.
@@ -103,6 +106,45 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
                     $"[{Name}] 이번 빌드가 내지 않은 생성 폼 {RemovedStaleForms.Count}개 삭제: "
                     + string.Join(", ", RemovedStaleForms));
         }
+    }
+
+    /// <summary>
+    /// Which enums this target declares, and which it re-exports from the shared source.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Without an owner filter nothing changes: every enum is declared, as before. With one, an enum
+    /// is this target's own when its file's owner passes the filter, like a model's; an enum of
+    /// another owner is carried only when one of this target's models references it — a module
+    /// target no longer repeats the whole base vocabulary, and a base target no longer carries a
+    /// module's enums that none of its models use.
+    /// </para>
+    /// <para>
+    /// A referenced enum of another owner is declared here unless the target names a shared source,
+    /// in which case it is re-exported from there — one declaration of each type across the targets.
+    /// The files keep their names and exports either way, so generated forms import from them
+    /// unchanged.
+    /// </para>
+    /// </remarks>
+    private (IReadOnlyList<EnumNode> Declared, IReadOnlyList<EnumNode> Shared) PartitionEnums(
+        IReadOnlyList<EnumNode> all, IReadOnlyList<ResolvedModel> models, IReadOnlySet<string> enumNames)
+    {
+        var filter = _options.SurfaceFilter;
+        if (!filter.HasOwnerFilter) return (all, []);
+
+        var referenced = new HashSet<string>(
+            models.SelectMany(m => m.Fields)
+                .Select(f => f.Type)
+                .Where(t => !string.IsNullOrWhiteSpace(t) && enumNames.Contains(t!))
+                .Select(t => t!),
+            StringComparer.Ordinal);
+
+        var own = all.Where(e => filter.AdmitsOwner(e.Prefix ?? "")).ToList();
+        var foreign = all.Where(e => !filter.AdmitsOwner(e.Prefix ?? "") && referenced.Contains(e.Name)).ToList();
+
+        return _options.SharedTypesImport is null
+            ? ([.. all.Where(e => own.Contains(e) || foreign.Contains(e))], [])
+            : (own, foreign);
     }
 
     /// <summary>
