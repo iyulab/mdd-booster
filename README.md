@@ -134,6 +134,24 @@ T-SQL `IX_{Model}_{Column}` · PostgreSQL `ix_{table}_{column}`. 대상 판정�
 > 나타나지 않는다. 신규 엔티티가 기본 노출되기를 원하면 `excludeEntities` 를 쓸 것.
 > (커버리지 출력이 무엇이 빠졌는지는 매 빌드에서 보여준다.)
 
+#### 소유자로 고르기 (`includeOwners` / `excludeOwners`)
+
+한 정본을 **베이스 파일 + 모듈 파일**(`# Prefix:` 선언)로 나눠 두고 표면을 모듈 단위로 가를 때는 이름
+목록 대신 **소유자**로 고른다. 소유자는 모델을 선언한 파일의 `# Prefix:` 값이고, 접두어 없는 파일은
+빈 문자열 `""` 이다.
+
+```json
+{ "type": "TypeScript", "outputPath": "../base/ui/src/types",   "excludeOwners": ["fsa"] },
+{ "type": "TypeScript", "outputPath": "../fsa/ui/src/types",    "includeOwners": ["fsa"] }
+```
+
+- **drift 하지 않는다** — 모듈 파일에 모델이 늘면 그 소유자의 타깃에 저절로 나타나고 다른 타깃에는
+  나타나지 않는다. 같은 구성을 엔티티 목록으로 쓰면 같은 이름을 두 번(include·exclude) 적고, 늘어난
+  모델은 모듈 타깃에서 빠진 채 베이스 타깃에 샌다.
+- 규칙은 엔티티 목록과 같다: 표면 타깃 전용 · `includeOwners` 와 `excludeOwners` 동시 지정은 빌드 오류 ·
+  선언된 적 없는 소유자는 빌드 오류(있는 소유자를 나열한다).
+- 엔티티 목록과 **함께** 쓰면 교집합이다 — 예: `includeOwners: ["fsa"]` + `excludeEntities: ["FsaDraft"]`.
+
 #### `field_schema_gen.ts` — 소비 계약
 
 TypeScript 타깃은 타입·폼과 함께 **필드 스키마 맵**을 낸다. 산출물 목록에는 있었지만 **무엇을

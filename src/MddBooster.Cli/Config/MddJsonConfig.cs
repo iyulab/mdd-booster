@@ -175,6 +175,25 @@ public sealed class MddJsonTarget
     public List<string>? ExcludeEntities { get; set; }
 
     /// <summary>
+    /// 표면 타깃(Api·TypeScript)이 방출할 모델을 <b>소유자</b>(선언 파일의 <c># Prefix:</c>)로 고른다.
+    /// 빈 문자열은 «접두어 없는 파일». <see cref="ExcludeOwners"/>와 함께 지정하면 빌드 오류이고,
+    /// 엔티티 목록과는 교집합으로 합쳐진다.
+    /// <para>
+    /// 엔티티 목록과 달리 drift 하지 않는다 — 모듈 파일에 모델이 늘면 그 소유자의 타깃에 저절로 나타나고
+    /// 다른 타깃에는 저절로 나타나지 않는다.
+    /// </para>
+    /// </summary>
+    [JsonPropertyName("includeOwners")]
+    public List<string>? IncludeOwners { get; set; }
+
+    /// <summary>
+    /// 표면 타깃(Api·TypeScript)에서 이 소유자(<c># Prefix:</c>)의 모델을 뺀다.
+    /// <see cref="IncludeOwners"/>와 함께 지정하면 빌드 오류.
+    /// </summary>
+    [JsonPropertyName("excludeOwners")]
+    public List<string>? ExcludeOwners { get; set; }
+
+    /// <summary>
     /// TypeScript 타깃이 <b>폼만</b> 좁힐 화이트리스트. 생략하면 타깃 범위 전량(현행).
     /// <see cref="FormsExcludeEntities"/>와 함께 지정하면 빌드 오류.
     /// <para>

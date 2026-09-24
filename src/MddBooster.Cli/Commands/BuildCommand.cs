@@ -226,19 +226,21 @@ public sealed class BuildCommand
         foreach (var target in cfg.Targets)
         {
             var label = $"{target.Type} 타깃({TargetPathOf(target)})";
-            var hasFilter = target.IncludeEntities?.Count > 0 || target.ExcludeEntities?.Count > 0;
+            var hasFilter = target.IncludeEntities?.Count > 0 || target.ExcludeEntities?.Count > 0
+                || target.IncludeOwners?.Count > 0 || target.ExcludeOwners?.Count > 0;
 
             // 표면 타깃 전용 — Sql·Model 에 걸면 FK/상속 무결성이 깨진다. 조용히 무시하지 않는다.
             if (hasFilter && target.Type is not ("Api" or "TypeScript"))
             {
                 configViolations.Add(
-                    $"{label}: includeEntities/excludeEntities 는 표면 타깃(Api·TypeScript)에만 지정할 수 있습니다 "
-                    + "— Sql·Model 을 부분집합으로 만들면 FK/상속 무결성이 깨집니다.");
+                    $"{label}: includeEntities/excludeEntities/includeOwners/excludeOwners 는 표면 타깃(Api·TypeScript)에만 "
+                    + "지정할 수 있습니다 — Sql·Model 을 부분집합으로 만들면 FK/상속 무결성이 깨집니다.");
                 continue;
             }
 
             filters[target] = EntitySurfaceFilter.Validate(
-                target.IncludeEntities, target.ExcludeEntities, allModels, label, out var violations);
+                target.IncludeEntities, target.ExcludeEntities, target.IncludeOwners, target.ExcludeOwners,
+                allModels, label, out var violations);
             configViolations.AddRange(violations);
 
             // 1.7a. 권한 키 형식 — 자리표시자 오타는 어떤 정책과도 매칭 안 되는 리터럴 키를

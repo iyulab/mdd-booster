@@ -42,6 +42,15 @@ NO ACTION). 이제 두 SQL 방언이 쓴다:
 라이브러리로 렌더러를 부르는 경우: `ColumnRenderer.Render` 의 `bool cascadeOnDelete` 가 `ReferentialAction? onDelete` 로 바뀌었다
 (`MddBooster.Core.Semantic.OnDeleteRule.For` 가 모델·필드에서 그 값을 준다).
 
+### 추가 — 표면 타깃을 소유자(`# Prefix:`)로 고르는 `includeOwners` / `excludeOwners`
+
+한 정본을 베이스 파일과 모듈 파일로 나눠 두고 표면(Api·TypeScript)을 모듈 단위로 가르려면, 지금까지는 같은 엔티티
+이름을 한 타깃의 `excludeEntities` 와 다른 타깃의 `includeEntities` 에 두 번 적어야 했고, 모듈에 모델이 늘면 모듈
+타깃에서는 조용히 빠지고 베이스 타깃에는 조용히 나타났다.
+
+- 이제 모델을 선언한 파일의 `# Prefix:` 로 고른다. 접두어 없는 파일은 `""`. 모델이 늘어도 설정이 바뀌지 않는다.
+- 엔티티 목록과 같은 규칙(표면 타깃 전용 · 동시 지정 오류 · 없는 소유자 오류)이고, 엔티티 목록과는 교집합.
+
 ### 추가 — 경고를 에러로 올리는 `mdd.json` 키
 
 `mdd build` 는 경고가 있어도 종료 코드 0 이어서, «경고 0 빌드»를 지키려면 콘솔 문구(로캘·형식이 바뀔 수 있는)를 찾아야
@@ -52,6 +61,7 @@ NO ACTION). 이제 두 SQL 방언이 쓴다:
 - 대상은 이 생성기의 `MDDnnn` 과 m3l 의 `M3L-Wnnn`. 승격된 경고가 있으면 두 층을 다 보고한 뒤 생성 전에 종료 코드 3.
 - 코드 형식이 아닌 값 · 두 목록에 함께 있는 코드는 설정 오류(종료 코드 4).
 - 키를 쓰지 않으면 동작은 그대로다.
+- `schemas/mdd.schema.json` 최상위에도 세 키가 있다(코드 형식 `pattern` 포함).
 
 ### 수정 — 더 이상 내지 않는 생성 폼이 `formsOutputPath` 에 남았다
 

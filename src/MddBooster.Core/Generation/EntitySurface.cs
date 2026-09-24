@@ -61,19 +61,39 @@ public static class EntitySurface
 public sealed class EntitySurfaceFilter
 {
     /// <summary>필터가 없는 상태 — 전량 통과.</summary>
-    public static EntitySurfaceFilter PassAll { get; } = new(null, null);
+    public static EntitySurfaceFilter PassAll { get; } = new(null, null, null, null);
 
     private readonly HashSet<string>? _include;
     private readonly HashSet<string>? _exclude;
+    private readonly HashSet<string>? _includeOwners;
+    private readonly HashSet<string>? _excludeOwners;
 
-    private EntitySurfaceFilter(IEnumerable<string>? include, IEnumerable<string>? exclude)
+    private EntitySurfaceFilter(
+        IEnumerable<string>? include, IEnumerable<string>? exclude,
+        IEnumerable<string>? includeOwners, IEnumerable<string>? excludeOwners)
     {
         _include = include is null ? null : new HashSet<string>(include, StringComparer.Ordinal);
         _exclude = exclude is null ? null : new HashSet<string>(exclude, StringComparer.Ordinal);
+        _includeOwners = includeOwners is null ? null : new HashSet<string>(includeOwners, StringComparer.Ordinal);
+        _excludeOwners = excludeOwners is null ? null : new HashSet<string>(excludeOwners, StringComparer.Ordinal);
     }
 
     /// <summary>어떤 필터도 설정되지 않았는지 (콘솔 회계 출력 생략 판단용).</summary>
-    public bool IsPassAll => _include is null && _exclude is null;
+    public bool IsPassAll => _include is null && _exclude is null && _includeOwners is null && _excludeOwners is null;
+
+    /// <summary>
+    /// 모델의 소유자 — 그 모델을 선언한 파일의 <c># Prefix:</c> 값. 접두어 없는 파일의 모델은 빈 문자열.
+    /// </summary>
+    /// <remarks>
+    /// 생성기가 이미 쓰는 개념이다(<c>MDD017</c> 이 모델명을 이것으로 재고, 확장 규칙이 소유 경계를 이것으로
+    /// 가른다). 소유자로 거르면 모듈에 모델이 늘어도 타깃 설정이 바뀌지 않는다 — 엔티티 목록은 그때마다 손으로
+    /// 맞춰야 한다.
+    /// </remarks>
+    public static string OwnerOf(ResolvedModel model)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        return model.Source.Prefix ?? "";
+    }
 
     /// <summary>
     /// 필터를 만들고 동시에 검증한다. 반환된 <paramref name="violations"/>가 비어 있지 않으면
@@ -86,6 +106,22 @@ public sealed class EntitySurfaceFilter
     public static EntitySurfaceFilter Validate(
         IReadOnlyList<string>? include,
         IReadOnlyList<string>? exclude,
+        IReadOnlyList<ResolvedModel> allModels,
+        string targetLabel,
+        out IReadOnlyList<string> violations)
+        => Validate(include, exclude, null, null, allModels, targetLabel, out violations);
+
+    /// <summary>
+    /// 엔티티 목록과 소유자 목록을 함께 받는 형태. 두 축은 <b>교집합</b>으로 합쳐진다 — 각 축 안에서는
+    /// include 와 exclude 중 하나만 쓸 수 있다.
+    /// </summary>
+    /// <param name="includeOwners">타깃의 <c>includeOwners</c> — 이 소유자의 모델만. 빈 문자열은 «접두어 없는 파일».</param>
+    /// <param name="excludeOwners">타깃의 <c>excludeOwners</c> — 이 소유자의 모델을 뺀다.</param>
+    public static EntitySurfaceFilter Validate(
+        IReadOnlyList<string>? include,
+        IReadOnlyList<string>? exclude,
+        IReadOnlyList<string>? includeOwners,
+        IReadOnlyList<string>? excludeOwners,
         IReadOnlyList<ResolvedModel> allModels,
         string targetLabel,
         out IReadOnlyList<string> violations)
@@ -126,9 +162,37 @@ public sealed class EntitySurfaceFilter
             }
         }
 
+        var incOwners = NormalizeOwners(includeOwners);
+        var excOwners = NormalizeOwners(excludeOwners);
+        if (incOwners is not null && excOwners is not null)
+        {
+            found.Add($"{targetLabel}: includeOwners 와 excludeOwners 를 함께 지정할 수 없습니다 — 하나만 쓰세요.");
+        }
+
+        var knownOwners = allModels.Select(OwnerOf).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+        foreach (var (listName, list) in new[] { ("includeOwners", incOwners), ("excludeOwners", excOwners) })
+        {
+            if (list is null) continue;
+            foreach (var owner in list.Where(o => !knownOwners.Contains(o, StringComparer.Ordinal)))
+            {
+                found.Add($"{targetLabel}: {listName} 의 '{owner}' 를 # Prefix: 로 선언한 파일이 없습니다 "
+                          + $"— 있는 소유자: {string.Join(", ", knownOwners.Select(DescribeOwner))}.");
+            }
+        }
+
         violations = found;
-        return found.Count > 0 ? PassAll : new EntitySurfaceFilter(inc, exc);
+        return found.Count > 0 ? PassAll : new EntitySurfaceFilter(inc, exc, incOwners, excOwners);
     }
+
+    private static string DescribeOwner(string owner) => owner.Length == 0 ? "\"\"(접두어 없음)" : $"'{owner}'";
+
+    /// <summary>
+    /// 소유자 목록 정규화 — 엔티티 목록과 달리 빈 문자열을 지우지 않는다: «접두어 없는 파일»이라는 뜻이다.
+    /// </summary>
+    private static HashSet<string>? NormalizeOwners(IReadOnlyList<string>? list)
+        => list is null || list.Count == 0
+            ? null
+            : new HashSet<string>(list.Select(s => s.Trim()), StringComparer.Ordinal);
 
     /// <summary>필터를 적용한 모델 목록. 순서는 입력 순서를 보존한다.</summary>
     public IReadOnlyList<ResolvedModel> Apply(IReadOnlyList<ResolvedModel> models)
@@ -138,7 +202,9 @@ public sealed class EntitySurfaceFilter
 
         return [.. models.Where(m =>
             (_include is null || _include.Contains(m.Name)) &&
-            (_exclude is null || !_exclude.Contains(m.Name)))];
+            (_exclude is null || !_exclude.Contains(m.Name)) &&
+            (_includeOwners is null || _includeOwners.Contains(OwnerOf(m))) &&
+            (_excludeOwners is null || !_excludeOwners.Contains(OwnerOf(m))))];
     }
 
     /// <summary>
@@ -156,9 +222,14 @@ public sealed class EntitySurfaceFilter
         ArgumentNullException.ThrowIfNull(allModels);
         var kept = Apply(allModels);
         var dropped = allModels.Where(m => !kept.Contains(m)).Select(m => m.Name).ToList();
-        var mode = optionPrefix.Length == 0
-            ? (_include is not null ? "includeEntities" : "excludeEntities")
-            : optionPrefix + (_include is not null ? "Include" : "Exclude");
+        var modes = new List<string>();
+        if (_include is not null || _exclude is not null)
+            modes.Add(optionPrefix.Length == 0
+                ? (_include is not null ? "includeEntities" : "excludeEntities")
+                : optionPrefix + (_include is not null ? "Include" : "Exclude"));
+        if (_includeOwners is not null) modes.Add("includeOwners");
+        if (_excludeOwners is not null) modes.Add("excludeOwners");
+        var mode = string.Join(" + ", modes);
         return $"{mode}: 포함 {kept.Count}개 / 제외 {dropped.Count}개"
                + (dropped.Count > 0 ? $" — {string.Join(", ", dropped)}" : "");
     }

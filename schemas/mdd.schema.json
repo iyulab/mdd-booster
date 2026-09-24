@@ -17,6 +17,20 @@
       "items": { "type": "string", "minLength": 1 },
       "minItems": 1
     },
+    "treatWarningsAsErrors": {
+      "type": "boolean",
+      "description": "Report every coded warning (MDDnnn from this generator, M3L-Wnnn from the m3l parser/validator) as an error: the build stops with exit code 3 before generating anything. Codes in noWarn are still suppressed. Named and ordered after MSBuild's TreatWarningsAsErrors."
+    },
+    "warningsAsErrors": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^(MDD\\d{3}|M3L-W\\d{3})$" },
+      "description": "Warning codes reported as errors (exit code 3), for promoting some rather than all. A code also listed in noWarn is a configuration error."
+    },
+    "noWarn": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^(MDD\\d{3}|M3L-W\\d{3})$" },
+      "description": "Warning codes not reported at all. Takes precedence over treatWarningsAsErrors."
+    },
     "targets": {
       "type": "array",
       "description": "One or more generation targets. The same type may appear more than once (e.g. two Api targets for two servers sharing one model) as long as their path differs.",
@@ -122,7 +136,10 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["type", "projectPath", "namespace"],
-      "not": { "required": ["includeEntities", "excludeEntities"] },
+      "allOf": [
+        { "not": { "required": ["includeEntities", "excludeEntities"] } },
+        { "not": { "required": ["includeOwners", "excludeOwners"] } }
+      ],
       "properties": {
         "type": { "const": "Api" },
         "projectPath": {
@@ -146,6 +163,16 @@
           "type": "array",
           "items": { "type": "string", "minLength": 1 },
           "description": "Blacklist of entities this target omits. Mutually exclusive with includeEntities."
+        },
+        "includeOwners": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Emit only the models declared in files whose # Prefix: is listed. The empty string means files with no prefix. Mutually exclusive with excludeOwners; combines with includeEntities/excludeEntities as an intersection. Unlike an entity list it does not drift: a model added to an owner's file follows the owner."
+        },
+        "excludeOwners": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Omit the models declared in files whose # Prefix: is listed. The empty string means files with no prefix. Mutually exclusive with includeOwners."
         }
       }
     },
@@ -153,7 +180,10 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["type", "outputPath"],
-      "not": { "required": ["includeEntities", "excludeEntities"] },
+      "allOf": [
+        { "not": { "required": ["includeEntities", "excludeEntities"] } },
+        { "not": { "required": ["includeOwners", "excludeOwners"] } }
+      ],
       "properties": {
         "type": { "const": "TypeScript" },
         "outputPath": {
@@ -203,6 +233,16 @@
           "type": "array",
           "items": { "type": "string", "minLength": 1 },
           "description": "Blacklist of entities this target omits. Mutually exclusive with includeEntities."
+        },
+        "includeOwners": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Emit only the models declared in files whose # Prefix: is listed. The empty string means files with no prefix. Mutually exclusive with excludeOwners; combines with includeEntities/excludeEntities as an intersection. Unlike an entity list it does not drift: a model added to an owner's file follows the owner."
+        },
+        "excludeOwners": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Omit the models declared in files whose # Prefix: is listed. The empty string means files with no prefix. Mutually exclusive with includeOwners."
         }
       }
     }
