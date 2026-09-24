@@ -141,8 +141,8 @@ T-SQL `IX_{Model}_{Column}` · PostgreSQL `ix_{table}_{column}`. 대상 판정�
 빈 문자열 `""` 이다.
 
 ```json
-{ "type": "TypeScript", "outputPath": "../base/ui/src/types",   "excludeOwners": ["fsa"] },
-{ "type": "TypeScript", "outputPath": "../fsa/ui/src/types",    "includeOwners": ["fsa"] }
+{ "type": "TypeScript", "outputPath": "../base/ui/src/types",   "excludeOwners": ["insp"] },
+{ "type": "TypeScript", "outputPath": "../insp/ui/src/types",    "includeOwners": ["insp"] }
 ```
 
 - **drift 하지 않는다** — 모듈 파일에 모델이 늘면 그 소유자의 타깃에 저절로 나타나고 다른 타깃에는
@@ -150,7 +150,7 @@ T-SQL `IX_{Model}_{Column}` · PostgreSQL `ix_{table}_{column}`. 대상 판정�
   모델은 모듈 타깃에서 빠진 채 베이스 타깃에 샌다.
 - 규칙은 엔티티 목록과 같다: 표면 타깃 전용 · `includeOwners` 와 `excludeOwners` 동시 지정은 빌드 오류 ·
   선언된 적 없는 소유자는 빌드 오류(있는 소유자를 나열한다).
-- 엔티티 목록과 **함께** 쓰면 교집합이다 — 예: `includeOwners: ["fsa"]` + `excludeEntities: ["FsaDraft"]`.
+- 엔티티 목록과 **함께** 쓰면 교집합이다 — 예: `includeOwners: ["insp"]` + `excludeEntities: ["InspDraft"]`.
 - **enum 도 같은 축으로 갈린다**(TypeScript 타깃). 소유자 축이 있는 타깃은 자기 소유자의 enum 을 전부, 다른 소유자의
   enum 은 **자기 모델이 참조하는 것만** 낸다 — 베이스 타깃에 모듈 enum 이 새지 않고, 모듈 타깃이 베이스 어휘 전량을
   되풀이하지 않는다. 소유자 축이 없는 타깃은 지금처럼 enum 전부를 낸다.
@@ -159,7 +159,7 @@ T-SQL `IX_{Model}_{Column}` · PostgreSQL `ix_{table}_{column}`. 대상 판정�
 선언**하는 것이 싫다면, 베이스 타깃 출력을 재수출하는 배럴을 가리킨다:
 
 ```json
-{ "type": "TypeScript", "outputPath": "../fsa/ui/src/types", "includeOwners": ["fsa"],
+{ "type": "TypeScript", "outputPath": "../insp/ui/src/types", "includeOwners": ["insp"],
   "sharedTypesImport": "@acme/base-ui/types" }
 ```
 
@@ -543,7 +543,7 @@ public AssetMaintenanceProfileExt? MaintenanceProfile { get; set; }
 | **쓰기 엔티티는 그대로** | `AssetMaintenanceProfile.cs` 는 아무것도 얻지 않는다. 쓰기 축의 navigation 은 삽입 순서 추론용으로 이미 따로 있다 |
 | **널 허용은 양쪽이 다르다** | forward 는 FK 를 따른다(`@not_null` 이면 비-널, `identifier?` 면 널 허용). **reverse 는 언제나 널 허용** — 대상 행에 의존 행이 없을 수 있다 |
 | **정방향 이름** | **FK 필드명**에서 온다 — 끝의 `_id` 를 떼고 PascalCase(`asset_id` → `Asset`, `owner_id` → `Owner`). 대상 모델명이 아니다. FK 속성(`OwnerId`)과 navigation(`Owner`)을 이 생성기가 **둘 다** 만들고 후자를 전자에서 유도하므로 EF 관례가 요구하는 짝이 어긋날 수 없다 |
-| **역방향 이름** | 의존 모델명이 대상 모델명으로 시작하면 그 접두를 뗀 나머지(`AssetMaintenanceProfile` → `MaintenanceProfile`), 아니면 모델명 전체(`Contractor` → `Contractor`). 파일이 `# Prefix:` 를 선언했으면 **그 접두는 보존한다**(`fsa` + `FsaAssetFacilityProfile` → `FsaFacilityProfile`) — 접두는 누가 선언했는지를 나르므로, 그것까지 떼면 두 소유자가 아무도 쓰지 않은 이름에서 충돌한다 |
+| **역방향 이름** | 의존 모델명이 대상 모델명으로 시작하면 그 접두를 뗀 나머지(`AssetMaintenanceProfile` → `MaintenanceProfile`), 아니면 모델명 전체(`Contractor` → `Contractor`). 파일이 `# Prefix:` 를 선언했으면 **그 접두는 보존한다**(`insp` + `InspAssetInspectionProfile` → `InspInspectionProfile`) — 접두는 누가 선언했는지를 나르므로, 그것까지 떼면 두 소유자가 아무도 쓰지 않은 이름에서 충돌한다 |
 
 **관계 구성 코드(`HasOne`/`WithOne`)는 방출하지 않는다.** EF 관례가 FK 이름과 navigation 이름으로
 이미 1:1 을 추론하기 때문이다(위 「정방향 이름」 참조). ⚠️ **`::aspect` 는 예외가 아니라 «같은

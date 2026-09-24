@@ -107,8 +107,8 @@ public class AspectRulesTests
     /// </summary>
     [Theory]
     [InlineData("AssetMaintenanceProfile", "", "MaintenanceProfile", true)]
-    [InlineData("FsaAssetFacilityProfile", "fsa", "FsaFacilityProfile", true)]
-    [InlineData("FsaFacilityProfile", "fsa", "FsaFacilityProfile", false)]
+    [InlineData("InspAssetInspectionProfile", "insp", "InspInspectionProfile", true)]
+    [InlineData("InspInspectionProfile", "insp", "InspInspectionProfile", false)]
     [InlineData("Contractor", "", "Contractor", false)]
     public void The_reverse_navigation_name_is_derived_from_the_model_name(
         string modelName, string prefix, string expected, bool conventional)

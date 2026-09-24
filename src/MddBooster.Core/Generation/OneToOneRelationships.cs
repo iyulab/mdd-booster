@@ -143,8 +143,8 @@ public static class OneToOneRelationships
     /// <c>&lt;Prefix&gt;&lt;Target&gt;&lt;Rest&gt;</c>, and the prefix is the part that says who owns
     /// the declaration — stripping it along with the target would produce a navigation whose name no
     /// longer says that, and two owners extending the same target would then collide on a name
-    /// neither of them wrote. <c>FsaAssetFacilityProfile</c> on <c>Asset</c> gives
-    /// <c>FsaFacilityProfile</c>.
+    /// neither of them wrote. <c>InspAssetInspectionProfile</c> on <c>Asset</c> gives
+    /// <c>InspInspectionProfile</c>.
     /// </param>
     /// <remarks>
     /// <para>

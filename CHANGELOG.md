@@ -157,7 +157,7 @@ Sql 타깃은 다른 모델의 키를 가리키는 세 자리 — `@reference` �
 
 `::aspect(Base)` 는 base 쪽에 navigation 하나를 만든다. 그 이름은 모델명에서 `<Base>` 를 뗀
 나머지이고 파일의 `# Prefix:` 는 보존된다 — `AssetMaintenanceProfile` → `Asset.MaintenanceProfile`,
-`FsaAssetFacilityProfile` → `Asset.FsaFacilityProfile`. 이름이 약속을 따르지 않으면 navigation 은
+`InspAssetInspectionProfile` → `Asset.InspInspectionProfile`. 이름이 약속을 따르지 않으면 navigation 은
 **모델명 전체**가 되고(`Contractor` → `Organization.Contractor`), 그때 **MDD019 경고**가 그 사실을
 알린다. 오류가 아닌 이유는 기존 테이블의 개명을 강요하지 않기 위해서다.
 

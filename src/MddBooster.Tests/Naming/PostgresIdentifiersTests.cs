@@ -15,7 +15,7 @@ public class PostgresIdentifiersTests
     [Theory]
     [InlineData("Asset", "asset")]
     [InlineData("WorkOrder", "work_order")]
-    [InlineData("FsaFacilityProfile", "fsa_facility_profile")]
+    [InlineData("InspInspectionProfile", "insp_inspection_profile")]
     [InlineData("AssetMaintenanceProfile", "asset_maintenance_profile")]
     [InlineData("FMSCode", "fms_code")]                 // 약어 연속 + 후행 단어
     [InlineData("FMS", "fms")]                          // 전체 약어
@@ -113,11 +113,11 @@ public class PostgresIdentifiersTests
     [Fact]
     public void BuildTableNameMap_MapsAllModels()
     {
-        var map = PostgresIdentifiers.BuildTableNameMap(["Asset", "WorkOrder", "FsaFacilityProfile"]);
+        var map = PostgresIdentifiers.BuildTableNameMap(["Asset", "WorkOrder", "InspInspectionProfile"]);
 
         Assert.Equal("asset", map["Asset"]);
         Assert.Equal("work_order", map["WorkOrder"]);
-        Assert.Equal("fsa_facility_profile", map["FsaFacilityProfile"]);
+        Assert.Equal("insp_inspection_profile", map["InspInspectionProfile"]);
     }
 
     [Fact]

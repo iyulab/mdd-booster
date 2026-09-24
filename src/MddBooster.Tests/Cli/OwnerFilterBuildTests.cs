@@ -26,9 +26,9 @@ public class OwnerFilterBuildTests
 
     private const string Module = """
 # Namespace: test.owners
-# Prefix: fsa
+# Prefix: insp
 
-## FsaInspection
+## InspVisit
 
 - id: identifier @pk @generated
 - note: string(50) "비고"
@@ -36,7 +36,7 @@ public class OwnerFilterBuildTests
 
     private const string ModuleGrown = Module + """
 
-## FsaObligation
+## InspSchedule
 
 - id: identifier @pk @generated
 - rule: string(50) "규칙"
@@ -48,9 +48,9 @@ public class OwnerFilterBuildTests
         var mddDir = Path.Combine(root, "mdd");
         Directory.CreateDirectory(mddDir);
         File.WriteAllText(Path.Combine(mddDir, "base.m3l.md"), Base);
-        File.WriteAllText(Path.Combine(mddDir, "fsa.m3l.md"), module);
+        File.WriteAllText(Path.Combine(mddDir, "insp.m3l.md"), module);
         File.WriteAllText(Path.Combine(mddDir, "mdd.json"),
-            "{\n  \"sources\": [\"./base.m3l.md\", \"./fsa.m3l.md\"],\n  \"targets\": [" + targetsJson + "]\n}");
+            "{\n  \"sources\": [\"./base.m3l.md\", \"./insp.m3l.md\"],\n  \"targets\": [" + targetsJson + "]\n}");
         return mddDir;
     }
 
@@ -60,8 +60,8 @@ public class OwnerFilterBuildTests
     }
 
     private const string SplitTargets =
-        """{ "type": "TypeScript", "outputPath": "../base", "excludeOwners": ["fsa"] }, """
-        + """{ "type": "TypeScript", "outputPath": "../module", "includeOwners": ["fsa"] }""";
+        """{ "type": "TypeScript", "outputPath": "../base", "excludeOwners": ["insp"] }, """
+        + """{ "type": "TypeScript", "outputPath": "../module", "includeOwners": ["insp"] }""";
 
     private static string Entities(string root, string target)
         => File.ReadAllText(Path.Combine(root, target, "entities_gen.ts"));
@@ -75,8 +75,8 @@ public class OwnerFilterBuildTests
             Assert.Equal(0, new BuildCommand().Run(mddDir));
 
             Assert.Contains("interface Asset ", Entities(root, "base"));
-            Assert.DoesNotContain("FsaInspection", Entities(root, "base"));
-            Assert.Contains("interface FsaInspection ", Entities(root, "module"));
+            Assert.DoesNotContain("InspVisit", Entities(root, "base"));
+            Assert.Contains("interface InspVisit ", Entities(root, "module"));
             Assert.DoesNotContain("interface Asset ", Entities(root, "module"));
         }
         finally { Cleanup(root); }
@@ -91,8 +91,8 @@ public class OwnerFilterBuildTests
         {
             Assert.Equal(0, new BuildCommand().Run(mddDir));
 
-            Assert.Contains("interface FsaObligation ", Entities(root, "module"));
-            Assert.DoesNotContain("FsaObligation", Entities(root, "base"));
+            Assert.Contains("interface InspSchedule ", Entities(root, "module"));
+            Assert.DoesNotContain("InspSchedule", Entities(root, "base"));
         }
         finally { Cleanup(root); }
     }
@@ -108,15 +108,15 @@ public class OwnerFilterBuildTests
             Assert.Equal(0, new BuildCommand().Run(mddDir));
 
             Assert.Contains("interface Asset ", Entities(root, "base"));
-            Assert.DoesNotContain("FsaInspection", Entities(root, "base"));
+            Assert.DoesNotContain("InspVisit", Entities(root, "base"));
         }
         finally { Cleanup(root); }
     }
 
     [Theory]
     [InlineData("""{ "type": "TypeScript", "outputPath": "../t", "includeOwners": ["fsx"] }""")]
-    [InlineData("""{ "type": "TypeScript", "outputPath": "../t", "includeOwners": ["fsa"], "excludeOwners": [""] }""")]
-    [InlineData("""{ "type": "Sql", "projectPath": "../t", "excludeOwners": ["fsa"] }""")]
+    [InlineData("""{ "type": "TypeScript", "outputPath": "../t", "includeOwners": ["insp"], "excludeOwners": [""] }""")]
+    [InlineData("""{ "type": "Sql", "projectPath": "../t", "excludeOwners": ["insp"] }""")]
     public void An_owner_filter_that_cannot_mean_what_it_says_is_a_configuration_error(string targetJson)
     {
         var mddDir = Scaffold(targetJson, out var root);
@@ -132,14 +132,14 @@ public class OwnerFilterBuildTests
     public void An_owner_filter_and_an_entity_filter_both_apply()
     {
         var mddDir = Scaffold(
-            """{ "type": "TypeScript", "outputPath": "../module", "includeOwners": ["fsa"], "excludeEntities": ["FsaInspection"] }""",
+            """{ "type": "TypeScript", "outputPath": "../module", "includeOwners": ["insp"], "excludeEntities": ["InspVisit"] }""",
             out var root, ModuleGrown);
         try
         {
             Assert.Equal(0, new BuildCommand().Run(mddDir));
 
-            Assert.Contains("interface FsaObligation ", Entities(root, "module"));
-            Assert.DoesNotContain("FsaInspection", Entities(root, "module"));
+            Assert.Contains("interface InspSchedule ", Entities(root, "module"));
+            Assert.DoesNotContain("InspVisit", Entities(root, "module"));
             Assert.DoesNotContain("interface Asset ", Entities(root, "module"));
         }
         finally { Cleanup(root); }
@@ -169,17 +169,17 @@ public class OwnerFilterBuildTests
 
     private const string ModuleWithEnums = """
 # Namespace: test.owners
-# Prefix: fsa
+# Prefix: insp
 
-## FsaGrade ::enum
+## InspGrade ::enum
 
 - a: "A"
 
-## FsaInspection
+## InspVisit
 
 - id: identifier @pk @generated
 - kind: AssetKind "종류"
-- grade: FsaGrade "등급"
+- grade: InspGrade "등급"
 """;
 
     private static string ScaffoldWithEnums(string targetsJson, out string root)
@@ -208,10 +208,10 @@ public class OwnerFilterBuildTests
             var baseEnums = Enums(root, "base");
             Assert.Contains("export type AssetKind =", baseEnums);
             Assert.Contains("export type AssetColor =", baseEnums);
-            Assert.DoesNotContain("FsaGrade", baseEnums);
+            Assert.DoesNotContain("InspGrade", baseEnums);
 
             var moduleEnums = Enums(root, "module");
-            Assert.Contains("export type FsaGrade =", moduleEnums);
+            Assert.Contains("export type InspGrade =", moduleEnums);
             Assert.Contains("export type AssetKind =", moduleEnums);
             Assert.DoesNotContain("AssetColor", moduleEnums);
             Assert.Contains("export interface IyuEntity", Entities(root, "module"));
@@ -227,7 +227,7 @@ public class OwnerFilterBuildTests
     public void A_shared_source_turns_the_foreign_declarations_into_re_exports()
     {
         var mddDir = ScaffoldWithEnums(
-            """{ "type": "TypeScript", "outputPath": "../module", "includeOwners": ["fsa"], "sharedTypesImport": "@acme/base/types" }""",
+            """{ "type": "TypeScript", "outputPath": "../module", "includeOwners": ["insp"], "sharedTypesImport": "@acme/base/types" }""",
             out var root);
         try
         {
@@ -236,7 +236,7 @@ public class OwnerFilterBuildTests
             var moduleEnums = Enums(root, "module");
             Assert.Contains("export type { AssetKind } from '@acme/base/types'", moduleEnums);
             Assert.DoesNotContain("export type AssetKind =", moduleEnums);
-            Assert.Contains("export type FsaGrade =", moduleEnums);
+            Assert.Contains("export type InspGrade =", moduleEnums);
 
             var labels = File.ReadAllText(Path.Combine(root, "module", "enum_labels_gen.ts"));
             Assert.Contains("export { AssetKindLabels } from '@acme/base/types'", labels);
@@ -250,7 +250,7 @@ public class OwnerFilterBuildTests
 
     [Theory]
     [InlineData("""{ "type": "TypeScript", "outputPath": "../t", "sharedTypesImport": "@acme/base/types" }""")]
-    [InlineData("""{ "type": "Api", "projectPath": "../t", "namespace": "T", "includeOwners": ["fsa"], "sharedTypesImport": "@acme/base/types" }""")]
+    [InlineData("""{ "type": "Api", "projectPath": "../t", "namespace": "T", "includeOwners": ["insp"], "sharedTypesImport": "@acme/base/types" }""")]
     public void A_shared_source_without_an_owner_axis_or_off_a_typescript_target_is_a_configuration_error(string targetJson)
     {
         var mddDir = ScaffoldWithEnums(targetJson, out var root);
