@@ -18,6 +18,20 @@ public sealed class SqlGenerator : IArtifactGenerator
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        // Fail the build, not the deployment — and before any file is replaced, so the last good
+        // output stays in place. PostgreSQL has no such limit; its generator does not ask.
+        var cascade = CascadePathDetector.Detect(context.Models);
+        if (cascade != null)
+        {
+            throw new InvalidOperationException(
+                $"SQL Server refuses these delete actions (error 1785): {cascade.Describe()}. " +
+                "One delete may reach a table only once and may not come back to its own table; a CASCADE " +
+                "(the key of an ::aspect) continues from the rows it deletes, a SET NULL " +
+                "(@reference(X)?) ends at the rows it updates. Declare one of the SET NULL keys " +
+                "@reference(X)! (NO ACTION) and clear the referencing rows in the application before " +
+                "the delete. PostgreSQL has no such limit.");
+        }
+
         var projectRoot = ResolveProjectRoot(context.WorkingDirectory);
         var tablesGenDir = Path.Combine(projectRoot, "dbo", "Tables_gen");
         var viewsGenDir = Path.Combine(projectRoot, "dbo", "Views_gen");

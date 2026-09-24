@@ -653,6 +653,11 @@ SQL Server, which has no RESTRICT and checks NO ACTION immediately. The automati
 **not** applied: a reference without a symbol writes no `ON DELETE` clause, so the database default
 (NO ACTION) holds. Applied as written, it would make common models undeployable on SQL Server — a
 self-reference, or two keys to the same model, cannot both cascade or set null there (error 1785).
+The same limit applies to the symbols as written, so the SQL Server dialect stops the build on a set
+of `?` keys (with the cascading key an `::aspect` makes) that SQL Server would refuse — a `?`
+self-reference, two `?` keys from one model to another, or a delete that would reach one table
+twice or come back to its own. A SET NULL ends at the rows it updates, so `?` keys of different
+models that form a loop or meet on one table are accepted. PostgreSQL has no such limit and writes them all.
 The attribute forms (`@cascade`, `@no_action`, `@set_null`, `@restrict`, `@cascade(X)`) are
 deprecated by the parser (M3L-W003) and are not read. The Model target (EF Core) configures the same
 action on the write entity's navigation (`OnDelete(DeleteBehavior.NoAction | SetNull | Restrict)`),
