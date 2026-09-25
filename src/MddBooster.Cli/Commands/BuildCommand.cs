@@ -415,15 +415,30 @@ public sealed class BuildCommand
             }
         }
 
-        // 2. 타깃별 생성기 실행
-        foreach (var target in cfg.Targets)
+        // 2. 타깃별 생성기 준비 — 그리고 «모든» 타깃의 검증을 어느 타깃이든 쓰기 전에.
+        //
+        // 타깃은 차례로 쓴다. 검증이 각 타깃의 Generate 안에만 있으면, 뒤 타깃이 모델을 거절할 때
+        // 앞 타깃은 이미 새 모델로 다시 써진 뒤다 — 실패한 빌드가 «반쯤 갱신된» 트리를 남기고,
+        // 생성물을 커밋하는 소비자에게는 멱등 검사(재생성 후 git diff)가 그 혼합을 변경으로 본다.
+        var prepared = cfg.Targets.Select(target =>
         {
             var filter = filters.TryGetValue(target, out var f) ? f : EntitySurfaceFilter.PassAll;
             // 명시 > 유일 추론 > null. 후보가 둘 이상인 경우는 위에서 이미 오류로 걸렀다.
             var entitiesNamespace = target.EntitiesNamespace
                 ?? (modelNamespaces.Count == 1 ? modelNamespaces[0] : null);
             var formsFilter = formsFilters.TryGetValue(target, out var ff) ? ff : EntitySurfaceFilter.PassAll;
-            var generator = ResolveGenerator(target, entitiesNamespace, filter, formsFilter);
+            return (Target: target, Filter: filter, FormsFilter: formsFilter,
+                Generator: ResolveGenerator(target, entitiesNamespace, filter, formsFilter));
+        }).ToList();
+
+        foreach (var p in prepared)
+        {
+            p.Generator.Validate(context);
+        }
+
+        // 3. 타깃별 생성기 실행
+        foreach (var (target, filter, formsFilter, generator) in prepared)
+        {
             var targetPath = TargetPathOf(target);
             Console.WriteLine($"[{generator.Name}] 생성 시작 (target: {targetPath})");
             // 커버리지 회계 — 화이트리스트는 정본에 새 엔티티가 들어와도 조용히 빠지므로

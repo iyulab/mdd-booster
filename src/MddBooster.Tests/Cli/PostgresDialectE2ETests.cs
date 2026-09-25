@@ -113,6 +113,47 @@ public class PostgresDialectE2ETests
         finally { Cleanup(mddDir); }
     }
 
+    /// <summary>
+    /// A model one target refuses leaves every target's previous output in place. The Sql target
+    /// runs first and has nothing to object to; the Model target refuses a model without the
+    /// timestamps its runtime maps. Checked inside each target's own generation, the Sql target
+    /// had already rewritten its files from the refused model by the time the Model target said so
+    /// — and the Model target had emptied its own directories before checking.
+    /// </summary>
+    [Fact]
+    public void A_model_one_target_refuses_leaves_every_targets_previous_output_in_place()
+    {
+        var (mddDir, dbDir) = Scaffold("refused", TimestampedChainModel);
+        var entitiesDir = Path.Combine(Path.GetDirectoryName(mddDir)!, "entities");
+        Directory.CreateDirectory(entitiesDir);
+        WriteConfig(mddDir,
+            "{ \"type\": \"Sql\", \"dialect\": \"postgres\", \"projectPath\": \"../db\" }, " +
+            "{ \"type\": \"Model\", \"dialect\": \"postgres\", \"projectPath\": \"../entities\", " +
+            "\"namespace\": \"X.Entities\", \"dbContextName\": \"XDbContext\" }");
+
+        try
+        {
+            Assert.Equal(0, new BuildCommand().Run(mddDir));
+            var before = Snapshot(dbDir, entitiesDir);
+            Assert.Contains(before.Keys, k => k.EndsWith("work_order.sql", StringComparison.Ordinal));
+            Assert.Contains(before.Keys, k => k.EndsWith("WorkOrder.cs", StringComparison.Ordinal));
+
+            // The next model renames a table (Sql would rewrite) and drops the timestamps (Model refuses).
+            File.WriteAllText(Path.Combine(mddDir, "model.m3l.md"),
+                ChainModel.Replace("## WorkOrder", "## Job", StringComparison.Ordinal));
+
+            var ex = Assert.Throws<InvalidOperationException>(() => new BuildCommand().Run(mddDir));
+            Assert.Contains("created_at", ex.Message);
+
+            Assert.Equal(before, Snapshot(dbDir, entitiesDir));
+        }
+        finally { Cleanup(mddDir); }
+    }
+
+    private static Dictionary<string, string> Snapshot(params string[] dirs) =>
+        dirs.SelectMany(d => Directory.GetFiles(d, "*", SearchOption.AllDirectories))
+            .ToDictionary(p => p, File.ReadAllText);
+
     [Fact]
     public void UnknownDialect_IsExplicitError()
     {

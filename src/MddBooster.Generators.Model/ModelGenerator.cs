@@ -18,6 +18,13 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
 
     public string Name => "model";
 
+    /// <summary>The runtime contract gate (<see cref="ModelTargetValidator"/>) — nothing is written.</summary>
+    public void Validate(GeneratorContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ModelTargetValidator.Validate(context.Models);
+    }
+
     public void Generate(GeneratorContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -26,6 +33,10 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
         var entityDir = Path.Combine(projectRoot, "Entity_gen");
         var contextDir = Path.Combine(projectRoot, "DbContext_gen");
         var enumDir = Path.Combine(projectRoot, "Enum_gen");
+
+        // Before the directories are emptied: a model this target refuses must not cost the
+        // consumer the entities it generated last time.
+        ModelTargetValidator.Validate(context.Models);
 
         CleanDir(entityDir);
         CleanDir(contextDir);
@@ -41,9 +52,6 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
 
         // Scan dbo/Views/ in the SQL project for user-maintained {Name}ExtView.sql files.
         var customExtViewModels = ScanCustomExtViews(context.WorkingDirectory);
-
-        // 런타임 계약 게이트 — 생성은 되지만 런타임에 파탄나는 모델을 여기서 명시적으로 거른다.
-        ModelTargetValidator.Validate(context.Models);
 
         // Computed once for the whole set, not per model: the navigation a read type gains on the
         // target side comes from a declaration in some other model, so no model can derive its own.

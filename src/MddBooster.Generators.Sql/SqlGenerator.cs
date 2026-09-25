@@ -14,10 +14,15 @@ public sealed class SqlGenerator : IArtifactGenerator
 
     public string Name => "sql";
 
-    public void Generate(GeneratorContext context)
+    /// <summary>The delete-path gate (SQL Server error 1785) — nothing is written.</summary>
+    public void Validate(GeneratorContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+        RefuseCascadePaths(context);
+    }
 
+    private static void RefuseCascadePaths(GeneratorContext context)
+    {
         // Fail the build, not the deployment — and before any file is replaced, so the last good
         // output stays in place. PostgreSQL has no such limit; its generator does not ask.
         var cascade = CascadePathDetector.Detect(context.Models);
@@ -31,6 +36,13 @@ public sealed class SqlGenerator : IArtifactGenerator
                 "@reference(X)! (NO ACTION) and clear the referencing rows in the application before " +
                 "the delete. PostgreSQL has no such limit.");
         }
+    }
+
+    public void Generate(GeneratorContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        RefuseCascadePaths(context);
 
         var projectRoot = ResolveProjectRoot(context.WorkingDirectory);
         var tablesGenDir = Path.Combine(projectRoot, "dbo", "Tables_gen");
