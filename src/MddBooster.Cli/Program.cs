@@ -24,7 +24,7 @@ public static class Program
             };
 
             // Only on the actual work command — keeps --help/version output clean and scriptable.
-            if (args[0] == "build")
+            if (args[0] == "build" && !args.Skip(1).Any(IsHelpFlag))
                 UpdateNotifier.CheckAndNotify(GetCurrentVersion());
 
             return exitCode;
@@ -42,8 +42,41 @@ public static class Program
 
     private static int RunBuild(string[] args)
     {
-        var configDir = args.Length >= 2 ? args[1] : Environment.CurrentDirectory;
+        var rest = args.Skip(1).ToArray();
+
+        // Options are recognised before anything is read as a path: a flag handed to
+        // the build command must never surface as "config directory not found".
+        if (rest.Any(IsHelpFlag))
+            return PrintBuildUsage();
+
+        var unknownOption = rest.FirstOrDefault(a => a.StartsWith('-'));
+        if (unknownOption is not null)
+        {
+            Console.Error.WriteLine($"알 수 없는 옵션: '{unknownOption}'");
+            PrintBuildUsage();
+            return 1;
+        }
+
+        if (rest.Length > 1)
+        {
+            Console.Error.WriteLine($"설정 디렉터리는 하나만 받습니다 — 추가 인자: '{rest[1]}'");
+            PrintBuildUsage();
+            return 1;
+        }
+
+        var configDir = rest.Length == 1 ? rest[0] : Environment.CurrentDirectory;
         return new BuildCommand().Run(configDir);
+    }
+
+    private static bool IsHelpFlag(string arg) => arg is "--help" or "-h";
+
+    private static int PrintBuildUsage()
+    {
+        Console.WriteLine("Usage: mdd build [<config-dir>]");
+        Console.WriteLine();
+        Console.WriteLine("  <config-dir>   mdd.json 이 있는 디렉터리 (생략하면 현재 디렉터리)");
+        Console.WriteLine("  -h, --help     이 메시지 출력");
+        return 0;
     }
 
     private static int PrintUsage()

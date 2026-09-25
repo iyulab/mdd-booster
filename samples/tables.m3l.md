@@ -29,9 +29,9 @@
 - id: identifier @pk @generated
 - project_id: identifier @reference(Project) @not_null
 - title: string(120) @not_null "제목"
-- status: TaskStatus @not_null = todo
+- status: TaskStatus = todo @not_null
 - estimated_hours: decimal(6,2) @not_null "예상 시간"
-- buffer_hours: decimal(6,2) @not_null = 0 "버퍼 시간"
+- buffer_hours: decimal(6,2) = 0 @not_null "버퍼 시간"
 
 - project_name: string @lookup(project_id.name) "프로젝트명"
 - planned_hours: decimal(6,2) @computed(`estimated_hours + buffer_hours`) "계획 시간"
