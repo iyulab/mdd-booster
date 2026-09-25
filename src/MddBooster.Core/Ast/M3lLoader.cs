@@ -59,9 +59,7 @@ public sealed class M3lLoader
         }
         if (!result.Success || result.Data is not ValidateResult diagnostics)
         {
-            throw new M3lLoadException(
-                result.Error ?? "M3L 검증 실패 (상세 정보 없음)",
-                sourceFile: sourceFile);
+            throw new M3lLoadException(NativeRefusal("검증기", result.Error), sourceFile: sourceFile);
         }
 
         return diagnostics;
@@ -85,6 +83,14 @@ public sealed class M3lLoader
         return JsonSerializer.Serialize(files);
     }
 
+    /// <summary>
+    /// 네이티브가 요청 자체를 처리하지 못했다 — 모델의 오류(그것은 진단 코드로 온다)가 아니라 이 도구와
+    /// M3L.Native 사이의 계약 문제다. 네이티브의 문구는 그대로 두되 누구의 말인지 밝힌다.
+    /// </summary>
+    private static string NativeRefusal(string component, string? nativeError) =>
+        $"M3L 네이티브 {component}가 요청을 처리하지 못했습니다 — mdd 와 M3L.Native 의 버전이 맞지 않거나 내부 오류일 수 있습니다. "
+        + (nativeError is null ? "(네이티브가 상세를 주지 않았습니다)" : $"(네이티브 원문: {nativeError})");
+
     private static M3lAst Validate(M3lResult<M3lAst>? result, string sourceFile)
     {
         if (result is null)
@@ -94,9 +100,7 @@ public sealed class M3lLoader
 
         if (!result.Success || result.Data is not M3lAst ast)
         {
-            throw new M3lLoadException(
-                result.Error ?? "M3L 파싱 실패 (상세 정보 없음)",
-                sourceFile: sourceFile);
+            throw new M3lLoadException(NativeRefusal("파서", result.Error), sourceFile: sourceFile);
         }
 
         if (ast.Errors.Count > 0)

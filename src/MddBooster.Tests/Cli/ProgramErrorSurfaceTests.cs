@@ -3,11 +3,11 @@ using MddBooster.Cli;
 namespace MddBooster.Tests.Cli;
 
 /// <summary>
-/// Cycle 101 — <c>Program.Main</c>'s top-level catch used to print the raw .NET stack trace
-/// unconditionally, burying the useful first line (exception message, which already carries
-/// JSON path/line/byte info for schema mismatches) under ~10 lines of framework frames. These
-/// tests exercise that catch through the real CLI entry point (not <c>BuildCommand.Run</c>
-/// directly) so a regression in <c>Program.cs</c> itself — not just in a generator — is caught.
+/// <c>Program.Main</c>'s top-level catch used to print the raw .NET stack trace unconditionally,
+/// burying the useful first line under ~10 lines of framework frames. These tests go through the
+/// real CLI entry point (not <c>BuildCommand.Run</c> directly) so a regression in <c>Program.cs</c>
+/// itself — not just in a generator — is caught. A malformed <c>mdd.json</c> no longer reaches that
+/// catch at all: it is a configuration error, reported with the file, line and member, exit code 4.
 /// </summary>
 [Collection(ConsoleCaptureCollection.Name)]
 public class ProgramErrorSurfaceTests
@@ -24,7 +24,7 @@ public class ProgramErrorSurfaceTests
         output.Split('\n').FirstOrDefault(line => line.TrimStart().StartsWith("at ")) ?? "";
 
     [Fact]
-    public void Malformed_targets_shape_prints_clean_message_no_stack_trace()
+    public void Malformed_targets_shape_is_a_configuration_error_with_no_stack_trace()
     {
         var mddDir = CreateTempDir();
         File.WriteAllText(Path.Combine(mddDir, "mdd.json"), """
@@ -39,9 +39,10 @@ public class ProgramErrorSurfaceTests
 
         try
         {
-            Assert.Equal(1, exitCode);
+            Assert.Equal(4, exitCode);
             Assert.Equal("", FirstStackFrame(stderr.Text));
-            Assert.Contains("targets", stderr.Text);
+            Assert.Contains("mdd.json", stderr.Text);
+            Assert.Contains("항목 targets[0]", stderr.Text);
         }
         finally
         {
@@ -50,10 +51,10 @@ public class ProgramErrorSurfaceTests
     }
 
     [Fact]
-    public void Wrong_scalar_type_for_sources_prints_clean_message_no_stack_trace()
+    public void Wrong_scalar_type_for_sources_is_a_configuration_error_with_no_stack_trace()
     {
-        // A *different* JSON schema mismatch must go through the same clean path, not just the
-        // originally-reproduced targets-shape case.
+        // A *different* JSON schema mismatch must go through the same path, not just the
+        // targets-shape case.
         var mddDir = CreateTempDir();
         File.WriteAllText(Path.Combine(mddDir, "mdd.json"), """
             {
@@ -67,9 +68,9 @@ public class ProgramErrorSurfaceTests
 
         try
         {
-            Assert.Equal(1, exitCode);
+            Assert.Equal(4, exitCode);
             Assert.Equal("", FirstStackFrame(stderr.Text));
-            Assert.Contains("sources", stderr.Text);
+            Assert.Contains("항목 sources", stderr.Text);
         }
         finally
         {
@@ -80,8 +81,8 @@ public class ProgramErrorSurfaceTests
     [Fact]
     public void Missing_sqlproj_prints_clean_message_no_stack_trace()
     {
-        // Widened scope from the issue's ⑸ 재발견: SqlGenerator.FindSqlProj's FileNotFoundException
-        // already carries a good Korean message, but Program.Main used to bury it the same way.
+        // SqlGenerator.FindSqlProj's FileNotFoundException already carries a good message, but
+        // Program.Main used to bury it the same way.
         var mddDir = CreateTempDir();
         File.WriteAllText(Path.Combine(mddDir, "tables.m3l.md"), FixtureContent);
         File.WriteAllText(Path.Combine(mddDir, "mdd.json"), """
@@ -147,13 +148,19 @@ public class ProgramErrorSurfaceTests
     [Fact]
     public void MDD_DEBUG_env_var_restores_the_stack_trace()
     {
+        // A failure that still reaches the top-level catch: the project the Sql target names
+        // has no .sqlproj.
         var mddDir = CreateTempDir();
+        File.WriteAllText(Path.Combine(mddDir, "tables.m3l.md"), FixtureContent);
         File.WriteAllText(Path.Combine(mddDir, "mdd.json"), """
             {
               "sources": ["./tables.m3l.md"],
-              "targets": ["Model"]
+              "targets": [
+                { "type": "Sql", "projectPath": "../db", "schema": "dbo" }
+              ]
             }
             """);
+        Directory.CreateDirectory(Path.Combine(mddDir, "..", "db"));
 
         Environment.SetEnvironmentVariable("MDD_DEBUG", "1");
         using var stderr = new ConsoleErrorCapture(this);

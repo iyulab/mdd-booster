@@ -16,7 +16,16 @@ public sealed class BuildCommand
         }
 
         var cfgPath = Path.Combine(configDirectory, "mdd.json");
-        var cfg = ConfigLoader.Load(cfgPath);
+        MddJsonConfig cfg;
+        try
+        {
+            cfg = ConfigLoader.Load(cfgPath);
+        }
+        catch (ConfigException ex)
+        {
+            Console.Error.WriteLine($"[config] {ex.Message}");
+            return 4;
+        }
 
         // 경고 정책은 진단이 하나라도 찍히기 «전»에 성립해야 한다 — 잘못 적힌 코드는 조용히 발화하지
         // 않는 규칙이 되므로 다른 설정 오류와 같은 종료 코드(4)로 먼저 세운다.
