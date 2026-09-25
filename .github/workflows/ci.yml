@@ -1,0 +1,53 @@
+name: CI
+
+# Build and test on every push to main and every pull request. The release workflow
+# (dotnet.yml) runs the same gate, but only when a version tag is pushed — until then a
+# change that breaks the build or a test is invisible to anyone who clones the branch.
+#
+# No path filter: tests read the Markdown the repository ships (the bundled language
+# reference, the CHANGELOG, the README), so a documentation-only change can turn them red.
+# No artifact uploads: packages belong to the release workflow.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      # The test suite compiles generated TypeScript with `tsc --strict`
+      # (GeneratedTypeScriptCompilesTests), restoring its toolchain with `npm ci` itself;
+      # Node is pinned so that restore does not depend on the runner's default version.
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: src/MddBooster.Tests/fixtures/ts-contract/package-lock.json
+
+      # No packages.lock.json in this repository; csproj hashes are the restore input.
+      - name: Cache NuGet packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore MddBooster.slnx
+
+      # TreatWarningsAsErrors is set by the projects, so a warning fails this step.
+      - name: Build
+        run: dotnet build MddBooster.slnx -c Release --no-restore
+
+      - name: Test
+        run: dotnet test MddBooster.slnx -c Release --no-build
