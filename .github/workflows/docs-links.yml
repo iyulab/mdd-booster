@@ -1,0 +1,24 @@
+name: Docs links
+
+# Relative links and heading anchors in the Markdown this repository ships, checked on
+# every push to main and every pull request — documentation-only changes included, since
+# those are the changes that break links. External URLs are not checked (--offline): their
+# availability is not this repository's to gate on. No artifacts.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check relative links and anchors
+        uses: lycheeverse/lychee-action@v2
+        with:
+          lycheeVersion: v0.24.2
+          args: --offline --no-progress --include-fragments './**/*.md'
+          fail: true

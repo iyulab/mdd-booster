@@ -73,13 +73,13 @@ being implemented, that test fails and this table is what it points at.
 7. [Complete Examples](#7-complete-examples)
    1. [Content Management Example](#71-content-management-example)
    2. [Order Processing Example](#72-order-processing-example)
-8. [Best Practices and Anti-patterns](#8-best-practices-and-anti-patterns)
-   1. [Recommended Practices](#81-recommended-practices)
-   2. [Anti-patterns to Avoid](#82-anti-patterns-to-avoid)
-   3. [Naming Conventions](#83-naming-conventions)
-9. [Appendix](#9-appendix)
-   1. [Terminology](#91-terminology)
-   2. [Mapping to Implementation](#92-mapping-to-implementation)
+8. [M3L Simple Extensions](#8-m3l-simple-extensions)
+   1. [Enhanced Documentation](#81-enhanced-documentation)
+   2. [Basic Constraints](#82-basic-constraints)
+   3. [Advanced Field Types](#83-advanced-field-types)
+   4. [Cascade Behavior for Foreign Keys](#84-cascade-behavior-for-foreign-keys)
+9. [Best Practices and Anti-patterns](#9-best-practices-and-anti-patterns)
+   1. [Recommended Practices](#91-recommended-practices)
 
 ## 1. Introduction
 
