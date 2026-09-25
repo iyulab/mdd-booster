@@ -28,7 +28,7 @@ public class PublicTextInternalReferenceTests
     [
         (new Regex(@"\bdocket\b", RegexOptions.IgnoreCase),
             "a reference into the maintainers' private issue queue"),
-        (new Regex(@"\bcycle-\d+\b", RegexOptions.IgnoreCase),
+        (new Regex(@"\bcycle[-_ ]\d+\b", RegexOptions.IgnoreCase),
             "a work-log iteration number"),
         (new Regex(@"\bclaudedocs\b", RegexOptions.IgnoreCase),
             "a path into untracked working notes"),

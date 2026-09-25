@@ -32,7 +32,7 @@ public sealed class SqlGeneratorOptions
     /// <summary>
     /// enum 컬럼에 table-level <c>CK_{Table}_{Column}</c> CHECK 제약 방출 여부.
     /// 기본값 <c>false</c> — SSDT dacpac은 CHECK를 매번 Drop→Create로 재현해 diff가
-    /// 불안정하므로(정책: cycle 27) SSDT 소비자는 EF Core 변환 검증에 의존한다.
+    /// 불안정하므로 SSDT 소비자는 EF Core 변환 검증에 의존한다.
     /// 선언형 도구(Schemorph 등) 소비자는 <c>true</c>로 DB 레벨 enum 강제를 켤 수 있다.
     /// </summary>
     public bool EmitEnumCheckConstraints { get; init; }

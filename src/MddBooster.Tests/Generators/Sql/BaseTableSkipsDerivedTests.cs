@@ -5,7 +5,7 @@ using MddBooster.Generators.Sql;
 namespace MddBooster.Tests.Generators.Sql;
 
 /// <summary>
-/// Regression guard for Cycle 22: base tables must only contain stored
+/// Regression guard: base tables must only contain stored
 /// columns. Lookup/Rollup/Computed fields belong in the _ext view (Phase I)
 /// and must be filtered out by TableRenderer.
 /// </summary>

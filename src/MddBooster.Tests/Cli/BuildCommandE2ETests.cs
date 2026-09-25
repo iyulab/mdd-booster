@@ -3,7 +3,7 @@ using MddBooster.Cli.Commands;
 namespace MddBooster.Tests.Cli;
 
 /// <summary>
-/// Cycle 23 — integration test for the full CLI BuildCommand with both
+/// Integration test for the full CLI BuildCommand with both
 /// Sql and Model targets. Writes a temporary mdd.json + fixture and verifies
 /// generated files land in the expected folders.
 /// </summary>

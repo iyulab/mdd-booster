@@ -6,7 +6,7 @@ namespace MddBooster.Tests.Generators.Sql;
 
 /// <summary>
 /// 2026-07-22 — enum CHECK 제약 opt-in 구현. 기본값 off(SSDT dacpac이 CHECK를
-/// Drop→Create로 재현해 diff가 불안정 — cycle 27 정책 유지). 선언형(Schemorph 등)
+/// Drop→Create로 재현해 diff가 불안정하다). 선언형(Schemorph 등)
 /// 소비자는 <c>EmitEnumCheckConstraints</c>로 DB 레벨 enum 강제를 켤 수 있다.
 /// <para>
 /// 2026-08-18 — 그 불안정의 근본 원인이 실측으로 확인됐다: SQL Server는 `CHECK (col

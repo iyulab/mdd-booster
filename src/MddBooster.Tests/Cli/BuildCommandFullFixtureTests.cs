@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis.CSharp;
 namespace MddBooster.Tests.Cli;
 
 /// <summary>
-/// Cycle 27 — exercises the full BuildCommand pipeline on the
+/// Exercises the full BuildCommand pipeline on the
 /// <c>order-with-derived</c> fixture so that enum, FK, VO, and
 /// derived-field generation are validated end-to-end through the CLI,
 /// not just via direct renderer calls. Every C# file produced is run

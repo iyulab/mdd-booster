@@ -3,7 +3,7 @@ using MddBooster.Generators.Sql;
 namespace MddBooster.Tests.Generators.Sql;
 
 /// <summary>
-/// Cycle 35 — regression guards for patching multiple managed folders in
+/// Regression guards for patching multiple managed folders in
 /// the same .sqlproj. SqlGenerator now writes Tables_gen AND Views_gen,
 /// so two Patch calls must coexist cleanly.
 /// </summary>

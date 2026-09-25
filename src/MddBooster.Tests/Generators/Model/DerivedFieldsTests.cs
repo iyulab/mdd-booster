@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis.CSharp;
 namespace MddBooster.Tests.Generators.Model;
 
 /// <summary>
-/// Cycle 22 — Lookup/Rollup/Computed field rendering. Derived fields only
+/// Lookup/Rollup/Computed field rendering. Derived fields only
 /// appear on the Ext read model (view-backed); the Write class and the
 /// marker interface stay stored-only.
 /// </summary>

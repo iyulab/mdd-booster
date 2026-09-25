@@ -97,7 +97,7 @@ public static class TableRenderer
         }
 
         // enum CHECK 제약은 opt-in (기본 off) — SSDT dacpac이 CHECK를 매번 Drop→Create로
-        // 재현해 diff가 불안정하므로(정책: cycle 27) SSDT 소비자는 EF Core string converter
+        // 재현해 diff가 불안정하므로 SSDT 소비자는 EF Core string converter
         // 검증에 의존한다. 선언형 도구(Schemorph 등) 소비자는 EmitEnumCheckConstraints로
         // DB 레벨 강제를 켠다. NULL은 IN 술어에서 UNKNOWN → CHECK 통과(nullable enum 안전).
         if (emitEnumCheckConstraints && enumLookup is not null)
