@@ -81,9 +81,13 @@ public sealed class BuildCommand
         var mergedAst = loader.LoadFiles(sourcePaths);
 
         // 파서 경고 표면화 — 조용히 삼키지 않는다.
+        // 검증기 결과도 파서가 낸 경고를 다시 담아 온다(M3L-W010 등). 같은 진단(코드·위치·문장)은
+        // 두 채널 중 먼저 온 쪽에서 한 번만 보고한다 — 두 번 찍히면 승격 집계도 두 번 센다.
+        var reportedM3l = new HashSet<string>(StringComparer.Ordinal);
         foreach (var w in mergedAst.Warnings)
         {
-            ReportWarning("m3l", w.Code, $"[{w.Code}] {w.File}:{w.Line}:{w.Col} {w.Message}");
+            var line = $"[{w.Code}] {w.File}:{w.Line}:{w.Col} {w.Message}";
+            if (reportedM3l.Add(line)) ReportWarning("m3l", w.Code, line);
         }
 
         // 검증기 진단 표면화 — 파서와 «다른 층»이다. 등록된 `::attribute` 의 오용
@@ -93,7 +97,8 @@ public sealed class BuildCommand
         var m3lDiagnostics = loader.ValidateFiles(sourcePaths);
         foreach (var w in m3lDiagnostics.Warnings)
         {
-            ReportWarning("m3l", w.Code, $"[{w.Code}] {w.File}:{w.Line}:{w.Col} {w.Message}");
+            var line = $"[{w.Code}] {w.File}:{w.Line}:{w.Col} {w.Message}";
+            if (reportedM3l.Add(line)) ReportWarning("m3l", w.Code, line);
         }
         // 검증기 «에러»는 빌드를 세운다 — 의미 분석 에러와 같은 종료 코드(3). 모델이 언어
         // 규칙을 어긴 채로 생성을 진행하면, 그 위반(예: 어디에도 정의되지 않은 타입 이름)이
