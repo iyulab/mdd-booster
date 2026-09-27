@@ -246,12 +246,7 @@ public sealed class SemanticAnalyzer
             var name = attr.Name;
             if (string.IsNullOrEmpty(name) || Ast.FieldAttributes.KnownNames.Contains(name)) continue;
 
-            var suggestion = Ast.FieldAttributes.KnownNames
-                .Select(known => (known, distance: Levenshtein(name.ToLowerInvariant(), known.ToLowerInvariant())))
-                .Where(c => c.distance <= 2)
-                .OrderBy(c => c.distance)
-                .Select(c => c.known)
-                .FirstOrDefault();
+            var suggestion = Naming.EditDistance.Nearest(name, Ast.FieldAttributes.KnownNames, maxDistance: 2);
             if (suggestion is null) continue;
 
             diagnostics.Add(new SemanticDiagnostic(
@@ -261,25 +256,6 @@ public sealed class SemanticAnalyzer
                 field.Loc,
                 SemanticSeverity.Warning));
         }
-    }
-
-    private static int Levenshtein(string a, string b)
-    {
-        if (Math.Abs(a.Length - b.Length) > 2) return int.MaxValue; // 조기 탈락 (거리 하한)
-        var prev = new int[b.Length + 1];
-        var curr = new int[b.Length + 1];
-        for (var j = 0; j <= b.Length; j++) prev[j] = j;
-        for (var i = 1; i <= a.Length; i++)
-        {
-            curr[0] = i;
-            for (var j = 1; j <= b.Length; j++)
-            {
-                var cost = a[i - 1] == b[j - 1] ? 0 : 1;
-                curr[j] = Math.Min(Math.Min(curr[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
-            }
-            (prev, curr) = (curr, prev);
-        }
-        return prev[b.Length];
     }
 }
 

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace MddBooster.Cli.Config;
@@ -24,12 +25,24 @@ public sealed class MddJsonConfig
     /// <summary>Warning codes not reported at all — a known, accepted case stated in the config.</summary>
     [JsonPropertyName("noWarn")]
     public List<string>? NoWarn { get; set; }
+
+    /// <summary>
+    /// Keys this configuration does not define, kept so they can be reported (<c>MDD024</c>) rather
+    /// than dropped. A misspelt <c>"source"</c> used to leave <see cref="Sources"/> empty with nothing
+    /// said about why; the JSON Schema flags it in an editor, but not in CI.
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? UnknownKeys { get; set; }
 }
 
 public sealed class MddJsonTarget
 {
     [JsonPropertyName("type")]
     public string Type { get; set; } = "";
+
+    /// <summary>Keys a target does not define — reported like <see cref="MddJsonConfig.UnknownKeys"/>.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? UnknownKeys { get; set; }
 
     [JsonPropertyName("projectPath")]
     public string ProjectPath { get; set; } = "";

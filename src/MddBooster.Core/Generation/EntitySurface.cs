@@ -252,31 +252,5 @@ public sealed class EntitySurfaceFilter
 
     /// <summary>가장 가까운 알려진 이름 제안 (오타 구제). 거리가 이름 길이의 절반을 넘으면 제안하지 않는다.</summary>
     private static string? Suggest(string name, IReadOnlyList<string> known)
-    {
-        if (known.Count == 0) return null;
-        var best = known
-            .Select(k => (k, d: Levenshtein(name.ToLowerInvariant(), k.ToLowerInvariant())))
-            .OrderBy(t => t.d)
-            .First();
-        return best.d <= Math.Max(2, name.Length / 2) ? best.k : null;
-    }
-
-    private static int Levenshtein(string a, string b)
-    {
-        var prev = new int[b.Length + 1];
-        var cur = new int[b.Length + 1];
-        for (var j = 0; j <= b.Length; j++) prev[j] = j;
-
-        for (var i = 1; i <= a.Length; i++)
-        {
-            cur[0] = i;
-            for (var j = 1; j <= b.Length; j++)
-            {
-                var cost = a[i - 1] == b[j - 1] ? 0 : 1;
-                cur[j] = Math.Min(Math.Min(cur[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
-            }
-            (prev, cur) = (cur, prev);
-        }
-        return prev[b.Length];
-    }
+        => Naming.EditDistance.Nearest(name, known, Math.Max(2, name.Length / 2));
 }

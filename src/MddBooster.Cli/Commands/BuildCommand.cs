@@ -54,6 +54,19 @@ public sealed class BuildCommand
             }
         }
 
+        // 설정 자신의 경고가 먼저다 — 모르는 키가 곧 «비어 있는 sources» 의 원인일 수 있고, 그 경우
+        // 뒤따르는 오류보다 이 한 줄이 원인을 말한다. 코드가 있어 treatWarningsAsErrors 로 CI 에서 세울 수 있다.
+        foreach (var w in ConfigLoader.UnknownKeyWarnings(cfg))
+            ReportWarning("config", "MDD024", $"[MDD024] {w}");
+
+        // 소스 없는 설정은 설정 오류다 — 로더 깊숙이에서 예외로 새어 나가던 것을 다른 설정 오류와
+        // 같은 자리·같은 종료 코드로. 바로 위 MDD024 가 있다면 그것이 원인을 말한다.
+        if (cfg.Sources.Count == 0)
+        {
+            Console.Error.WriteLine("[config] mdd.json 에 sources 가 없습니다 — M3L 파일 경로 목록을 \"sources\": [\"./tables.m3l.md\"] 처럼 적으십시오.");
+            return 4;
+        }
+
         // 1. M3L 소스 로드 — 전체 sources를 하나의 resolve 단위로 병합 파싱한다.
         // 파일별 독립 파싱은 cross-file 상속·인터페이스 참조를 E007로 오탐한다 (스펙 §2.1 Rule 3).
         var loader = new M3lLoader();
