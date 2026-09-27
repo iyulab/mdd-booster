@@ -102,6 +102,29 @@ public class AspectRelationshipTests
     }
 
     /// <summary>
+    /// 쓰기 엔티티(테이블에 매핑되는 쪽)도 base 로의 FK 를 갖는다 — EF 모델에서 스키마를 만드는
+    /// 소비자(<c>EnsureCreated</c>·마이그레이션)가 운영 스키마와 같은 제약을 얻는 자리다. 없으면 그
+    /// 스키마는 아무 base 도 가리키지 않는 aspect 행을 받아 저장한다(소비자 실측).
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void The_write_entity_carries_the_key_relationship_too(bool postgresNaming)
+    {
+        var models = Load("aspect-shared-key.m3l.md");
+
+        var code = DbContextRenderer.Render(models, "AppDbContext", "Test.Entities",
+            postgresNaming: postgresNaming, oneToOne: OneToOneRelationships.Describe(models));
+
+        Assert.Contains(
+            "modelBuilder.Entity<AssetMaintenanceProfile>()"
+            + ".HasOne<Asset>().WithOne()"
+            + ".HasForeignKey<AssetMaintenanceProfile>(e => e.Id)"
+            + ".OnDelete(DeleteBehavior.Cascade);",
+            code);
+    }
+
+    /// <summary>
     /// negative control — 보통 1:1 은 구성 코드를 내지 <b>않는다</b>. 관례가 추론하기 때문이고,
     /// 그 결정은 그대로다. 이 단언이 없으면 위 하나만으로는 「이 생성기가 모든 1:1 에 구성을
     /// 낸다」로도 통과한다.

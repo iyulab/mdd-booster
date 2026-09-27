@@ -67,6 +67,9 @@ public class GeneratedCodeCompilesWithoutRuntimeReferencesTests
         public sealed class BindingAttribute : System.Attribute
         { public BindingAttribute(params string[] a) { _ = a; } }
 
+        [System.AttributeUsage(System.AttributeTargets.Property)]
+        public sealed class SearchableAttribute : System.Attribute { }
+
         """;
 
     /// <summary>

@@ -429,6 +429,13 @@ public static class EntityPairRenderer
                 sb.AppendLine("    [Editable(false)]");
         }
 
+        // [Searchable] — @searchable, the fields free-text search is meant for. The runtime's $search
+        // reads it from the read type: once a type marks any property, only the marked ones are
+        // searched. Emitted on both classes so the declaration does not depend on which one a
+        // consumer's own search code reflects over.
+        if (MddBooster.Core.Ast.FieldAttributes.Has(f, "searchable"))
+            sb.AppendLine("    [Searchable]");
+
         // [Display(Name, GroupName, Description)] — field label/group/help from M3L declaration.
         // @label(text) overrides the description; unlike FieldAttributes.EffectiveLabel this
         // does NOT fall back to the PascalCase field name — presence of Name here signals

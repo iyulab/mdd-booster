@@ -77,6 +77,7 @@ public class ModelTargetAxisCoverageTests
             ["implements"] = (Disposition.Carried, "additional interfaces on the generated classes"),
             ["inherits"] = (Disposition.Carried, "base class override"),
             ["binding"] = (Disposition.Carried, "[Binding]"),
+            ["searchable"] = (Disposition.Carried, "[Searchable] on both classes — the declaration the runtime's $search reads to narrow which string properties a term is matched against"),
             ["label"] = (Disposition.Carried, "[Display(Name)] — overrides the field description as the label source; FieldAttributes.EffectiveLabel/GetAttributeFirstParam(\"label\") is the shared priority (see also TsFieldSchemaRenderer and TsFormRenderer, which read the same override for the TypeScript targets)"),
             ["internal"] = (Disposition.Carried, "at field level: dropped from the interface and the Ext (read) class, kept on the write class. The FullView/UdView SELECT drops the same field in the same pass — see FullViewRendererTests/UdViewRendererTests. At model level it stays NotApplicable — that grain is EntitySurface.IsInternal, an Api/TypeScript-surface decision with no entity-generation counterpart"),
             ["help"] = (Disposition.Carried, "[Display(Description)] — GetAttributeString(\"help\") is the same free-text read TsFormRenderer's helpText already uses for the generated form"),
@@ -96,7 +97,6 @@ public class ModelTargetAxisCoverageTests
             ["on_update"] = (Disposition.UnimplementedEverywhere, "as on_delete"),
             ["validate"] = (Disposition.UnimplementedEverywhere, "[RegularExpression] or a custom attribute would be the counterpart"),
             ["computed_raw"] = (Disposition.UnimplementedEverywhere, "raw-expression variant of computed; only the parsed computed form is read"),
-            ["searchable"] = (Disposition.UnimplementedEverywhere, "query-surface hint with no entity-level counterpart"),
             ["visibility"] = (Disposition.UnimplementedEverywhere, "a surface axis rather than a presentation one — it decides whether a field is emitted at all, not how it is shown. @internal records the same decision one grain coarser, over a whole entity; no target reads a per-field spelling of it. Carrying it would not be a Model-target edit on its own: the FullView SELECT list and the Ext class it backs have to drop the field in the same pass, or the mapping fails at run time"),
 
             // ---- layers the entity does not model ----

@@ -104,6 +104,21 @@ public static class DbContextRenderer
               .AppendLine(".OnDelete(DeleteBehavior.Cascade);");
         }
 
+        // The write entity carries the same key relationship, without navigations — the write types
+        // have none for it. The read-type configuration above is what $expand needs; this one is what
+        // a schema built from the EF model (EnsureCreated, migrations) needs, since it is the write
+        // entity that maps to the table. Without it that schema has no foreign key from the aspect's
+        // key to its base, and a row referring to no base row is stored instead of refused.
+        foreach (var (aspect, baseName) in aspectBases.OrderBy(p => p.Key, StringComparer.Ordinal))
+        {
+            var dependent = NameCasing.ToPascalCase(aspect);
+            sb.Append("        modelBuilder.Entity<").Append(dependent).Append(">()")
+              .Append(".HasOne<").Append(NameCasing.ToPascalCase(baseName)).Append(">()")
+              .Append(".WithOne()")
+              .Append(".HasForeignKey<").Append(dependent).Append(">(e => e.Id)")
+              .AppendLine(".OnDelete(DeleteBehavior.Cascade);");
+        }
+
         // A declared delete action (`@reference(X)!`/`?`/`!!`) is configured on the write entity's
         // navigation too. Without it EF applies its own convention to tracked rows — a required key
         // cascades, an optional one is cleared client-side — and deletes children the database

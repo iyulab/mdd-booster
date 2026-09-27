@@ -90,6 +90,23 @@ public static class ApiRegistrationRenderer
               .Append(queryName).Append("\", \"").Append(mutationPrefix).AppendLine("\");");
         }
 
+        // ::aspect(Base) 셋은 키가 자기 것이 아니다 — 행의 키가 곧 Base 행에 대한 참조다. 런타임은 그
+        // 사실을 선언받아야 제네릭 쓰기 경로에서 «아무 Base 도 가리키지 않는 행»을 거절할 수 있다
+        // (선언이 없으면 서버가 새 키를 만들어 고아 행을 쓰거나, 막는 일을 DB 제약에 맡긴다 — EF 모델로
+        // 스키마를 만드는 소비자에겐 그 제약도 없다). 런타임은 등록되지 않은 셋을 가리키는 선언을
+        // 거절하므로 모든 AddEntityPair 뒤에 둔다. Base 가 @internal 이면 가리킬 셋이 없어 내지 않는다.
+        var registered = models.Where(m => !EntitySurface.IsInternal(m))
+            .Select(m => m.Name).ToHashSet(StringComparer.Ordinal);
+        foreach (var model in models.OrderBy(m => m.Name, StringComparer.Ordinal))
+        {
+            if (!registered.Contains(model.Name)) continue;
+            if (model.Source.Base is not { Kind: "aspect" } aspectOf || !registered.Contains(aspectOf.Model)) continue;
+
+            sb.Append("        options.ODataModel.DeclareSharedKey(\"")
+              .Append(Pluralizer.Pluralize(NameCasing.ToPascalCase(model.Name))).Append("\", \"")
+              .Append(Pluralizer.Pluralize(NameCasing.ToPascalCase(aspectOf.Model))).AppendLine("\");");
+        }
+
         sb.AppendLine("    }");
         sb.AppendLine("}");
         return sb.ToString();
