@@ -16,6 +16,52 @@
 
 ---
 
+## 0.34.0
+
+### 🔴 생성물이 `Iyu.*` 0.33.0 이상을 요구한다 — `@searchable` → `[Searchable]`
+
+`@searchable` 필드가 생성 엔티티(쓰기·읽기 두 클래스)에 `[Searchable]` 을 단다. 이 어노테이션은 `Iyu.Core` **0.33.0** 에서
+생겼으므로 그보다 낮은 판을 쓰는 앱은 재생성 뒤 `CS0246` 으로 멈춘다 — **런타임 패키지를 먼저 올린 뒤 이 판으로 재생성할 것.**
+`@searchable` 을 쓰지 않는 모델은 영향이 없다.
+
+- 런타임의 `$search` 는 `[Searchable]` 이 하나라도 있는 타입을 **선언된 문자열 속성만** 검색한다(없는 타입은 종전대로 전부).
+  재생성 뒤 검색이 좁아질 수 있으니, 검색이 닿아야 할 필드가 전부 `@searchable` 인지 점검할 것.
+
+### `::aspect` 셋이 런타임에 공유 키로 선언된다
+
+- **Api 타깃**이 `::aspect(Base)` 모델마다 `options.ODataModel.DeclareSharedKey("<셋>", "<Base 셋>")` 을 모든 `AddEntityPair` 뒤에
+  낸다(`Iyu.Server.OData` 0.32.0 이상). 제네릭 쓰기 경로의 공유 키 거절 — 키 없음 400 `SharedKeyRequired`, 없는 Base 409
+  `SharedKeyPrincipalMissing`, 이미 있는 행 409 `SharedKeyRowExists` — 이 켜진다. 종전에는 DB 제약이 막거나(오류 번역에 의존),
+  EF 모델로 만든 스키마에선 막지 못했다. Base 가 `@internal` 이면 선언하지 않는다(가리킬 셋이 없다).
+- **Model 타깃**이 쓰기 엔티티에도 Base 로의 FK 를 구성한다 —
+  `HasOne<Base>().WithOne().HasForeignKey<Aspect>(e => e.Id).OnDelete(DeleteBehavior.Cascade)`. `EnsureCreated`·마이그레이션으로
+  스키마를 만드는 앱도 SQL 방언이 이미 내던 CASCADE FK 와 같은 제약을 갖는다. 재생성하면 `DbContext` 에 aspect 마다 한 줄이 늘어난다.
+
+### CLI
+
+- 🔇 **잘못된 `mdd.json` 은 설정 오류(종료 코드 4)** 다 — 종전 1. 메시지가 파일·행·열·항목과 원인을 말하고(«기대: 문자열 배열» 처럼
+  설정의 말로), JSON 문법 오류는 파서 원문임을 밝힌다. 네이티브 파서·검증기가 요청을 처리하지 못했을 때도 그 사실을 따로 말한다.
+- 🆕 **MDD024(경고)** — `mdd.json` 에 이 생성기가 모르는 키(루트 또는 `targets[n]`)가 있다. 여전히 무시되지만 위치와 가까운 알려진
+  키를 말한다(`'source'` → `'sources'`). 코드가 있으므로 🔇 **`treatWarningsAsErrors`·`warningsAsErrors` 를 켠 설정에서는 빌드가
+  선다** — 편집기 밖(CI)에서 설정 오타를 잡는 길이다.
+- 🔇 **`sources` 가 비어 있으면 설정 오류(종료 코드 4)** — 종전에는 로더 예외가 새어 나와 1 이었다.
+- 🔇 **`build` 인자는 옵션이 먼저 해석된다** — `--help`·알 수 없는 옵션이 «디렉터리 없음»이 아니라 옵션으로 다뤄지고, **설정 디렉터리
+  뒤의 둘째 인자는 거절**된다(종전에는 조용히 무시). `-` 로 시작하는 디렉터리는 `./-dir` 로 적는다.
+- **모든 타깃이 모델을 검증한 뒤에 어느 타깃이든 쓴다** — 한 타깃이 거절하면 다른 타깃의 이전 출력이 그대로 남는다. 종전에는 Model
+  타깃이 자기 검증 전에 출력 디렉터리를 비워, 실패한 빌드가 지난 엔티티를 지웠다.
+- m3l 파서 경고가 한 번만 찍힌다 — 검증기 결과가 같은 경고를 다시 담아 와 두 번 찍히고, 경고 승격 집계도 두 번 셌다.
+
+### 파서 `M3L.Native` 0.16.0
+
+- 🆕 **`M3L-W010`(경고)** — 필드 줄이 읽지 않는 텍스트를 보고한다. `- amount: decimal(12,2) @not_null = 0 "Amount"` 처럼 속성 뒤에
+  둔 `= 기본값` 과 그 뒤 설명은 지금까지 조용히 버려졌다(기본값이 없는 컬럼이 생성된다). 경고를 보면 기본값을 타입 바로 뒤로 옮길 것 —
+  `name: type = default @attributes "description"` 순서다. 생성물은 바뀌지 않는다(AST 불변).
+
+### 그 밖
+
+- 샘플 `mdd.json`·모델의 기본값 표기를 정순으로. 번들 문서(`docs/M3L.md`)의 목차 앵커 수리.
+- main push·PR 에서 Release 구성 build+test 를 도는 CI 와 문서 링크 검사가 더해졌다(게시 산출물 무관).
+
 ## 0.33.0
 
 ### 🔴 breaking — `@reference` 뒤의 기호가 삭제 동작을 낸다
