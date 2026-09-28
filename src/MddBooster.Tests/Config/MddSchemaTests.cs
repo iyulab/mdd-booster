@@ -49,6 +49,39 @@ public class MddSchemaTests
     }
 
     [Fact]
+    public void Underscore_note_keys_validate_at_the_root_and_on_every_target_kind()
+    {
+        // Same rule as the loader: a key starting with "_" is a note, not an unknown property —
+        // an editor and `mdd build` must not disagree about the same file.
+        const string json = """
+        {
+          "_why": "root",
+          "sources": ["./tables.m3l.md"],
+          "targets": [
+            { "type": "Sql", "projectPath": "./db", "_projectPath_why": "n" },
+            { "type": "Model", "projectPath": "./m", "namespace": "N", "dbContextName": "Db", "_namespace_why": "n" },
+            { "type": "Api", "projectPath": "./api", "namespace": "N", "_why": "n" },
+            { "type": "TypeScript", "outputPath": "./ts", "_why": "n" }
+          ]
+        }
+        """;
+        var result = Validate(json);
+        Assert.True(result.IsValid, JsonSerializer.Serialize(result));
+    }
+
+    [Fact]
+    public void A_misspelt_key_is_still_rejected_next_to_note_keys()
+    {
+        const string json = """
+        {
+          "sources": ["./tables.m3l.md"],
+          "targets": [ { "type": "Sql", "projectPath": "./db", "_why": "n", "dialekt": "postgres" } ]
+        }
+        """;
+        Assert.False(Validate(json).IsValid);
+    }
+
+    [Fact]
     public void Unknown_property_on_a_target_is_rejected()
     {
         const string json = """

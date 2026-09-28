@@ -82,8 +82,9 @@ public sealed class MddJsonTargetSchemaDriftTests
 
     /// <summary>
     /// The same two-way check at the root: <see cref="MddJsonConfig"/>'s own keys against the schema's
-    /// top-level <c>properties</c> (which also names the optional <c>$schema</c> pointer the class
-    /// does not model). The target check alone let root keys drift — the schema's root is
+    /// top-level <c>properties</c>, the optional <c>$schema</c> pointer included — the class declares it
+    /// too, so the key the schema recommends is not reported as unknown (<c>MDD024</c>) by the loader,
+    /// which reads its known keys from the class. The target check alone let root keys drift — the schema's root is
     /// <c>additionalProperties:false</c>, so a root key missing from it is flagged by every editor
     /// that validates the file.
     /// </summary>
@@ -100,7 +101,6 @@ public sealed class MddJsonTargetSchemaDriftTests
         using var doc = JsonDocument.Parse(File.ReadAllText(SchemaPath));
         var schema = doc.RootElement.GetProperty("properties").EnumerateObject()
             .Select(p => p.Name)
-            .Where(n => n != "$schema")
             .ToHashSet(StringComparer.Ordinal);
 
         Assert.True(code.SetEquals(schema),

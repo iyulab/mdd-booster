@@ -5,6 +5,9 @@
   "description": "Config consumed by `mdd build` — one or more M3L sources, generated into one or more targets (Sql/Model/Api/TypeScript). A property placed at the wrong level (e.g. a target-level knob left at the root) is otherwise silently ignored by the loader; this schema's additionalProperties:false at every level exists specifically to catch that.",
   "type": "object",
   "additionalProperties": false,
+  "patternProperties": {
+    "^_": { "description": "A note — a key starting with \"_\" records the reason for a nearby setting and is ignored without a warning (JSON has no comment an editor accepts)." }
+  },
   "required": ["sources", "targets"],
   "properties": {
     "$schema": {
@@ -49,6 +52,9 @@
     "sqlTarget": {
       "type": "object",
       "additionalProperties": false,
+      "patternProperties": {
+        "^_": { "description": "A note — a key starting with \"_\" records the reason for a nearby setting and is ignored without a warning (JSON has no comment an editor accepts)." }
+      },
       "required": ["type", "projectPath"],
       "properties": {
         "type": { "const": "Sql" },
@@ -105,6 +111,9 @@
     "modelTarget": {
       "type": "object",
       "additionalProperties": false,
+      "patternProperties": {
+        "^_": { "description": "A note — a key starting with \"_\" records the reason for a nearby setting and is ignored without a warning (JSON has no comment an editor accepts)." }
+      },
       "required": ["type", "projectPath", "namespace", "dbContextName"],
       "properties": {
         "type": { "const": "Model" },
@@ -135,6 +144,9 @@
     "apiTarget": {
       "type": "object",
       "additionalProperties": false,
+      "patternProperties": {
+        "^_": { "description": "A note — a key starting with \"_\" records the reason for a nearby setting and is ignored without a warning (JSON has no comment an editor accepts)." }
+      },
       "required": ["type", "projectPath", "namespace"],
       "allOf": [
         { "not": { "required": ["includeEntities", "excludeEntities"] } },
@@ -179,6 +191,9 @@
     "typeScriptTarget": {
       "type": "object",
       "additionalProperties": false,
+      "patternProperties": {
+        "^_": { "description": "A note — a key starting with \"_\" records the reason for a nearby setting and is ignored without a warning (JSON has no comment an editor accepts)." }
+      },
       "required": ["type", "outputPath"],
       "allOf": [
         { "not": { "required": ["includeEntities", "excludeEntities"] } },

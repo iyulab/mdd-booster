@@ -5,6 +5,13 @@ namespace MddBooster.Cli.Config;
 
 public sealed class MddJsonConfig
 {
+    /// <summary>
+    /// The schema an editor validates this file against. Not read by the build — declared so the
+    /// key the published schema recommends is a known key rather than an <c>MDD024</c>.
+    /// </summary>
+    [JsonPropertyName("$schema")]
+    public string? Schema { get; set; }
+
     [JsonPropertyName("sources")]
     public List<string> Sources { get; set; } = [];
 

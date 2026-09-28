@@ -16,6 +16,15 @@
 
 ---
 
+## [Unreleased]
+
+### `mdd.json` 의 설명 키와 `$schema` 가 더 이상 `MDD024` 가 아니다
+
+- `_` 로 시작하는 키(루트·`targets[n]`)는 설정의 근거를 적는 설명 칸으로 보고 경고 없이 무시한다 — 예 `"_includeEntities_why"`.
+  0.34.0 에서는 이 키가 `MDD024` 로 보고돼, `treatWarningsAsErrors` 를 켜면 설명을 지워야 빌드가 섰다. 알려진 키는 `_` 로
+  시작하지 않으므로 오타 탐지 범위는 그대로다. 스키마(`schemas/mdd.schema.json`)도 같은 규칙으로 받는다(`patternProperties`).
+- **수정**: 스키마가 권하는 `"$schema"` 키가 0.34.0 에서 `MDD024` 로 보고되던 것.
+
 ## 0.34.0
 
 ### 🔴 생성물이 `Iyu.*` 0.33.0 이상을 요구한다 — `@searchable` → `[Searchable]`

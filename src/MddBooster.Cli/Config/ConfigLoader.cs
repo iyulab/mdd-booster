@@ -47,6 +47,11 @@ public static class ConfigLoader
     /// <remarks>
     /// 알려진 키는 설정 타입의 <see cref="JsonPropertyNameAttribute"/> 에서 읽는다 — 스키마 드리프트
     /// 시험이 같은 원천을 스키마와 대조하므로, 목록을 여기 따로 적으면 셋째 사본이 된다.
+    /// <para>
+    /// <c>_</c> 로 시작하는 키는 설명 칸이라 보고하지 않는다(<see cref="NotePrefix"/>). 편집기가 받는 JSON 에는
+    /// 주석이 없어 설정의 근거를 옆 키에 적는 것이 유일한 이식성 있는 자리이고, 알려진 키는 <c>_</c> 로
+    /// 시작하지 않으므로 오타 탐지는 줄지 않는다. 스키마의 <c>patternProperties</c> 가 같은 규칙이다.
+    /// </para>
     /// </remarks>
     public static IReadOnlyList<string> UnknownKeyWarnings(MddJsonConfig config)
     {
@@ -64,10 +69,14 @@ public static class ConfigLoader
         if (unknown is null) return;
         foreach (var key in unknown.Keys.Order(StringComparer.Ordinal))
         {
+            if (key.StartsWith(NotePrefix, StringComparison.Ordinal)) continue;
             var hint = EditDistance.Nearest(key, known, maxDistance: 2) is { } near ? $" — '{near}' 의 오타일 수 있습니다" : "";
             warnings.Add($"mdd.json 의 '{prefix}{key}' 는 알 수 없는 키라 무시됩니다{hint}. 이 자리의 키: {string.Join(", ", known)}");
         }
     }
+
+    /// <summary>설명 칸(<c>"_outputPath_why"</c> 등)의 접두 — 무시하되 경고하지 않는다.</summary>
+    public const string NotePrefix = "_";
 
     private static IReadOnlyList<string> KnownKeys<T>() =>
         typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance)

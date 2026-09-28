@@ -96,6 +96,53 @@ public class UnknownConfigKeyBuildTests
     }
 
     [Fact]
+    public void Keys_starting_with_an_underscore_are_notes_and_are_not_reported()
+    {
+        // JSON has no comment an editor accepts, so the rationale for a setting lives in a sibling
+        // key. Under treatWarningsAsErrors a report here would stop the build.
+        var (exit, stderr, generated) = Build("""
+            {
+              "_why": "root note",
+              "treatWarningsAsErrors": true,
+              "sources": ["./tables.m3l.md"],
+              "targets": [{ "type": "TypeScript", "outputPath": "../ts", "_outputPath_why": "target note" }]
+            }
+            """);
+
+        Assert.Equal(0, exit);
+        Assert.True(generated);
+        Assert.DoesNotContain("MDD024", stderr);
+    }
+
+    [Fact]
+    public void The_schema_key_the_published_schema_recommends_is_not_reported()
+    {
+        var (exit, stderr, generated) = Build($$"""
+            {
+              "$schema": "https://raw.githubusercontent.com/iyulab/mdd-booster/main/schemas/mdd.schema.json",
+              "treatWarningsAsErrors": true,
+              "sources": ["./tables.m3l.md"],
+              "targets": [{{Target}}]
+            }
+            """);
+
+        Assert.Equal(0, exit);
+        Assert.True(generated);
+        Assert.DoesNotContain("MDD024", stderr);
+    }
+
+    [Fact]
+    public void A_misspelt_key_is_still_reported_next_to_note_keys()
+    {
+        // The note rule must not widen into "anything unusual is fine".
+        var (_, stderr, _) = Build(
+            """{ "_why": "note", "sources": ["./tables.m3l.md"], "targets": [{ "type": "TypeScript", "outputPath": "../ts", "outputPth": "../x" }] }""");
+
+        Assert.Contains("'targets[0].outputPth'", stderr);
+        Assert.DoesNotContain("_why", stderr);
+    }
+
+    [Fact]
     public void Known_keys_come_from_the_configuration_types()
     {
         var path = Path.Combine(Path.GetTempPath(), $"mdd-keys-{Guid.NewGuid():N}.json");
