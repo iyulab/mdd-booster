@@ -19,7 +19,7 @@ public static class ConfigLoader
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         if (!File.Exists(path))
         {
-            throw new FileNotFoundException($"mdd.json을 찾을 수 없습니다: {path}", path);
+            throw new ConfigException($"mdd.json을 찾을 수 없습니다: {path} — 설정 디렉터리에 mdd.json 을 두거나, mdd build <mdd.json 이 있는 디렉터리> 로 가리키십시오.", path);
         }
 
         var json = File.ReadAllText(path);

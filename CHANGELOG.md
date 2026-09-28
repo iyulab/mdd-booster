@@ -32,6 +32,7 @@
   종료 코드 1 을 특정해 검사하던 스크립트는 3·4 를 보게 된다(0 이 아님을 보던 스크립트는 영향 없음). README 에 종료 코드 표를 뒀다.
 - 생성기 라이브러리를 직접 쓰는 코드: 이 거절들은 `MddBooster.Core.Generation.GeneratorRefusalException`(`Kind` = `Model`/`Configuration`)이다.
   `InvalidOperationException` 파생이라 그것으로 잡던 코드는 그대로 잡는다 — `.sqlproj` 없음은 종전 `FileNotFoundException` 이었다.
+- 설정 디렉터리에 `mdd.json` 이 없으면 설정 오류(4, `[config]`)다 — 종전 `error:` · 1.
 
 ### 출력을 쓰지 못한 빌드가 원인과 «이미 새로 쓴 타깃»을 말한다
 

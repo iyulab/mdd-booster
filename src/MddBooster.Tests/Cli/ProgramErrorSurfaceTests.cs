@@ -146,12 +146,37 @@ public class ProgramErrorSurfaceTests
     }
 
     [Fact]
-    public void MDD_DEBUG_env_var_restores_the_stack_trace()
+    public void A_directory_without_mdd_json_is_a_configuration_error()
     {
-        // A failure that still reaches the top-level catch: a directory with no mdd.json. (A missing
-        // .sqlproj used to serve here; it is now a configuration refusal with its own exit code.)
         var mddDir = CreateTempDir();
         File.WriteAllText(Path.Combine(mddDir, "tables.m3l.md"), FixtureContent);
+
+        using var stderr = new ConsoleErrorCapture(this);
+        var exitCode = Program.Main(["build", mddDir]);
+
+        try
+        {
+            Assert.Equal(4, exitCode);
+            Assert.Contains("[config]", stderr.Text);
+            Assert.Contains("mdd.json", stderr.Text);
+            Assert.DoesNotContain("error:", stderr.Text);
+        }
+        finally
+        {
+            Cleanup(mddDir);
+        }
+    }
+
+    [Fact]
+    public void MDD_DEBUG_env_var_restores_the_stack_trace()
+    {
+        // A failure that still reaches the top-level catch: a source the configuration names does not
+        // exist. (A missing .sqlproj, then a missing mdd.json, served here before each became a
+        // configuration error with its own exit code.)
+        var mddDir = CreateTempDir();
+        File.WriteAllText(Path.Combine(mddDir, "mdd.json"), """
+            { "sources": ["./not-there.m3l.md"], "targets": [ { "type": "TypeScript", "outputPath": "../ts" } ] }
+            """);
 
         Environment.SetEnvironmentVariable("MDD_DEBUG", "1");
         using var stderr = new ConsoleErrorCapture(this);
