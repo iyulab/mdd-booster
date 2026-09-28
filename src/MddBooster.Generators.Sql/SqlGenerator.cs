@@ -14,11 +14,20 @@ public sealed class SqlGenerator : IArtifactGenerator
 
     public string Name => "sql";
 
-    /// <summary>The delete-path gate (SQL Server error 1785) — nothing is written.</summary>
+    /// <summary>
+    /// The delete-path gate (SQL Server error 1785), and — when the <c>.sqlproj</c> is to be patched —
+    /// that there is exactly one to patch. Nothing is written.
+    /// </summary>
+    /// <remarks>
+    /// The project file used to be looked up only after the table and view files were rewritten, so a
+    /// missing one failed the build with this target — and every target before it — already rewritten.
+    /// </remarks>
     public void Validate(GeneratorContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
         RefuseCascadePaths(context);
+        if (_options.EmitSqlProj)
+            FindSqlProj(ResolveProjectRoot(context.WorkingDirectory));
     }
 
     private static void RefuseCascadePaths(GeneratorContext context)
@@ -184,10 +193,14 @@ public sealed class SqlGenerator : IArtifactGenerator
 
     private static string FindSqlProj(string projectRoot)
     {
-        var candidates = Directory.GetFiles(projectRoot, "*.sqlproj", SearchOption.TopDirectoryOnly);
+        var candidates = Directory.Exists(projectRoot)
+            ? Directory.GetFiles(projectRoot, "*.sqlproj", SearchOption.TopDirectoryOnly)
+            : [];
         if (candidates.Length == 0)
         {
-            throw new FileNotFoundException($"'{projectRoot}' 폴더에서 .sqlproj을 찾을 수 없습니다.");
+            throw new FileNotFoundException(
+                $"'{projectRoot}' 폴더에서 .sqlproj을 찾을 수 없습니다 — Sql 타깃은 기본으로 그 프로젝트 파일에 생성 파일을 등록합니다. "
+                + "projectPath 를 .sqlproj 가 있는 폴더로 두거나, SSDT 프로젝트 없이 쓰려면(선언형 스키마 도구 등) 타깃에 \"emitSqlProj\": false 를 두십시오.");
         }
         if (candidates.Length > 1)
         {

@@ -464,6 +464,12 @@ public sealed class BuildCommand
         }
 
         // 3. 타깃별 생성기 실행
+        //
+        // 파일 시스템이 쓰기를 거절하면(읽기 전용·다른 프로그램이 연 파일·권한) 그 타깃과 원인, 그리고
+        // «이 빌드가 이미 새로 쓴 타깃»을 말하고 멈춘다. 검증은 위에서 끝났으니 여기서의 실패는 모델이 아니라
+        // 환경 쪽이다 — 그리고 앞 타깃은 이미 새 모델로 써졌으므로, 그 사실을 말하지 않으면 사용자는 섞인
+        // 트리를 멀쩡한 것으로 읽는다.
+        var written = new List<string>();
         foreach (var (target, filter, formsFilter, generator) in prepared)
         {
             var targetPath = TargetPathOf(target);
@@ -476,7 +482,19 @@ public sealed class BuildCommand
             // 기준은 allModels 가 아니라 **타깃이 이미 좁힌 집합**이다(폼 ⊆ 타깃).
             if (!formsFilter.IsPassAll)
                 Console.WriteLine($"[{generator.Name}] 폼 {formsFilter.DescribeCoverage(filter.Apply(allModels), "forms")}");
-            generator.Generate(context);
+            try
+            {
+                generator.Generate(context);
+            }
+            catch (Exception ex) when (OutputWriteFailure.IsWriteFailure(ex))
+            {
+                Console.Error.WriteLine($"[{generator.Name}] 출력을 쓰지 못했습니다 (target: {targetPath}) — {OutputWriteFailure.Describe(ex)}");
+                Console.Error.WriteLine(written.Count > 0
+                    ? $"[{generator.Name}] 이미 새로 쓴 타깃: {string.Join(", ", written)} — 이 타깃도 일부는 써졌을 수 있습니다. 이 빌드의 출력은 섞여 있으니 원인을 고친 뒤 다시 빌드하십시오."
+                    : $"[{generator.Name}] 이 타깃의 일부 파일은 써졌을 수 있습니다 — 원인을 고친 뒤 다시 빌드하십시오.");
+                return 1;
+            }
+            written.Add($"{generator.Name}({targetPath})");
             Console.WriteLine($"[{generator.Name}] 완료");
         }
 
