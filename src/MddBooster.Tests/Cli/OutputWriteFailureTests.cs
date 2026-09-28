@@ -49,6 +49,9 @@ public class OutputWriteFailureTests
 
     private static void Cleanup(string root)
     {
+        if (!OperatingSystem.IsWindows())
+            foreach (var d in Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories))
+                File.SetUnixFileMode(d, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         foreach (var f in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
             File.SetAttributes(f, FileAttributes.Normal);
         try { Directory.Delete(root, recursive: true); } catch { }
@@ -68,7 +71,13 @@ public class OutputWriteFailureTests
         {
             Assert.Equal(0, Build(root, TsThenModel).Exit);
             var locked = Directory.EnumerateFiles(Path.Combine(root, "model"), "Item.cs", SearchOption.AllDirectories).Single();
-            File.SetAttributes(locked, FileAttributes.ReadOnly);
+            // What makes the write fail differs by platform: Windows refuses to replace a read-only
+            // file, while on Unix a file in a writable directory can be deleted and recreated whatever
+            // its own mode — there, the directory has to refuse.
+            if (OperatingSystem.IsWindows())
+                File.SetAttributes(locked, FileAttributes.ReadOnly);
+            else
+                File.SetUnixFileMode(Path.GetDirectoryName(locked)!, UnixFileMode.UserRead | UnixFileMode.UserExecute);
 
             var (exit, stderr) = Build(root, TsThenModel);
 
