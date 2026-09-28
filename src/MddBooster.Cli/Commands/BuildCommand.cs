@@ -1,3 +1,4 @@
+using MddBooster.Core.Generation;
 using MddBooster.Cli.Config;
 using MddBooster.Generators.Api;
 using MddBooster.Generators.TypeScript;
@@ -458,9 +459,20 @@ public sealed class BuildCommand
                 Generator: ResolveGenerator(target, entitiesNamespace, filter, formsFilter));
         }).ToList();
 
+        // 거절은 그 종류의 종료 코드로 — 모델을 이 타깃이 표현할 수 없으면 의미 분석 에러와 같은 3, 타깃의 설정이나
+        // 그 설정이 가리키는 파일이 틀렸으면 다른 설정 오류와 같은 4. 예상 밖 실패만 최상위 `error:` 로 간다.
         foreach (var p in prepared)
         {
-            p.Generator.Validate(context);
+            try
+            {
+                p.Generator.Validate(context);
+            }
+            catch (GeneratorRefusalException ex)
+            {
+                var configuration = ex.Kind == GeneratorRefusalKind.Configuration;
+                Console.Error.WriteLine($"[{p.Generator.Name}] {(configuration ? "설정 오류" : "오류")} {ex.Message}");
+                return configuration ? 4 : 3;
+            }
         }
 
         // 3. 타깃별 생성기 실행

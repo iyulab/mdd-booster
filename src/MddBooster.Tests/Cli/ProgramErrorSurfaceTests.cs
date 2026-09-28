@@ -81,8 +81,8 @@ public class ProgramErrorSurfaceTests
     [Fact]
     public void Missing_sqlproj_prints_clean_message_no_stack_trace()
     {
-        // SqlGenerator.FindSqlProj's FileNotFoundException already carries a good message, but
-        // Program.Main used to bury it the same way.
+        // SqlGenerator.FindSqlProj's message was always good, but Program.Main used to bury it under
+        // a stack trace. It is now a configuration refusal: exit code 4, under the target's name.
         var mddDir = CreateTempDir();
         File.WriteAllText(Path.Combine(mddDir, "tables.m3l.md"), FixtureContent);
         File.WriteAllText(Path.Combine(mddDir, "mdd.json"), """
@@ -100,7 +100,7 @@ public class ProgramErrorSurfaceTests
 
         try
         {
-            Assert.Equal(1, exitCode);
+            Assert.Equal(4, exitCode);
             Assert.Equal("", FirstStackFrame(stderr.Text));
             Assert.Contains(".sqlproj", stderr.Text);
         }
@@ -148,19 +148,10 @@ public class ProgramErrorSurfaceTests
     [Fact]
     public void MDD_DEBUG_env_var_restores_the_stack_trace()
     {
-        // A failure that still reaches the top-level catch: the project the Sql target names
-        // has no .sqlproj.
+        // A failure that still reaches the top-level catch: a directory with no mdd.json. (A missing
+        // .sqlproj used to serve here; it is now a configuration refusal with its own exit code.)
         var mddDir = CreateTempDir();
         File.WriteAllText(Path.Combine(mddDir, "tables.m3l.md"), FixtureContent);
-        File.WriteAllText(Path.Combine(mddDir, "mdd.json"), """
-            {
-              "sources": ["./tables.m3l.md"],
-              "targets": [
-                { "type": "Sql", "projectPath": "../db", "schema": "dbo" }
-              ]
-            }
-            """);
-        Directory.CreateDirectory(Path.Combine(mddDir, "..", "db"));
 
         Environment.SetEnvironmentVariable("MDD_DEBUG", "1");
         using var stderr = new ConsoleErrorCapture(this);

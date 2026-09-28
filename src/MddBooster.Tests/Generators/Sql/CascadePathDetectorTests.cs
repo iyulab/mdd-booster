@@ -226,9 +226,10 @@ public class CascadePathDetectorTests : IDisposable
         File.WriteAllText(previous, "-- last good output");
 
         var generator = new SqlGenerator(new SqlGeneratorOptions { ProjectPath = ".", EmitSqlProj = false, EmitRefreshScript = false });
-        var ex = Assert.Throws<InvalidOperationException>(() =>
+        var ex = Assert.Throws<GeneratorRefusalException>(() =>
             generator.Generate(new GeneratorContext { Models = models, Enums = ast.Enums, WorkingDirectory = _root }));
 
+        Assert.Equal(GeneratorRefusalKind.Model, ex.Kind);
         Assert.Contains("error 1785", ex.Message);
         Assert.Contains("Category.parent_id (SET NULL)", ex.Message);
         Assert.Equal("-- last good output", File.ReadAllText(previous));

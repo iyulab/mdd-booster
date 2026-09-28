@@ -142,8 +142,11 @@ public class PostgresDialectE2ETests
             File.WriteAllText(Path.Combine(mddDir, "model.m3l.md"),
                 ChainModel.Replace("## WorkOrder", "## Job", StringComparison.Ordinal));
 
-            var ex = Assert.Throws<InvalidOperationException>(() => new BuildCommand().Run(mddDir));
-            Assert.Contains("created_at", ex.Message);
+            using (var err = new ConsoleErrorCapture(this))
+            {
+                Assert.Equal(3, new BuildCommand().Run(mddDir));
+                Assert.Contains("created_at", err.Text);
+            }
 
             Assert.Equal(before, Snapshot(dbDir, entitiesDir));
         }

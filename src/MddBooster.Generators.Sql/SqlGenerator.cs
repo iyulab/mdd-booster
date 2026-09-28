@@ -1,3 +1,4 @@
+using MddBooster.Core.Generation;
 using M3L.Native;
 using MddBooster.Core.Naming;
 
@@ -37,7 +38,7 @@ public sealed class SqlGenerator : IArtifactGenerator
         var cascade = CascadePathDetector.Detect(context.Models);
         if (cascade != null)
         {
-            throw new InvalidOperationException(
+            throw new GeneratorRefusalException(GeneratorRefusalKind.Model,
                 $"SQL Server refuses these delete actions (error 1785): {cascade.Describe()}. " +
                 "One delete may reach a table only once and may not come back to its own table; a CASCADE " +
                 "(the key of an ::aspect) continues from the rows it deletes, a SET NULL " +
@@ -198,13 +199,13 @@ public sealed class SqlGenerator : IArtifactGenerator
             : [];
         if (candidates.Length == 0)
         {
-            throw new FileNotFoundException(
+            throw new GeneratorRefusalException(GeneratorRefusalKind.Configuration,
                 $"'{projectRoot}' 폴더에서 .sqlproj을 찾을 수 없습니다 — Sql 타깃은 기본으로 그 프로젝트 파일에 생성 파일을 등록합니다. "
                 + "projectPath 를 .sqlproj 가 있는 폴더로 두거나, SSDT 프로젝트 없이 쓰려면(선언형 스키마 도구 등) 타깃에 \"emitSqlProj\": false 를 두십시오.");
         }
         if (candidates.Length > 1)
         {
-            throw new InvalidOperationException($"'{projectRoot}' 폴더에 .sqlproj이 여러 개 있습니다: {string.Join(", ", candidates)}");
+            throw new GeneratorRefusalException(GeneratorRefusalKind.Configuration, $"'{projectRoot}' 폴더에 .sqlproj이 여러 개 있습니다: {string.Join(", ", candidates)}");
         }
         return candidates[0];
     }

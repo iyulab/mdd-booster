@@ -1,3 +1,4 @@
+using MddBooster.Core.Generation;
 using M3L.Native;
 using MddBooster.Core.Semantic;
 
@@ -36,7 +37,7 @@ public static class ModelTargetValidator
                 string.Equals(f.Name, required, StringComparison.OrdinalIgnoreCase));
             if (!declared)
             {
-                throw new InvalidOperationException(
+                throw new GeneratorRefusalException(GeneratorRefusalKind.Model,
                     $"Model '{model.Name}': '{required}' 필드가 없습니다. IyuEntity는 CreatedAt/UpdatedAt을 " +
                     "항상 매핑하므로 미선언 모델은 존재하지 않는 컬럼 매핑으로 런타임에 실패합니다. " +
                     "Timestampable 인터페이스를 상속하거나 두 필드를 직접 선언하세요.");

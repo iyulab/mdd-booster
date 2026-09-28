@@ -1,3 +1,4 @@
+using MddBooster.Core.Generation;
 using MddBooster.Core.Ast;
 using MddBooster.Core.Semantic;
 using MddBooster.Generators.Model;
@@ -27,7 +28,7 @@ public class ModelTargetValidatorTests
     {
         var models = Load("order-with-nullable-ref.m3l.md");
 
-        var ex = Assert.Throws<InvalidOperationException>(
+        var ex = Assert.Throws<GeneratorRefusalException>(
             () => ModelTargetValidator.Validate(models));
 
         Assert.Contains("created_at", ex.Message);

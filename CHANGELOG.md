@@ -25,6 +25,14 @@
   시작하지 않으므로 오타 탐지 범위는 그대로다. 스키마(`schemas/mdd.schema.json`)도 같은 규칙으로 받는다(`patternProperties`).
 - **수정**: 스키마가 권하는 `"$schema"` 키가 0.34.0 에서 `MDD024` 로 보고되던 것.
 
+### 🔴 타깃의 검증 거절이 종류대로 종료 코드 3·4 로 선다 (종전 1)
+
+- Model 타깃의 타임스탬프 계약·Sql 타깃의 SQL Server 1785 삭제 경로 거절은 **모델 오류(3)**, `.sqlproj` 없음·여럿은 **설정 오류(4)** 로,
+  `[model] 오류 …`·`[sql] 설정 오류 …` 처럼 타깃 이름 아래 찍힌다. 종전에는 예상 밖 실패와 같은 `error: …` · 종료 코드 1 이었다 —
+  종료 코드 1 을 특정해 검사하던 스크립트는 3·4 를 보게 된다(0 이 아님을 보던 스크립트는 영향 없음). README 에 종료 코드 표를 뒀다.
+- 생성기 라이브러리를 직접 쓰는 코드: 이 거절들은 `MddBooster.Core.Generation.GeneratorRefusalException`(`Kind` = `Model`/`Configuration`)이다.
+  `InvalidOperationException` 파생이라 그것으로 잡던 코드는 그대로 잡는다 — `.sqlproj` 없음은 종전 `FileNotFoundException` 이었다.
+
 ### 출력을 쓰지 못한 빌드가 원인과 «이미 새로 쓴 타깃»을 말한다
 
 - 읽기 전용 파일·다른 프로그램이 연 파일·권한·디스크 공간 때문에 생성 파일을 쓰지 못하면, 종전에는 `error: Access to the path … is denied.`
