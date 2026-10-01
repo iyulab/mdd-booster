@@ -16,7 +16,7 @@
 
 ---
 
-## [Unreleased]
+## 0.36.0
 
 ### 🔇 soft-delete 대상의 rollup 은 무엇을 읽든 삭제된 행을 세지 않는다
 
