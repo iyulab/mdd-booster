@@ -87,3 +87,17 @@ export const nonFieldKeyIsRejected: EverythingFieldOverrides = { Id: () => null 
 export const fieldUnionIsNarrowerThanTheEntity: EverythingFormField = 'Title'
 // @ts-expect-error same inversion one level down — the union must not admit a slot field
 export const slotIsNotInTheFieldUnion: EverythingFormField = 'OwnerId'
+
+// --- a slot the caller forgot must not compile --------------------------------------
+
+// The form draws nothing of its own in a slot cell, so a forgotten key would otherwise be
+// an empty cell nobody notices. Leaving a slot empty on purpose is spelled `null`.
+// @ts-expect-error every slot key is required
+export const missingSlotKeyIsRejected: EverythingFormSlots = {}
+
+export const emptySlotIsSpelledNull: EverythingFormSlots = { OwnerId: null }
+
+export function MissingSlotsPropIsRejected(form: Partial<Everything>) {
+  // @ts-expect-error a form with slots cannot be rendered without them
+  return <EverythingFormBase form={form} onChange={() => {}} />
+}

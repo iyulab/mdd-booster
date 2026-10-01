@@ -9,7 +9,7 @@ namespace MddBooster.Generators.TypeScript;
 
 /// <summary>
 /// Renders per-entity React form base components ({Entity}Form_gen.tsx).
-/// FK fields (@reference) become slot placeholders.
+/// FK fields (@reference) and @slot fields become slots the caller must fill.
 /// </summary>
 /// <remarks>
 /// Which modules the rendered file imports from — its layout components, its
@@ -186,7 +186,7 @@ public static class TsFormRenderer
 
         // Collect slot fields: @reference FK fields AND @slot-annotated non-FK fields.
         // @slot allows non-FK fields (e.g. a field with a custom auto-generate button) to be
-        // rendered as slot placeholders rather than as inline form controls.
+        // rendered as caller-filled slots rather than as inline form controls.
         var slotFields = storedFields
             .Where(f => HasAttribute(f, "reference") || HasAttribute(f, "slot"))
             .Select(f => NameCasing.ToPascalCase(f.Name))
@@ -276,12 +276,15 @@ public static class TsFormRenderer
 
         sb.AppendLine();
 
-        // Slots type (only when FK fields exist).
+        // Slots type (only when FK fields exist). Every key is required: a slot is a hole in the
+        // form that only the caller can fill, so leaving one out is a mistake the compiler should
+        // name, not something to paper over at runtime. A slot the caller deliberately leaves
+        // empty is spelled out as `null`.
         if (fkFields.Count > 0)
         {
             sb.Append("export type ").Append(entityName).AppendLine("FormSlots = {");
             foreach (var fk in fkFields)
-                sb.Append("  ").Append(fk).AppendLine("?: ReactNode");
+                sb.Append("  ").Append(fk).AppendLine(": ReactNode");
             sb.AppendLine("}");
             sb.AppendLine();
         }
@@ -336,7 +339,7 @@ public static class TsFormRenderer
         sb.AppendLine("}: {");
         sb.Append("  form: Partial<").Append(entityName).AppendLine(">");
         sb.Append("  onChange: (updates: Partial<").Append(entityName).AppendLine(">) => void");
-        if (fkFields.Count > 0) sb.Append("  slots?: ").Append(entityName).AppendLine("FormSlots");
+        if (fkFields.Count > 0) sb.Append("  slots: ").Append(entityName).AppendLine("FormSlots");
         if (renderableFields.Count > 0)
             sb.Append("  fieldOverrides?: ").Append(entityName).AppendLine("FieldOverrides");
         sb.Append("  sectionProps?: ").Append(entityName).AppendLine("FormSectionProps");
@@ -660,17 +663,12 @@ public static class TsFormRenderer
         // Dispatch on the same classifier the import list uses (see ControlFor).
         var control = ControlFor(field, enumNames);
 
-        // FK or @slot → slot placeholder.
-        // Uses `!== undefined` check (not ??) so callers can pass null to suppress the field entirely.
+        // FK or @slot → whatever the caller supplied, and nothing else. There is deliberately no
+        // fallback: any text drawn here would reach a production screen the moment a caller
+        // forgot a key. The required key type (see the FormSlots type above) is what catches
+        // that omission; `null` is how a caller says "this slot stays empty".
         if (control == FormControl.Slot)
-        {
-            // The label lands in JSX *text* position (unlike every other control below, where
-            // it lands inside an attribute). A label containing `{`/`}` would otherwise be
-            // re-parsed as a JSX expression container, so it goes through a JS string literal
-            // instead, which renders identically as a text node.
-            var slotText = SourceLiteral.TypeScriptString(label + " slot");
-            return $"{{slots?.{prop} !== undefined ? slots.{prop} : <span className=\"text-gray-400 text-xs\">{{{slotText}}}</span>}}";
-        }
+            return $"{{slots.{prop}}}";
 
         if (control == FormControl.Checkbox)
             return $"<UCheckbox {labelAttr}{descAttr}{disabledAttr}{errorAttr} checked={{form.{prop} ?? false}} onChange={{v => onChange({{ {prop}: v }})}} />";

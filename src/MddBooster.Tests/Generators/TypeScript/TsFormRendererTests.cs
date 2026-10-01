@@ -696,20 +696,55 @@ public class TsFormRendererTests
         Assert.Contains($"export function {expectedFn}(", content);
     }
 
-    // --- slot placeholder label — JSX text-node safety --------------------------
+    // --- slots — the caller fills every one, the form draws nothing of its own ----
 
     [Fact]
-    public void Slot_placeholder_label_containing_braces_does_not_break_out_of_jsx_text()
+    public void A_slot_renders_only_what_the_caller_supplied()
     {
-        // A label with `{`/`}` used to land unescaped in JSX text position, so the generated
-        // .tsx failed to parse (the braces were read as a JSX expression container). The label
-        // must render as a JS string literal instead, which is safe in that position.
+        // The slot cell used to fall back to a "<label> slot" placeholder whenever the caller
+        // left the key out — text meant for the developer that reached the end user's screen
+        // with every build, lint and test still green. The cell now carries no text of its own,
+        // so the label (here one with braces, the case that once broke out of JSX text
+        // position) must not appear anywhere in the output.
         var models = LoadFixture("slot-label-with-braces.m3l.md");
         var content = TsFormRenderer.RenderAll(models, [], TestImports)["Item"];
 
-        Assert.Contains("'분류 목록 [{a, b}] slot'", content);
-        Assert.DoesNotContain("{a, b}] slot</span>", content);
+        Assert.Contains("{slots.CategoryId}", content);
+        Assert.DoesNotContain("분류 목록", content);
+        Assert.DoesNotContain("<span", content);
     }
+
+    [Fact]
+    public void Every_slot_key_and_the_slots_prop_itself_are_required()
+    {
+        // Omitting a key is the mistake, so it has to be a compile error at the call site.
+        // An optional key would let the omission through and render an empty cell — the same
+        // silence as the old placeholder, only invisible. `null` is the explicit "leave empty".
+        var models = LoadInline("""
+            ## Target
+
+            - id: identifier @pk @generated
+
+            ## Doc
+
+            - id: identifier @pk @generated
+            - target_id: identifier @reference(Target) @not_null "대상"
+            - code: string(20) @slot "코드"
+            - memo: string(100) "메모"
+            """);
+        var content = TsFormRenderer.RenderAll(models, [], TestImports)["Doc"];
+
+        Assert.Contains("  TargetId: ReactNode", content);
+        Assert.Contains("  Code: ReactNode", content);
+        Assert.DoesNotContain("?: ReactNode", SlotsType(content));
+        Assert.Contains("  slots: DocFormSlots", content);
+        Assert.DoesNotContain("slots?", content);
+    }
+
+    private static string SlotsType(string content) =>
+        string.Join('\n', content.Split('\n')
+            .SkipWhile(l => !l.StartsWith("export type DocFormSlots", StringComparison.Ordinal))
+            .TakeWhile(l => l.TrimEnd() != "}"));
 
     // --- enum field default — must stay a member of the (wire-form) union type --
 
@@ -791,7 +826,7 @@ public class TsFormRendererTests
     public void A_slot_field_is_not_wrapped_in_an_override()
     {
         var content = TsFormRenderer.RenderAll(LoadInline(OverrideModel), [], TestImports)["Order"];
-        var line = content.Split('\n').Single(l => l.Contains("slots?.CustomerId"));
+        var line = content.Split('\n').Single(l => l.Contains("slots.CustomerId"));
 
         Assert.DoesNotContain("fieldOverrides", line);
     }
