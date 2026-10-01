@@ -1,5 +1,8 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using MddBooster.Cli.Commands;
+
+[assembly: InternalsVisibleTo("MddBooster.Tests")]
 
 namespace MddBooster.Cli;
 
@@ -31,13 +34,28 @@ public static class Program
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"error: {ex.Message}");
-            if (Environment.GetEnvironmentVariable("MDD_DEBUG") is not null)
-            {
-                Console.Error.WriteLine(ex.StackTrace);
-            }
-            return 1;
+            return ReportUnexpected(ex);
         }
+    }
+
+    /// <summary>
+    /// The answer to a failure nothing translated — a defect or an environment this tool did not
+    /// anticipate, as opposed to a model or configuration error, which have their own exit codes.
+    /// One line by default; <c>MDD_DEBUG</c> adds the stack trace.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Main"/> so the behaviour can be tested with an exception of the test's
+    /// choosing. Each translated failure removes a way to reach this from the command line, and a test
+    /// that depends on one of the remaining ways loses its subject the day that one is translated too.
+    /// </remarks>
+    internal static int ReportUnexpected(Exception ex)
+    {
+        Console.Error.WriteLine($"error: {ex.Message}");
+        if (Environment.GetEnvironmentVariable("MDD_DEBUG") is not null)
+        {
+            Console.Error.WriteLine(ex.StackTrace);
+        }
+        return 1;
     }
 
     private static int RunBuild(string[] args)

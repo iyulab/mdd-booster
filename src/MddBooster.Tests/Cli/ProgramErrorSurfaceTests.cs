@@ -168,29 +168,100 @@ public class ProgramErrorSurfaceTests
     }
 
     [Fact]
-    public void MDD_DEBUG_env_var_restores_the_stack_trace()
+    public void A_source_mdd_json_names_that_does_not_exist_is_a_configuration_error_naming_every_one()
     {
-        // A failure that still reaches the top-level catch: a source the configuration names does not
-        // exist. (A missing .sqlproj, then a missing mdd.json, served here before each became a
-        // configuration error with its own exit code.)
         var mddDir = CreateTempDir();
+        File.WriteAllText(Path.Combine(mddDir, "tables.m3l.md"), FixtureContent);
         File.WriteAllText(Path.Combine(mddDir, "mdd.json"), """
-            { "sources": ["./not-there.m3l.md"], "targets": [ { "type": "TypeScript", "outputPath": "../ts" } ] }
+            { "sources": ["./tables.m3l.md", "./not-there.m3l.md", "./also-missing.m3l.md"], "targets": [ { "type": "TypeScript", "outputPath": "../ts" } ] }
             """);
 
+        using var stderr = new ConsoleErrorCapture(this);
+        var exitCode = Program.Main(["build", mddDir]);
+
+        try
+        {
+            Assert.Equal(4, exitCode);
+            Assert.Contains("[config]", stderr.Text);
+            Assert.Contains("./not-there.m3l.md", stderr.Text);
+            Assert.Contains("./also-missing.m3l.md", stderr.Text);
+            Assert.DoesNotContain("./tables.m3l.md", stderr.Text);
+            Assert.DoesNotContain("error:", stderr.Text);
+        }
+        finally
+        {
+            Cleanup(mddDir);
+        }
+    }
+
+    /// <summary>
+    /// A model the parser refuses is a model error, like one the validator refuses: exit 3, one line
+    /// per diagnostic — not the unexpected-failure exit 1 with every diagnostic joined into one line.
+    /// </summary>
+    [Fact]
+    public void A_source_the_parser_refuses_is_a_model_error_with_one_line_per_diagnostic()
+    {
+        var mddDir = CreateTempDir();
+        File.WriteAllText(Path.Combine(mddDir, "tables.m3l.md"), """
+            # Namespace: test.bank
+
+            ## BankAccount : Missing1, Missing2
+            - id: identifier @pk @generated
+            """);
+        File.WriteAllText(Path.Combine(mddDir, "mdd.json"), """
+            { "sources": ["./tables.m3l.md"], "targets": [ { "type": "TypeScript", "outputPath": "../ts" } ] }
+            """);
+
+        using var stderr = new ConsoleErrorCapture(this);
+        var exitCode = Program.Main(["build", mddDir]);
+
+        try
+        {
+            Assert.Equal(3, exitCode);
+            Assert.Contains("[m3l] 에러", stderr.Text);
+            Assert.DoesNotContain("error:", stderr.Text);
+            var diagnosticLines = stderr.Text.Split('\n').Count(l => l.TrimStart().StartsWith("[M3L-E"));
+            Assert.True(diagnosticLines >= 2, stderr.Text);
+        }
+        finally
+        {
+            Cleanup(mddDir);
+        }
+    }
+
+    [Fact]
+    public void An_untranslated_failure_is_one_line_and_exit_1()
+    {
+        using var stderr = new ConsoleErrorCapture(this);
+
+        var exitCode = Program.ReportUnexpected(Thrown(new InvalidOperationException("boom")));
+
+        Assert.Equal(1, exitCode);
+        Assert.Equal("error: boom", stderr.Text.Trim());
+    }
+
+    [Fact]
+    public void MDD_DEBUG_env_var_restores_the_stack_trace()
+    {
         Environment.SetEnvironmentVariable("MDD_DEBUG", "1");
         using var stderr = new ConsoleErrorCapture(this);
         try
         {
-            var exitCode = Program.Main(["build", mddDir]);
+            var exitCode = Program.ReportUnexpected(Thrown(new InvalidOperationException("boom")));
             Assert.Equal(1, exitCode);
             Assert.NotEqual("", FirstStackFrame(stderr.Text));
         }
         finally
         {
             Environment.SetEnvironmentVariable("MDD_DEBUG", null);
-            Cleanup(mddDir);
         }
+    }
+
+    /// <summary>An exception with a stack trace, as one that reached the top level has.</summary>
+    private static Exception Thrown(Exception ex)
+    {
+        try { throw ex; }
+        catch (Exception caught) { return caught; }
     }
 
     private static string CreateTempDir()

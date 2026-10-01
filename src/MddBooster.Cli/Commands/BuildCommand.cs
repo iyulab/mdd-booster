@@ -74,12 +74,38 @@ public sealed class BuildCommand
         var sourcePaths = cfg.Sources
             .Select(srcRel => Path.GetFullPath(Path.Combine(configDirectory, srcRel)))
             .ToList();
+        // 없는 소스는 설정 오류다 — 가리킨 것은 mdd.json 이다. 한 번에 전부 말한다: 하나씩 고치며
+        // 다시 돌리게 하지 않는다.
+        var missingSources = cfg.Sources
+            .Where(rel => !File.Exists(Path.GetFullPath(Path.Combine(configDirectory, rel))))
+            .ToList();
+        if (missingSources.Count > 0)
+        {
+            Console.Error.WriteLine($"[config] sources 의 파일을 찾을 수 없습니다 ({missingSources.Count}건 — 경로는 mdd.json 이 있는 디렉터리 기준):");
+            foreach (var rel in missingSources)
+                Console.Error.WriteLine($"  {rel} → {Path.GetFullPath(Path.Combine(configDirectory, rel))}");
+            return 4;
+        }
+
         foreach (var srcAbs in sourcePaths)
         {
             Console.WriteLine($"[m3l] 로딩: {srcAbs}");
         }
 
-        var mergedAst = loader.LoadFiles(sourcePaths);
+        M3L.Native.M3lAst mergedAst;
+        try
+        {
+            mergedAst = loader.LoadFiles(sourcePaths);
+        }
+        catch (M3lLoadException ex) when (ex.Diagnostics.Count > 0)
+        {
+            // 파서 에러는 모델 오류다 — 검증기 에러와 같은 모양·같은 종료 코드(3). 한 줄로 이어 붙인
+            // 예외 메시지가 아니라 진단마다 한 줄.
+            Console.Error.WriteLine($"[m3l] 에러 {ex.Diagnostics.Count}건:");
+            foreach (var d in ex.Diagnostics)
+                Console.Error.WriteLine($"  {d}");
+            return 3;
+        }
 
         // 파서 경고 표면화 — 조용히 삼키지 않는다.
         // 검증기 결과도 파서가 낸 경고를 다시 담아 온다(M3L-W010 등). 같은 진단(코드·위치·문장)은
