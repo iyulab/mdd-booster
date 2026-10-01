@@ -76,20 +76,63 @@ public class BundledSpecCopyDriftTests
     [Fact]
     public void Bundled_spec_copy_has_no_unclosed_code_fence()
     {
-        var lines = ReadSpecCopyLines();
-
-        var openedAtLine = 0;
-        for (var i = 0; i < lines.Length; i++)
-        {
-            if (!lines[i].StartsWith("```", StringComparison.Ordinal)) continue;
-            openedAtLine = openedAtLine == 0 ? i + 1 : 0;
-        }
+        var openedAtLine = UnclosedFence(ReadSpecCopyLines());
 
         Assert.True(
-            openedAtLine == 0,
+            openedAtLine is null,
             $"docs/M3L.md has a code fence opened at line {openedAtLine} that is never closed. " +
             "Everything after it renders as one code block — headings included — which is how a " +
             "previously published copy inverted its own structure without failing any build. " +
-            "Close the fence, or remove the stray ``` line.");
+            "Close the fence, or give an outer fence more backticks than the one it contains.");
+    }
+
+    /// <summary>
+    /// The check follows CommonMark, not a toggle: a nested example inside a longer fence is the
+    /// legitimate way to show a fenced block, and a toggle would call it unclosed.
+    /// </summary>
+    [Theory]
+    [InlineData("````markdown|```sql|x|```|````|# Next", null)]   // four around three — closed
+    [InlineData("```markdown|```sql|x|```|```|# Next", 5)]       // three around three — closes early
+    [InlineData("```|x|`````", null)]                            // a longer closing run closes
+    [InlineData("~~~|x|```", 1)]                                 // backticks do not close tildes
+    [InlineData("```sql|x|``` trailing", 1)]                     // a closing line has nothing after the run
+    [InlineData("    ```|x", null)]                              // four spaces in is code, not a fence
+    [InlineData("Use ```x``` inline.", null)]                    // inline code is not a fence
+    public void The_fence_check_tells_a_closed_nest_from_an_early_close(string text, int? expected)
+        => Assert.Equal(expected, UnclosedFence(text.Split('|')));
+
+    /// <summary>The 1-based line of a fence that is never closed, or null.</summary>
+    private static int? UnclosedFence(IReadOnlyList<string> lines)
+    {
+        (char Ch, int Run, int Line)? open = null;
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (Fence(lines[i]) is not { } fence) continue;
+            var (ch, run, hasInfo) = fence;
+            if (open is null)
+                open = (ch, run, i + 1);
+            else if (ch == open.Value.Ch && run >= open.Value.Run && !hasInfo)
+                open = null;
+        }
+        return open?.Line;
+    }
+
+    /// <summary>
+    /// A CommonMark fence line — a run of three or more backticks or tildes, indented at most
+    /// three spaces — as its character, run length, and whether anything follows the run.
+    /// </summary>
+    private static (char Ch, int Run, bool HasInfo)? Fence(string line)
+    {
+        var indent = line.Length - line.TrimStart(' ').Length;
+        if (indent > 3) return null;
+        var rest = line[indent..];
+        if (rest.Length == 0 || rest[0] is not ('`' or '~')) return null;
+        var ch = rest[0];
+        var run = rest.TakeWhile(c => c == ch).Count();
+        if (run < 3) return null;
+        var after = rest[run..].Trim();
+        // A backtick fence's info string may not contain a backtick — such a line is inline code.
+        if (ch == '`' && after.Contains('`')) return null;
+        return (ch, run, after.Length > 0);
     }
 }
