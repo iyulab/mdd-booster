@@ -34,7 +34,7 @@ public static class PgUdViewRenderer
         sb.Append("CREATE VIEW ").Append(schema).Append('.').Append(viewName).AppendLine(" AS");
         sb.Append("SELECT ").AppendLine(projection);
         sb.Append("FROM ").Append(schema).Append('.').Append(tableName).AppendLine(" AS b");
-        sb.AppendLine("WHERE b.deleted_at IS NULL;");
+        sb.Append("WHERE b.").Append(PgFullViewRenderer.LiveRowColumnPredicate).AppendLine(";");
         return sb.ToString();
     }
 }

@@ -396,8 +396,7 @@ public static class DbContextRenderer
         var name = NameCasing.ToPascalCase(model.Name);
         if (customExtViewModels != null && customExtViewModels.Contains(name)) return "ext";
         if (model.Fields.Any(f => f.Kind is FieldKind.Lookup or FieldKind.Rollup or FieldKind.Computed)) return "full";
-        if (model.Fields.Any(f => f.Kind == FieldKind.Stored &&
-            string.Equals(f.Name, "deleted_at", StringComparison.Ordinal))) return "ud";
+        if (SoftDelete.IsEnabled(model)) return "ud";
         return "none";
     }
 

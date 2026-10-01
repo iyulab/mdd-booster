@@ -85,7 +85,8 @@ public static class PgFullViewRenderer
             var def = rollup.Rollup
                 ?? throw new InvalidOperationException(
                     $"Rollup 필드 '{model.Name}.{rollup.Name}'에 파싱된 RollupDef가 없습니다.");
-            rollupColumns.Add((RenderRollupSubquery(def, schema, baseAlias, basePk.Name, tableNameMap, viewNameMap, derivedFieldsByModel), rollup.Name));
+            var targetSoftDeletes = modelLookup.TryGetValue(def.Target, out var rollupTarget) && SoftDelete.IsEnabled(rollupTarget);
+            rollupColumns.Add((RenderRollupSubquery(def, schema, baseAlias, basePk.Name, tableNameMap, viewNameMap, derivedFieldsByModel, targetSoftDeletes), rollup.Name));
         }
 
         var allProjected = lookupColumns.Concat(rollupColumns).ToList();
@@ -127,7 +128,8 @@ public static class PgFullViewRenderer
         string basePkName,
         IReadOnlyDictionary<string, string> tableNameMap,
         IReadOnlyDictionary<string, string> viewNameMap,
-        IReadOnlyDictionary<string, IReadOnlySet<string>> derivedFieldsByModel)
+        IReadOnlyDictionary<string, IReadOnlySet<string>> derivedFieldsByModel,
+        bool targetSoftDeletes = false)
     {
         var target = def.Target;
         var fkColumn = def.Fk;
@@ -135,9 +137,9 @@ public static class PgFullViewRenderer
         var field = def.Field;
 
         var targetTable = tableNameMap[target];
-        var fromRelation = FullViewRenderer.RollupReadsDerivedColumn(def, derivedFieldsByModel)
-            ? viewNameMap[target]
-            : targetTable;
+        // 삭제 행 제외 규칙은 T-SQL 쪽과 같다 — FullView 는 UdView 를 읽어 이미 거르고, 기본 테이블은 여기서 거른다.
+        var readsFullView = FullViewRenderer.RollupReadsDerivedColumn(def, derivedFieldsByModel);
+        var fromRelation = readsFullView ? viewNameMap[target] : targetTable;
 
         var innerExpr = aggregate switch
         {
@@ -151,6 +153,8 @@ public static class PgFullViewRenderer
         };
 
         var whereClause = $"{fkColumn} = {baseAlias}.{basePkName}";
+        if (targetSoftDeletes && !readsFullView)
+            whereClause += $" AND {LiveRowColumnPredicate}";
         if (!string.IsNullOrWhiteSpace(def.Where))
         {
             var where = ParentReferenceToken.Substitute(def.Where, field => $"{baseAlias}.{field}");
@@ -159,6 +163,9 @@ public static class PgFullViewRenderer
 
         return $"(SELECT {innerExpr} FROM {schema}.{fromRelation} WHERE {whereClause})";
     }
+
+    /// <summary>소프트 삭제 테이블의 행 필터(열 이름만) — UdView 와 기본 테이블을 읽는 rollup 이 같은 것을 쓴다.</summary>
+    internal const string LiveRowColumnPredicate = SoftDelete.FieldName + " IS NULL";
 
     /// <summary>모델의 PG UdView 이름 — <see cref="PostgresSqlGenerator"/>가 같은 규칙으로 계산한다.</summary>
     internal static string UdViewNameOf(string tableName) => tableName + "_ud_view";

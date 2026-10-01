@@ -34,9 +34,7 @@ public sealed class ViewPlanner
         var rollups = model.Fields.Where(f => f.Kind == FieldKind.Rollup).ToList();
         var computeds = model.Fields.Where(f => f.Kind == FieldKind.Computed).ToList();
 
-        var needsUd = model.Fields.Any(f =>
-            f.Kind == FieldKind.Stored &&
-            string.Equals(f.Name, "deleted_at", StringComparison.Ordinal));
+        var needsUd = SoftDelete.IsEnabled(model);
 
         var needsFull = lookups.Count > 0 || rollups.Count > 0 || computeds.Count > 0;
 

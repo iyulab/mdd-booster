@@ -32,7 +32,7 @@ public static class UdViewRenderer
         sb.AppendLine("AS");
         sb.Append("SELECT ").Append(projection)
           .Append(" FROM [").Append(schema).Append("].[").Append(modelName).AppendLine("]");
-        sb.AppendLine("WHERE [DeletedAt] IS NULL");
+        sb.Append("WHERE ").AppendLine(FullViewRenderer.LiveRowPredicate);
         sb.AppendLine("GO");
         return sb.ToString();
     }

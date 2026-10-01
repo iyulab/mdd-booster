@@ -114,8 +114,10 @@ public static class FullViewRenderer
             var def = rollup.Rollup
                 ?? throw new InvalidOperationException(
                     $"Rollup field '{plan.Model.Name}.{rollup.Name}' has no parsed RollupDef.");
+            var rollupTarget = findModel(def.Target);
             rollupColumns.Add((
-                expr: RenderRollupSubquery(def, schema, baseAlias, TargetKey.PkColumn(plan.Model), derivedFieldsByModel),
+                expr: RenderRollupSubquery(def, schema, baseAlias, TargetKey.PkColumn(plan.Model), derivedFieldsByModel,
+                    targetSoftDeletes: rollupTarget is not null && SoftDelete.IsEnabled(rollupTarget)),
                 alias: NameCasing.ToPascalCase(rollup.Name)));
         }
 
@@ -218,8 +220,14 @@ public static class FullViewRenderer
     }
 
     /// <param name="basePkColumn">The owning model's PK column — what the target's FK points at.</param>
+    /// <param name="targetSoftDeletes">
+    /// The target soft-deletes (<see cref="SoftDelete"/>): its deleted rows are not counted. A
+    /// FullView source already excludes them (it reads the UdView); a base-table source filters
+    /// them here — so every rollup over the same target counts the same set of rows, whichever
+    /// columns it happens to read.
+    /// </param>
     internal static string RenderRollupSubquery(RollupDef def, string schema, string baseAlias, string basePkColumn,
-        IReadOnlyDictionary<string, IReadOnlySet<string>>? derivedFieldsByModel)
+        IReadOnlyDictionary<string, IReadOnlySet<string>>? derivedFieldsByModel, bool targetSoftDeletes = false)
     {
         var target = def.Target;
         var fkColumn = NameCasing.ToPascalCase(def.Fk);
@@ -229,9 +237,8 @@ public static class FullViewRenderer
         // Only source from the target's FullView when the rollup reads one of the target's
         // derived columns — the aggregated field or a column its `where:` names. Otherwise it
         // reads straight from the base table, same as before the target had any FullView.
-        var fromTarget = RollupReadsDerivedColumn(def, derivedFieldsByModel)
-            ? target + "FullView"
-            : target;
+        var readsFullView = RollupReadsDerivedColumn(def, derivedFieldsByModel);
+        var fromTarget = readsFullView ? target + "FullView" : target;
 
         var innerExpr = aggregate switch
         {
@@ -245,6 +252,8 @@ public static class FullViewRenderer
         };
 
         var whereClause = $"[{fkColumn}] = {baseAlias}.[{basePkColumn}]";
+        if (targetSoftDeletes && !readsFullView)
+            whereClause += " AND " + LiveRowPredicate;
         if (!string.IsNullOrWhiteSpace(def.Where))
         {
             var where = ParentReferenceToken.Substitute(
@@ -254,6 +263,12 @@ public static class FullViewRenderer
 
         return $"(SELECT {innerExpr} FROM [{schema}].[{fromTarget}] WHERE {whereClause})";
     }
+
+    /// <summary>
+    /// The row filter of a soft-deleting table — what its UdView applies, and what a rollup
+    /// reading the base table applies itself.
+    /// </summary>
+    internal const string LiveRowPredicate = "[DeletedAt] IS NULL";
 
     /// <summary>
     /// True when <paramref name="columnPascal"/> is one of <paramref name="model"/>'s own

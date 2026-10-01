@@ -130,8 +130,7 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
             return EntityPairRenderer.ExtBacking.Ext;
         if (model.Fields.Any(f => f.Kind is FieldKind.Lookup or FieldKind.Rollup or FieldKind.Computed))
             return EntityPairRenderer.ExtBacking.Full;
-        if (model.Fields.Any(f => f.Kind == FieldKind.Stored &&
-            string.Equals(f.Name, "deleted_at", StringComparison.Ordinal)))
+        if (SoftDelete.IsEnabled(model))
             return EntityPairRenderer.ExtBacking.Ud;
         return EntityPairRenderer.ExtBacking.None;
     }

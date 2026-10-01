@@ -485,6 +485,8 @@ MDD_DEBUG=1 mdd build ./mdd
 행을 correlate하는 실제 SQL 별칭은 렌더러 내부 구현 세부사항이라 문서화된 계약이 아니다.
 `where:` 가 대상 모델의 Lookup·Rollup·Computed 필드를 부르면 서브쿼리는 대상의 기본 테이블이 아니라
 FullView 를 읽는다(집계 필드가 파생 필드일 때와 같다) — 파생 필드는 어디서 불러도 같은 뜻이다.
+대상 모델이 soft-delete(`deleted_at`)면 rollup 은 **삭제된 행을 세지 않는다** — 무엇을 읽든 같다. FullView 는
+UdView 위에 있어 이미 거르고, 기본 테이블을 읽는 서브쿼리는 UdView 와 같은 조건(`DeletedAt IS NULL`)을 스스로 붙인다.
 
 ### 선언된 제약 → C# 엔티티 (Model 타깃)
 
