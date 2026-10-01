@@ -150,8 +150,7 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
             foreach (var rollup in plan.Rollups.Where(f => !EntitySurface.IsFieldInternal(f)))
             {
                 var def = rollup.Rollup;
-                if (def is null || string.IsNullOrEmpty(def.Field)) continue;
-                if (FullViewRenderer.IsDerivedColumn(derivedFieldsByModel, def.Target, NameCasing.ToPascalCase(def.Field)))
+                if (def is not null && FullViewRenderer.RollupReadsDerivedColumn(def, derivedFieldsByModel))
                     targets.Add(def.Target);
             }
             hardTargets[plan.Model.Name] = targets;

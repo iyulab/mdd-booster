@@ -483,6 +483,8 @@ MDD_DEBUG=1 mdd build ./mdd
 `@rollup`의 `where:` 절은 상관 서브쿼리 필터로 렌더된다. 부모 행(집계가 걸린 대상 테이블 자신)의
 컬럼을 참조하려면 `$parent.<field>`를 쓴다(`field`는 m3l 필드명, snake_case) — 서브쿼리가 부모
 행을 correlate하는 실제 SQL 별칭은 렌더러 내부 구현 세부사항이라 문서화된 계약이 아니다.
+`where:` 가 대상 모델의 Lookup·Rollup·Computed 필드를 부르면 서브쿼리는 대상의 기본 테이블이 아니라
+FullView 를 읽는다(집계 필드가 파생 필드일 때와 같다) — 파생 필드는 어디서 불러도 같은 뜻이다.
 
 ### 선언된 제약 → C# 엔티티 (Model 타깃)
 

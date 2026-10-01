@@ -226,14 +226,12 @@ public static class FullViewRenderer
         var aggregate = (def.Aggregate ?? "count").Trim().ToLowerInvariant();
         var field = def.Field;
 
-        // Only source from the target's FullView when the aggregated field is itself one
-        // of the target's derived columns (e.g. summing a Rollup/Computed field). `count`
-        // has no field to aggregate and every other aggregate over a raw base column reads
-        // straight from the base table — same as before the target had any FullView.
-        var fromTarget = !string.IsNullOrEmpty(field)
-            && IsDerivedColumn(derivedFieldsByModel, target, NameCasing.ToPascalCase(field))
-                ? target + "FullView"
-                : target;
+        // Only source from the target's FullView when the rollup reads one of the target's
+        // derived columns — the aggregated field or a column its `where:` names. Otherwise it
+        // reads straight from the base table, same as before the target had any FullView.
+        var fromTarget = RollupReadsDerivedColumn(def, derivedFieldsByModel)
+            ? target + "FullView"
+            : target;
 
         var innerExpr = aggregate switch
         {
@@ -274,6 +272,60 @@ public static class FullViewRenderer
         => derivedFieldsByModel != null
             && derivedFieldsByModel.TryGetValue(model, out var derived)
             && derived.Contains(columnPascal);
+
+    /// <summary>
+    /// True when a rollup reads any of its target's derived (Lookup/Rollup/Computed) columns —
+    /// the aggregated field, or a column its <c>where:</c> names — so its subquery must read the
+    /// target's FullView: those columns do not exist on the base table. The one question every
+    /// rollup renderer and every FullView cycle detector asks, so they cannot disagree.
+    /// </summary>
+    internal static bool RollupReadsDerivedColumn(
+        RollupDef def,
+        IReadOnlyDictionary<string, IReadOnlySet<string>>? derivedFieldsByModel)
+    {
+        if (!string.IsNullOrEmpty(def.Field)
+            && IsDerivedColumn(derivedFieldsByModel, def.Target, NameCasing.ToPascalCase(def.Field)))
+            return true;
+        return !string.IsNullOrWhiteSpace(def.Where)
+            && RollupWhereColumns(def.Where).Any(c => IsDerivedColumn(derivedFieldsByModel, def.Target, c));
+    }
+
+    /// <summary>
+    /// The target columns a rollup's <c>where:</c> names, PascalCased: bare snake_case
+    /// identifiers and bracketed names. Not <c>$parent.</c> references or an alias-qualified
+    /// column (<c>b.field</c> — those are the parent's), not string literals, not keywords.
+    /// </summary>
+    internal static IEnumerable<string> RollupWhereColumns(string where)
+    {
+        var expr = ParentReferenceToken.Substitute(where, _ => " ");
+        int i = 0;
+        while (i < expr.Length)
+        {
+            if (expr[i] == '\'')
+            {
+                i++;
+                while (i < expr.Length)
+                {
+                    if (expr[i] == '\'' && !(i + 1 < expr.Length && expr[i + 1] == '\'')) { i++; break; }
+                    i += expr[i] == '\'' ? 2 : 1;
+                }
+                continue;
+            }
+            if (expr[i] == '[')
+            {
+                var close = expr.IndexOf(']', i + 1);
+                if (close < 0) yield break;
+                if (i == 0 || expr[i - 1] != '.') yield return expr[(i + 1)..close];
+                i = close + 1;
+                continue;
+            }
+            int start = i;
+            while (i < expr.Length && expr[i] != '\'' && expr[i] != '[') i++;
+            foreach (Match m in Regex.Matches(expr[start..i], @"(?<![.\w$])[a-z][a-z0-9_]*\b(?!\s*\.)"))
+                if (!IsSqlKeyword(m.Value))
+                    yield return NameCasing.ToPascalCase(m.Value);
+        }
+    }
 
     private static string NormalizeComputedExpression(string expr)
     {

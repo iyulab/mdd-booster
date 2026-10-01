@@ -143,9 +143,8 @@ public static class FullViewCycleDetector
             foreach (var rollup in plan.Rollups.Where(f => !EntitySurface.IsFieldInternal(f)))
             {
                 var def = rollup.Rollup;
-                if (def is null || string.IsNullOrEmpty(def.Field)) continue;
-                var targetColumnPascal = NameCasing.ToPascalCase(def.Field);
-                if (FullViewRenderer.IsDerivedColumn(derivedFieldsByModel, def.Target, targetColumnPascal)
+                if (def is not null
+                    && FullViewRenderer.RollupReadsDerivedColumn(def, derivedFieldsByModel)
                     && !targets.Contains(def.Target))
                 {
                     targets.Add(def.Target);

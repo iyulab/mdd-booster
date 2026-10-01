@@ -135,10 +135,9 @@ public static class PgFullViewRenderer
         var field = def.Field;
 
         var targetTable = tableNameMap[target];
-        var fromRelation = !string.IsNullOrEmpty(field)
-            && FullViewRenderer.IsDerivedColumn(derivedFieldsByModel, target, NameCasing.ToPascalCase(field))
-                ? viewNameMap[target]
-                : targetTable;
+        var fromRelation = FullViewRenderer.RollupReadsDerivedColumn(def, derivedFieldsByModel)
+            ? viewNameMap[target]
+            : targetTable;
 
         var innerExpr = aggregate switch
         {

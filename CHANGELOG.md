@@ -16,6 +16,18 @@
 
 ---
 
+## [Unreleased]
+
+### `@rollup` 의 `where:` 가 대상의 파생 필드를 불러도 배포가 깨지지 않는다
+
+- `where:` 가 대상 모델의 Lookup·Rollup·Computed 필드를 이름으로 부르면(예 자식의 `@computed` 로 만든 `effective_channel`),
+  집계 서브쿼리가 대상의 **기본 테이블**에서 그 열을 찾아 `mdd build` 는 통과하고 뷰 배포가 `Invalid column name`(SQL Server
+  `Msg 207`)으로 실패했다. 이제 집계 필드가 파생 필드일 때와 같이 대상의 FullView 를 읽는다 — 그 필드는 모델의 다른 곳에서와
+  같은 뜻을 갖는다. T-SQL·PostgreSQL 두 방언과 FullView 순환 검출이 같은 판정을 쓴다 — 그래서 이 읽기가 두 뷰를 서로 물리게 만들면
+  배포 전에 빌드가 순환을 보고한다.
+- 🔇 대상이 soft-delete 모델이면 FullView 가 삭제된 행을 거르므로, 이 경우의 집계는 삭제된 자식 행을 세지 않는다 — 집계 필드가
+  파생 필드일 때 이미 그랬던 동작과 같다. 기본 테이블을 읽는 다른 rollup 은 바뀌지 않는다.
+
 ## 0.35.0
 
 ### `mdd.json` 의 설명 키와 `$schema` 가 더 이상 `MDD024` 가 아니다
