@@ -48,6 +48,7 @@ public sealed class SemanticAnalyzer
                 CheckRollupTarget(model, field, diagnostics);
                 CheckBinding(model, field, diagnostics);
                 CheckAttributeTypos(model, field, diagnostics);
+                CheckRowVersionUse(model, field, diagnostics);
             }
         }
 
@@ -97,6 +98,39 @@ public sealed class SemanticAnalyzer
                     field.Loc));
                 break;
             // UnknownTarget: the reference itself is reported where references are checked.
+        }
+    }
+
+    /// <summary>
+    /// A row version that cannot do its job. <c>MDD025</c> (warning): marked <c>@internal</c>, it
+    /// drops out of the read type — the surface the ETag is built from — so the set stops offering
+    /// conditional writes at all. <c>MDD026</c>: a lookup reading another model's row version; the
+    /// value identifies a version of that row and says nothing about this one, and on PostgreSQL the
+    /// version is a system column a join cannot read under the field's name.
+    /// </summary>
+    private void CheckRowVersionUse(ResolvedModel model, FieldNode field, List<SemanticDiagnostic> diagnostics)
+    {
+        if (field.Kind == FieldKind.Stored && M3lPrimitives.IsRowVersion(field)
+            && MddBooster.Core.Generation.EntitySurface.IsFieldInternal(field))
+        {
+            diagnostics.Add(new SemanticDiagnostic(
+                "MDD025",
+                $"'{model.Name}.{field.Name}': @internal 행 버전(rowversion)은 읽기 타입에서 빠져 이 셋이 ETag 를 내지 않는다 — " +
+                "If-Match 조건부 쓰기가 사라진다. 행 버전을 노출하거나, 동시성 검사를 원치 않으면 필드를 지우세요.",
+                field.Loc,
+                SemanticSeverity.Warning));
+        }
+
+        if (field.Kind == FieldKind.Lookup
+            && LookupTarget.Resolve(model, field, _models) is { } target
+            && M3lPrimitives.IsRowVersion(target))
+        {
+            var owner = LookupPath.Walk(model, field.Lookup!.Path, _models).Target?.Name ?? "?";
+            diagnostics.Add(new SemanticDiagnostic(
+                "MDD026",
+                $"'{model.Name}.{field.Name}' @lookup({field.Lookup.Path}): '{owner}.{target.Name}' 는 그 행의 버전(rowversion)이다 — " +
+                "다른 행이 읽어 쓸 값이 아니다(PostgreSQL 에서는 조인으로 읽을 열도 없다). 그 행의 동시성은 그 행의 ETag 로 다루세요.",
+                field.Loc));
         }
     }
 

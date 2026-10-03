@@ -1013,6 +1013,8 @@ consumer-repo/
 | MDD022 | base 를 밝히지 않은 채 키가 곧 다른 모델의 FK(`@pk @reference(X)`) — `::aspect(X)` 로 선언하라 |
 | MDD023 | `@reference(X)?`(삭제 시 SET NULL)인데 키가 NULL 을 허용하지 않는다 — 필드를 nullable 로 하거나 다른 기호를 쓰라 |
 | MDD024(경고) | `mdd.json` 에 이 생성기가 정의하지 않은 키가 있다(루트 또는 `targets[n]`) — 무시되며, 가까운 알려진 키가 있으면 제안한다. 분석이 아니라 설정 단계에서 나오고, 다른 경고처럼 `treatWarningsAsErrors`·`warningsAsErrors` 로 빌드를 세울 수 있다 — 편집기 밖(CI)에서 오타를 잡는 길. `_` 로 시작하는 설명 키와 `$schema` 는 보고하지 않는다. `sources` 가 비어 있으면 설정 오류(종료 코드 4) |
+| MDD025(경고) | `rowversion` 행 버전에 `@internal` — 읽기 타입에서 빠져 그 셋이 ETag 를 내지 않는다(`If-Match` 조건부 쓰기가 사라진다) |
+| MDD026 | `@lookup` 이 다른 모델의 `rowversion` 을 읽음 — 행 버전은 그 행의 것이고, PostgreSQL 에서는 조인으로 읽을 열도 없다 |
 
 `mdd build` 에서는 파서 검증기가 이 분석보다 먼저 돈다 — lookup 경로의 키에 `@reference` 가 없으면 `M3L-E002`, 경로 조각이
 그 자리의 모델에 없으면 `M3L-E022` 로 먼저 멈추므로 CLI 에서 `MDD004`·`MDD005`·`MDD006` 을 보는 일은 드물다. 이 분석기를
