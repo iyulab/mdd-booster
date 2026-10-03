@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using MddBooster.Core.Ast;
 using MddBooster.Core.Semantic;
 using MddBooster.Generators.TypeScript;
@@ -19,39 +20,31 @@ public sealed class TsFormImportsTests
         return new InterfaceResolver(ast).ResolveAll();
     }
 
-    private static string Render(TsFormModuleImports? modules = null)
+    private static string Render(TsFormModuleImports modules)
     {
         var models = Models(out var enums);
-        var imports = new TsFormImports { GeneratedTypesBase = "../types" };
-        if (modules is not null) imports = imports with { Modules = modules };
+        var imports = new TsFormImports { GeneratedTypesBase = "../types", Modules = modules };
 
         return TsFormRenderer.RenderAll(models, enums, imports)["OrderItem"];
     }
 
     /// <summary>
-    /// The defaults are not a style choice — they are the exact strings the
-    /// generator emitted before these became settings. Changing one silently
-    /// rewrites the import block of every consumer who configured nothing, so
-    /// this test exists to make that change deliberate rather than incidental.
+    /// None of the three has a default. A default could only be a guess at the
+    /// consumer's folder layout or at a component library this generator does not
+    /// depend on; <c>required</c> makes leaving one out a compile error for a
+    /// library caller, and the CLI turns it into a configuration error that names
+    /// the missing key.
     /// </summary>
-    [Fact]
-    public void Defaults_are_the_strings_the_generator_emitted_before_they_were_settings()
+    [Theory]
+    [InlineData(nameof(TsFormModuleImports.Layout))]
+    [InlineData(nameof(TsFormModuleImports.Controls))]
+    [InlineData(nameof(TsFormModuleImports.SelectOptions))]
+    public void Every_foreign_module_must_be_named_by_the_caller(string property)
     {
-        var defaults = new TsFormModuleImports();
+        var member = typeof(TsFormModuleImports).GetProperty(property)!;
 
-        Assert.Equal("@iyulab/enterprise", defaults.Layout);
-        Assert.Equal("../components/ui", defaults.Controls);
-        Assert.Equal("../lib/select-options", defaults.SelectOptions);
-    }
-
-    [Fact]
-    public void Configuring_nothing_reproduces_the_historical_import_block()
-    {
-        var form = Render();
-
-        Assert.Contains("import { FormSection, FormRow } from '@iyulab/enterprise'", form);
-        Assert.Contains("} from '../components/ui'", form);
-        Assert.Contains("import { enumToOptions } from '../lib/select-options'", form);
+        Assert.True(member.IsDefined(typeof(RequiredMemberAttribute), inherit: false),
+            $"{property} must stay required — a default here names a layout or package for the consumer.");
     }
 
     [Fact]
@@ -67,25 +60,6 @@ public sealed class TsFormImportsTests
         Assert.Contains("import { FormSection, FormRow } from '@example/layout'", form);
         Assert.Contains("} from '@example/controls'", form);
         Assert.Contains("import { enumToOptions } from '@example/enum-options'", form);
-
-        // The point of the change is that the old locations stop being required.
-        Assert.DoesNotContain("@iyulab/enterprise", form);
-        Assert.DoesNotContain("../components/ui", form);
-        Assert.DoesNotContain("../lib/select-options", form);
-    }
-
-    /// <summary>
-    /// Overriding one module must not disturb the others, or a consumer who only
-    /// wants to move their controls would have to restate the other two.
-    /// </summary>
-    [Fact]
-    public void Overriding_one_module_leaves_the_others_at_their_defaults()
-    {
-        var form = Render(new TsFormModuleImports { Controls = "@example/controls" });
-
-        Assert.Contains("} from '@example/controls'", form);
-        Assert.Contains("import { FormSection, FormRow } from '@iyulab/enterprise'", form);
-        Assert.Contains("import { enumToOptions } from '../lib/select-options'", form);
     }
 
     /// <summary>
@@ -95,7 +69,12 @@ public sealed class TsFormImportsTests
     [Fact]
     public void Configuring_the_foreign_modules_does_not_move_the_generated_type_imports()
     {
-        var form = Render(new TsFormModuleImports { Controls = "@example/controls" });
+        var form = Render(new TsFormModuleImports
+        {
+            Layout = "@example/layout",
+            Controls = "@example/controls",
+            SelectOptions = "@example/enum-options",
+        });
 
         Assert.Contains("from '../types/entities_gen'", form);
         Assert.Contains("from '../types/enums_gen'", form);

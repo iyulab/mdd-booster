@@ -16,6 +16,22 @@
 
 ---
 
+## [Unreleased]
+
+### 🔴 폼을 내는 TypeScript 타깃은 import 모듈 셋을 전부 적는다 — 기본값 없음
+
+- `formLayoutImport`·`formControlsImport`·`formSelectOptionsImport` 의 기본값을 없앴다. 종전 기본값은 소비자 트리의 폴더 배치
+  (`../components/ui`·`../lib/select-options`)와 이 생성기가 의존하지 않는 특정 컴포넌트 라이브러리를 추측했고, 그 라이브러리가
+  export 를 재배치하자 설정 없는 모든 빌드가 생성 폼에서 `TS2305` 로 깨졌다. 어느 모듈을 가리킬지는 소비자가 정하고, 그 라이브러리를
+  쓸 때 무엇을 가리킬지는 그 라이브러리의 문서가 말한다.
+- **breaking**: `formsOutputPath` 가 있는 TypeScript 타깃에 세 키 중 하나라도 없으면 빌드가 아무것도 쓰기 전에 빠진 키 이름을 대며
+  멈춘다(종료 코드 4). 폼을 내지 않는 타깃에 이 키를 적어도 같은 오류다. `schemas/mdd.schema.json` 도 같은 규칙을 편집기에서 검사한다.
+- 라이브러리 API: `TsFormModuleImports` 의 세 속성이 `required` 다. `TsFormImports.Modules` 도 `required`, `TypeScriptGeneratorOptions.FormModules`
+  는 `null` 이 기본이며 `FormsOutputPath` 를 주면 필수다(없으면 `Generate` 가 아무것도 쓰기 전에 `InvalidOperationException`).
+- 이행: 세 키를 생략해 온 설정이라면 종전 기본값이 가리키던 곳을 그대로 적는다 — `"formControlsImport": "../components/ui"`,
+  `"formSelectOptionsImport": "../lib/select-options"`, 그리고 `formLayoutImport` 는 쓰는 컴포넌트 라이브러리의 문서가 안내하는 모듈.
+  이미 세 키를 다 적은 설정은 바뀌는 것이 없다.
+
 ## 0.36.0
 
 ### 🔇 soft-delete 대상의 rollup 은 무엇을 읽든 삭제된 행을 세지 않는다

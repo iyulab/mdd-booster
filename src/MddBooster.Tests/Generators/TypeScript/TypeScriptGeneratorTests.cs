@@ -50,6 +50,7 @@ public sealed class TypeScriptGeneratorTests : IDisposable
         {
             OutputPath = outputPath,
             FormsOutputPath = formsOutputPath,
+            FormModules = FormImportFixtures.TestModules,
         }).Generate(LoadContext());
 
         return File.ReadAllText(Path.Combine(_root, formsOutputPath, "OrderItemForm_gen.tsx"));
@@ -64,6 +65,7 @@ public sealed class TypeScriptGeneratorTests : IDisposable
         {
             OutputPath = outputPath,
             FormsOutputPath = formsOutputPath,
+            FormModules = FormImportFixtures.TestModules,
         });
         generator.Generate(LoadContext());
         return generator;
@@ -86,6 +88,28 @@ public sealed class TypeScriptGeneratorTests : IDisposable
         Assert.False(File.Exists(stale));
         Assert.Equal(["RenamedAwayForm_gen.tsx"], generator.RemovedStaleForms);
         Assert.True(File.Exists(Path.Combine(forms, "OrderItemForm_gen.tsx")));
+    }
+
+    /// <summary>
+    /// A library caller that asks for forms without naming where they import their layout,
+    /// controls and option helper from is stopped before any file is written — there is no
+    /// default to fall back on.
+    /// </summary>
+    [Fact]
+    public void Forms_without_their_import_modules_are_refused_before_anything_is_written()
+    {
+        Directory.CreateDirectory(_root);
+        var generator = new TypeScriptGenerator(new TypeScriptGeneratorOptions
+        {
+            OutputPath = "types",
+            FormsOutputPath = "forms",
+        });
+
+        var ex = Assert.Throws<InvalidOperationException>(() => generator.Generate(LoadContext()));
+
+        Assert.Contains("FormModules", ex.Message);
+        Assert.False(Directory.Exists(Path.Combine(_root, "types")));
+        Assert.False(Directory.Exists(Path.Combine(_root, "forms")));
     }
 
     /// <summary>

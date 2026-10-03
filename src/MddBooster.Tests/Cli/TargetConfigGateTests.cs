@@ -172,7 +172,7 @@ public class TargetConfigGateTests
     public void Two_typescript_targets_sharing_a_forms_directory_fail_the_build()
     {
         var mddDir = Scaffold(
-            """{ "type": "TypeScript", "outputPath": "../ts/a", "formsOutputPath": "../ts/forms" }, { "type": "TypeScript", "outputPath": "../ts/b", "formsOutputPath": "../ts/forms" }""",
+            """{ "type": "TypeScript", "outputPath": "../ts/a", "formsOutputPath": "../ts/forms", "formLayoutImport": "@example/layout", "formControlsImport": "@example/controls", "formSelectOptionsImport": "@example/enum-options" }, { "type": "TypeScript", "outputPath": "../ts/b", "formsOutputPath": "../ts/forms", "formLayoutImport": "@example/layout", "formControlsImport": "@example/controls", "formSelectOptionsImport": "@example/enum-options" }""",
             out var root);
         try
         {
@@ -185,7 +185,7 @@ public class TargetConfigGateTests
     public void Two_typescript_targets_with_their_own_forms_directories_succeed()
     {
         var mddDir = Scaffold(
-            """{ "type": "TypeScript", "outputPath": "../ts/a", "formsOutputPath": "../ts/forms-a" }, { "type": "TypeScript", "outputPath": "../ts/b", "formsOutputPath": "../ts/forms-b" }""",
+            """{ "type": "TypeScript", "outputPath": "../ts/a", "formsOutputPath": "../ts/forms-a", "formLayoutImport": "@example/layout", "formControlsImport": "@example/controls", "formSelectOptionsImport": "@example/enum-options" }, { "type": "TypeScript", "outputPath": "../ts/b", "formsOutputPath": "../ts/forms-b", "formLayoutImport": "@example/layout", "formControlsImport": "@example/controls", "formSelectOptionsImport": "@example/enum-options" }""",
             out var root);
         try
         {

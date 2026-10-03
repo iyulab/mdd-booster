@@ -25,6 +25,15 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        // Checked before anything is written: a half-written target is worse than none.
+        if (_options.FormsOutputPath is not null && _options.FormModules is null)
+        {
+            throw new InvalidOperationException(
+                "FormsOutputPath is set but FormModules is not — a generated form imports its "
+                + "layout, controls and option helper from modules this generator does not write, "
+                + "so the caller must name all three.");
+        }
+
         var outDir = ConfiguredPathResolver.Resolve(context.WorkingDirectory, _options.OutputPath, "outputPath");
 
         Directory.CreateDirectory(outDir);
@@ -78,7 +87,7 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
             {
                 GeneratedTypesBase = TsModuleSpecifier.RelativeBase(
                     formsDir, outDir, "formsOutputPath", "outputPath"),
-                Modules = _options.FormModules,
+                Modules = _options.FormModules!,
             };
 
             // 폼 전용 입도 — 이미 타깃 필터를 통과한 `models` 위에 얹는다. 그래서 폼 집합이

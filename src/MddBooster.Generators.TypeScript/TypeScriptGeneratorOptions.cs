@@ -18,15 +18,14 @@ public sealed class TypeScriptGeneratorOptions
 
     /// <summary>
     /// Where generated forms import the modules this generator does not write.
-    /// Defaults reproduce the historical output, so leaving this unset keeps
-    /// existing consumers byte-identical.
+    /// Required whenever <see cref="FormsOutputPath"/> is set; meaningless otherwise.
     /// </summary>
     /// <remarks>
     /// Deliberately does not cover the generator's own output — that specifier
     /// is derived from <see cref="OutputPath"/> and <see cref="FormsOutputPath"/>,
     /// because this class already knows it. See <see cref="TsFormImports"/>.
     /// </remarks>
-    public TsFormModuleImports FormModules { get; init; } = new();
+    public TsFormModuleImports? FormModules { get; init; }
 
     /// <summary>
     /// 이 타깃의 엔티티 부분집합 필터 (<c>includeEntities</c>/<c>excludeEntities</c>, <c>includeOwners</c>/<c>excludeOwners</c>).

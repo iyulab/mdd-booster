@@ -41,7 +41,7 @@ public class IntentionalGapNoticeTests
         "- name: string(30) @not_null \"교대명\"\n";
 
     private const string TypeScriptTarget =
-        """{ "type": "TypeScript", "outputPath": "../ts", "formsOutputPath": "../ts/forms" }""";
+        """{ "type": "TypeScript", "outputPath": "../ts", "formsOutputPath": "../ts/forms", "formLayoutImport": "@example/layout", "formControlsImport": "@example/controls", "formSelectOptionsImport": "@example/enum-options" }""";
 
     private const string NoticePrefix = "[typescript] 안내:";
 

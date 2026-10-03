@@ -328,7 +328,11 @@ public sealed class BuildCommand
                 }
             }
 
-            // 1.7b. 폼 전용 필터 — 같은 술어를 재사용하되 적용 범위가 좁다.
+            // 1.7b. 폼이 임포트할 «이 생성기가 쓰지 않는» 모듈 — 소비자가 정한다. 기본값은 두지 않는다:
+            // 남의 디렉터리 배치나 특정 패키지에 대한 추측이 되고, 추측이 틀리면 tsc 가 처음 말한다.
+            configViolations.AddRange(FormImportViolations(target, label));
+
+            // 1.7c. 폼 전용 필터 — 같은 술어를 재사용하되 적용 범위가 좁다.
             var hasFormsFilter = target.FormsInclude?.Count > 0 || target.FormsExclude?.Count > 0;
             if (!hasFormsFilter) continue;
 
@@ -604,29 +608,62 @@ public sealed class BuildCommand
         }
     }
 
+    /// <summary>The three form-import keys, by the name a consumer writes in <c>mdd.json</c>.</summary>
+    private static IEnumerable<(string Key, string? Value)> FormImportKeys(MddJsonTarget target) =>
+    [
+        ("formLayoutImport", target.FormLayoutImport),
+        ("formControlsImport", target.FormControlsImport),
+        ("formSelectOptionsImport", target.FormSelectOptionsImport),
+    ];
+
     /// <summary>
-    /// Applies whichever form-import overrides the target declared, leaving the
-    /// rest at the record's defaults.
+    /// A target that emits forms names all three modules; a target that does not
+    /// names none. Either way round, the build says which key is the problem.
     /// </summary>
-    /// <remarks>
-    /// Written as overrides onto a default instance rather than as
-    /// <c>value ?? "literal"</c> so the defaults live in exactly one place. A
-    /// second copy here would be free to drift from the one the generated files
-    /// are actually compared against.
-    /// </remarks>
-    private static TsFormModuleImports FormModulesFor(MddJsonTarget target)
+    private static IEnumerable<string> FormImportViolations(MddJsonTarget target, string label)
     {
-        var modules = new TsFormModuleImports();
+        var declared = FormImportKeys(target)
+            .Where(k => !string.IsNullOrWhiteSpace(k.Value))
+            .Select(k => k.Key)
+            .ToList();
+        var emitsForms = target.Type == "TypeScript" && !string.IsNullOrWhiteSpace(target.FormsOutputPath);
 
-        if (!string.IsNullOrWhiteSpace(target.FormLayoutImport))
-            modules = modules with { Layout = target.FormLayoutImport };
-        if (!string.IsNullOrWhiteSpace(target.FormControlsImport))
-            modules = modules with { Controls = target.FormControlsImport };
-        if (!string.IsNullOrWhiteSpace(target.FormSelectOptionsImport))
-            modules = modules with { SelectOptions = target.FormSelectOptionsImport };
+        if (!emitsForms)
+        {
+            if (declared.Count > 0)
+            {
+                yield return $"{label}: {string.Join(", ", declared)} 를 지정했지만 이 타깃은 폼을 내지 않습니다 "
+                    + "— 폼은 TypeScript 타깃이 formsOutputPath 를 가질 때만 생성됩니다.";
+            }
+            yield break;
+        }
 
-        return modules;
+        var missing = FormImportKeys(target)
+            .Where(k => string.IsNullOrWhiteSpace(k.Value))
+            .Select(k => k.Key)
+            .ToList();
+        if (missing.Count > 0)
+        {
+            yield return $"{label}: formsOutputPath 로 폼을 내려면 {string.Join(", ", missing)} 가 필요합니다 "
+                + "— 생성 폼이 임포트하는 레이아웃·컨트롤·옵션 헬퍼는 이 생성기가 쓰지 않는 모듈이라, "
+                + "어디서 가져올지는 소비자가 정합니다(README 「소비 프로젝트 계약 (TypeScript 타깃)」).";
+        }
     }
+
+    /// <summary>
+    /// The form-import modules a target declared, or <c>null</c> when it emits no
+    /// forms. Only called after <see cref="FormImportViolations"/> found none, so
+    /// a forms-emitting target has all three.
+    /// </summary>
+    private static TsFormModuleImports? FormModulesFor(MddJsonTarget target) =>
+        string.IsNullOrWhiteSpace(target.FormsOutputPath)
+            ? null
+            : new TsFormModuleImports
+            {
+                Layout = target.FormLayoutImport!,
+                Controls = target.FormControlsImport!,
+                SelectOptions = target.FormSelectOptionsImport!,
+            };
 
     private IArtifactGenerator ResolveGenerator(
         MddJsonTarget target, string? modelNamespace, EntitySurfaceFilter surfaceFilter,

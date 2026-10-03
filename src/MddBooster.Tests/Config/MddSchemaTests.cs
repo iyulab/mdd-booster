@@ -154,4 +154,19 @@ public class MddSchemaTests
         var result = Validate(json);
         Assert.True(result.IsValid, DescribeErrors(result));
     }
+
+    /// <summary>
+    /// The editor and <c>mdd build</c> agree on the form-import rule: a target that emits forms
+    /// names all three modules, and one that does not names none.
+    /// </summary>
+    [Theory]
+    [InlineData("""{ "type": "TypeScript", "outputPath": "./ts", "formsOutputPath": "./forms" }""")]
+    [InlineData("""{ "type": "TypeScript", "outputPath": "./ts", "formsOutputPath": "./forms", "formLayoutImport": "@x/layout", "formControlsImport": "@x/controls" }""")]
+    [InlineData("""{ "type": "TypeScript", "outputPath": "./ts", "formLayoutImport": "@x/layout" }""")]
+    public void Form_import_modules_go_with_formsOutputPath_all_or_none(string target)
+    {
+        var json = $$"""{ "sources": ["./a.m3l.md"], "targets": [ {{target}} ] }""";
+
+        Assert.False(Validate(json).IsValid);
+    }
 }

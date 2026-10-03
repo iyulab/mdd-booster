@@ -199,6 +199,12 @@
         { "not": { "required": ["includeEntities", "excludeEntities"] } },
         { "not": { "required": ["includeOwners", "excludeOwners"] } }
       ],
+      "dependentRequired": {
+        "formsOutputPath": ["formLayoutImport", "formControlsImport", "formSelectOptionsImport"],
+        "formLayoutImport": ["formsOutputPath"],
+        "formControlsImport": ["formsOutputPath"],
+        "formSelectOptionsImport": ["formsOutputPath"]
+      },
       "properties": {
         "type": { "const": "TypeScript" },
         "outputPath": {
@@ -226,18 +232,18 @@
         },
         "formLayoutImport": {
           "type": "string",
-          "default": "@iyulab/enterprise",
-          "description": "Module a generated form imports FormSection/FormRow from. The default is a historical compatibility value, not a recommendation."
+          "minLength": 1,
+          "description": "Module a generated form imports FormSection/FormRow from. Required with formsOutputPath, rejected without it — there is no default, because any default would be a guess at your folder layout or at a component library this generator does not depend on."
         },
         "formControlsImport": {
           "type": "string",
-          "default": "../components/ui",
-          "description": "Module a generated form imports its controls (UInput/UTextarea/USelect/UCheckbox) from."
+          "minLength": 1,
+          "description": "Module a generated form imports its controls (UInput/UTextarea/USelect/UCheckbox) from. Required with formsOutputPath, rejected without it."
         },
         "formSelectOptionsImport": {
           "type": "string",
-          "default": "../lib/select-options",
-          "description": "Module supplying enumToOptions, consumed by the generated {Enum}Labels maps."
+          "minLength": 1,
+          "description": "Module supplying enumToOptions, consumed by the generated {Enum}Labels maps. Required with formsOutputPath, rejected without it."
         },
         "includeEntities": {
           "type": "array",

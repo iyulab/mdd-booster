@@ -274,7 +274,7 @@ public class EntityFilterBuildTests
     public void Forms_filter_narrows_the_forms_while_the_types_stay_whole()
     {
         var mddDir = Scaffold(
-            """{ "type": "TypeScript", "outputPath": "../ts", "formsOutputPath": "../ts/forms", "formsInclude": ["Order"] }""",
+            """{ "type": "TypeScript", "outputPath": "../ts", "formsOutputPath": "../ts/forms", "formLayoutImport": "@example/layout", "formControlsImport": "@example/controls", "formSelectOptionsImport": "@example/enum-options", "formsInclude": ["Order"] }""",
             out var root);
         try
         {
@@ -298,7 +298,7 @@ public class EntityFilterBuildTests
     public void Forms_exclude_is_the_other_direction_of_the_same_filter()
     {
         var mddDir = Scaffold(
-            """{ "type": "TypeScript", "outputPath": "../ts", "formsOutputPath": "../ts/forms", "formsExclude": ["OrderItem"] }""",
+            """{ "type": "TypeScript", "outputPath": "../ts", "formsOutputPath": "../ts/forms", "formLayoutImport": "@example/layout", "formControlsImport": "@example/controls", "formSelectOptionsImport": "@example/enum-options", "formsExclude": ["OrderItem"] }""",
             out var root);
         try
         {
@@ -318,15 +318,15 @@ public class EntityFilterBuildTests
     /// </summary>
     [Theory]
     // formsInclude 가 타깃 필터 밖의 엔티티를 가리킴
-    [InlineData("""{ "type": "TypeScript", "outputPath": "../ts", "formsOutputPath": "../ts/forms", "includeEntities": ["Order"], "formsInclude": ["OrderItem"] }""")]
+    [InlineData("""{ "type": "TypeScript", "outputPath": "../ts", "formsOutputPath": "../ts/forms", "formLayoutImport": "@example/layout", "formControlsImport": "@example/controls", "formSelectOptionsImport": "@example/enum-options", "includeEntities": ["Order"], "formsInclude": ["OrderItem"] }""")]
     // formsOutputPath 없이 폼 필터만
     [InlineData("""{ "type": "TypeScript", "outputPath": "../ts", "formsInclude": ["Order"] }""")]
     // 폼 필터를 TypeScript 아닌 타깃에
     [InlineData("""{ "type": "Api", "projectPath": "../api", "namespace": "T.Server", "formsInclude": ["Order"] }""")]
     // 둘 다 지정
-    [InlineData("""{ "type": "TypeScript", "outputPath": "../ts", "formsOutputPath": "../ts/forms", "formsInclude": ["Order"], "formsExclude": ["OrderItem"] }""")]
+    [InlineData("""{ "type": "TypeScript", "outputPath": "../ts", "formsOutputPath": "../ts/forms", "formLayoutImport": "@example/layout", "formControlsImport": "@example/controls", "formSelectOptionsImport": "@example/enum-options", "formsInclude": ["Order"], "formsExclude": ["OrderItem"] }""")]
     // 미지 엔티티명
-    [InlineData("""{ "type": "TypeScript", "outputPath": "../ts", "formsOutputPath": "../ts/forms", "formsInclude": ["Ordr"] }""")]
+    [InlineData("""{ "type": "TypeScript", "outputPath": "../ts", "formsOutputPath": "../ts/forms", "formLayoutImport": "@example/layout", "formControlsImport": "@example/controls", "formSelectOptionsImport": "@example/enum-options", "formsInclude": ["Ordr"] }""")]
     public void Invalid_forms_filter_config_fails_the_build(string targetJson)
     {
         var mddDir = Scaffold(targetJson, out var root);
