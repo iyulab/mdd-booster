@@ -186,10 +186,13 @@ public class AspectBuildTests
     [Fact]
     public void The_form_MDD022_names_is_one_that_builds()
     {
-        var suggested = Implicit.Replace(
+        // The raw literal carries the checkout's line endings (CRLF where Git converts them), so the
+        // edit is made on normalized text — matching "\n" against CRLF would replace nothing.
+        var model = Implicit.ReplaceLineEndings("\n");
+        var suggested = model.Replace(
             "## AssetMaintenanceProfile\n- asset_id: identifier @pk @reference(Asset)\n",
             "## AssetMaintenanceProfile ::aspect(Asset)\n");
-        Assert.NotEqual(Implicit, suggested);
+        Assert.NotEqual(model, suggested);
 
         var mddDir = Scaffold(suggested, out var root, out _);
         using var stderr = new ConsoleErrorCapture(this);
