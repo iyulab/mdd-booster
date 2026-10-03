@@ -69,6 +69,9 @@ public static class PgTypeMapper
             "json" => "jsonb",
             // bytea는 길이 상한 개념이 없다 — binary(n)의 길이 인자는 DDL에서 소실 (문서화된 완화)
             "binary" => "bytea",
+            // The xmin system column's type. The table renderer emits no column for a row version;
+            // this names what the views project under the field's name.
+            "rowversion" => "xid",
             _ => throw new NotSupportedException($"지원하지 않는 M3L 타입: '{m3lType}'"),
         };
     }

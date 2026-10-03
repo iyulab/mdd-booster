@@ -24,7 +24,19 @@ public static class M3lPrimitives
         "date", "time", "timestamp", "datetime",
         "phone", "email", "url",
         "json", "binary",
+        "rowversion",
     };
+
+    /// <summary>
+    /// The row version the database engine maintains (specification §10.4.1) — the one primitive
+    /// whose storage differs by dialect: a <c>rowversion</c> column on SQL Server, the <c>xmin</c>
+    /// system column on PostgreSQL (no column of its own).
+    /// </summary>
+    public const string RowVersion = "rowversion";
+
+    /// <summary>Whether <paramref name="field"/> is the model's row version.</summary>
+    public static bool IsRowVersion(M3L.Native.FieldNode field) =>
+        string.Equals(field.Type, RowVersion, StringComparison.Ordinal);
 
     public static bool Contains(string? typeName) =>
         typeName is not null && All.Contains(typeName);

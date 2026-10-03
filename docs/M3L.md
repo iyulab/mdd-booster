@@ -312,6 +312,32 @@ deliberate:
 No format validation is emitted for any of these types — the bound is the length axis
 only. A 321-character value is refused; `not-an-email` is not.
 
+#### 2.3.1.2 Row Versions
+
+```markdown
+- row_version: rowversion        # Set by the database engine on every write to the row
+```
+
+A `rowversion` field holds the row's version: the database engine changes it on every write,
+which makes it the model's optimistic-concurrency token — an update can be made conditional on
+the row still being at the version the client read. The value is opaque. A model has at most one
+(`M3L-E023`), and it is never nullable, an array or defaulted, and never `@pk`, `@primary`,
+`@unique`, `@reference` or `@fk` (`M3L-E024`). How it is stored is a consumer mapping.
+
+**What this generator implements** — the mapping differs by dialect, and every target follows it:
+
+| | SQL Server | PostgreSQL |
+|---|---|---|
+| Table | `[RowVersion] ROWVERSION NOT NULL` | no column — the `xmin` system column is the version |
+| Views | projected like any column | `b.xmin AS row_version` where the view reads the table; the name where it reads another view |
+| Entities (write and read) | `[Timestamp] public byte[] RowVersion` | `[Timestamp] public uint RowVersion`, mapped to `xmin` on the table |
+| TypeScript | `RowVersion: string \| number` — the wire shape is the server's; compare, never compute | same |
+| Field schema / forms | `readOnly: true`, not `required`; no form control | same |
+
+`[Timestamp]` on the write type makes an update with a stale version affect no row; on the read
+type it is what an OData model builder turns into the entity's ETag. An index on a row version is
+generated on SQL Server and refused on PostgreSQL, where a system column cannot be indexed.
+
 #### 2.3.2 Extended Field Format (For Complex Cases Only)
 
 **Use Basic Format whenever possible.** Extended format is only for very complex field definitions:

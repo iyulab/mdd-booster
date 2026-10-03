@@ -23,6 +23,7 @@ public class PgTypeMapperTests
     [InlineData("datetime", null, "timestamptz")]
     [InlineData("json", null, "jsonb")]
     [InlineData("binary", null, "bytea")]
+    [InlineData("rowversion", null, "xid")]
     [InlineData("string", "30", "varchar(30)")]
     public void Map_SimpleTypes(string m3lType, string? param, string expected)
     {

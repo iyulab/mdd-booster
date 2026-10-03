@@ -2,6 +2,7 @@ using System.Text;
 using M3L.Native;
 using MddBooster.Core.Naming;
 using MddBooster.Core.Semantic;
+using MddBooster.Core.Types;
 
 namespace MddBooster.Generators.Sql.Postgres;
 
@@ -40,6 +41,16 @@ public static class PgFullViewRenderer
     /// <see cref="FullViewRenderer.IsDerivedColumn"/> 게이트 재사용 전용 — SQL 텍스트에는
     /// 나타나지 않는다(T-SQL 쪽과 동일한 딕셔너리를 그대로 공유해도 무방).
     /// </param>
+    /// <summary>
+    /// One stored field in a view's projection. The row version is the exception: on a table it is
+    /// the <c>xmin</c> system column, projected under the field's name; a view (the UdView a
+    /// FullView reads through) has no system columns and already carries it under that name.
+    /// </summary>
+    internal static string ProjectBaseColumn(FieldNode field, string alias, bool sourceIsTable) =>
+        sourceIsTable && M3lPrimitives.IsRowVersion(field)
+            ? $"{alias}.xmin AS {field.Name}"
+            : $"{alias}.{field.Name}";
+
     public static string Render(
         ViewPlan plan,
         string schema,
@@ -62,8 +73,8 @@ public static class PgFullViewRenderer
         var basePk = ModelPrimaryKey.Find(model)
             ?? throw new InvalidOperationException($"모델 '{model.Name}'에 PK가 없어 Rollup 상관 서브쿼리를 렌더할 수 없습니다.");
 
-        var baseColumns = BaseColumns.StoredFields(model, excludeFieldInternal: true).Select(f => f.Name);
-        var baseProjection = string.Join(", ", baseColumns.Select(c => baseAlias + "." + c));
+        var baseProjection = string.Join(", ", BaseColumns.StoredFields(model, excludeFieldInternal: true)
+            .Select(f => ProjectBaseColumn(f, baseAlias, sourceIsTable: !plan.NeedsUdView)));
 
         var lookups = plan.Lookups.Where(f => !EntitySurface.IsFieldInternal(f)).ToList();
         var rollups = plan.Rollups.Where(f => !EntitySurface.IsFieldInternal(f)).ToList();

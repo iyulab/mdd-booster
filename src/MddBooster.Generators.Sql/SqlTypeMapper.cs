@@ -67,6 +67,8 @@ public static class SqlTypeMapper
             "json" => "NVARCHAR(MAX)",
             "binary" when p0 is not null => $"VARBINARY({p0})",
             "binary" => "VARBINARY(MAX)",
+            // The engine sets the value on every write; the column is the row's version.
+            "rowversion" => "ROWVERSION",
             _ => throw new NotSupportedException($"지원하지 않는 M3L 타입: '{m3lType}'"),
         };
     }

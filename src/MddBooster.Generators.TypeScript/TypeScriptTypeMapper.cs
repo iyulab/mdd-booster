@@ -55,6 +55,10 @@ public static class TypeScriptTypeMapper
             "url" => "string",
             "json" => "string",
             "binary" => "string",
+            // Opaque, and its wire shape follows the database the server runs on: SQL Server's
+            // row version serializes as a base64 string, PostgreSQL's (xmin) as a number. A client
+            // compares it for equality or, better, sends the entity's ETag back — never computes.
+            "rowversion" => "string | number",
             _ => throw new NotSupportedException($"Unsupported M3L type: '{m3lType}'"),
         };
     }

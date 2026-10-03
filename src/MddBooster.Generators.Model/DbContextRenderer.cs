@@ -334,7 +334,7 @@ public static class DbContextRenderer
             sb.Append("        modelBuilder.Entity<").Append(name).AppendLine(">(e =>");
             sb.AppendLine("        {");
             sb.Append("            e.ToTable(\"").Append(table).AppendLine("\");");
-            AppendPostgresColumns(sb, model, pk);
+            AppendPostgresColumns(sb, model, pk, readsTable: true);
             AppendIndexes(sb, model, name, table, isPostgres: true);
             AppendSectionIndexes(sb, model, name, table, isPostgres: true);
             sb.AppendLine("        });");
@@ -343,7 +343,8 @@ public static class DbContextRenderer
             sb.AppendLine("        {");
             sb.AppendLine("            e.ToTable((string?)null);");
             sb.Append("            e.ToView(\"").Append(extView).AppendLine("\");");
-            AppendPostgresColumns(sb, model, pk);
+            // The read type reads the table itself only when no view backs it.
+            AppendPostgresColumns(sb, model, pk, readsTable: extView == table);
             if (backing == "full")
             {
                 AppendPostgresDerivedColumns(sb, model);
@@ -352,14 +353,25 @@ public static class DbContextRenderer
         }
     }
 
-    private static void AppendPostgresColumns(StringBuilder sb, ResolvedModel model, FieldNode? pk)
+    /// <param name="readsTable">
+    /// Whether this mapping reads the table (the write type, or a read type no view backs) rather
+    /// than a view. Only a row version cares: PostgreSQL keeps it in the <c>xmin</c> system column,
+    /// which a table has and a view does not — the views project it under the field's name.
+    /// </param>
+    private static void AppendPostgresColumns(StringBuilder sb, ResolvedModel model, FieldNode? pk, bool readsTable)
     {
         foreach (var field in BaseColumnsOf(model))
         {
             // 공유/명명 PK 필드는 엔티티에 별도 속성이 없다 — 상속된 Id가 그 컬럼이다.
             var property = ReferenceEquals(field, pk) ? "Id" : NameCasing.ToPascalCase(field.Name);
+            // A row version on a table is `xmin`. Named explicitly rather than left to Npgsql's
+            // convention, because an explicit column name — the one every other property gets —
+            // overrides that convention.
+            var column = readsTable && MddBooster.Core.Types.M3lPrimitives.IsRowVersion(field)
+                ? "xmin"
+                : field.Name;
             sb.Append("            e.Property(x => x.").Append(property)
-              .Append(").HasColumnName(\"").Append(field.Name).Append("\")");
+              .Append(").HasColumnName(\"").Append(column).Append("\")");
             if (string.Equals(field.Type, "json", StringComparison.Ordinal))
             {
                 sb.Append(".HasColumnType(\"jsonb\")");

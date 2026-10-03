@@ -34,7 +34,11 @@ public static class CSharpTypeMapper
     /// caller ensures the generated enum lives in the same namespace).
     /// Otherwise delegates to <see cref="Map"/> for primitives.
     /// </summary>
-    public static string MapFieldType(string m3lType, IReadOnlySet<string>? knownEnumNames)
+    /// <param name="postgres">
+    /// Whether the entities map to PostgreSQL. Only <c>rowversion</c> depends on it — see
+    /// <see cref="Map"/>.
+    /// </param>
+    public static string MapFieldType(string m3lType, IReadOnlySet<string>? knownEnumNames, bool postgres = false)
     {
         if (string.IsNullOrWhiteSpace(m3lType))
             throw new ArgumentException("m3lType is empty.", nameof(m3lType));
@@ -44,10 +48,16 @@ public static class CSharpTypeMapper
             return NameCasing.ToPascalCase(m3lType);
         }
 
-        return Map(m3lType);
+        return Map(m3lType, postgres);
     }
 
-    public static string Map(string m3lType)
+    /// <remarks>
+    /// <c>rowversion</c> is the one type whose CLR shape depends on the database: SQL Server keeps
+    /// the row version in a <c>rowversion</c> column EF reads as <c>byte[]</c>, while PostgreSQL has
+    /// no such column and EF (Npgsql) maps a <c>uint</c> row version to the <c>xmin</c> system
+    /// column instead. Every other type maps the same way for both.
+    /// </remarks>
+    public static string Map(string m3lType, bool postgres = false)
     {
         if (string.IsNullOrWhiteSpace(m3lType))
             throw new ArgumentException("m3lType is empty.", nameof(m3lType));
@@ -76,6 +86,7 @@ public static class CSharpTypeMapper
             "url" => "string",
             "json" => "string",
             "binary" => "byte[]",
+            "rowversion" => postgres ? "uint" : "byte[]",
             _ => throw new NotSupportedException($"Unsupported M3L type: '{m3lType}'"),
         };
     }
@@ -103,9 +114,10 @@ public static class CSharpTypeMapper
     /// types produce an empty string because the auto-property block closes
     /// itself and appending <c>;</c> would be a syntax error.
     /// </summary>
-    public static string DefaultInitializer(string m3lType) => m3lType switch
+    public static string DefaultInitializer(string m3lType, bool postgres = false) => m3lType switch
     {
         "binary" => " = Array.Empty<byte>();",
+        "rowversion" => postgres ? string.Empty : " = Array.Empty<byte>();",
         _ when IsReferenceType(m3lType) => " = string.Empty;",
         _ => string.Empty,
     };

@@ -18,6 +18,20 @@
 
 ## [Unreleased]
 
+### 행 버전 `rowversion` — 모델이 낙관적 동시성 토큰을 선언한다 (파서 `M3L.Native` 0.18.0)
+
+- M3L 0.18.0 의 `rowversion` 타입(데이터베이스 엔진이 쓰기마다 바꾸는 행 버전)을 모든 타깃이 방출한다. 방언에 따라 저장이 갈린다:
+  - **SQL Server** — `[RowVersion] ROWVERSION NOT NULL` 열 · 엔티티 `[Timestamp] public byte[] RowVersion` · 뷰는 다른 열처럼 투영.
+  - **PostgreSQL** — **열이 없다**(시스템 열 `xmin` 이 행 버전) · 엔티티 `[Timestamp] public uint RowVersion` · 테이블을 읽는 매핑(쓰기 엔티티,
+    뷰 없는 읽기 엔티티)은 `HasColumnName("xmin")`, 뷰는 테이블을 읽을 때 `b.xmin AS row_version` 으로 투영하고 다른 뷰를 읽을 때는 그 이름을 그대로.
+  - `[Timestamp]` 는 쓰기·읽기 두 클래스 모두 — 쓰기 쪽은 EF 가 낡은 버전의 갱신을 «영향 0행»으로 만들고, 읽기 쪽은 OData 모델 빌더의 ETag 원천이 된다.
+  - **TypeScript** — `entities_gen.ts` 에 `RowVersion: string | number`(wire 모양은 서버 방언 — 비교만) · `field_schema_gen.ts` 에 `readOnly: true`
+    (`required` 없음) · 생성 폼에 컨트롤 없음.
+- PostgreSQL 에서 행 버전에 건 인덱스(`@index` · `### Indexes`)는 시스템 열에 걸 수 없어 **빌드가 아무것도 쓰기 전에 거절**한다(모델 오류, 종료 코드 3).
+  SQL Server 는 그대로 인덱스를 낸다.
+- 파서 `M3L.Native` 0.17.0 → 0.18.0. 새 검증 오류 `M3L-E023`(모델당 행 버전 둘 이상)·`M3L-E024`(행 버전이 nullable·배열·기본값이거나
+  `@pk`·`@primary`·`@unique`·`@reference`·`@fk`)가 빌드를 세운다(종료 코드 3).
+
 ### 🔴 폼을 내는 TypeScript 타깃은 import 모듈 셋을 전부 적는다 — 기본값 없음
 
 - `formLayoutImport`·`formControlsImport`·`formSelectOptionsImport` 의 기본값을 없앴다. 종전 기본값은 소비자 트리의 폴더 배치

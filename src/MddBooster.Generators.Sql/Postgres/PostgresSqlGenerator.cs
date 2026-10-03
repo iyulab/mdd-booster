@@ -43,6 +43,20 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
 
     public string Name => "sql-pg";
 
+    /// <summary>
+    /// Refuses what this dialect cannot carry out, before any target writes a file.
+    /// </summary>
+    public void Validate(GeneratorContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var violations = context.Models.SelectMany(PgTableRenderer.RowVersionIndexViolations).ToList();
+        if (violations.Count > 0)
+        {
+            throw new GeneratorRefusalException(GeneratorRefusalKind.Model, string.Join(Environment.NewLine, violations));
+        }
+    }
+
     public void Generate(GeneratorContext context)
     {
         ArgumentNullException.ThrowIfNull(context);

@@ -26,6 +26,10 @@
      hop, so its property must be nullable even though the first key is
      required. Each hop is its own join in the view, and the compile gates are
      what prove the generated types agree with that.
+  6. A row version on WorkOrder, whose read type is a FullView with rollups and
+     a computed layer above it. The version is a column on one dialect and a
+     system column on the other, opaque to TypeScript, and absent from the form;
+     the compile gates and the clean-stderr gate prove every target agrees.
 
   Keep those shapes when editing. Growing the model is fine; flattening it is
   what makes the gate stop earning its runtime.
@@ -317,6 +321,7 @@
 - closed_at: timestamp? "종료시각"
 - labor_hours: decimal(8,2) = 0 "작업시간"
 - description: text? "상세"
+- row_version: rowversion "행 버전"
 
 - asset_tag: string @lookup(asset_id.tag) "설비 태그"
 - asset_name: string @lookup(asset_id.name) "설비명"

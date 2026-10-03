@@ -167,6 +167,8 @@ public static class TsFormRenderer
             .Where(f => f.Kind == FieldKind.Stored)
             .Where(f => !HasAttribute(f, "pk"))
             .Where(f => !IsInheritedTimestamp(f.Name))
+            // The row version is set by the database engine on every write — nobody enters it.
+            .Where(f => !MddBooster.Core.Types.M3lPrimitives.IsRowVersion(f))
             .ToList();
 
         if (storedFields.Count == 0) return null;

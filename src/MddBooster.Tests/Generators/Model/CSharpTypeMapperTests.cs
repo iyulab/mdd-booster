@@ -80,4 +80,17 @@ public class CSharpTypeMapperTests
     {
         Assert.Equal(expected, CSharpTypeMapper.DefaultInitializer(m3l));
     }
+
+    /// <summary>
+    /// The row version is the one type whose CLR shape follows the database: SQL Server reads its
+    /// rowversion column as bytes, PostgreSQL's xmin is a 32-bit transaction id.
+    /// </summary>
+    [Theory]
+    [InlineData(false, "byte[]", " = Array.Empty<byte>();")]
+    [InlineData(true, "uint", "")]
+    public void Rowversion_follows_the_dialect(bool postgres, string type, string initializer)
+    {
+        Assert.Equal(type, CSharpTypeMapper.Map("rowversion", postgres));
+        Assert.Equal(initializer, CSharpTypeMapper.DefaultInitializer("rowversion", postgres));
+    }
 }

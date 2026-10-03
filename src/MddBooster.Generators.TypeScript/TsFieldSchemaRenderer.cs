@@ -47,7 +47,7 @@ public static class TsFieldSchemaRenderer
 
             var constrainedFields = schemaFields
                 .Select(f => (Field: f, Constraints: ExtractConstraints(f, model, models)))
-                .Where(pair => pair.Constraints.IsDerived || pair.Constraints.HasAny)
+                .Where(pair => pair.Constraints.IsDerived || pair.Constraints.EngineSet || pair.Constraints.HasAny)
                 .ToList();
 
             if (constrainedFields.Count == 0) continue;
@@ -71,6 +71,10 @@ public static class TsFieldSchemaRenderer
                 if (constraints.Derived != null)
                 {
                     parts.Add($"derived: '{constraints.Derived}'");
+                    parts.Add("readOnly: true");
+                }
+                else if (constraints.EngineSet)
+                {
                     parts.Add("readOnly: true");
                 }
 
@@ -113,7 +117,11 @@ public static class TsFieldSchemaRenderer
         // for; the write-axis half is dropped.
         var isDerived = derived is not null;
 
-        var required = !isDerived && !field.Nullable;
+        // The row version is stored but never supplied: the database engine sets it on every write.
+        // Read-only for the same reason a derived field is, so the write-axis half is dropped too.
+        var engineSet = MddBooster.Core.Types.M3lPrimitives.IsRowVersion(field);
+
+        var required = !isDerived && !engineSet && !field.Nullable;
 
         // Shared with the generated form's `maxlength` — see FieldAttributes.EffectiveMaxLength.
         // Extracting it separately here is how the two would drift into disagreeing about the
@@ -143,7 +151,7 @@ public static class TsFieldSchemaRenderer
         }
         string? group = MddBooster.Core.Ast.FieldAttributes.EffectiveGroup(field);
 
-        return new FieldConstraints(required, maxLength, min, max, label, group, derived);
+        return new FieldConstraints(required, maxLength, min, max, label, group, derived, engineSet);
     }
 
     private static bool HasAttribute(FieldNode field, string name) =>
@@ -155,7 +163,7 @@ public static class TsFieldSchemaRenderer
 
     private record FieldConstraints(
         bool Required, int? MaxLength, double? Min, double? Max,
-        string? Label, string? Group, string? Derived)
+        string? Label, string? Group, string? Derived, bool EngineSet)
     {
         /// <summary>
         /// True when the field has at least one constraint or metadata (required, maxLength, min, max, label, group).

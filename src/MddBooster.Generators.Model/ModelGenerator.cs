@@ -60,7 +60,8 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
         foreach (var model in context.Models)
         {
             var backing = DetermineExtBacking(model, customExtViewModels);
-            var rendered = EntityPairRenderer.Render(model, _options.Namespace, enumNames, backing, oneToOne, context.Models);
+            var rendered = EntityPairRenderer.Render(
+                model, _options.Namespace, enumNames, backing, oneToOne, context.Models, _options.PostgresNaming);
             var baseName = model.Name;
             File.WriteAllText(Path.Combine(entityDir, $"I{baseName}.cs"), rendered.Interface);
             File.WriteAllText(Path.Combine(entityDir, $"{baseName}.cs"), rendered.Write);

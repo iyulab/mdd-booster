@@ -393,11 +393,15 @@ DDL과 EF 매핑이 서로 다른 네이밍을 전제하게 된다).
 - `emitSqlProj`/`emitRefreshScript`는 SSDT 개념 — postgres와 함께 명시하면 오류.
 - 타입 매핑 주의점: `timestamp/datetime→timestamptz` · `string→text`(길이 지정 시
   `varchar(n)`) · `json→jsonb` · `byte→smallint`(PG에 1바이트 정수 없음 — 승격) ·
-  `binary(n)→bytea`(**길이 상한 소실** — bytea에 길이 개념 없음).
+  `binary(n)→bytea`(**길이 상한 소실** — bytea에 길이 개념 없음) ·
+  `rowversion` → **열 없음**(시스템 열 `xmin` 이 행 버전이다 — 뷰는 테이블을 읽을 때
+  `b.xmin AS 필드명` 으로 투영한다. 행 버전에 건 인덱스는 PG 에서 걸 수 없어 **빌드가 거절**한다(종료 코드 3)).
 
 **Model 타깃 (postgres)** — DbContext에 명시 매핑을 굽는다(런타임 네이밍 컨벤션 추론
 없음): 엔티티별 `ToTable("snake")` + 저장 필드 전체 `HasColumnName("필드명")`,
-공유 PK는 상속 `Id`를 PK 물리명으로, `json` 필드는 `HasColumnType("jsonb")`.
+공유 PK는 상속 `Id`를 PK 물리명으로, `json` 필드는 `HasColumnType("jsonb")`,
+`rowversion` 필드는 테이블을 읽는 매핑(쓰기 엔티티·뷰 없는 읽기 엔티티)에서 `HasColumnName("xmin")`
+— 명시 열 이름이 Npgsql 의 `xmin` 관례를 덮으므로 이름을 적는다.
 Ext 읽기 모델은 뷰 backing이 없으면 같은 테이블을 읽고, 뷰 backing이 있으면 Sql 타깃이
 실제로 방출하는 이름(`{table}_full_view`/`{table}_ud_view`)을 그대로 가리키며 비-internal
 Lookup/Rollup 파생 컬럼도 `HasColumnName`으로 명시한다. Computed 파생 필드 또는 `@indexed`
@@ -503,6 +507,7 @@ UdView 위에 있어 이미 거르고, 기본 테이블을 읽는 서브쿼리�
 | `string(n)` | `[StringLength(n)]` | **널 허용 여부와 무관** — `string(50)?` 도 상한 50을 갖는다 |
 | `phone`·`email`·`url` | `[StringLength(n)]` | 상한이 **선언이 아니라 타입**에서 온다(명세 §10.4.2 — 30/320/2048). 컬럼·엔티티·필드 스키마·생성 폼이 같은 `n` 을 쓴다 |
 | `= <value>` | 속성 초기화자 | `= true;` · `= 3;` · `= "NEW";` · `= 0.5m;` · `= Status.Draft;` |
+| `rowversion` | `[Timestamp]` | 쓰기·읽기 두 클래스 모두. 쓰기 쪽은 EF 가 엔진이 생성하는 동시성 토큰으로 읽어 낡은 버전의 갱신이 아무 행도 바꾸지 않게 하고, 읽기 쪽은 OData 모델 빌더가 ETag 원천으로 읽는다. CLR 타입은 방언을 따른다 — SQL Server `byte[]`, PostgreSQL `uint`(`xmin`). `[Required]` 는 붙지 않는다(호출자가 주는 값이 아니다) |
 | `@immutable` | `[Editable(false)]` | 저장 필드에만 붙는다. 아래 TypeScript 타깃의 생성 폼 `disabled` prop과 같은 선언을 미러링 — 둘 다 메타데이터일 뿐, 이 리포가 생성하는 어떤 API 계층도 이를 강제하지 않는다 |
 | 필드 단위 `@unique` | `HasIndex(...).IsUnique()` | 엔티티 속성이 아니라 `DbContext.OnModelCreating`의 fluent 설정 — SQL 타깃의 `UK_{Model}_{Column}`/PG의 `uq_{table}_{field}`와 같은 이름을 `HasDatabaseName`으로 명시한다. 널 허용 컬럼도 분기 없이 같은 한 줄만 방출 — SQL Server 프로바이더가 unique index의 널 허용 컬럼에 `WHERE ... IS NOT NULL` 필터를 자동으로 붙이므로 (SQL 타깃의 filtered index와 동일 결과), PostgreSQL은 애초에 `UNIQUE`가 NULL을 distinct로 취급하므로 (둘 다 이 리포가 손으로 만드는 코드가 아니다) |
 | 필드 단위 `@index` | `HasIndex(...)` | 위와 같은 자리, `IX_{Model}_{Column}`/`ix_{table}_{field}` 이름. `@unique`와 함께 선언되면 `unique`만 방출한다(제약이 이미 인덱스를 소유 — SQL 타깃과 동일한 배제) |
@@ -749,6 +754,7 @@ export function enumToOptions(labels: Record<string, string>): /* USelect의 opt
 | `phone`·`email`·`url` | `UInput maxlength={n}` | 상한이 **선언이 아니라 타입**에서 온다(명세 §10.4.2 — 30/320/2048). `string(n)`과 같은 자리에 같은 값으로 방출된다. **길이 축 한정** — 형식 검증(`type="email"` 등)은 앱 계층 몫이라 컨트롤은 평문 입력 그대로다 |
 | `string`(무파라미터) | `UInput` | `NVARCHAR(MAX)`라 상한이 없다 — 방출할 것이 없다 |
 | `@reference` FK · `@slot` | **슬롯** — 호출부가 준 것만 그린다 | `slots` prop 과 그 키 전부가 **필수**다. 빈 칸으로 둘 슬롯은 `null` 로 명시한다 — 빠뜨리면 컴파일 오류 |
+| `rowversion` | **그리지 않는다** | 엔진이 쓰기마다 정하는 값이라 사람이 입력하지 않는다. `entities_gen.ts` 에는 `string \| number`(서버 방언의 wire 모양 — 비교만, 계산 금지), `field_schema_gen.ts` 에는 `readOnly: true`(`required` 없음) |
 
 
 > **`step`은 선택 옵션이 아니다.** `<input type="number">`의 `step` 기본값은 1이라, 없으면

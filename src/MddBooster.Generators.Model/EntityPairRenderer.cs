@@ -55,7 +55,8 @@ public static class EntityPairRenderer
         IReadOnlySet<string>? knownEnumNames = null,
         ExtBacking extBacking = ExtBacking.None,
         IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne = null,
-        IReadOnlyList<ResolvedModel>? allModels = null)
+        IReadOnlyList<ResolvedModel>? allModels = null,
+        bool postgres = false)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentException.ThrowIfNullOrWhiteSpace(ns);
@@ -108,12 +109,12 @@ public static class EntityPairRenderer
             .ToHashSet(StringComparer.Ordinal);
 
         return new RenderedPair(
-            Interface: RenderInterface(entityName, readOnlyStoredFields, ns, knownEnumNames),
-            Write: RenderClass(entityName, storedFields, derivedFields: null, ns, isExt: false, knownEnumNames, extBacking, model.Source, model.Name, oneToOne, nullableLookups),
-            Read: RenderClass(entityName, readOnlyStoredFields, readOnlyDerivedFields, ns, isExt: true, knownEnumNames, extBacking, model.Source, model.Name, oneToOne, nullableLookups));
+            Interface: RenderInterface(entityName, readOnlyStoredFields, ns, knownEnumNames, postgres),
+            Write: RenderClass(entityName, storedFields, derivedFields: null, ns, isExt: false, knownEnumNames, extBacking, model.Source, model.Name, oneToOne, nullableLookups, postgres),
+            Read: RenderClass(entityName, readOnlyStoredFields, readOnlyDerivedFields, ns, isExt: true, knownEnumNames, extBacking, model.Source, model.Name, oneToOne, nullableLookups, postgres));
     }
 
-    private static string RenderInterface(string entityName, IReadOnlyList<FieldNode> fields, string ns, IReadOnlySet<string>? knownEnumNames)
+    private static string RenderInterface(string entityName, IReadOnlyList<FieldNode> fields, string ns, IReadOnlySet<string>? knownEnumNames, bool postgres)
     {
         var sb = new StringBuilder();
         sb.AppendLine(Header);
@@ -132,7 +133,7 @@ public static class EntityPairRenderer
         sb.AppendLine("    global::System.Guid Id { get; }");
         foreach (var f in fields)
         {
-            var cs = CSharpTypeMapper.MapFieldType(f.Type!, knownEnumNames);
+            var cs = CSharpTypeMapper.MapFieldType(f.Type!, knownEnumNames, postgres);
             var nullable = f.Nullable ? "?" : string.Empty;
             sb.Append("    ").Append(cs).Append(nullable).Append(' ')
               .Append(NameCasing.ToPascalCase(f.Name)).AppendLine(" { get; }");
@@ -152,7 +153,8 @@ public static class EntityPairRenderer
         ModelNode source,
         string modelName,
         IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne,
-        IReadOnlySet<string> nullableLookups)
+        IReadOnlySet<string> nullableLookups,
+        bool postgres)
     {
         var className = isExt ? entityName + "Ext" : entityName;
         // Ext classes route to the SQL layer that actually exposes their
@@ -211,13 +213,13 @@ public static class EntityPairRenderer
         sb.AppendLine("{");
         foreach (var f in storedFields)
         {
-            RenderProperty(sb, f, knownEnumNames, nullableLookups, isExt);
+            RenderProperty(sb, f, knownEnumNames, nullableLookups, isExt, postgres);
         }
         if (derivedFields is { Count: > 0 })
         {
             foreach (var f in derivedFields)
             {
-                RenderProperty(sb, f, knownEnumNames, nullableLookups, isExt);
+                RenderProperty(sb, f, knownEnumNames, nullableLookups, isExt, postgres);
             }
         }
         if (isExt) RenderOneToOneNavigation(sb, modelName, oneToOne);
@@ -284,9 +286,10 @@ public static class EntityPairRenderer
         FieldNode f,
         IReadOnlySet<string>? knownEnumNames,
         IReadOnlySet<string>? nullableLookups,
-        bool isExt = false)
+        bool isExt,
+        bool postgres)
     {
-        var cs = CSharpTypeMapper.MapFieldType(f.Type!, knownEnumNames);
+        var cs = CSharpTypeMapper.MapFieldType(f.Type!, knownEnumNames, postgres);
 
         // A lookup read through an optional key at any hop yields NULL whenever that key is NULL
         // (each hop is a LEFT JOIN) — LookupPath.ResultNullable decided which, for the whole path.
@@ -315,7 +318,7 @@ public static class EntityPairRenderer
         var initializer = declaredInitializer
             ?? (effectiveNullable || isEnumField
                 ? string.Empty
-                : CSharpTypeMapper.DefaultInitializer(f.Type!));
+                : CSharpTypeMapper.DefaultInitializer(f.Type!, postgres));
 
         // [Column(TypeName = "decimal(p,s)")] for decimal fields with explicit precision.
         // Suppresses EF Core's "No store type specified" warning and aligns the CLR
@@ -427,6 +430,13 @@ public static class EntityPairRenderer
             // guard is a separate capability, and this repository does not provide one.
             if (MddBooster.Core.Ast.FieldAttributes.Has(f, "immutable"))
                 sb.AppendLine("    [Editable(false)]");
+
+            // [Timestamp] — the row version. On both classes, for two different readers: EF takes
+            // the write type's as a concurrency token the engine generates (so an update with a
+            // stale version affects no row), and the OData model builder takes the read type's as
+            // the ETag source. The runtime keeps a concurrency token out of every write body.
+            if (MddBooster.Core.Types.M3lPrimitives.IsRowVersion(f))
+                sb.AppendLine("    [Timestamp]");
         }
 
         // [Searchable] — @searchable, the fields free-text search is meant for. The runtime's $search

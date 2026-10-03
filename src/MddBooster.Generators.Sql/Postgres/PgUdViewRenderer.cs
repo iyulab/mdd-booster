@@ -25,9 +25,8 @@ public static class PgUdViewRenderer
         ArgumentException.ThrowIfNullOrWhiteSpace(tableName);
         ArgumentException.ThrowIfNullOrWhiteSpace(viewName);
 
-        var columns = BaseColumns.StoredFields(model, excludeFieldInternal: true)
-            .Select(f => f.Name);
-        var projection = string.Join(", ", columns.Select(c => "b." + c));
+        var projection = string.Join(", ", BaseColumns.StoredFields(model, excludeFieldInternal: true)
+            .Select(f => PgFullViewRenderer.ProjectBaseColumn(f, "b", sourceIsTable: true)));
 
         var sb = new StringBuilder();
         sb.AppendLine(Header);

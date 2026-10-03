@@ -184,6 +184,7 @@ public class ModelTargetAxisCoverageTests
             ["email"] = (TypeDisposition.Carried, "bounded by the type rather than a parameter; the bound becomes [StringLength(n)]"),
             ["phone"] = (TypeDisposition.Carried, "as email"),
             ["url"] = (TypeDisposition.Carried, "as email"),
+            ["rowversion"] = (TypeDisposition.Carried, "the engine owns the value; it becomes [Timestamp] — a concurrency token EF reads as generated on add and update"),
 
             // ---- constraint-bearing, not carried ----
             ["binary"] = (TypeDisposition.AsymmetricGap, "the (n) parameter sizes the column as VARBINARY(n); [MaxLength(n)] would be the counterpart, and its absence is asserted in FieldConstraintRenderTests"),

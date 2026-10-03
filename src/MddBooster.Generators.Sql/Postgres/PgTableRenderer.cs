@@ -3,6 +3,7 @@ using System.Text.Json;
 using M3L.Native;
 using MddBooster.Core.Naming;
 using MddBooster.Core.Semantic;
+using MddBooster.Core.Types;
 
 namespace MddBooster.Generators.Sql.Postgres;
 
@@ -170,7 +171,9 @@ public static class PgTableRenderer
         sb.AppendLine("(");
 
         var bodyLines = new List<string>();
-        bodyLines.AddRange(storedFields.Select(f => RenderColumn(f, enumLookup)));
+        bodyLines.AddRange(storedFields
+            .Where(f => !M3lPrimitives.IsRowVersion(f))   // the row version is xmin — no column
+            .Select(f => RenderColumn(f, enumLookup)));
         bodyLines.AddRange(constraints.Select(c => $"CONSTRAINT {c.Name} {c.Body}"));
 
         for (var i = 0; i < bodyLines.Count; i++)
@@ -307,6 +310,36 @@ public static class PgTableRenderer
                     string.Join(", ", cols)));
             }
         }
+    }
+
+    /// <summary>
+    /// Indexes the model declares on its row version. PostgreSQL keeps the row version in the
+    /// <c>xmin</c> system column — the table has no column of that name, and a system column
+    /// cannot be indexed — so each one is a declaration this dialect cannot carry out.
+    /// </summary>
+    /// <remarks>
+    /// A unique or key constraint on a row version is already refused by the language
+    /// (<c>M3L-E024</c>); an index is not, because SQL Server can index a <c>rowversion</c> column
+    /// (the usual way to find rows changed since a version), so the refusal is this dialect's.
+    /// </remarks>
+    public static IReadOnlyList<string> RowVersionIndexViolations(ResolvedModel model)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+
+        var violations = new List<string>();
+        foreach (var rowVersion in BaseColumns.StoredFields(model).Where(M3lPrimitives.IsRowVersion))
+        {
+            var fieldLevel = Has(rowVersion, "index");
+            var inSection = SectionIndexParser.Parse(model)
+                .Any(e => e.Columns.Contains(rowVersion.Name, StringComparer.Ordinal));
+            if (fieldLevel || inSection)
+            {
+                violations.Add(
+                    $"모델 '{model.Name}' 필드 '{rowVersion.Name}': rowversion 은 PostgreSQL 에서 시스템 열 xmin 이라 "
+                    + "인덱스를 걸 수 없습니다 — 그 인덱스 선언을 지우세요(SQL Server 방언은 허용).");
+            }
+        }
+        return violations;
     }
 
     private static string AnsiCheckValues(EnumNode enumNode) =>
