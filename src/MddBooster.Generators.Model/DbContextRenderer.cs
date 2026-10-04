@@ -28,7 +28,8 @@ public static class DbContextRenderer
         string ns,
         IReadOnlySet<string>? customExtViewModels = null,
         bool postgresNaming = false,
-        IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne = null)
+        IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne = null,
+        IReadOnlyList<ManyToOneNavigations.Navigation>? manyToOne = null)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentException.ThrowIfNullOrWhiteSpace(contextName);
@@ -102,6 +103,20 @@ public static class DbContextRenderer
               .Append(".WithOne(e => e.").Append(r.ReverseName).Append(')')
               .Append(".HasForeignKey<").Append(dependent).Append(">(e => e.Id)")
               .AppendLine(".OnDelete(DeleteBehavior.Cascade);");
+        }
+
+        // Read-type many-to-one navigations are configured, not left to convention. Convention pairs
+        // reference navigations between two types into a one-to-one when it finds one each way, and
+        // refuses to choose when it finds more — a read type with a one-to-one to a target and an
+        // ordinary reference to the same target is exactly that. Naming each of these as a
+        // many-to-one with no inverse leaves convention only the one-to-one pairs it already finds.
+        foreach (var n in manyToOne ?? [])
+        {
+            if (n.CollidesWith is not null) continue;
+            sb.Append("        modelBuilder.Entity<").Append(NameCasing.ToPascalCase(n.DependentModel)).Append("Ext>()")
+              .Append(".HasOne(e => e.").Append(n.Name).Append(')')
+              .Append(".WithMany()")
+              .Append(".HasForeignKey(e => e.").Append(NameCasing.ToPascalCase(n.ForeignKeyField)).AppendLine(");");
         }
 
         // The write entity carries the same key relationship, without navigations — the write types

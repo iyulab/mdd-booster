@@ -54,8 +54,33 @@ public sealed class SemanticAnalyzer
 
         ExtensionRules.Check(_models, diagnostics);
         AspectRules.Check(_models, diagnostics);
+        CheckManyToOneNavigationNames(diagnostics);
 
         return diagnostics;
+    }
+
+    /// <summary>
+    /// <c>MDD027</c> (warning): a reference key whose read-type navigation would take a name the read
+    /// type already uses — a declared field (typically a lookup spelled like the key without
+    /// <c>_id</c>) or a one-to-one navigation. The declared member keeps the name and the navigation is
+    /// not generated, so <c>$expand</c> cannot follow that key; saying so is the difference between a
+    /// missing navigation and a silently missing one.
+    /// </summary>
+    private void CheckManyToOneNavigationNames(List<SemanticDiagnostic> diagnostics)
+    {
+        var oneToOne = Generation.OneToOneRelationships.Describe(_models);
+        foreach (var n in Generation.ManyToOneNavigations.Describe(_models, oneToOne))
+        {
+            if (n.CollidesWith is null) continue;
+            var field = _models.First(m => m.Name == n.DependentModel).Fields.First(f => f.Name == n.ForeignKeyField);
+            diagnostics.Add(new SemanticDiagnostic(
+                "MDD027",
+                $"'{n.DependentModel}.{n.ForeignKeyField}' @reference({n.TargetModel}): 읽기 타입 navigation '{n.Name}' 이 " +
+                $"이미 있는 멤버({n.CollidesWith})와 이름이 같아 생성하지 않는다 — 이 키로는 $expand 할 수 없다. " +
+                "그 멤버의 이름을 바꾸면 navigation 이 생긴다.",
+                field.Loc,
+                SemanticSeverity.Warning));
+        }
     }
 
     private void CheckLookupPath(ResolvedModel model, FieldNode field, List<SemanticDiagnostic> diagnostics)

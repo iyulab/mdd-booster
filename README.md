@@ -579,11 +579,35 @@ public AssetMaintenanceProfileExt? MaintenanceProfile { get; set; }
 > 그 섹션은 현재 어떤 타깃도 읽지 않으며, 빌드는 이를 「소비되지 않는 요소」로 보고한다
 > (§"소비되지 않는 요소 회계"). 지금 쓸 수 있는 해소는 위 두 가지뿐이다.
 
-> ⚠️ **N:1 `$expand` 는 이것으로 열리지 않는다.** 여기서 생기는 것은 **1:1 선언(`@reference` +
-> `@unique`)에 한정된** navigation 이다. `@unique` 없는 일반 `@reference`(N:1)는 읽기 타입에
-> navigation 을 얻지 않으므로, 그쪽을 기대하고 `$expand` 를 쓰면 여전히 실패한다. 「navigation
-> 기반이 열렸다」를 「`$expand` 가 열렸다」로 읽지 말 것 — N:1 은 별도 수요가 생길 때 같은 기반
-> 위에 연다.
+### 참조 키(N:1) → 읽기 타입의 정방향 navigation (Model 타깃)
+
+일반 `@reference(X)` 키(`@unique` 도 `@pk` 도 아닌 것)는 의존 모델의 읽기 타입에 대상 **읽기 타입**을 가리키는 navigation 하나를 준다.
+OData 클라이언트가 참조 대상의 값(이름·코드 등)을 `$expand` 로 같은 요청에서 읽는 길이 이것이다.
+
+```markdown
+## Asset
+- id: identifier @pk @generated
+- lifecycle_state_id: identifier? @reference(AssetLifecycleState)
+```
+
+```csharp
+// AssetExt.cs
+public AssetLifecycleStateExt? LifecycleState { get; set; }
+```
+
+```
+GET /$data/Assets?$select=Name&$expand=LifecycleState($select=Code,Name)
+```
+
+| | |
+|---|---|
+| **정방향만** | 대상 쪽에는 아무것도 생기지 않는다 — 컬렉션 navigation 은 `$expand` 한 번이 끌어올 행 수에 상한이 없는 다른 표면이라, 키를 선언했다는 것만으로 열지 않는다 |
+| **이름·널 허용** | 1:1 의 정방향과 같다 — 키에서 `_id` 를 뗀 PascalCase, 키가 nullable 이면 navigation 도. 자기 참조(`parent_id → Parent`)도 생긴다 |
+| **관계 구성** | 생성 `DbContext` 가 각 navigation 을 역방향 없는 다대일(`HasOne(…).WithMany().HasForeignKey(…)`)로 명시한다. 1:1 과 달리 관례에 맡기지 않는 이유: 같은 대상에 1:1 키와 일반 키를 함께 가진 모델에서 EF 가 어느 navigation 이 어느 관계인지 고르지 못하고 컨텍스트 생성을 거절한다 |
+| **제외** | `@unique`·`@pk` 키(위의 1:1) · `@internal` 키(읽기 타입에 키가 없다) · `_id` 로 끝나지 않는 키(쓰기 엔티티의 navigation 과 같은 규칙) |
+| **이름이 이미 있으면** | 읽기 타입이 그 이름을 이미 쓰면(키 이름에서 `_id` 를 뺀 lookup 필드, 1:1 navigation) **선언된 멤버가 이긴다** — navigation 은 생성하지 않고 빌드가 `MDD027` 경고로 알린다. 멤버 이름을 바꾸면 생긴다 |
+
+`$expand` 가 닿는 셋의 읽기 정책은 런타임의 `$expand` 인가 검사가 적용한다. 쓰기 엔티티·인터페이스·SQL 은 이 navigation 과 무관하다.
 
 ### `::aspect` → PK 가 곧 base FK 인 테이블
 
@@ -1015,6 +1039,7 @@ consumer-repo/
 | MDD024(경고) | `mdd.json` 에 이 생성기가 정의하지 않은 키가 있다(루트 또는 `targets[n]`) — 무시되며, 가까운 알려진 키가 있으면 제안한다. 분석이 아니라 설정 단계에서 나오고, 다른 경고처럼 `treatWarningsAsErrors`·`warningsAsErrors` 로 빌드를 세울 수 있다 — 편집기 밖(CI)에서 오타를 잡는 길. `_` 로 시작하는 설명 키와 `$schema` 는 보고하지 않는다. `sources` 가 비어 있으면 설정 오류(종료 코드 4) |
 | MDD025(경고) | `rowversion` 행 버전에 `@internal` — 읽기 타입에서 빠져 그 셋이 ETag 를 내지 않는다(`If-Match` 조건부 쓰기가 사라진다) |
 | MDD026 | `@lookup` 이 다른 모델의 `rowversion` 을 읽음 — 행 버전은 그 행의 것이고, PostgreSQL 에서는 조인으로 읽을 열도 없다 |
+| MDD027(경고) | 참조 키의 읽기 타입 navigation 이름이 그 읽기 타입의 기존 멤버(lookup 필드·1:1 navigation)와 같다 — 선언된 멤버가 이름을 갖고 navigation 은 생성하지 않는다(그 키로는 `$expand` 불가) |
 
 `mdd build` 에서는 파서 검증기가 이 분석보다 먼저 돈다 — lookup 경로의 키에 `@reference` 가 없으면 `M3L-E002`, 경로 조각이
 그 자리의 모델에 없으면 `M3L-E022` 로 먼저 멈추므로 CLI 에서 `MDD004`·`MDD005`·`MDD006` 을 보는 일은 드물다. 이 분석기를

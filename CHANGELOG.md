@@ -16,6 +16,23 @@
 
 ---
 
+## [Unreleased]
+
+### 참조 키(N:1)가 읽기 타입에 navigation 을 얻는다 — `$expand` 로 참조 대상을 한 요청에 읽는다
+
+- 일반 `@reference(Target)` 키(`xxx_id`)마다 의존 모델의 **읽기 타입**에 대상 **읽기 타입**을 가리키는 정방향 navigation 이 생긴다 —
+  `lifecycle_state_id: identifier? @reference(AssetLifecycleState)` → `public AssetLifecycleStateExt? LifecycleState { get; set; }`.
+  이름은 1:1 과 같은 규칙(키에서 `_id` 를 뗀 PascalCase), 널 허용은 키를 따른다. 자기 참조도 생긴다. 대상 쪽에는 아무것도 생기지 않는다(컬렉션 없음).
+- 생성 `DbContext` 가 각 navigation 을 역방향 없는 다대일로 **명시 구성**한다(`HasOne(…).WithMany().HasForeignKey(…)`). 같은 대상에 1:1 키와 일반 키를
+  함께 가진 모델은 관례에 맡기면 EF 가 관계를 고르지 못해 컨텍스트가 만들어지지 않는다 — 구성이 그 모양을 풀어 둔다.
+- 쓰기 엔티티·인터페이스·SQL 은 바뀌지 않는다. 엔티티 파일은 두 방언에서 바이트 단위로 같다.
+- 제외: `@unique`·`@pk` 키(1:1 — 이미 양쪽 navigation 이 있다) · `@internal` 키(읽기 타입에 키가 없다) · `_id` 로 끝나지 않는 키(쓰기 쪽 navigation 과 같은 규칙).
+- 🆕 **`MDD027`(경고)** — navigation 이름이 읽기 타입의 기존 멤버(키 이름에서 `_id` 를 뺀 이름의 lookup 필드, 1:1 navigation)와 같으면 선언된 멤버가
+  이름을 갖고 navigation 은 생성하지 않는다. 그 키로는 `$expand` 할 수 없으니 멤버 이름을 바꾸면 생긴다.
+- 🔇 **읽기 표면(EDM)이 넓어진다** — 참조를 가진 셋마다 navigation 속성이 `$metadata` 에 나타나고 `$expand` 대상이 된다. 대상 셋의 읽기 정책은
+  런타임의 `$expand` 인가 검사가 적용한다. 다른 셋에 등록되지 않은(`@internal`·`excludeEntities`) 모델을 가리키는 navigation 이 그 데이터를 어떻게
+  다루는지는 런타임이 정한다 — 그 런타임 판의 CHANGELOG 를 함께 확인할 것.
+
 ## 0.37.0
 
 ### 행 버전 `rowversion` — 모델이 낙관적 동시성 토큰을 선언한다 (파서 `M3L.Native` 0.18.0)

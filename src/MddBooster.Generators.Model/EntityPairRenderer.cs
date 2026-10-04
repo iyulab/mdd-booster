@@ -49,6 +49,11 @@ public static class EntityPairRenderer
     /// optional key along the path makes the lookup's property optional. Omitted, only the first
     /// hop's key (on this model) is consulted.
     /// </param>
+    /// <param name="manyToOne">
+    /// The set's many-to-one navigations (<see cref="ManyToOneNavigations.Describe"/>) — computed once
+    /// for the set like <paramref name="oneToOne"/>, because which names they may take depends on the
+    /// one-to-one navigations around them. Omitted, the read type carries none.
+    /// </param>
     public static RenderedPair Render(
         ResolvedModel model,
         string ns,
@@ -56,7 +61,8 @@ public static class EntityPairRenderer
         ExtBacking extBacking = ExtBacking.None,
         IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne = null,
         IReadOnlyList<ResolvedModel>? allModels = null,
-        bool postgres = false)
+        bool postgres = false,
+        IReadOnlyList<ManyToOneNavigations.Navigation>? manyToOne = null)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentException.ThrowIfNullOrWhiteSpace(ns);
@@ -110,8 +116,8 @@ public static class EntityPairRenderer
 
         return new RenderedPair(
             Interface: RenderInterface(entityName, readOnlyStoredFields, ns, knownEnumNames, postgres),
-            Write: RenderClass(entityName, storedFields, derivedFields: null, ns, isExt: false, knownEnumNames, extBacking, model.Source, model.Name, oneToOne, nullableLookups, postgres),
-            Read: RenderClass(entityName, readOnlyStoredFields, readOnlyDerivedFields, ns, isExt: true, knownEnumNames, extBacking, model.Source, model.Name, oneToOne, nullableLookups, postgres));
+            Write: RenderClass(entityName, storedFields, derivedFields: null, ns, isExt: false, knownEnumNames, extBacking, model.Source, model.Name, oneToOne, manyToOne, nullableLookups, postgres),
+            Read: RenderClass(entityName, readOnlyStoredFields, readOnlyDerivedFields, ns, isExt: true, knownEnumNames, extBacking, model.Source, model.Name, oneToOne, manyToOne, nullableLookups, postgres));
     }
 
     private static string RenderInterface(string entityName, IReadOnlyList<FieldNode> fields, string ns, IReadOnlySet<string>? knownEnumNames, bool postgres)
@@ -153,6 +159,7 @@ public static class EntityPairRenderer
         ModelNode source,
         string modelName,
         IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne,
+        IReadOnlyList<ManyToOneNavigations.Navigation>? manyToOne,
         IReadOnlySet<string> nullableLookups,
         bool postgres)
     {
@@ -223,6 +230,7 @@ public static class EntityPairRenderer
             }
         }
         if (isExt) RenderOneToOneNavigation(sb, modelName, oneToOne);
+        if (isExt) RenderManyToOneNavigation(sb, modelName, manyToOne);
         sb.AppendLine("}");
         return sb.ToString();
     }
@@ -278,6 +286,36 @@ public static class EntityPairRenderer
                 sb.Append("    public ").Append(dependent).Append("? ").Append(r.ReverseName)
                   .AppendLine(" { get; set; }");
             }
+        }
+    }
+
+    /// <summary>
+    /// The many-to-one navigations on a read type: one per ordinary reference key, pointing at the
+    /// target's read type. Nullability follows the key, as on the forward side of a one-to-one.
+    /// </summary>
+    /// <remarks>
+    /// Names come from <see cref="ManyToOneNavigations.Describe"/>, which also decides that a name
+    /// already taken on this read type loses — a navigation marked as colliding is not emitted, so the
+    /// class always compiles and the analyzer says what was left out.
+    /// </remarks>
+    private static void RenderManyToOneNavigation(
+        StringBuilder sb, string modelName, IReadOnlyList<ManyToOneNavigations.Navigation>? manyToOne)
+    {
+        if (manyToOne is null || manyToOne.Count == 0) return;
+
+        foreach (var n in manyToOne)
+        {
+            if (n.CollidesWith is not null) continue;
+            if (!string.Equals(n.DependentModel, modelName, StringComparison.Ordinal)) continue;
+
+            var target = NameCasing.ToPascalCase(n.TargetModel) + "Ext";
+            sb.AppendLine();
+            if (n.IsOptional)
+                sb.Append("    public ").Append(target).Append("? ").Append(n.Name)
+                  .AppendLine(" { get; set; }");
+            else
+                sb.Append("    public ").Append(target).Append(' ').Append(n.Name)
+                  .AppendLine(" { get; set; } = null!;");
         }
     }
 
@@ -491,9 +529,7 @@ public static class EntityPairRenderer
     /// key named by the <c>xxx_id</c> convention. <see cref="DbContextRenderer"/> configures the
     /// relationship through that navigation, so both read the same rule.
     /// </summary>
-    internal static bool HasWriteNavigation(FieldNode f) =>
-        !string.IsNullOrEmpty(MddBooster.Core.Ast.FieldAttributes.FirstArg(f, "reference"))
-        && f.Name.EndsWith("_id", StringComparison.OrdinalIgnoreCase);
+    internal static bool HasWriteNavigation(FieldNode f) => ManyToOneNavigations.IsNavigableKey(f);
 
     /// <summary>
     /// Derives the EF Core navigation property name from a FK field name ending in <c>_id</c>.

@@ -56,12 +56,14 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
         // Computed once for the whole set, not per model: the navigation a read type gains on the
         // target side comes from a declaration in some other model, so no model can derive its own.
         var oneToOne = OneToOneRelationships.Describe(context.Models);
+        var manyToOne = ManyToOneNavigations.Describe(context.Models, oneToOne);
 
         foreach (var model in context.Models)
         {
             var backing = DetermineExtBacking(model, customExtViewModels);
             var rendered = EntityPairRenderer.Render(
-                model, _options.Namespace, enumNames, backing, oneToOne, context.Models, _options.PostgresNaming);
+                model, _options.Namespace, enumNames, backing, oneToOne, context.Models, _options.PostgresNaming,
+                manyToOne);
             var baseName = model.Name;
             File.WriteAllText(Path.Combine(entityDir, $"I{baseName}.cs"), rendered.Interface);
             File.WriteAllText(Path.Combine(entityDir, $"{baseName}.cs"), rendered.Write);
@@ -97,7 +99,8 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
             _options.Namespace,
             customExtViewModels,
             _options.PostgresNaming,
-            oneToOne);
+            oneToOne,
+            manyToOne);
         File.WriteAllText(Path.Combine(contextDir, $"{_options.DbContextName}.cs"), dbContext);
     }
 
