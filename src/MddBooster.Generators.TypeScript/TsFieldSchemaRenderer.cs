@@ -41,6 +41,7 @@ public static class TsFieldSchemaRenderer
             // model's own field list once rather than concatenating two passes.
             var schemaFields = model.Fields
                 .Where(f => f.Kind is FieldKind.Stored or FieldKind.Lookup or FieldKind.Rollup or FieldKind.Computed)
+                .Where(f => !EntitySurface.IsFieldInternal(f))
                 .Where(f => !HasAttribute(f, "pk"))
                 .Where(f => !IsInheritedTimestamp(f.Name))
                 .ToList();

@@ -50,7 +50,7 @@ public static class TsInterfaceRenderer
         var usedEnums = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var model in models)
         {
-            foreach (var f in model.Fields)
+            foreach (var f in model.Fields.Where(f => !EntitySurface.IsFieldInternal(f)))
             {
                 if (knownEnumNames is not null
                     && !string.IsNullOrWhiteSpace(f.Type)
@@ -104,12 +104,14 @@ public static class TsInterfaceRenderer
 
         var storedFields = model.Fields
             .Where(f => f.Kind == FieldKind.Stored)
+            .Where(f => !EntitySurface.IsFieldInternal(f))
             .Where(f => !HasAttribute(f, "pk"))
             .Where(f => !IsInheritedTimestamp(f.Name))
             .ToList();
 
         var extFields = model.Fields
             .Where(f => f.Kind is FieldKind.Lookup or FieldKind.Rollup or FieldKind.Computed)
+            .Where(f => !EntitySurface.IsFieldInternal(f))
             .ToList();
 
         if (!string.IsNullOrWhiteSpace(model.Description))

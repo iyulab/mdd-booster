@@ -165,6 +165,7 @@ public static class TsFormRenderer
     {
         var storedFields = model.Fields
             .Where(f => f.Kind == FieldKind.Stored)
+            .Where(f => !EntitySurface.IsFieldInternal(f))
             .Where(f => !HasAttribute(f, "pk"))
             .Where(f => !IsInheritedTimestamp(f.Name))
             // The row version is set by the database engine on every write — nobody enters it.

@@ -354,6 +354,27 @@ public static class GeneratedPermissions
 | `entities_gen.ts` · `field_schema_gen.ts` · `*Form_gen.tsx` | ❌ 유지 | 타입은 데이터 API 전용이 아니다 — 전용 엔드포인트로 관리되는 엔티티에도 유용하다 |
 | Sql · Model 타깃 전체 | ❌ 유지 | 스토리지·EF 매핑은 노출과 무관하다 |
 
+#### 필드 단위 `@internal` — 저장하되 노출하지 않는다
+
+비밀번호 해시·시크릿 해시처럼 **저장은 해야 하지만 데이터 API 로 나가면 안 되는 칸**은 그 필드에
+`@internal` 을 붙인다. 엔티티는 데이터 API 에 그대로 남고, 그 칸 하나만 빠진다.
+
+```markdown
+- password_hash: string(255) @not_null @internal "비밀번호 해시"
+```
+
+| 산출물 | 그 칸 |
+|---|---|
+| 기반 테이블 · 쓰기 엔티티(`Account`) · EF 매핑 | ✅ 그대로 — 저장·인증 경로가 쓴다 |
+| `FullView`/`UdView` 의 `SELECT` · 인터페이스(`IAccount`) · 읽기 타입(`AccountExt`) | ❌ 빠진다 (같은 빌드·같은 술어라 짝이 어긋나지 않는다) |
+| 데이터 API — OData 응답·`$select`·`$filter`·`$expand`, GraphQL 선택, 제네릭 POST/PATCH 본문 | ❌ 없다 — 두 표면이 모두 읽기 타입에서 만들어진다. 쓰기 본문에 그 칸을 실으면 모르는 속성으로 거절된다 |
+| `entities_gen.ts` · `field_schema_gen.ts` · `*Form_gen.tsx` | ❌ 빠진다 — 이 셋은 OData wire 모양의 미러인데, 그 칸은 어느 wire 에도 없다 |
+
+- **표식 하나가 두 표면을 함께 닫는다** — 런타임의 표면별 제외(`ODataModel.Exclude` + `GraphQL.Exclude`)를 두 벌로 걸 필요가 없다.
+- 이미 배포된 뷰는 재생성 시 `SELECT` 목록이 바뀐다 — 적용 전에 diff 로 범위를 볼 것.
+- 행 버전(`rowversion`)에 붙이면 `MDD025` 경고 — 읽기 타입에서 빠져 그 셋이 ETag 를 잃는다.
+- 이름 규약(`*_hash` 등)으로 추정해 빼지 않는다 — 노출 여부는 명시 표식으로만 정한다.
+
 ### PostgreSQL 방언 (`dialect: "postgres"`)
 
 Sql·Model 타깃은 `dialect` 노브를 받는다 — 기본 `"tsql"`(위 현행 동작), `"postgres"`는

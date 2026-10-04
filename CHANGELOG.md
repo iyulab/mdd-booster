@@ -18,6 +18,17 @@
 
 ## [Unreleased]
 
+### TypeScript 타깃이 필드 단위 `@internal` 을 따른다 — 어느 응답에도 없는 칸을 타입이 약속하지 않는다
+
+- `@internal` 이 붙은 **필드**가 `entities_gen.ts`(인터페이스) · `field_schema_gen.ts` · `*Form_gen.tsx`(생성 폼)에서 빠진다.
+  그 칸은 읽기 타입에 없어 데이터 API 응답에도 쓰기 본문에도 실리지 않는다 — 이 셋은 그 wire 모양의 미러라, 남겨 두면 타입은 오지 않는 값을
+  약속하고 폼은 서버가 모르는 속성으로 거절하는 본문을 만든다. 그 칸으로만 쓰이던 enum 은 `entities_gen.ts` 의 import 에서도 빠진다.
+- 🔴 **breaking(0.x)** — 그 칸을 읽던 TypeScript 코드는 컴파일 오류로 드러난다. 화면 코드가 `Omit<Account, 'PasswordHash'>` 처럼 손으로 깎던
+  자리는 생성 타입을 그대로 쓰면 된다.
+- 바뀌지 않는 것: **모델** 단위 `@internal` 엔티티의 TypeScript 타입은 그대로 생성된다(데이터 API 셋이 없는 엔티티의 타입은 전용 엔드포인트가 쓰는
+  모양일 수 있다). 그 타입에서 칸 하나를 빼려면 그 필드에 `@internal` 을 붙인다. `@internal` 이 붙지 않은 필드의 산출은 바이트 단위로 같다.
+- README 에 필드 단위 `@internal`(`0.15.0` 부터)의 절을 더했다 — 지금까지 CHANGELOG 에만 있었다.
+
 ### 참조 키(N:1)가 읽기 타입에 navigation 을 얻는다 — `$expand` 로 참조 대상을 한 요청에 읽는다
 
 - 일반 `@reference(Target)` 키(`xxx_id`)마다 의존 모델의 **읽기 타입**에 대상 **읽기 타입**을 가리키는 정방향 navigation 이 생긴다 —

@@ -24,10 +24,10 @@ namespace MddBooster.Core.Generation;
 /// <see cref="IsFieldInternal"/>은 같은 어휘(<c>@internal</c>)를 **필드** 결에 적용한다 —
 /// 엔티티 자체는 데이터 API에 남지만 그 필드 하나만 읽기 표면(뷰 SELECT·Ext 클래스)에서
 /// 빠진다. 기반 테이블·기반(Write) 엔티티에는 그대로 남는다 — 저장은 하되 노출하지 않는다.
-/// 이것도 <b>읽기(Read) 축</b>의 개념이다. TypeScript 타깃(interfaces·form·field schema)은
-/// 이를 <b>존중하지 않는다</b> — 엔티티 레벨과 같은 이유(타입/폼은 데이터 API 전용이 아니다)가
-/// 필드 레벨에도 동형으로 적용되고, 폼은 오히려 <b>쓰기(Write)</b> 축이라 방향이 반대다. 필드를
-/// 폼에서 편집 못 하게 막는 것은 별개의 축(쓰기 표면 제어)이며 이 타입이 표현하지 않는다.
+/// 읽기 타입이 데이터 API(OData·GraphQL)의 유일한 원천이므로, 그 칸은 응답에도 쓰기 본문에도
+/// 실리지 않는다. 그래서 그 wire 모양을 미러하는 TypeScript 타깃(interfaces·field schema·form)도
+/// 이를 <b>존중한다</b> — 엔티티 레벨과 비대칭인 것은 의도다: 데이터 API 셋이 없는 엔티티의
+/// 타입은 OData 미러가 아니지만, 셋이 있는 엔티티의 칸 하나는 여전히 그 미러의 일부다.
 /// </para>
 /// </remarks>
 public static class EntitySurface

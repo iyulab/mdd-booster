@@ -49,8 +49,10 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
         var enumsContent = TsEnumRenderer.RenderAll(declaredEnums, sharedEnums, _options.SharedTypesImport);
         File.WriteAllText(Path.Combine(outDir, "enums_gen.ts"), enumsContent);
 
-        // entities_gen.ts — @internal 은 존중하지 않는다(엔티티·필드 레벨 둘 다). 타입은
-        // 데이터 API 전용이 아니며 전용 엔드포인트로 관리되는 인프라 엔티티에도 타입은 유용하다.
+        // entities_gen.ts — 두 결의 @internal 을 다르게 다룬다. 필드 단위는 **존중한다**: 이 인터페이스는
+        // OData wire 모양의 미러인데, 그 칸은 읽기 타입에 없어 응답에도 쓰기 본문에도 실리지 않는다 —
+        // 남겨 두면 어떤 응답도 싣지 않는 값을 약속한다. 엔티티 단위는 존중하지 않는다: 데이터 API 셋이
+        // 아예 없는 엔티티의 타입은 OData 미러가 아니라 전용 엔드포인트가 쓰는 모양일 수 있다.
         var entitiesContent = TsInterfaceRenderer.RenderAll(models, enumNames, _options.SharedTypesImport);
         File.WriteAllText(Path.Combine(outDir, "entities_gen.ts"), entitiesContent);
 
@@ -65,13 +67,13 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
         var enumLabelsContent = TsEnumLabelsRenderer.RenderAll(declaredEnums, sharedEnums, _options.SharedTypesImport);
         File.WriteAllText(Path.Combine(outDir, "enum_labels_gen.ts"), enumLabelsContent);
 
-        // field_schema_gen.ts — @internal 필드도 존중하지 않는다, entities_gen.ts 와 같은 이유.
+        // field_schema_gen.ts — entities_gen.ts 와 같은 규칙(필드 단위 @internal 제외).
         var fieldSchemaContent = TsFieldSchemaRenderer.RenderAll(models);
         File.WriteAllText(Path.Combine(outDir, "field_schema_gen.ts"), fieldSchemaContent);
 
-        // {Entity}Form_gen.tsx (optional) — @internal 필드도 존중하지 않는다, entities_gen.ts 와
-        // 같은 이유. 필드를 폼에서 편집 못 하게 막는 것은 쓰기(Write) 축 관심사이고 @internal은
-        // 읽기(Read) 축 어휘라 이 형태로는 표현되지 않는다 — 별개 축, 별개 어휘가 필요하다.
+        // {Entity}Form_gen.tsx (optional) — 필드 단위 @internal 칸을 내지 않는다: 폼은 OData 쓰기 본문을
+        // 만드는데, 읽기 타입에 없는 칸은 EDM 에도 없어 서버가 모르는 속성으로 거절한다. «저장 칸을 폼에서
+        // 읽기 전용으로»는 별개의 쓰기 축(@immutable·@generated 등)이 맡는다.
         if (_options.FormsOutputPath is not null)
         {
             var formsDir = ConfiguredPathResolver.Resolve(
