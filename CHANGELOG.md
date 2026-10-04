@@ -18,7 +18,7 @@
 
 ## [Unreleased]
 
-### standalone `::view` → `CREATE VIEW` — Sql 타깃이 파생 뷰를 낸다 (파서 `M3L.Native` 0.18.1)
+### standalone `::view` → `CREATE VIEW` — Sql 타깃이 파생 뷰를 낸다 (파서 `M3L.Native` 0.19.0)
 
 - Sql 타깃이 M3L 명세 §4.7 의 standalone `::view` 를 뷰로 낸다 — T-SQL `dbo/Views_gen/<Name>.sql`(sqlproj·`RefreshViews` 포함) · PostgreSQL
   `views_gen/<snake_name>.sql`. from/join(모델 또는 다른 뷰) · `@from` 투영 · `@rollup`(FullView 와 같은 상관 서브쿼리) · `group_by` · 중첩.
@@ -27,8 +27,9 @@
   (그 방언이 만들지 않는 모델 뷰를 읽는 뷰, 그런 뷰를 읽는 뷰도).
 - Model·Api·TypeScript 타깃은 뷰를 읽지 않는다. Sql 타깃이 없는 빌드는 해석된 뷰가 생성되지 않는다고 경고한다(종전 «소비되지 않는 요소» 목록의
   `::view` 항목을 대신한다).
-- 파서 `M3L.Native` 0.18.0 → 0.18.1 — 뷰 `### Source` 의 따옴표 없는 지시문(`join: Order on Order.customer_id = Customer.id` · `order_by: name asc` ·
-  `group_by: [Customer.id, Customer.name]`)이 첫 단어 뒤에서 잘리던 결함이 고쳐진 판.
+- 파서 `M3L.Native` 0.18.0 → 0.19.0 — 뷰 `### Source` 의 따옴표 없는 지시문(`join: Order on Order.customer_id = Customer.id` · `order_by: name asc` ·
+  `group_by: [Customer.id, Customer.name]`)이 첫 단어 뒤에서 잘리던 결함이 고쳐진 판. 🔴 검증기가 뷰의 `join` 대상(`M3L-E004`)과 `@from` 참조(`M3L-E025`)도
+  검사한다 — 정의되지 않은 관계나 칸을 가리키는 뷰는 이제 m3l 검증 단계에서 빌드를 세운다(종료 코드 3).
 - 빌드가 standalone `::view` 를 모델에 대해 해석한다 — from/join 의 관계, `@from(Relation.field)`·join 조건·`group_by` 가 가리키는 열, `@rollup` 의 대상과 키.
   join 조건은 식이 아니라 **구조**로 읽는다(`Model.field = Model.field` 항을 `AND` 로 이은 것).
 - 🔴 새 오류 `MDD030` — 해석되지 않는 뷰(정의되지 않은 관계·열, 해석할 수 없는 join 조건, 원천 없는 열, 서로를 읽는 뷰)는 빌드를 세운다(종료 코드 3).
