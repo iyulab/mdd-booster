@@ -99,13 +99,7 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
         // 2. 뷰 — 대상 판정 + 순환 검출은 T-SQL 타깃(SqlGenerator)과 동일한 AST 레벨 로직
         // (FullViewCycleDetector/FullViewRenderer의 dialect-무관 정적 헬퍼)을 그대로 재사용한다.
         var allPlans = context.Models.Select(planner.Plan).ToList();
-        var derivedFieldsByModel = allPlans
-            .Where(p => p.NeedsFullView)
-            .ToDictionary(
-                p => p.Model.Name,
-                p => (IReadOnlySet<string>)new HashSet<string>(
-                    p.Lookups.Concat(p.Rollups).Concat(p.Computeds).Select(f => NameCasing.ToPascalCase(f.Name))),
-                StringComparer.Ordinal);
+        var derivedFieldsByModel = StandaloneViewSources.DerivedFieldsByModel(allPlans);
 
         var cycle = FullViewCycleDetector.Detect(allPlans, derivedFieldsByModel);
         if (cycle != null)
@@ -121,76 +115,7 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
                 "JOIN 한다), Rollup의 집계 대상을 원본 컬럼으로 바꿔 순환을 끊어야 한다.");
         }
 
-        // 이번 렌더러가 직접 지원하는 것은 Lookup/Rollup 파생 컬럼뿐이다 — Computed(표현식 문법이
-        // 방언마다 달라 안전한 자동 변환 불가) · @indexed Rollup(구체화 뷰 갱신 전략은 별도 결정)이
-        // 있는 모델은 스킵하고 경고한다. 부분 뷰(일부 파생 컬럼만 담은 FullView)는 만들지 않는다 —
-        // Model 타깃이 여전히 존재하지 않는 컬럼을 가리키는 이 이슈와 같은 결함 클래스가 재발한다.
-        var selfUnsupported = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var plan in allPlans.Where(p => p.NeedsFullView))
-        {
-            var nonInternalComputeds = plan.Computeds.Where(f => !EntitySurface.IsFieldInternal(f)).ToList();
-            if (nonInternalComputeds.Count > 0)
-            {
-                Console.Error.WriteLine(
-                    $"[sql-pg] 경고: 모델 '{plan.Model.Name}'의 Computed 파생 필드는 PG 방언이 아직 " +
-                    "방출하지 않는다(표현식 문법 차이로 안전한 자동 변환 불가) — 해당 뷰를 직접 만들기 전까지 Ext 질의는 실패한다.");
-                selfUnsupported.Add(plan.Model.Name);
-                continue;
-            }
-
-            var indexedRollups = plan.Rollups
-                .Where(f => !EntitySurface.IsFieldInternal(f))
-                .Where(f => FieldAttributes.Has(f, "indexed"))
-                .ToList();
-            if (indexedRollups.Count > 0)
-            {
-                Console.Error.WriteLine(
-                    $"[sql-pg] 경고: 모델 '{plan.Model.Name}'의 @indexed Rollup은 PG 방언이 아직 " +
-                    "방출하지 않는다(구체화 뷰 갱신 전략이 별도 결정 필요) — 해당 뷰를 직접 만들기 전까지 Ext 질의는 실패한다.");
-                selfUnsupported.Add(plan.Model.Name);
-            }
-        }
-
-        // 체이닝 전파 — A의 Lookup/Rollup이 B의 파생 컬럼을 거쳐 B의 FullView를 딛어야 하는데
-        // B가 (스스로든, 전파로든) 미지원이면 A도 존재하지 않을 뷰를 참조하게 된다.
-        var hardTargets = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-        foreach (var plan in allPlans.Where(p => p.NeedsFullView))
-        {
-            var targets = new HashSet<string>(StringComparer.Ordinal);
-            var lookups = plan.Lookups.Where(f => !EntitySurface.IsFieldInternal(f) && f.Lookup?.Path is not null);
-            foreach (var (target, _) in LookupJoinPlanner.FullViewDependencies(
-                         plan.Model, lookups, name => allPlans.FirstOrDefault(p => p.Model.Name == name)?.Model, derivedFieldsByModel))
-                targets.Add(target);
-            foreach (var rollup in plan.Rollups.Where(f => !EntitySurface.IsFieldInternal(f)))
-            {
-                var def = rollup.Rollup;
-                if (def is not null && FullViewRenderer.RollupReadsDerivedColumn(def, derivedFieldsByModel))
-                    targets.Add(def.Target);
-            }
-            hardTargets[plan.Model.Name] = targets;
-        }
-
-        var unsupported = new HashSet<string>(selfUnsupported, StringComparer.Ordinal);
-        bool changed;
-        do
-        {
-            changed = false;
-            foreach (var (modelName, targets) in hardTargets)
-            {
-                if (unsupported.Contains(modelName)) continue;
-                if (targets.Any(unsupported.Contains))
-                {
-                    unsupported.Add(modelName);
-                    changed = true;
-                    if (!selfUnsupported.Contains(modelName))
-                    {
-                        Console.Error.WriteLine(
-                            $"[sql-pg] 경고: 모델 '{modelName}'의 FullView는 아직 미지원인 다른 모델의 " +
-                            "파생 컬럼을 체이닝으로 딛고 있어 함께 보류한다 — 해당 뷰를 직접 만들기 전까지 Ext 질의는 실패한다.");
-                    }
-                }
-            }
-        } while (changed);
+        var unsupported = UnsupportedModels(allPlans, derivedFieldsByModel, Console.Error.WriteLine);
 
         var renderablePlans = allPlans
             .Where(p => p.NeedsAnyView && !unsupported.Contains(p.Model.Name))
@@ -230,6 +155,23 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
             }
         }
 
+        // standalone ::view — 이 방언이 생성하는 것만(식 있는 뷰 등은 빌드가 MDD029 로 이미 알렸다).
+        var skippedViews = StandaloneViewSources.PostgresSkipped(context.Views, context.Models);
+        var standaloneViews = context.Views.Where(v => !skippedViews.ContainsKey(v.Name)).ToList();
+        var standaloneViewNames = new Dictionary<string, string>(StringComparer.Ordinal);
+        var takenNames = new HashSet<string>(
+            tableNames.Values.Concat(fullViewNames.Values).Concat(udViewNames.Values), StringComparer.Ordinal);
+        foreach (var view in standaloneViews)
+        {
+            var name = PostgresIdentifiers.ToSnakeCase(view.Name);
+            if (PostgresIdentifiers.Check(name) is { } v)
+                violations.Add($"뷰 '{view.Name}' 이름: {v}");
+            else if (!takenNames.Add(name))
+                violations.Add($"뷰 '{view.Name}' 이름 '{name}' 이(가) 다른 테이블·뷰와 겹친다");
+            else
+                standaloneViewNames[view.Name] = name;
+        }
+
         if (violations.Count > 0)
         {
             throw new PostgresNamingException(violations);
@@ -265,6 +207,96 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
                 File.WriteAllText(Path.Combine(viewsGenDir, fullViewNames[plan.Model.Name] + ".sql"), sql);
             }
         }
+
+        foreach (var view in standaloneViews)
+        {
+            var sql = PgStandaloneViewRenderer.Render(
+                view, _options.Schema, tableNames, fullViewNames, standaloneViewNames, derivedFieldsByModel);
+            File.WriteAllText(Path.Combine(viewsGenDir, standaloneViewNames[view.Name] + ".sql"), sql);
+        }
+    }
+
+    /// <summary>
+    /// The models whose views (UdView and FullView) this dialect does not render — a non-internal
+    /// <c>@computed</c> or an <c>@indexed</c> rollup, or a FullView chained onto one of those. Shared with
+    /// <see cref="StandaloneViewSources.PostgresSkipped"/>, so a standalone view never reads a view that is not there.
+    /// </summary>
+    internal static HashSet<string> UnsupportedModels(
+        IReadOnlyList<ViewPlan> allPlans,
+        IReadOnlyDictionary<string, IReadOnlySet<string>> derivedFieldsByModel,
+        Action<string>? warn)
+    {
+            // 이번 렌더러가 직접 지원하는 것은 Lookup/Rollup 파생 컬럼뿐이다 — Computed(표현식 문법이
+            // 방언마다 달라 안전한 자동 변환 불가) · @indexed Rollup(구체화 뷰 갱신 전략은 별도 결정)이
+            // 있는 모델은 스킵하고 경고한다. 부분 뷰(일부 파생 컬럼만 담은 FullView)는 만들지 않는다 —
+            // Model 타깃이 여전히 존재하지 않는 컬럼을 가리키는 이 이슈와 같은 결함 클래스가 재발한다.
+            var selfUnsupported = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var plan in allPlans.Where(p => p.NeedsFullView))
+            {
+                var nonInternalComputeds = plan.Computeds.Where(f => !EntitySurface.IsFieldInternal(f)).ToList();
+                if (nonInternalComputeds.Count > 0)
+                {
+                    warn?.Invoke(
+                        $"[sql-pg] 경고: 모델 '{plan.Model.Name}'의 Computed 파생 필드는 PG 방언이 아직 " +
+                        "방출하지 않는다(표현식 문법 차이로 안전한 자동 변환 불가) — 해당 뷰를 직접 만들기 전까지 Ext 질의는 실패한다.");
+                    selfUnsupported.Add(plan.Model.Name);
+                    continue;
+                }
+
+                var indexedRollups = plan.Rollups
+                    .Where(f => !EntitySurface.IsFieldInternal(f))
+                    .Where(f => FieldAttributes.Has(f, "indexed"))
+                    .ToList();
+                if (indexedRollups.Count > 0)
+                {
+                    warn?.Invoke(
+                        $"[sql-pg] 경고: 모델 '{plan.Model.Name}'의 @indexed Rollup은 PG 방언이 아직 " +
+                        "방출하지 않는다(구체화 뷰 갱신 전략이 별도 결정 필요) — 해당 뷰를 직접 만들기 전까지 Ext 질의는 실패한다.");
+                    selfUnsupported.Add(plan.Model.Name);
+                }
+            }
+
+            // 체이닝 전파 — A의 Lookup/Rollup이 B의 파생 컬럼을 거쳐 B의 FullView를 딛어야 하는데
+            // B가 (스스로든, 전파로든) 미지원이면 A도 존재하지 않을 뷰를 참조하게 된다.
+            var hardTargets = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+            foreach (var plan in allPlans.Where(p => p.NeedsFullView))
+            {
+                var targets = new HashSet<string>(StringComparer.Ordinal);
+                var lookups = plan.Lookups.Where(f => !EntitySurface.IsFieldInternal(f) && f.Lookup?.Path is not null);
+                foreach (var (target, _) in LookupJoinPlanner.FullViewDependencies(
+                             plan.Model, lookups, name => allPlans.FirstOrDefault(p => p.Model.Name == name)?.Model, derivedFieldsByModel))
+                    targets.Add(target);
+                foreach (var rollup in plan.Rollups.Where(f => !EntitySurface.IsFieldInternal(f)))
+                {
+                    var def = rollup.Rollup;
+                    if (def is not null && FullViewRenderer.RollupReadsDerivedColumn(def, derivedFieldsByModel))
+                        targets.Add(def.Target);
+                }
+                hardTargets[plan.Model.Name] = targets;
+            }
+
+            var unsupported = new HashSet<string>(selfUnsupported, StringComparer.Ordinal);
+            bool changed;
+            do
+            {
+                changed = false;
+                foreach (var (modelName, targets) in hardTargets)
+                {
+                    if (unsupported.Contains(modelName)) continue;
+                    if (targets.Any(unsupported.Contains))
+                    {
+                        unsupported.Add(modelName);
+                        changed = true;
+                        if (!selfUnsupported.Contains(modelName))
+                        {
+                            warn?.Invoke(
+                                $"[sql-pg] 경고: 모델 '{modelName}'의 FullView는 아직 미지원인 다른 모델의 " +
+                                "파생 컬럼을 체이닝으로 딛고 있어 함께 보류한다 — 해당 뷰를 직접 만들기 전까지 Ext 질의는 실패한다.");
+                        }
+                    }
+                }
+            } while (changed);
+        return unsupported;
     }
 
     private string ResolveProjectRoot(string workingDirectory)

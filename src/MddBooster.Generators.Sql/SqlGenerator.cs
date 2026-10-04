@@ -81,13 +81,7 @@ public sealed class SqlGenerator : IArtifactGenerator
         // suffices — redirecting on "target merely has a FullView" instead of "the exact
         // column requested is derived" can chain two models into a cycle (SQL72009).
         var allPlans = context.Models.Select(m => planner.Plan(m)).ToList();
-        var derivedFieldsByModel = allPlans
-            .Where(p => p.NeedsFullView)
-            .ToDictionary(
-                p => p.Model.Name,
-                p => (IReadOnlySet<string>)new HashSet<string>(
-                    p.Lookups.Concat(p.Rollups).Concat(p.Computeds).Select(f => NameCasing.ToPascalCase(f.Name))),
-                StringComparer.Ordinal);
+        var derivedFieldsByModel = StandaloneViewSources.DerivedFieldsByModel(allPlans);
 
         // Fail the build, not the deployment: two models can each redirect a JOIN/subquery to
         // the other's FullView for independently valid reasons and still add up to a cycle
@@ -129,6 +123,15 @@ public sealed class SqlGenerator : IArtifactGenerator
                 File.WriteAllText(Path.Combine(viewsGenDir, fileName), sql);
                 viewFileNames.Add(fileName);
             }
+        }
+
+        // 2b. Standalone ::view — after the FullViews they may read, in dependency order.
+        foreach (var view in context.Views)
+        {
+            var sql = StandaloneViewRenderer.Render(view, _options.Schema, derivedFieldsByModel);
+            var fileName = $"{view.Name}.sql";
+            File.WriteAllText(Path.Combine(viewsGenDir, fileName), sql);
+            viewFileNames.Add(fileName);
         }
 
         // 3. Post-deployment refresh script (Scripts_gen)

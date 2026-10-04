@@ -26,7 +26,7 @@ what makes them worth listing in one place.
 | `@min_length` · `@max_length` | length bounds on a string field | the declared type — `string(20)` sets the column width, the API surface and the generated form together |
 | `@pattern` | a regular expression a value must match | nowhere; no check is emitted and none runs at build time |
 | `@ledger` | a table that only ever receives inserts | nowhere; no constraint, trigger or comment is emitted |
-| `@materialized` | a view whose rows are stored rather than computed per query | nowhere. A standalone `::view` model produces no output at all, so the marker has nothing to qualify — that much *is* reported, as an unconsumed element |
+| `@materialized` | a view whose rows are stored rather than computed per query | nowhere. The SQL target generates standalone `::view` models, but not a materialized one — that view is left out, and the build says so (`MDD031`) |
 
 Two attributes are absent from this list on purpose. `@validate` and `@behavior` are equally unread,
 but each has a section of its own below (§4.7, §4.3) and its own note there; repeating them here

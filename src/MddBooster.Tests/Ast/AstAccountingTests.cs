@@ -8,19 +8,25 @@ namespace MddBooster.Tests.Ast;
 /// </summary>
 public class AstAccountingTests
 {
+    /// <summary>
+    /// The standalone view is consumed now — the view resolver reads every one, and a view that is
+    /// not generated is reported by the build with its reason (no Sql target, a shape the generator
+    /// does not emit). Listing it here as well would say "nothing reads this" about something the
+    /// build just resolved.
+    /// </summary>
     [Fact]
-    public void Standalone_view_is_parsed_into_Views_and_reported_unconsumed()
+    public void Standalone_view_is_parsed_into_Views_and_is_not_reported_unconsumed()
     {
         var ast = new M3lLoader().LoadFile(
             Path.Combine(AppContext.BaseDirectory, "fixtures", "standalone-view.m3l.md"));
 
-        // 파서는 §4.7 view를 Models가 아닌 Views 컬렉션으로 분리한다 — 생성기는 Models만 소비.
+        // 파서는 §4.7 view를 Models가 아닌 Views 컬렉션으로 분리한다.
         Assert.DoesNotContain(ast.Models, m => m.Name == "VAssetFailureStats");
         Assert.Contains(ast.Views, v => v.Name == "VAssetFailureStats");
 
         var unconsumed = AstAccounting.ListUnconsumed(ast);
 
-        Assert.Contains("::view VAssetFailureStats", unconsumed);
+        Assert.DoesNotContain(unconsumed, u => u.StartsWith("::view", StringComparison.Ordinal));
     }
 
     /// <summary>

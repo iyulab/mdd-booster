@@ -342,7 +342,7 @@ public static class FullViewRenderer
         }
     }
 
-    private static string NormalizeComputedExpression(string expr)
+    internal static string NormalizeComputedExpression(string expr)
     {
         var sb = new StringBuilder(expr.Length + 16);
         int i = 0;

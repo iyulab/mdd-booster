@@ -18,8 +18,15 @@
 
 ## [Unreleased]
 
-### standalone `::view` 를 해석하고 진단한다 (파서 `M3L.Native` 0.18.1)
+### standalone `::view` → `CREATE VIEW` — Sql 타깃이 파생 뷰를 낸다 (파서 `M3L.Native` 0.18.1)
 
+- Sql 타깃이 M3L 명세 §4.7 의 standalone `::view` 를 뷰로 낸다 — T-SQL `dbo/Views_gen/<Name>.sql`(sqlproj·`RefreshViews` 포함) · PostgreSQL
+  `views_gen/<snake_name>.sql`. from/join(모델 또는 다른 뷰) · `@from` 투영 · `@rollup`(FullView 와 같은 상관 서브쿼리) · `group_by` · 중첩.
+  모델은 그 읽기 표면과 같은 행으로 읽는다(파생 열 → FullView, 소프트 삭제 → UdView). `order_by` 는 내지 않는다.
+- `where`·`@computed` 는 T-SQL 에서 FullView 와 같은 식 계약으로 낸다. PostgreSQL 은 식이 있는 뷰를 생성하지 않는다 — 새 경고 `MDD029`
+  (그 방언이 만들지 않는 모델 뷰를 읽는 뷰, 그런 뷰를 읽는 뷰도).
+- Model·Api·TypeScript 타깃은 뷰를 읽지 않는다. Sql 타깃이 없는 빌드는 해석된 뷰가 생성되지 않는다고 경고한다(종전 «소비되지 않는 요소» 목록의
+  `::view` 항목을 대신한다).
 - 파서 `M3L.Native` 0.18.0 → 0.18.1 — 뷰 `### Source` 의 따옴표 없는 지시문(`join: Order on Order.customer_id = Customer.id` · `order_by: name asc` ·
   `group_by: [Customer.id, Customer.name]`)이 첫 단어 뒤에서 잘리던 결함이 고쳐진 판.
 - 빌드가 standalone `::view` 를 모델에 대해 해석한다 — from/join 의 관계, `@from(Relation.field)`·join 조건·`group_by` 가 가리키는 열, `@rollup` 의 대상과 키.

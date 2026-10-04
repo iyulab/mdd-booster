@@ -5,10 +5,10 @@ namespace MddBooster.Core.Ast;
 
 /// <summary>
 /// 로더 회계 — "파싱된 모든 요소는 소비되거나 경고된다". 생성 파이프라인은
-/// Models/Enums/Interfaces만 소비하므로, 그 밖의 AST 요소(standalone <c>::view</c>,
-/// <c>::flow</c>, extension, 그리고 어떤 타깃도 읽지 않는 <c>### 섹션</c>)는 여기서 열거해
-/// 호출자가 경고로 가시화한다. 섹션 중 소비되는 것은 <c>### Indexes</c> 하나뿐이다.
-/// (2026-07-22 이슈: standalone ::view가 무경고로 산출물에서 탈락)
+/// Models/Enums/Interfaces 와 standalone <c>::view</c>(<see cref="MddBooster.Core.Semantic.ViewResolver"/>)를
+/// 소비하므로, 그 밖의 AST 요소(<c>::flow</c>, extension, 그리고 어떤 타깃도 읽지 않는 <c>### 섹션</c>)는
+/// 여기서 열거해 호출자가 경고로 가시화한다. 섹션 중 소비되는 것은 <c>### Indexes</c> 하나뿐이다.
+/// 뷰가 «생성되지 않는» 경우(Sql 타깃 없음·생성하지 않는 모양)는 빌드가 따로 말한다.
 /// <para>
 /// 속성(attribute) 축은 이 회계 대상이 아니다 — 열린 어휘라 「읽히지 않는 것」의 집합을
 /// 열거할 수 없다. enum 헤더의 부모 목록(<c>## X ::enum : Base</c>)도 대상이 아니다: 파서가
@@ -27,7 +27,6 @@ public static class AstAccounting
         ArgumentNullException.ThrowIfNull(ast);
 
         var unconsumed = new List<string>();
-        unconsumed.AddRange(ast.Views.Select(v => $"::view {v.Name}"));
         unconsumed.AddRange(ast.Flows.Select(f => $"::flow {f.Name}"));
         unconsumed.AddRange(ast.Extensions.Keys.Select(k => $"extension {k}"));
 

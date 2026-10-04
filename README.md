@@ -656,6 +656,36 @@ GET /$data/Assets?$select=Name&$expand=LifecycleState($select=Code,Name)
 
 `$expand` 가 닿는 셋의 읽기 정책은 런타임의 `$expand` 인가 검사가 적용한다. 쓰기 엔티티·인터페이스·SQL 은 이 navigation 과 무관하다.
 
+### standalone `::view` → `CREATE VIEW` (Sql 타깃)
+
+M3L 명세 §4.7 의 파생 뷰(`## Name ::view` + `### Source`)를 Sql 타깃이 뷰로 낸다 — T-SQL `dbo/Views_gen/<Name>.sql`(sqlproj·`RefreshViews` 대상) ·
+PostgreSQL `views_gen/<snake_name>.sql`. 빌드가 먼저 뷰를 모델에 대해 해석하고(`MDD030`), 생성하지 않는 모양은 이유와 함께 경고한다.
+
+```markdown
+## CustomerStats ::view
+### Source
+- from: Customer
+- join: Order on Order.customer_id = Customer.id      # 조건은 Model.field = Model.field 를 AND 로
+- group_by: [Customer.id, Customer.name]
+
+- customer_name: string @from(Customer.name)           # 소스에서 투영
+- total_spent: decimal(12,2) @rollup(Order.customer_id, sum(total_amount))
+- tier: string @computed("CASE WHEN total_spent > 10000 THEN 'Gold' ELSE 'Bronze' END")
+```
+
+| 원소 | 생성 |
+|---|---|
+| `from` · `join` | 모델 또는 다른 standalone 뷰(중첩). 관계마다 그 이름이 별칭이 된다. join 은 `INNER JOIN` — 조건을 **구조로** 읽는다(`Model.field = Model.field` 항을 `AND` 로 이은 것만, 그 밖은 `MDD030`) |
+| 읽는 모델 | 그 모델의 **읽기 표면**과 같은 행 — 파생 열(lookup·rollup·computed)을 읽으면 FullView, 소프트 삭제 모델이면 UdView, 아니면 테이블 |
+| `@from(Relation.field)` | 그 관계의 열 |
+| `@rollup(Target.fk, …)` | FullView 와 같은 상관 서브쿼리 — `from` 모델의 키에 상관 |
+| `where` · `@computed` | **T-SQL 만** — FullView 와 같은 식 계약(식별자 → PascalCase 열, 문자열 리터럴 보존, `Relation.field` 는 관계로 한정). 식의 방언은 언어가 정하지 않는다 — PostgreSQL 은 식이 있는 뷰를 생성하지 않는다(`MDD029`) |
+| `group_by` | `Relation.field` 목록. 출력 열 이름으로 묶는 것은 생성하지 않는다(`MDD031`) |
+| `order_by` | 내지 않는다 — 뷰에는 순서가 없고, T-SQL 은 `TOP` 없는 뷰의 `ORDER BY` 를 거절한다(빌드 로그에 정보 한 줄) |
+
+생성하지 않는 것: SQL 코드 블록 소스(`MDD028`) · `@materialized` · `@lookup` 열(뷰는 소스에서 투영한다 — `@from`) · 뷰 소스 위의 `@rollup`(`MDD031`).
+Model·Api·TypeScript 타깃은 뷰를 읽지 않는다(읽기 전용 엔티티·셋은 다음 단계). Sql 타깃이 없는 빌드는 해석된 뷰가 생성되지 않는다고 경고한다.
+
 ### `::aspect` → PK 가 곧 base FK 인 테이블
 
 한 모델이 다른 모델의 **한 행에 딸리는 선택적 정보**를 나를 때 쓴다. 컬렉션이 아니라 0..1 이고,
@@ -1088,6 +1118,7 @@ consumer-repo/
 | MDD026 | `@lookup` 이 다른 모델의 `rowversion` 을 읽음 — 행 버전은 그 행의 것이고, PostgreSQL 에서는 조인으로 읽을 열도 없다 |
 | MDD027(경고) | 참조 키의 읽기 타입 navigation 이름이 그 읽기 타입의 기존 멤버(lookup 필드·1:1 navigation)와 같다 — 선언된 멤버가 이름을 갖고 navigation 은 생성하지 않는다(그 키로는 `$expand` 불가) |
 | MDD028(경고) | standalone `::view` 의 `### Source` 가 SQL 코드 블록이다 — 모델 이름을 방언 이름으로 바꾸려면 SQL 을 해석해야 해서 그 뷰는 생성하지 않는다. from/join/where 항목으로 쓰면 생성된다 |
+| MDD029(경고) | standalone `::view` 를 PostgreSQL 방언에서 생성하지 않는다 — 식(`where`·`@computed`)이 있다(언어가 식의 방언을 정하지 않는다), 그 방언이 생성하지 않는 모델 뷰(`@computed`·`@indexed` rollup)를 읽는다, 또는 그런 뷰를 읽는다 |
 | MDD030 | standalone `::view` 가 해석되지 않는다 — 정의되지 않은 관계(from/join), 뷰의 from/join 이 아닌 관계나 없는 열을 가리키는 `@from`·join 조건·`group_by`, `Model.field = Model.field` 항을 `AND` 로 이은 것이 아닌 join 조건, 조인 대상을 쓰지 않는 조건, 값의 원천(`@from`·`@rollup`·`@computed`)이 없는 열, 서로를 읽는 뷰 |
 | MDD031(경고) | standalone `::view` 를 생성하지 않는 모양 — `@materialized`, `@lookup` 열(뷰는 소스에서 투영한다 — `@from`), 출력 열을 가리키는 `group_by`, 뷰 소스 위의 `@rollup`, 생성하지 않는 뷰를 읽는 뷰 |
 | MDD032(경고) | 뷰를 2단보다 깊게 겹쳐 읽는다 — 명세가 2단까지를 권장한다(생성은 한다) |

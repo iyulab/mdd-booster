@@ -187,6 +187,31 @@ public sealed class BuildCommand
         var errors = diagnostics.Where(d => d.Severity == SemanticSeverity.Error).ToList();
         foreach (var w in warnings)
             ReportWarning("semantic", w.Code, w.Format());
+
+        // standalone ::view 는 Sql 타깃이 생성한다. 그 타깃이 없으면 해석된 뷰도 산출물이 없다 —
+        // 로더 회계와 같은 자리에서 알린다. PostgreSQL 방언이 건너뛰는 뷰는 이유와 함께 경고한다.
+        if (viewResolution.Views.Count > 0)
+        {
+            var sqlTargets = cfg.Targets.Where(t => t.Type == "Sql").ToList();
+            if (sqlTargets.Count == 0)
+            {
+                Console.Error.WriteLine(
+                    $"[m3l] 경고: standalone 뷰 {viewResolution.Views.Count}개를 생성하는 타깃이 없습니다(Sql 타깃이 생성한다): "
+                    + string.Join(", ", viewResolution.Views.Select(v => v.Name)));
+            }
+            else if (sqlTargets.Any(IsPostgresDialect))
+            {
+                foreach (var (name, reason) in MddBooster.Generators.Sql.StandaloneViewSources.PostgresSkipped(viewResolution.Views, allModels))
+                {
+                    var view = viewResolution.Views.Single(v => v.Name == name);
+                    ReportWarning("semantic", "MDD029", new SemanticDiagnostic("MDD029",
+                        $"뷰 '{name}' 을(를) PostgreSQL 방언에서 생성하지 않는다 — {reason}.",
+                        view.Source.Loc, SemanticSeverity.Warning).Format());
+                }
+            }
+            foreach (var view in viewResolution.Views.Where(v => !string.IsNullOrWhiteSpace(v.Source.SourceDef?.OrderBy)))
+                Console.WriteLine($"[m3l] 정보: 뷰 '{view.Name}' 의 order_by 는 방출하지 않는다 — 뷰에는 순서가 없다(조회하는 쪽이 정렬한다).");
+        }
         if (errors.Count > 0)
         {
             Console.Error.WriteLine($"[semantic] 에러 {errors.Count}건:");
