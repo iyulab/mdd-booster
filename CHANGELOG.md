@@ -16,7 +16,7 @@
 
 ---
 
-## [Unreleased]
+## 0.38.0
 
 ### standalone `::view` → `CREATE VIEW` — Sql 타깃이 파생 뷰를 낸다 (파서 `M3L.Native` 0.19.0)
 
