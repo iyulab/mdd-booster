@@ -316,6 +316,32 @@ public static class GeneratedPermissions
 > export type EntityPermission = `${Lowercase<EntitySetName>}.${Verb}`
 > ```
 
+#### 등록할 표면 고르기 (`surfaces`)
+
+Api 타깃은 기본으로 엔티티마다 **두 표면**을 등록한다 — OData(`/$data`, 읽기·쓰기)와 GraphQL(`/graphql`, 읽기).
+한 표면만 연동 계약으로 삼는 배포는 그 표면만 등록한다:
+
+```json
+{ "type": "Api", "projectPath": "../src/MyApp.Server", "namespace": "MyApp.Server",
+  "surfaces": ["odata"] }
+```
+
+| 값 | 등록 파일 | `Controllers_gen.cs` | 런타임 |
+|---|---|---|---|
+| 생략 · `["odata", "graphql"]` | 두 표면 모두(현행 — 바이트 단위로 같다) | 낸다 | `/$data` · `/graphql` |
+| `["odata"]` | OData 셋 · 공유 키 선언 | 낸다 | GraphQL 쿼리 필드가 0개라 `/graphql` 을 매핑하지 않는다 |
+| `["graphql"]` | GraphQL 쿼리 필드 | **내지 않는다** | 읽기 전용 배포 — 쓰기 경로는 OData 에만 있다 |
+
+🔴 **왜 고를 수 있어야 하나** — 인가 정책은 표면마다 따로 붙는다(OData 셋의 `RestrictPolicy` ·
+GraphQL 쿼리 필드의 `Restrict`). 쓰지 않는 표면을 남겨 두면, 거기에 정책을 미러링하지 않는 한
+그 표면은 대체 정책(인증만)으로 열려 있다. 어떤 표면을 배포하는가는 배포 토폴로지라 모델이 아니라
+이 설정에 산다 — 엔티티 축(`includeEntities`/`excludeEntities`)과 같은 자리다.
+
+- 빈 배열·중복·모르는 값(대소문자 포함)은 **빌드 오류**다.
+- Api 타깃 밖에 적으면 빌드 오류다.
+- 비밀 칸 하나를 두 표면에서 빼는 것은 이 옵션의 일이 아니다 — 그 필드에 `@internal` 을 붙이면
+  읽기 타입에서 빠져 두 표면에서 함께 사라진다(아래 «필드 단위 `@internal`»).
+
 #### 복수 타깃 게이트
 
 같은 종류의 타깃을 **여러 개** 둘 수 있다(한 정본 → 여러 서버). 다만 조용한 오출력이 되는 두 경우는 오류다.

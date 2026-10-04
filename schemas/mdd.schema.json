@@ -216,6 +216,14 @@
           "description": "Emit Api_gen/Permissions_gen.cs with one constant per (entity set, verb) plus an entity-set -> (read, write) default map, using this pattern. Placeholders: {entitySet} (Orders), {entitySetLower} (orders), {verb} (read/write), {Verb} (Read/Write) — e.g. \"{entitySetLower}.{verb}\" yields orders.read. An unknown placeholder fails the build rather than passing through as a literal that matches no policy. Omit to emit nothing. The pattern is input because the key shape is the consuming app's authorization convention: a generator that picked one would hand every app with a different convention constants that are wrong, not merely unused. Read and write only, matching the runtime's RestrictPolicy(setName, readPolicy, writePolicy) pair.",
           "examples": ["{entitySetLower}.{verb}"]
         },
+        "surfaces": {
+          "type": "array",
+          "items": { "enum": ["odata", "graphql"] },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Api target only: the runtime surfaces the generated registration wires. Omit for both (unchanged output). [\"odata\"] writes no GraphQL registration, so the runtime maps no /graphql endpoint; [\"graphql\"] writes no OData registration, controllers or shared-key declarations, which leaves a read-only GraphQL deployment (OData is the only write path). Which surfaces a deployment serves is topology, so it lives here rather than in the model; authorization policies attach per surface, so an unused surface would otherwise stay open under the fallback policy. An empty list, a repeated value or an unknown value fails the build.",
+          "examples": [["odata"]]
+        },
         "formsOutputPath": {
           "type": "string",
           "description": "Directory {Entity}Form_gen.tsx files go into. Omit to skip form generation entirely."

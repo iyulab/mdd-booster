@@ -30,7 +30,8 @@ public sealed class ApiRegistrationGenerator(ApiRegistrationGeneratorOptions opt
         var rendered = ApiRegistrationRenderer.Render(
             models,
             _options.Namespace,
-            _options.EntitiesNamespace);
+            _options.EntitiesNamespace,
+            surfaces: _options.Surfaces);
 
         File.WriteAllText(Path.Combine(apiDir, "ApiRegistration_gen.cs"), rendered);
 
@@ -43,12 +44,17 @@ public sealed class ApiRegistrationGenerator(ApiRegistrationGeneratorOptions opt
                 PermissionsRenderer.Render(models, _options.Namespace, _options.PermissionKeyTemplate));
         }
 
-        var controllers = ODataControllerRenderer.Render(
-            models,
-            _options.Namespace,
-            _options.EntitiesNamespace);
+        // OData 컨트롤러는 OData 셋의 엔드포인트다 — 셋을 등록하지 않으면 낼 것이 없다
+        // (CleanDir 가 지난 빌드의 파일을 이미 지웠다).
+        if (_options.Surfaces.HasFlag(ApiSurfaces.OData))
+        {
+            var controllers = ODataControllerRenderer.Render(
+                models,
+                _options.Namespace,
+                _options.EntitiesNamespace);
 
-        File.WriteAllText(Path.Combine(apiDir, "Controllers_gen.cs"), controllers);
+            File.WriteAllText(Path.Combine(apiDir, "Controllers_gen.cs"), controllers);
+        }
     }
 
     private string ResolveProjectRoot(string workingDirectory)
@@ -95,4 +101,10 @@ public sealed class ApiRegistrationGeneratorOptions
     /// 아니라, 여기서 발명하면 규약이 다른 소비자에게는 쓸모없는 것이 아니라 **틀린** 상수가 된다.
     /// </remarks>
     public string? PermissionKeyTemplate { get; init; }
+
+    /// <summary>
+    /// 등록할 런타임 표면(<c>surfaces</c>). 기본 <see cref="ApiSurfaces.All"/> — 생략한 소비자의 산출은
+    /// 이 옵션 이전과 바이트 단위로 같다.
+    /// </summary>
+    public ApiSurfaces Surfaces { get; init; } = ApiSurfaces.All;
 }

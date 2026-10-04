@@ -263,4 +263,15 @@ public sealed class MddJsonTarget
     /// </summary>
     [JsonPropertyName("permissionKeyTemplate")]
     public string? PermissionKeyTemplate { get; set; }
+
+    /// <summary>
+    /// Api 타깃이 등록할 런타임 표면 — <c>"odata"</c>·<c>"graphql"</c>. 생략하면 둘 다(현행).
+    /// <para>
+    /// 어떤 표면을 배포하는가는 배포 토폴로지라 소비자 설정에 산다(<see cref="IncludeEntities"/> 와 같은
+    /// 자리). 인가 정책은 표면마다 따로 붙으므로, 쓰지 않는 표면을 남겨 두면 그 표면은 대체 정책으로
+    /// 열려 있다. 빈 배열·중복·모르는 값은 빌드 오류.
+    /// </para>
+    /// </summary>
+    [JsonPropertyName("surfaces")]
+    public List<string>? Surfaces { get; set; }
 }

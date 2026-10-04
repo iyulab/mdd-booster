@@ -25,6 +25,12 @@ namespace MddBooster.Generators.Api;
 /// Entity set names use <see cref="Pluralizer"/> to match the DbContext
 /// convention; GraphQL query names are camelCase plural; mutation prefix is
 /// camelCase singular (HotChocolate mutation field naming convention).
+/// <para>
+/// <c>surfaces</c> narrows that to the surfaces the deployment serves: without
+/// <see cref="ApiSurfaces.GraphQL"/> no GraphQL line is written (and the runtime maps no
+/// <c>/graphql</c> endpoint); without <see cref="ApiSurfaces.OData"/> no OData line or shared-key
+/// declaration is written.
+/// </para>
 /// </remarks>
 public static class ApiRegistrationRenderer
 {
@@ -34,11 +40,16 @@ public static class ApiRegistrationRenderer
         IReadOnlyList<ResolvedModel> models,
         string ns,
         string? entitiesNamespace = null,
-        string methodName = "RegisterGeneratedEntities")
+        string methodName = "RegisterGeneratedEntities",
+        ApiSurfaces surfaces = ApiSurfaces.All)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentException.ThrowIfNullOrWhiteSpace(ns);
         ArgumentException.ThrowIfNullOrWhiteSpace(methodName);
+        if (surfaces == ApiSurfaces.None)
+            throw new ArgumentException("At least one surface must be selected.", nameof(surfaces));
+        var odata = surfaces.HasFlag(ApiSurfaces.OData);
+        var graphql = surfaces.HasFlag(ApiSurfaces.GraphQL);
 
         var sb = new StringBuilder();
         sb.AppendLine(Header);
@@ -61,14 +72,15 @@ public static class ApiRegistrationRenderer
             // 아이덴티티/인증 같은 인프라 엔티티(전용 엔드포인트로만 관리, 범용 CRUD·시크릿 컬럼
             // 노출 금지)를 위한 도메인 중립 knob.
             //
-            // 이 제외가 **타입 도달성까지** 없앤다는 근거(2026-07-30 실측): 런타임은 read 타입만
-            // 스키마에 등록하고(OData `EntitySet<TRead>` · GraphQL `ObjectType<TRead>`), write 타입은
-            // 어느 스키마에도 넣지 않는다. 그리고 read(Ext) 타입은 평면이다 — FK 를 스칼라로만
-            // 들고 내비게이션 프로퍼티가 없다. 두 조건이 함께 성립해서 제외된 엔티티 타입이
-            // 컨벤션 기반 타입 발견으로 되살아나지 않는다.
-            //   · 조건 1(우리 것): Ext 평면성 — `ReferenceAttributeTests.Ext_read_type_stays_flat_…` tripwire.
-            //   · 조건 2(런타임 것): mutation 미배선. 런타임이 mutation 을 배선하면 nav 를 가진 write
-            //     타입이 input 타입으로 들어가 이 보장이 약해진다. 그때 재검토 필요.
+            // 이 제외가 **타입 도달성까지** 없애는가: 런타임은 read 타입만 스키마에 등록하고
+            // (OData `EntitySet<TRead>` · GraphQL `ObjectType<TRead>`), write 타입은 어느 스키마에도
+            // 넣지 않는다. read(Ext) 타입은 이제 다른 read 타입을 가리키는 navigation 을 갖는다
+            // (1:1 · 참조 키 N:1) — 그래서 제외된 엔티티의 read 타입은 navigation 을 거쳐 컨벤션
+            // 발견으로 되살아날 수 있고, 그것을 막는 것은 런타임의 경계다: 등록되지 않은 타입을
+            // 가리키는 navigation 을 EDM 과 GraphQL 타입에서 빼고 `$expand` 를 거절한다(런타임
+            // CHANGELOG — 이 생성기의 산출이 그 판 이전 런타임 위에 올라가면 안 되는 이유).
+            // mutation 은 런타임에 배선돼 있지 않다 — 배선되면 write 타입이 input 타입으로 들어가
+            // 이 판단을 다시 해야 한다.
             if (EntitySurface.IsInternal(model)) continue;
 
             var entity = NameCasing.ToPascalCase(model.Name);
@@ -80,14 +92,20 @@ public static class ApiRegistrationRenderer
             // Pluralizer 는 접미 규칙만 쓰고 불규칙 복수 사전이 없어 camelCase 입력에도 안전하다.
             var queryName = Pluralizer.Pluralize(mutationPrefix);   // e.g. "orders"
 
-            sb.Append("        options.ODataModel.AddEntityPair<")
-              .Append(entityPrefix).Append(entity).Append("Ext, ")
-              .Append(entityPrefix).Append(entity).Append(">(\"")
-              .Append(setName).AppendLine("\");");
-            sb.Append("        options.GraphQL.AddEntityPair<")
-              .Append(entityPrefix).Append(entity).Append("Ext, ")
-              .Append(entityPrefix).Append(entity).Append(">(\"")
-              .Append(queryName).Append("\", \"").Append(mutationPrefix).AppendLine("\");");
+            if (odata)
+            {
+                sb.Append("        options.ODataModel.AddEntityPair<")
+                  .Append(entityPrefix).Append(entity).Append("Ext, ")
+                  .Append(entityPrefix).Append(entity).Append(">(\"")
+                  .Append(setName).AppendLine("\");");
+            }
+            if (graphql)
+            {
+                sb.Append("        options.GraphQL.AddEntityPair<")
+                  .Append(entityPrefix).Append(entity).Append("Ext, ")
+                  .Append(entityPrefix).Append(entity).Append(">(\"")
+                  .Append(queryName).Append("\", \"").Append(mutationPrefix).AppendLine("\");");
+            }
         }
 
         // ::aspect(Base) 셋은 키가 자기 것이 아니다 — 행의 키가 곧 Base 행에 대한 참조다. 런타임은 그
@@ -95,8 +113,10 @@ public static class ApiRegistrationRenderer
         // (선언이 없으면 서버가 새 키를 만들어 고아 행을 쓰거나, 막는 일을 DB 제약에 맡긴다 — EF 모델로
         // 스키마를 만드는 소비자에겐 그 제약도 없다). 런타임은 등록되지 않은 셋을 가리키는 선언을
         // 거절하므로 모든 AddEntityPair 뒤에 둔다. Base 가 @internal 이면 가리킬 셋이 없어 내지 않는다.
-        var registered = models.Where(m => !EntitySurface.IsInternal(m))
-            .Select(m => m.Name).ToHashSet(StringComparer.Ordinal);
+        // 공유 키는 OData 쓰기 경로의 선언이다 — OData 를 내지 않으면 가리킬 셋도, 지킬 쓰기도 없다.
+        var registered = odata
+            ? models.Where(m => !EntitySurface.IsInternal(m)).Select(m => m.Name).ToHashSet(StringComparer.Ordinal)
+            : [];
         foreach (var model in models.OrderBy(m => m.Name, StringComparer.Ordinal))
         {
             if (!registered.Contains(model.Name)) continue;

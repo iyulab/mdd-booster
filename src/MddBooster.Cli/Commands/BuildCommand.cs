@@ -328,6 +328,22 @@ public sealed class BuildCommand
                 }
             }
 
+            // 1.7a'. 방출 표면 — 빈 목록·오타가 «아무것도 등록하지 않는» 또는 «한 표면이 조용히 빠진»
+            // 산출을 만들게 두지 않는다.
+            if (target.Surfaces is not null)
+            {
+                if (target.Type != "Api")
+                {
+                    configViolations.Add(
+                        $"{label}: surfaces 는 Api 타깃에만 지정할 수 있습니다 — 런타임 표면을 등록하는 타깃이 그것뿐입니다.");
+                }
+                else
+                {
+                    foreach (var problem in MddBooster.Generators.Api.ApiSurfaceNames.Validate(target.Surfaces))
+                        configViolations.Add($"{label}: surfaces 가 {problem}");
+                }
+            }
+
             // 1.7b. 폼이 임포트할 «이 생성기가 쓰지 않는» 모듈 — 소비자가 정한다. 기본값은 두지 않는다:
             // 남의 디렉터리 배치나 특정 패키지에 대한 추측이 되고, 추측이 틀리면 tsc 가 처음 말한다.
             configViolations.AddRange(FormImportViolations(target, label));
@@ -692,6 +708,7 @@ public sealed class BuildCommand
                     EntitiesNamespace = modelNamespace,
                     SurfaceFilter = surfaceFilter,
                     PermissionKeyTemplate = target.PermissionKeyTemplate,
+                    Surfaces = MddBooster.Generators.Api.ApiSurfaceNames.Parse(target.Surfaces),
                 }),
             "TypeScript" => new TypeScriptGenerator(
                 new TypeScriptGeneratorOptions

@@ -18,6 +18,14 @@
 
 ## [Unreleased]
 
+### Api 타깃 `surfaces` — 배포가 쓰는 런타임 표면만 등록한다
+
+- Api 타깃 옵션 `"surfaces": ["odata", "graphql"]`. 생략하면 둘 다 — 산출은 이 옵션 이전과 **바이트 단위로 같다**.
+- `["odata"]` — `GraphQL.AddEntityPair` 를 내지 않는다. 런타임은 GraphQL 쿼리 필드가 0개면 `/graphql` 을 매핑하지 않으므로 그 표면이 사라진다.
+- `["graphql"]` — OData 셋 등록·`DeclareSharedKey`·`Controllers_gen.cs` 를 내지 않는다(쓰기 경로가 OData 에만 있어 읽기 전용 배포가 된다).
+- 빈 배열·중복·모르는 값, Api 가 아닌 타깃의 `surfaces` 는 설정 오류(종료 코드 4). `schemas/mdd.schema.json` 에 키가 더해졌다.
+- 이유: 인가 정책은 표면마다 따로 붙는다 — 쓰지 않는 표면은 정책을 미러링하지 않는 한 대체 정책으로 열려 있다.
+
 ### TypeScript 타깃이 필드 단위 `@internal` 을 따른다 — 어느 응답에도 없는 칸을 타입이 약속하지 않는다
 
 - `@internal` 이 붙은 **필드**가 `entities_gen.ts`(인터페이스) · `field_schema_gen.ts` · `*Form_gen.tsx`(생성 폼)에서 빠진다.
