@@ -16,4 +16,11 @@ public sealed class GeneratorContext
     /// enum-typed fields in the type mappers.
     /// </summary>
     public IReadOnlyList<EnumNode> Enums { get; init; } = Array.Empty<EnumNode>();
+
+    /// <summary>
+    /// Standalone <c>::view</c> declarations that resolved completely (<see cref="ViewResolver"/>),
+    /// in dependency order — a view after every view it reads. A view that did not resolve is not
+    /// here; the build has already said why.
+    /// </summary>
+    public IReadOnlyList<ResolvedView> Views { get; init; } = Array.Empty<ResolvedView>();
 }

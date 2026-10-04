@@ -18,6 +18,16 @@
 
 ## [Unreleased]
 
+### standalone `::view` 를 해석하고 진단한다 (파서 `M3L.Native` 0.18.1)
+
+- 파서 `M3L.Native` 0.18.0 → 0.18.1 — 뷰 `### Source` 의 따옴표 없는 지시문(`join: Order on Order.customer_id = Customer.id` · `order_by: name asc` ·
+  `group_by: [Customer.id, Customer.name]`)이 첫 단어 뒤에서 잘리던 결함이 고쳐진 판.
+- 빌드가 standalone `::view` 를 모델에 대해 해석한다 — from/join 의 관계, `@from(Relation.field)`·join 조건·`group_by` 가 가리키는 열, `@rollup` 의 대상과 키.
+  join 조건은 식이 아니라 **구조**로 읽는다(`Model.field = Model.field` 항을 `AND` 로 이은 것).
+- 🔴 새 오류 `MDD030` — 해석되지 않는 뷰(정의되지 않은 관계·열, 해석할 수 없는 join 조건, 원천 없는 열, 서로를 읽는 뷰)는 빌드를 세운다(종료 코드 3).
+  종전에는 뷰를 읽지 않아 이런 모델도 빌드가 통과했다(«소비되지 않는 요소» 경고만).
+- 새 경고 `MDD028`(SQL 코드 블록 소스) · `MDD031`(`@materialized`·`@lookup` 열·출력 열 `group_by`·뷰 위 `@rollup`) · `MDD032`(2단보다 깊은 중첩).
+
 ### Api 타깃 `surfaces` — 배포가 쓰는 런타임 표면만 등록한다
 
 - Api 타깃 옵션 `"surfaces": ["odata", "graphql"]`. 생략하면 둘 다 — 산출은 이 옵션 이전과 **바이트 단위로 같다**.

@@ -178,7 +178,11 @@ public sealed class BuildCommand
         }
 
         // 1.5. 의미 분석 — Warning은 표면화만 하고 진행, Error는 빌드 중단.
-        var diagnostics = new SemanticAnalyzer(allModels, allEnums).Analyze();
+        // standalone ::view 의 해석도 같은 층이다 — 모델을 가리키는 참조가 맞는지는 생성 전에 판정한다.
+        var viewResolution = ViewResolver.Resolve(mergedAst.Views, allModels);
+        var diagnostics = new SemanticAnalyzer(allModels, allEnums).Analyze()
+            .Concat(viewResolution.Diagnostics)
+            .ToList();
         var warnings = diagnostics.Where(d => d.Severity == SemanticSeverity.Warning).ToList();
         var errors = diagnostics.Where(d => d.Severity == SemanticSeverity.Error).ToList();
         foreach (var w in warnings)
@@ -204,6 +208,7 @@ public sealed class BuildCommand
             Models = allModels,
             WorkingDirectory = configDirectory,
             Enums = allEnums,
+            Views = viewResolution.Views,
         };
 
         // 1.6. 설정 위반 수집 — 전부 모아 한 번에 실패시킨다(한 건씩 고쳐가며 재실행하게 만들지 않는다).

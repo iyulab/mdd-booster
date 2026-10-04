@@ -1087,6 +1087,10 @@ consumer-repo/
 | MDD025(경고) | `rowversion` 행 버전에 `@internal` — 읽기 타입에서 빠져 그 셋이 ETag 를 내지 않는다(`If-Match` 조건부 쓰기가 사라진다) |
 | MDD026 | `@lookup` 이 다른 모델의 `rowversion` 을 읽음 — 행 버전은 그 행의 것이고, PostgreSQL 에서는 조인으로 읽을 열도 없다 |
 | MDD027(경고) | 참조 키의 읽기 타입 navigation 이름이 그 읽기 타입의 기존 멤버(lookup 필드·1:1 navigation)와 같다 — 선언된 멤버가 이름을 갖고 navigation 은 생성하지 않는다(그 키로는 `$expand` 불가) |
+| MDD028(경고) | standalone `::view` 의 `### Source` 가 SQL 코드 블록이다 — 모델 이름을 방언 이름으로 바꾸려면 SQL 을 해석해야 해서 그 뷰는 생성하지 않는다. from/join/where 항목으로 쓰면 생성된다 |
+| MDD030 | standalone `::view` 가 해석되지 않는다 — 정의되지 않은 관계(from/join), 뷰의 from/join 이 아닌 관계나 없는 열을 가리키는 `@from`·join 조건·`group_by`, `Model.field = Model.field` 항을 `AND` 로 이은 것이 아닌 join 조건, 조인 대상을 쓰지 않는 조건, 값의 원천(`@from`·`@rollup`·`@computed`)이 없는 열, 서로를 읽는 뷰 |
+| MDD031(경고) | standalone `::view` 를 생성하지 않는 모양 — `@materialized`, `@lookup` 열(뷰는 소스에서 투영한다 — `@from`), 출력 열을 가리키는 `group_by`, 뷰 소스 위의 `@rollup`, 생성하지 않는 뷰를 읽는 뷰 |
+| MDD032(경고) | 뷰를 2단보다 깊게 겹쳐 읽는다 — 명세가 2단까지를 권장한다(생성은 한다) |
 
 `mdd build` 에서는 파서 검증기가 이 분석보다 먼저 돈다 — lookup 경로의 키에 `@reference` 가 없으면 `M3L-E002`, 경로 조각이
 그 자리의 모델에 없으면 `M3L-E022` 로 먼저 멈추므로 CLI 에서 `MDD004`·`MDD005`·`MDD006` 을 보는 일은 드물다. 이 분석기를
