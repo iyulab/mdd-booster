@@ -7,7 +7,7 @@ namespace MddBooster.Generators.Api;
 
 /// <summary>
 /// Renders <c>Api_gen/Permissions_gen.cs</c> — one constant per (entity set, verb) plus the
-/// entity-set → (read, write) default map.
+/// read type → (read, write) default map.
 /// </summary>
 /// <remarks>
 /// The registration file already emits the entity-set list; without the permission dimension a
@@ -35,7 +35,8 @@ public static class PermissionsRenderer
     /// <summary>The subset the default map is built from — see the remarks on this type.</summary>
     private static readonly IReadOnlyList<string> DefaultMapVerbs = ["read", "write"];
 
-    public static string Render(IReadOnlyList<ResolvedModel> models, string ns, string template)
+    public static string Render(
+        IReadOnlyList<ResolvedModel> models, string ns, string template, string? entitiesNamespace = null)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentException.ThrowIfNullOrWhiteSpace(ns);
@@ -43,11 +44,15 @@ public static class PermissionsRenderer
 
         // Same exclusion the registration file applies: an @internal entity has no data-API
         // surface, so a permission key for it would name an endpoint that does not exist.
-        var sets = models
+        var entities = models
             .Where(m => !EntitySurface.IsInternal(m))
-            .Select(m => Pluralizer.Pluralize(NameCasing.ToPascalCase(m.Name)))
-            .OrderBy(s => s, StringComparer.Ordinal)
+            .Select(m => NameCasing.ToPascalCase(m.Name))
+            .Select(entity => (Entity: entity, Set: Pluralizer.Pluralize(entity)))
+            .OrderBy(e => e.Set, StringComparer.Ordinal)
             .ToList();
+        var sets = entities.Select(e => e.Set).ToList();
+        // Entities are referred to by qualified name, as the registration file does — see EntityTypeRef.
+        var entityPrefix = EntityTypeRef.PrefixFor(ns, entitiesNamespace);
 
         var sb = new StringBuilder();
         sb.AppendLine(Header);
@@ -81,21 +86,22 @@ public static class PermissionsRenderer
 
         sb.AppendLine();
         sb.AppendLine("    /// <summary>");
-        sb.AppendLine("    /// Entity set name → (read, write) keys. A consumer maps its sets from");
-        sb.AppendLine("    /// this and layers only its exceptions on top, so adding an entity to the");
-        sb.AppendLine("    /// model cannot leave a hole in the map.");
+        sb.AppendLine("    /// Read type → (read, write) keys. A consumer declares each entity's policies");
+        sb.AppendLine("    /// from this and layers only its exceptions on top, so adding an entity to the");
+        sb.AppendLine("    /// model cannot leave a hole in the map. Keyed by the read type because that is");
+        sb.AppendLine("    /// what names the entity on every surface it is served on.");
         sb.AppendLine("    /// </summary>");
         sb.AppendLine("    /// <remarks>");
         sb.AppendLine("    /// Deletes are governed by the write key unless the application says");
         sb.AppendLine("    /// otherwise for a given set — the runtime's own default. Reach for the");
         sb.AppendLine("    /// per-set <c>…Delete</c> constant on the sets where it does.");
         sb.AppendLine("    /// </remarks>");
-        sb.AppendLine("    public static readonly IReadOnlyDictionary<string, (string Read, string Write)> Default =");
-        sb.AppendLine("        new Dictionary<string, (string Read, string Write)>");
+        sb.AppendLine("    public static readonly IReadOnlyDictionary<global::System.Type, (string Read, string Write)> Default =");
+        sb.AppendLine("        new Dictionary<global::System.Type, (string Read, string Write)>");
         sb.AppendLine("        {");
-        foreach (var set in sets)
+        foreach (var (entity, set) in entities)
         {
-            sb.Append("            [\"").Append(set).Append("\"] = (")
+            sb.Append("            [typeof(").Append(entityPrefix).Append(entity).Append("Ext)] = (")
               .Append(set).Append(NameOf(DefaultMapVerbs[0])).Append(", ")
               .Append(set).Append(NameOf(DefaultMapVerbs[1])).AppendLine("),");
         }

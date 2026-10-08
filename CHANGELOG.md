@@ -27,6 +27,13 @@
   (추상 기반 멤버면 `CS0534`)로 컴파일되지 않았다. 쓰기 타입은 그대로 계약을 받는다. 좁아진 읽기 타입에서도 성립하는 계약은 소비 앱의
   partial 클래스에 선언한다(`public partial class UserExt : IAudited { }`) — `docs/M3L.md` §3.4.9.
 
+### 🔴 `GeneratedPermissions.Default` 의 키가 읽기 타입이다
+
+- `permissionKeyTemplate` 이 내는 `Permissions_gen.cs` 의 기본 매핑이 `IReadOnlyDictionary<string, …>`(엔티티 셋 이름 키)에서
+  `IReadOnlyDictionary<global::System.Type, (string Read, string Write)>`(읽기 타입 키 — `[typeof(OrderExt)] = (OrdersRead, OrdersWrite)`)로
+  바뀌었다. 런타임의 인가 선언이 표면별(셋 이름 · 쿼리 이름)이 아니라 엔티티 단위(읽기 타입)가 되었고, 셋 이름은 OData 표면만의 이름이다.
+  상수(`OrdersRead` 등)는 그대로다. 마이그레이션: 맵을 셋 이름으로 순회하던 코드를 타입으로 — 런타임 README «Per-entity authorization».
+
 ### 소유자로 가른 Api 타깃 — `::aspect` 의 공유 키 선언이 사라지지 않는다
 
 - `includeOwners`/`excludeOwners`·엔티티 목록으로 Api 타깃을 가르고 aspect 와 그 base 가 서로 다른 타깃에 떨어지면, 종전에는 어느 쪽도

@@ -44,11 +44,11 @@ public class PermissionsRendererTests
     }
 
     [Fact]
-    public void Emits_the_entity_set_to_read_write_default_map()
+    public void Emits_the_read_type_to_read_write_default_map()
     {
         var result = PermissionsRenderer.Render(LoadInline(Model), "T.Server", "{entitySetLower}.{verb}");
 
-        Assert.Contains("[\"Orders\"] = (OrdersRead, OrdersWrite),", result);
+        Assert.Contains("[typeof(OrderExt)] = (OrdersRead, OrdersWrite),", result);
     }
 
     /// <summary>
@@ -109,8 +109,32 @@ public class PermissionsRendererTests
     {
         var result = PermissionsRenderer.Render(LoadInline(Model), "T.Server", "{entitySetLower}.{verb}");
 
-        Assert.Contains("IReadOnlyDictionary<string, (string Read, string Write)> Default", result);
-        Assert.Contains("[\"Orders\"] = (OrdersRead, OrdersWrite),", result);
+        Assert.Contains("IReadOnlyDictionary<global::System.Type, (string Read, string Write)> Default", result);
+        Assert.Contains("[typeof(OrderExt)] = (OrdersRead, OrdersWrite),", result);
         Assert.DoesNotContain("OrdersDelete),", result);
+    }
+
+    /// <summary>
+    /// The map is keyed by read type — what names an entity on every surface the runtime serves it on, and what
+    /// the runtime's per-entity authorization takes. An entity-set name was OData's own name for it. The keys
+    /// reach the entities by qualified name, so the file compiles in another namespace with no <c>using</c>.
+    /// </summary>
+    [Fact]
+    public void The_default_map_is_keyed_by_read_type_and_compiles_against_the_entities_namespace()
+    {
+        var result = PermissionsRenderer.Render(
+            LoadInline(Model), "T.Server", "{entitySetLower}.{verb}", entitiesNamespace: "T.Entities");
+
+        var trees = new[]
+        {
+            Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(result),
+            Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText("namespace T.Entities; public class OrderExt { }"),
+        };
+        var compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create(
+            "Permissions", trees, MddBooster.Tests.TestSupport.BclReferences.All(),
+            new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary));
+
+        Assert.Empty(compilation.GetDiagnostics().Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error));
+        Assert.DoesNotContain("ServiceClient", result);
     }
 }

@@ -281,9 +281,19 @@ public static class GeneratedPermissions
     public const string OrdersWrite  = "orders.write";
     public const string OrdersDelete = "orders.delete";
 
-    /// 엔티티셋 → (read, write). 소비앱은 이 위에 예외만 얹는다.
-    public static readonly IReadOnlyDictionary<string, (string Read, string Write)> Default = …;
+    /// 읽기 타입 → (read, write). 소비앱은 이 위에 예외만 얹는다.
+    public static readonly IReadOnlyDictionary<global::System.Type, (string Read, string Write)> Default = …;
+    //   [typeof(OrderExt)] = (OrdersRead, OrdersWrite), …
 }
+```
+
+맵의 키는 **읽기 타입**이다 — 런타임이 엔티티를 어느 표면에서 서빙하든 그 엔티티를 가리키는 이름이고, 런타임의
+엔티티 단위 인가 선언이 받는 것이 그것이다(런타임 README «Per-entity authorization»). 셋 이름은 OData 표면만의
+이름이라 키가 될 수 없다:
+
+```csharp
+foreach (var (type, (read, write)) in GeneratedPermissions.Default)
+    options.Authorize(type, read: read, write: write);
 ```
 
 | 자리표시자 | 값 |
@@ -306,8 +316,6 @@ public static class GeneratedPermissions
 - 알 수 없는 자리표시자는 **빌드 오류** — 그대로 통과시키면 어떤 정책과도 매칭되지 않는
   리터럴 키가 조용히 나간다.
 - `@internal` 엔티티는 등록 파일과 **같은 이유로 제외**된다(데이터 API 표면이 없다).
-- **read·write 둘뿐**이다. 런타임의 짝이 `RestrictPolicy(setName, readPolicy, writePolicy)` 라,
-  `delete` 를 세 번째 동사로 내면 이 키를 소비하는 쪽이 하지 않는 구분을 발명하게 된다.
 
 > TypeScript 쪽은 이 옵션이 필요 없다 — `entity_names_gen.ts` 의 `ENTITY_NAMES`/`EntitySetName`
 > 위에 세 줄이면 같은 타입이 나오고, 새 엔티티가 모델에 들어오면 그 타입이 자동으로 넓어진다:
