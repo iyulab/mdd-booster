@@ -349,7 +349,7 @@ public static class DbContextRenderer
             sb.Append("        modelBuilder.Entity<").Append(name).AppendLine(">(e =>");
             sb.AppendLine("        {");
             sb.Append("            e.ToTable(\"").Append(table).AppendLine("\");");
-            AppendPostgresColumns(sb, model, pk, readsTable: true);
+            AppendPostgresColumns(sb, model, pk, readsTable: true, readType: false);
             AppendIndexes(sb, model, name, table, isPostgres: true);
             AppendSectionIndexes(sb, model, name, table, isPostgres: true);
             sb.AppendLine("        });");
@@ -359,7 +359,7 @@ public static class DbContextRenderer
             sb.AppendLine("            e.ToTable((string?)null);");
             sb.Append("            e.ToView(\"").Append(extView).AppendLine("\");");
             // The read type reads the table itself only when no view backs it.
-            AppendPostgresColumns(sb, model, pk, readsTable: extView == table);
+            AppendPostgresColumns(sb, model, pk, readsTable: extView == table, readType: true);
             if (backing == "full")
             {
                 AppendPostgresDerivedColumns(sb, model);
@@ -373,10 +373,17 @@ public static class DbContextRenderer
     /// than a view. Only a row version cares: PostgreSQL keeps it in the <c>xmin</c> system column,
     /// which a table has and a view does not — the views project it under the field's name.
     /// </param>
-    private static void AppendPostgresColumns(StringBuilder sb, ResolvedModel model, FieldNode? pk, bool readsTable)
+    /// <param name="readType">
+    /// Whether this is the read type's mapping. A field-level <c>@internal</c> field is stored, so the
+    /// write type maps it, but the read type does not have the property at all — mapping it there
+    /// would not compile.
+    /// </param>
+    private static void AppendPostgresColumns(
+        StringBuilder sb, ResolvedModel model, FieldNode? pk, bool readsTable, bool readType)
     {
         foreach (var field in BaseColumnsOf(model))
         {
+            if (readType && !ReferenceEquals(field, pk) && EntitySurface.IsFieldInternal(field)) continue;
             // 공유/명명 PK 필드는 엔티티에 별도 속성이 없다 — 상속된 Id가 그 컬럼이다.
             var property = ReferenceEquals(field, pk) ? "Id" : NameCasing.ToPascalCase(field.Name);
             // A row version on a table is `xmin`. Named explicitly rather than left to Npgsql's

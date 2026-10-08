@@ -988,7 +988,12 @@ public partial class User : global::Sample.Contracts.PrincipalBase, IUser, globa
   The generated marker interface `IXxx` is always emitted regardless.
 - Arguments are **fully-qualified**; the generator adds no namespace of its own.
   This keeps mdd domain-neutral — the consuming app owns the contract types.
-- Applies to both the write entity and the `Ext` read entity.
+- Applies to the write entity always, and to the `Ext` read entity **while it keeps every stored
+  field**. A field-level `@internal` field leaves the read entity, and the generator cannot see
+  whether a contract declares that member — so a read entity that lost a field carries neither
+  `@inherits` nor `@implements` (its base is `IyuEntity`). Where a contract still holds on the
+  narrower read entity, declare it in a partial class of your own:
+  `public partial class UserExt : Sample.Contracts.IAudited { }`.
 
 ### 3.5 Metadata Definition
 

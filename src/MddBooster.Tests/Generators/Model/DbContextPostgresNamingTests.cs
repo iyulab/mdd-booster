@@ -99,6 +99,55 @@ public class DbContextPostgresNamingTests
         }
     }
 
+    /// <summary>
+    /// A field-level <c>@internal</c> field is stored — the write type maps its column — but the read
+    /// type has no such property, so its mapping must not name it (CS1061). Both backings: the read
+    /// type reading the table itself, and reading the full view.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PostgresNaming_ReadTypeDoesNotMapAFieldLevelInternalColumn(bool viewBacked)
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), $"mdd-dbctx-{Guid.NewGuid():N}.m3l.md");
+        File.WriteAllText(tmp,
+            "# Namespace: test\n\n" +
+            "## Worker\n" +
+            "- id: identifier @pk @generated\n" +
+            "- name: string(50) @not_null\n\n" +
+            "## Account\n" +
+            "- id: identifier @pk @generated\n" +
+            "- name: string(50) @not_null\n" +
+            "- secret: string(100) @not_null @internal\n" +
+            (viewBacked
+                ? "- worker_id: identifier? @reference(Worker)\n- worker_name: string? @lookup(worker_id.name)\n"
+                : string.Empty));
+        try
+        {
+            var models = new InterfaceResolver(new M3lLoader().LoadFile(tmp)).ResolveAll().ToList();
+            var output = DbContextRenderer.Render(models, "TestDbContext", "Test.Ns", postgresNaming: true);
+
+            var write = Block(output, "modelBuilder.Entity<Account>(e =>");
+            var read = Block(output, "modelBuilder.Entity<AccountExt>(e =>");
+            Assert.Contains("e.Property(x => x.Secret).HasColumnName(\"secret\");", write);
+            Assert.DoesNotContain("Secret", read);
+            Assert.Contains("e.Property(x => x.Name).HasColumnName(\"name\");", read);
+            Assert.Contains(viewBacked ? "e.ToView(\"account_full_view\");" : "e.ToView(\"account\");", read);
+        }
+        finally
+        {
+            File.Delete(tmp);
+        }
+
+        static string Block(string output, string head)
+        {
+            var start = output.IndexOf(head, StringComparison.Ordinal);
+            Assert.True(start >= 0, $"missing: {head}");
+            var end = output.IndexOf("        });", start, StringComparison.Ordinal);
+            return output[start..end];
+        }
+    }
+
     [Fact]
     public void DefaultRender_IsUnchangedByTheNewParameter()
     {

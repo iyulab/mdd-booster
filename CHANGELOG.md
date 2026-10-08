@@ -16,6 +16,17 @@
 
 ---
 
+## [Unreleased]
+
+### 필드 단위 `@internal` — PostgreSQL 방언과 외부 계약에서 컴파일되는 생성물
+
+- PostgreSQL 방언 DbContext 의 읽기 타입(`…Ext`) 매핑이 필드 단위 `@internal` 저장 필드를 더 이상 매핑하지 않는다. 읽기 타입에는 그 속성이
+  없으므로 종전 생성물은 `CS1061` 로 컴파일되지 않았다(쓰기 타입 매핑은 그대로). 기본 방언은 읽기 타입에 저장 칸을 매핑하지 않아 해당이 없었다.
+- 🔴 `@inherits`·`@implements` 는 읽기 타입이 **저장 필드를 전부 가질 때만** 읽기 타입에도 붙는다. 필드 단위 `@internal` 이 칸 하나를 빼면 읽기
+  타입은 계약을 받지 않는다(기반 클래스 `IyuEntity`) — 생성기는 계약이 그 칸을 선언하는지 볼 수 없고, 선언한다면 종전 생성물은 `CS0535`
+  (추상 기반 멤버면 `CS0534`)로 컴파일되지 않았다. 쓰기 타입은 그대로 계약을 받는다. 좁아진 읽기 타입에서도 성립하는 계약은 소비 앱의
+  partial 클래스에 선언한다(`public partial class UserExt : IAudited { }`) — `docs/M3L.md` §3.4.9.
+
 ## 0.38.0
 
 ### standalone `::view` → `CREATE VIEW` — Sql 타깃이 파생 뷰를 낸다 (파서 `M3L.Native` 0.19.0)

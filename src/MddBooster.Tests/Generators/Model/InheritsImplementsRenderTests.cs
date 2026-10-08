@@ -134,4 +134,37 @@ public class InheritsImplementsRenderTests
 
         Assert.Contains("public partial class UserExt : global::Sample.Contracts.PrincipalBase, IUser", result.Read);
     }
+
+    /// <summary>
+    /// A field-level <c>@internal</c> field leaves the read type, so the read type can no longer be
+    /// assumed to have every member a contract declares. The contracts stay on the write type and
+    /// leave the read type — otherwise <c>IPrincipal</c> declaring <c>PasswordHash</c> fails the read
+    /// type with CS0535 (an abstract base member, with CS0534).
+    /// </summary>
+    [Fact]
+    public void A_read_type_that_lost_a_field_to_internal_carries_no_external_contract()
+    {
+        var plain = ModelWith("User",
+            Attr("inherits", "Sample.Contracts.PrincipalBase"),
+            Attr("implements", "Sample.Contracts.IPrincipal"));
+        var model = new ResolvedModel
+        {
+            Name = plain.Name,
+            Source = plain.Source,
+            Fields = [.. plain.Fields, new FieldNode
+            {
+                Name = "password_hash", Type = "string", Kind = FieldKind.Stored, Nullable = false,
+                Attributes = [Attr("internal")],
+                Loc = new SourceLocation { File = "t.m3l.md", Line = 2 },
+            }],
+        };
+
+        var result = EntityPairRenderer.Render(model, "Sample.Entities", extBacking: EntityPairRenderer.ExtBacking.None);
+
+        Assert.Contains(
+            "public partial class User : global::Sample.Contracts.PrincipalBase, IUser, global::Sample.Contracts.IPrincipal",
+            result.Write);
+        Assert.Contains("public partial class UserExt : IyuEntity, IUser" + Environment.NewLine, result.Read);
+        Assert.DoesNotContain("Sample.Contracts", result.Read);
+    }
 }

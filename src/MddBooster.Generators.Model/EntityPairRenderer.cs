@@ -108,6 +108,15 @@ public static class EntityPairRenderer
         var readOnlyStoredFields = storedFields.Where(f => !EntitySurface.IsFieldInternal(f)).ToList();
         var readOnlyDerivedFields = derivedFields.Where(f => !EntitySurface.IsFieldInternal(f)).ToList();
 
+        // The external contracts @inherits/@implements name are types this generator cannot see
+        // into. The write type carries every stored field, so whatever it claims is the model's
+        // claim. The read type can carry the same claim only while it is guaranteed the same
+        // members — once a field-level @internal field leaves it, a contract that declares that
+        // member would not compile on it, and nothing here can tell whether the contract does.
+        // So the read type keeps the contracts exactly as long as it keeps every stored field; a
+        // consumer who knows a contract still holds on the narrower type says so in a partial class.
+        var readTypeKeepsContracts = readOnlyStoredFields.Count == storedFields.Count;
+
         var models = allModels ?? [model];
         var nullableLookups = derivedFields
             .Where(f => f.Kind == FieldKind.Lookup && LookupPath.ResultNullable(model, f, models))
@@ -117,7 +126,7 @@ public static class EntityPairRenderer
         return new RenderedPair(
             Interface: RenderInterface(entityName, readOnlyStoredFields, ns, knownEnumNames, postgres),
             Write: RenderClass(entityName, storedFields, derivedFields: null, ns, isExt: false, knownEnumNames, extBacking, model.Source, model.Name, oneToOne, manyToOne, nullableLookups, postgres),
-            Read: RenderClass(entityName, readOnlyStoredFields, readOnlyDerivedFields, ns, isExt: true, knownEnumNames, extBacking, model.Source, model.Name, oneToOne, manyToOne, nullableLookups, postgres));
+            Read: RenderClass(entityName, readOnlyStoredFields, readOnlyDerivedFields, ns, isExt: true, knownEnumNames, extBacking, model.Source, model.Name, oneToOne, manyToOne, nullableLookups, postgres, externalContracts: readTypeKeepsContracts));
     }
 
     private static string RenderInterface(string entityName, IReadOnlyList<FieldNode> fields, string ns, IReadOnlySet<string>? knownEnumNames, bool postgres)
@@ -161,7 +170,8 @@ public static class EntityPairRenderer
         IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne,
         IReadOnlyList<ManyToOneNavigations.Navigation>? manyToOne,
         IReadOnlySet<string> nullableLookups,
-        bool postgres)
+        bool postgres,
+        bool externalContracts = true)
     {
         var className = isExt ? entityName + "Ext" : entityName;
         // Ext classes route to the SQL layer that actually exposes their
@@ -180,7 +190,8 @@ public static class EntityPairRenderer
 
         // @implements 어트리뷰트에서 추가 인터페이스 추출 (도메인 중립 — 인자는
         // 완전수식명(FQN)을 verbatim 사용, mdd는 global:: 만 접두).
-        var extraInterfaces = (source.Attributes ?? [])
+        IEnumerable<FieldAttribute> contractAttributes = externalContracts ? source.Attributes ?? [] : [];
+        var extraInterfaces = contractAttributes
             .Where(a => string.Equals(a.Name, "implements", StringComparison.OrdinalIgnoreCase))
             .SelectMany(a => a.Args ?? [])
             .Select(AttributeArgString)
@@ -190,7 +201,7 @@ public static class EntityPairRenderer
 
         // @inherits(FQN) — 기본 베이스클래스 IyuEntity 오버라이드 (도메인 중립).
         // 미지정 시 IyuEntity 유지(하위호환). 단일 인자(C# 단일 상속).
-        var inheritsFqn = (source.Attributes ?? [])
+        var inheritsFqn = contractAttributes
             .Where(a => string.Equals(a.Name, "inherits", StringComparison.OrdinalIgnoreCase))
             .SelectMany(a => a.Args ?? [])
             .Select(AttributeArgString)
