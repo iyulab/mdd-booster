@@ -31,7 +31,8 @@ public sealed class ApiRegistrationGenerator(ApiRegistrationGeneratorOptions opt
             models,
             _options.Namespace,
             _options.EntitiesNamespace,
-            surfaces: _options.Surfaces);
+            surfaces: _options.Surfaces,
+            registeredElsewhere: _options.RegisteredElsewhere);
 
         File.WriteAllText(Path.Combine(apiDir, "ApiRegistration_gen.cs"), rendered);
 
@@ -107,4 +108,11 @@ public sealed class ApiRegistrationGeneratorOptions
     /// 이 옵션 이전과 바이트 단위로 같다.
     /// </summary>
     public ApiSurfaces Surfaces { get; init; } = ApiSurfaces.All;
+
+    /// <summary>
+    /// Models whose OData set another Api target of the same build registers. An <c>::aspect</c> registered
+    /// here whose base is one of them still gets its shared-key declaration. Omitted (default): only this
+    /// target's own sets count.
+    /// </summary>
+    public IReadOnlySet<string>? RegisteredElsewhere { get; init; }
 }

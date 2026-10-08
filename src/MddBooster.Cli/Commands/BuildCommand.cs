@@ -464,6 +464,40 @@ public sealed class BuildCommand
             }
         }
 
+        // 1.8b. 공유 키 선언(`::aspect`)은 aspect 셋을 등록하는 Api 타깃이 낸다 — Base 셋은 같은 빌드의 다른
+        // Api 타깃이 등록할 수 있다(소유자로 가른 타깃에서 모듈의 aspect 가 베이스의 Base 에 붙는 모양). 그래서
+        // 타깃마다 «다른 타깃이 OData 로 등록하는 모델»을 넘긴다. Base 를 어느 타깃도 등록하지 않으면 선언할
+        // 곳이 없다 — 공유 키 거절이 꺼진다는 것을 조용히 두지 않는다(MDD033).
+        var odataRegisteredBy = new Dictionary<MddJsonTarget, HashSet<string>>();
+        if (configViolations.Count == 0)
+        {
+            foreach (var api in apiTargets.Where(t =>
+                ApiSurfaceNames.Parse(t.Surfaces).HasFlag(ApiSurfaces.OData)))
+            {
+                odataRegisteredBy[api] = (filters.TryGetValue(api, out var af) ? af : EntitySurfaceFilter.PassAll)
+                    .Apply(allModels)
+                    .Where(m => !EntitySurface.IsInternal(m))
+                    .Select(m => m.Name)
+                    .ToHashSet(StringComparer.Ordinal);
+            }
+            var odataRegisteredAnywhere = odataRegisteredBy.Values.SelectMany(s => s).ToHashSet(StringComparer.Ordinal);
+            foreach (var aspect in allModels
+                .Where(m => odataRegisteredAnywhere.Contains(m.Name))
+                .Where(m => m.Source.Base is { Kind: "aspect" })
+                .OrderBy(m => m.Name, StringComparer.Ordinal))
+            {
+                var principal = allModels.FirstOrDefault(m => m.Name == aspect.Source.Base!.Model);
+                if (principal is null || EntitySurface.IsInternal(principal)
+                    || odataRegisteredAnywhere.Contains(principal.Name)) continue;
+
+                ReportWarning("config", "MDD033", new SemanticDiagnostic("MDD033",
+                    $"'{aspect.Name}' 은(는) '{principal.Name}' 의 aspect 인데, 어떤 Api 타깃도 '{principal.Name}' 을(를) OData 로 "
+                    + "등록하지 않는다 — 공유 키 선언(DeclareSharedKey)을 낼 곳이 없어 그 셋의 공유 키 거절이 꺼진다. "
+                    + $"'{principal.Name}' 을(를) 등록하는 Api 타깃을 두거나, aspect 도 함께 빼라.",
+                    aspect.Source.Loc, SemanticSeverity.Warning).Format());
+            }
+        }
+
         if (configViolations.Count > 0)
         {
             Console.Error.WriteLine($"[config] 설정 오류 {configViolations.Count}건:");
@@ -531,8 +565,12 @@ public sealed class BuildCommand
             var entitiesNamespace = target.EntitiesNamespace
                 ?? (modelNamespaces.Count == 1 ? modelNamespaces[0] : null);
             var formsFilter = formsFilters.TryGetValue(target, out var ff) ? ff : EntitySurfaceFilter.PassAll;
+            var registeredElsewhere = odataRegisteredBy
+                .Where(kv => !ReferenceEquals(kv.Key, target))
+                .SelectMany(kv => kv.Value)
+                .ToHashSet(StringComparer.Ordinal);
             return (Target: target, Filter: filter, FormsFilter: formsFilter,
-                Generator: ResolveGenerator(target, entitiesNamespace, filter, formsFilter));
+                Generator: ResolveGenerator(target, entitiesNamespace, filter, formsFilter, registeredElsewhere));
         }).ToList();
 
         // 거절은 그 종류의 종료 코드로 — 모델을 이 타깃이 표현할 수 없으면 의미 분석 에러와 같은 3, 타깃의 설정이나
@@ -713,7 +751,7 @@ public sealed class BuildCommand
 
     private IArtifactGenerator ResolveGenerator(
         MddJsonTarget target, string? modelNamespace, EntitySurfaceFilter surfaceFilter,
-        EntitySurfaceFilter formsSurfaceFilter)
+        EntitySurfaceFilter formsSurfaceFilter, IReadOnlySet<string> registeredElsewhere)
     {
         return target.Type switch
         {
@@ -739,6 +777,7 @@ public sealed class BuildCommand
                     SurfaceFilter = surfaceFilter,
                     PermissionKeyTemplate = target.PermissionKeyTemplate,
                     Surfaces = MddBooster.Generators.Api.ApiSurfaceNames.Parse(target.Surfaces),
+                    RegisteredElsewhere = registeredElsewhere,
                 }),
             "TypeScript" => new TypeScriptGenerator(
                 new TypeScriptGeneratorOptions

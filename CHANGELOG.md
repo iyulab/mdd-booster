@@ -27,6 +27,14 @@
   (추상 기반 멤버면 `CS0534`)로 컴파일되지 않았다. 쓰기 타입은 그대로 계약을 받는다. 좁아진 읽기 타입에서도 성립하는 계약은 소비 앱의
   partial 클래스에 선언한다(`public partial class UserExt : IAudited { }`) — `docs/M3L.md` §3.4.9.
 
+### 소유자로 가른 Api 타깃 — `::aspect` 의 공유 키 선언이 사라지지 않는다
+
+- `includeOwners`/`excludeOwners`·엔티티 목록으로 Api 타깃을 가르고 aspect 와 그 base 가 서로 다른 타깃에 떨어지면, 종전에는 어느 쪽도
+  `DeclareSharedKey` 를 내지 않아 런타임의 공유 키 거절(`SharedKeyRequired`·`SharedKeyPrincipalMissing`·`SharedKeyRowExists`)이 조용히 꺼졌다.
+  이제 aspect 셋을 등록하는 타깃이 선언을 내고, base 셋이 같은 빌드의 다른 Api 타깃 것이면 그 등록을 먼저 부르라는 주석을 함께 낸다(순서가
+  틀리면 런타임 기동이 base 셋 이름을 대며 실패한다 — 조용히 꺼지지 않는다).
+- 새 경고 `MDD033` — aspect 를 OData 로 등록하는데 그 base 를 같은 빌드의 어떤 Api 타깃도 등록하지 않는다(선언을 낼 곳이 없다).
+
 ## 0.38.0
 
 ### standalone `::view` → `CREATE VIEW` — Sql 타깃이 파생 뷰를 낸다 (파서 `M3L.Native` 0.19.0)

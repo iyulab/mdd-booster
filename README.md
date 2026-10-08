@@ -1122,6 +1122,7 @@ consumer-repo/
 | MDD030 | standalone `::view` 가 해석되지 않는다 — 정의되지 않은 관계(from/join), 뷰의 from/join 이 아닌 관계나 없는 열을 가리키는 `@from`·join 조건·`group_by`, `Model.field = Model.field` 항을 `AND` 로 이은 것이 아닌 join 조건, 조인 대상을 쓰지 않는 조건, 값의 원천(`@from`·`@rollup`·`@computed`)이 없는 열, 서로를 읽는 뷰 |
 | MDD031(경고) | standalone `::view` 를 생성하지 않는 모양 — `@materialized`, `@lookup` 열(뷰는 소스에서 투영한다 — `@from`), 출력 열을 가리키는 `group_by`, 뷰 소스 위의 `@rollup`, 생성하지 않는 뷰를 읽는 뷰 |
 | MDD032(경고) | 뷰를 2단보다 깊게 겹쳐 읽는다 — 명세가 2단까지를 권장한다(생성은 한다) |
+| MDD033(경고) | `::aspect` 셋을 OData 로 등록하는데, 그 base 를 같은 빌드의 어떤 Api 타깃도 OData 로 등록하지 않는다 — 공유 키 선언(`DeclareSharedKey`)을 낼 곳이 없어 그 셋의 공유 키 거절이 꺼진다. base 를 등록하는 Api 타깃을 두거나 aspect 도 함께 뺀다(설정 단계에서 나온다) |
 
 `mdd build` 에서는 파서 검증기가 이 분석보다 먼저 돈다 — lookup 경로의 키에 `@reference` 가 없으면 `M3L-E002`, 경로 조각이
 그 자리의 모델에 없으면 `M3L-E022` 로 먼저 멈추므로 CLI 에서 `MDD004`·`MDD005`·`MDD006` 을 보는 일은 드물다. 이 분석기를

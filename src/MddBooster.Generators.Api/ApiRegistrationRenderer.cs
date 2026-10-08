@@ -41,7 +41,8 @@ public static class ApiRegistrationRenderer
         string ns,
         string? entitiesNamespace = null,
         string methodName = "RegisterGeneratedEntities",
-        ApiSurfaces surfaces = ApiSurfaces.All)
+        ApiSurfaces surfaces = ApiSurfaces.All,
+        IReadOnlySet<string>? registeredElsewhere = null)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentException.ThrowIfNullOrWhiteSpace(ns);
@@ -114,13 +115,26 @@ public static class ApiRegistrationRenderer
         // 스키마를 만드는 소비자에겐 그 제약도 없다). 런타임은 등록되지 않은 셋을 가리키는 선언을
         // 거절하므로 모든 AddEntityPair 뒤에 둔다. Base 가 @internal 이면 가리킬 셋이 없어 내지 않는다.
         // 공유 키는 OData 쓰기 경로의 선언이다 — OData 를 내지 않으면 가리킬 셋도, 지킬 쓰기도 없다.
+        //
+        // 선언은 aspect 셋을 등록하는 쪽에 속한다. Base 는 같은 빌드의 다른 Api 타깃이 등록할 수 있다 —
+        // 소유자로 가른 타깃에서 모듈의 aspect 가 베이스의 Base 에 붙는 모양이다. 그 경우에도 선언을 내고,
+        // 런타임이 선언 시점에 Base 셋을 찾으므로 그 등록을 먼저 부르라고 생성물에 적는다(순서가 틀리면
+        // 기동이 Base 셋 이름을 대며 실패한다 — 조용히 꺼지지 않는다).
         var registered = odata
             ? models.Where(m => !EntitySurface.IsInternal(m)).Select(m => m.Name).ToHashSet(StringComparer.Ordinal)
             : [];
         foreach (var model in models.OrderBy(m => m.Name, StringComparer.Ordinal))
         {
             if (!registered.Contains(model.Name)) continue;
-            if (model.Source.Base is not { Kind: "aspect" } aspectOf || !registered.Contains(aspectOf.Model)) continue;
+            if (model.Source.Base is not { Kind: "aspect" } aspectOf) continue;
+            var principalHere = registered.Contains(aspectOf.Model);
+            if (!principalHere && registeredElsewhere?.Contains(aspectOf.Model) != true) continue;
+
+            if (!principalHere)
+            {
+                sb.Append("        // '").Append(Pluralizer.Pluralize(NameCasing.ToPascalCase(aspectOf.Model)))
+                  .AppendLine("' is registered by another generated registration; call that one first.");
+            }
 
             sb.Append("        options.ODataModel.DeclareSharedKey(\"")
               .Append(Pluralizer.Pluralize(NameCasing.ToPascalCase(model.Name))).Append("\", \"")
