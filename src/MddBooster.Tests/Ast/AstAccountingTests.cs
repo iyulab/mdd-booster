@@ -234,4 +234,38 @@ public class AstAccountingTests
 
         Assert.DoesNotContain(unconsumed, u => u.StartsWith("::enum", StringComparison.Ordinal));
     }
+
+    /// <summary>
+    /// A custom framework attribute (§2.5.6) is parsed and preserved, and no target reads it — the
+    /// generator owns the mapping to each platform. It is reported instead of vanishing from the output,
+    /// once per declaration: a field an interface declares is reported on the interface, not again on
+    /// every model that takes it.
+    /// </summary>
+    [Fact]
+    public void Framework_attributes_are_reported_once_where_declared()
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), $"mdd-acct-{Guid.NewGuid():N}.m3l.md");
+        File.WriteAllText(tmp, """
+# Namespace: x
+
+## Versioned ::interface
+- version: integer `[ConcurrencyCheck]`
+
+## Account : Versioned
+- id: identifier @pk @generated
+- password: string(100) `[DataType(DataType.Password)]` `[JsonIgnore]`
+- name: string(50)
+""");
+        try
+        {
+            var unconsumed = AstAccounting.ListUnconsumed(new M3lLoader().LoadFile(tmp))
+                .Where(u => u.Contains("§2.5.6", StringComparison.Ordinal)).ToList();
+
+            Assert.Equal(3, unconsumed.Count);
+            Assert.Single(unconsumed, u => u.StartsWith("Versioned.version:", StringComparison.Ordinal) && u.Contains("ConcurrencyCheck", StringComparison.Ordinal));
+            Assert.Single(unconsumed, u => u.StartsWith("Account.password:", StringComparison.Ordinal) && u.Contains("JsonIgnore", StringComparison.Ordinal));
+            Assert.Single(unconsumed, u => u.StartsWith("Account.password:", StringComparison.Ordinal) && u.Contains("DataType", StringComparison.Ordinal));
+        }
+        finally { File.Delete(tmp); }
+    }
 }

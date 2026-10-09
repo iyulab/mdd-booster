@@ -11,13 +11,18 @@ namespace MddBooster.Core.Ast;
 /// 뷰가 «생성되지 않는» 경우(Sql 타깃 없음·생성하지 않는 모양)는 빌드가 따로 말한다.
 /// <para>
 /// 속성(attribute) 축은 이 회계 대상이 아니다 — 열린 어휘라 「읽히지 않는 것」의 집합을
-/// 열거할 수 없다. enum 헤더의 부모 목록(<c>## X ::enum : Base</c>)도 대상이 아니다: 파서가
+/// 열거할 수 없다. 예외는 사용자 프레임워크 속성(<c>`[X]`</c>, 명세 §2.5.6)이다 — 이 생성기는
+/// 그중 어느 것도 읽지 않으므로 «읽히지 않는 것» = 선언된 것 전부라 열거할 수 있다. enum 헤더의 부모 목록(<c>## X ::enum : Base</c>)도 대상이 아니다: 파서가
 /// 부모의 값을 자식의 <c>Values</c> 로 합쳐 주므로(명세 §3.1.6) 모든 타깃이 상속 멤버를 이미
 /// 읽고 있다.
 /// </para>
 /// </summary>
 public static class AstAccounting
 {
+    private static string FrameworkAttributeText(CustomAttribute attr) =>
+        !string.IsNullOrWhiteSpace(attr.Raw) ? attr.Raw.Trim()
+        : $"[{attr.Content}]";
+
     /// <summary>이 생성기가 관계를 읽는 유일한 형태.</summary>
     public const string RelationReadForm = "@reference(Target)";
 
@@ -68,6 +73,24 @@ public static class AstAccounting
             if (sections.Custom is null) continue;
             unconsumed.AddRange(sections.Custom.Keys.Select(k => $"{model.Name}: ### {k}"));
         }
+
+        // Custom framework attributes (§2.5.6) are "processed by implementation-specific parsers", and
+        // this implementation processes none: the generator owns how a model becomes C#, SQL and
+        // TypeScript, and a raw platform attribute would bypass that mapping (and the portability of
+        // the model across targets). Parsed and preserved, then dropped by every target — so it is
+        // reported here instead of disappearing. The intent usually has M3L vocabulary already
+        // (a row version is the `rowversion` type).
+        // The parser copies an interface's fields into each model that takes it, location and all —
+        // interfaces go first and a declaration is reported once, where it is written.
+        var reported = new HashSet<(string?, int, int, string)>();
+        foreach (var owner in ast.Interfaces.Concat(ast.Models))
+            foreach (var field in owner.Fields)
+                foreach (var attr in field.FrameworkAttrs ?? [])
+                {
+                    var text = FrameworkAttributeText(attr);
+                    if (!reported.Add((field.Loc.File, field.Loc.Line, field.Loc.Col, text))) continue;
+                    unconsumed.Add($"{owner.Name}.{field.Name}: 프레임워크 속성 {text} (명세 §2.5.6 — 어떤 타깃도 읽지 않는다)");
+                }
 
         return unconsumed;
     }

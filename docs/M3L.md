@@ -493,6 +493,13 @@ M3L allows for custom framework-specific attributes using square brackets:
 
 These custom attributes can be used to provide platform-specific metadata that will be processed by implementation-specific parsers.
 
+**What this generator implements** — none of them. A custom attribute parses and reaches the model,
+and no target carries it into the output: this generator owns how a model becomes C#, SQL and
+TypeScript, and a raw platform attribute would bypass that mapping and tie the model to one target.
+The build lists each one among the unconsumed elements (`[m3l] 경고: 소비되지 않는 요소`) rather than
+dropping it silently. Where the intent has M3L vocabulary, use that — a row version is the
+`rowversion` type (§2.3.1.2), which every target maps.
+
 ## 3. Special Elements
 
 ### 3.1 Enum Definition
