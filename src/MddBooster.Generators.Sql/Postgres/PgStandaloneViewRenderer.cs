@@ -56,6 +56,7 @@ public static class PgStandaloneViewRenderer
         }
 
         var columns = new List<string>();
+        var computed = new List<(string Expr, string Name)>();
         foreach (var column in view.Columns)
         {
             switch (column)
@@ -70,10 +71,11 @@ public static class PgStandaloneViewRenderer
                         rollup.Rollup, schema, Alias(view.From), key.Name, tableNameMap, fullViewNameMap, derivedFieldsByModel,
                         targetSoftDeletes: SoftDelete.IsEnabled(rollup.Target)) + $" AS {column.Name}");
                     break;
-                case ViewComputedColumn computed:
-                    var selected = ExpressionSelection.Select(computed.Computed, SqlDialect.PostgreSql)
+                case ViewComputedColumn computedColumn:
+                    var selected = ExpressionSelection.Select(computedColumn.Computed, SqlDialect.PostgreSql)
                         ?? throw new InvalidOperationException($"View column '{view.Name}.{column.Name}' has no PostgreSQL expression (MDD036).");
-                    columns.Add($"{PostgresExpressions.Render(selected, Reference)} AS {column.Name}");
+                    // Over the projected row (the CTE below): a bare name is a column the view already carries.
+                    computed.Add((PostgresExpressions.Render(selected, name => name), column.Name));
                     break;
             }
         }
@@ -90,6 +92,7 @@ public static class PgStandaloneViewRenderer
         var sb = new StringBuilder();
         sb.AppendLine(Header);
         sb.Append("CREATE VIEW ").Append(schema).Append('.').Append(viewNameMap[view.Name]).AppendLine(" AS");
+        if (computed.Count > 0) sb.AppendLine("WITH r AS (");
         sb.AppendLine("SELECT");
         for (var i = 0; i < columns.Count; i++)
             sb.Append("    ").Append(columns[i]).AppendLine(i < columns.Count - 1 ? "," : "");
@@ -104,6 +107,23 @@ public static class PgStandaloneViewRenderer
         if (view.GroupBy.Count > 0)
             sb.Append("GROUP BY ").AppendLine(string.Join(", ", view.GroupBy.Select(Column)));
         sb.Length -= Environment.NewLine.Length;
+        if (computed.Count > 0)
+        {
+            // r = the projected columns; one layer per computed column, each able to read every column before it —
+            // the same shape as the T-SQL renderer.
+            sb.AppendLine().Append(')');
+            var previous = "r";
+            for (var i = 0; i < computed.Count; i++)
+            {
+                var layer = "c" + (i + 1);
+                sb.AppendLine(",");
+                sb.Append(layer).Append(" AS (SELECT ").Append(previous).Append(".*, ").Append(computed[i].Expr)
+                  .Append(" AS ").Append(computed[i].Name).Append(" FROM ").Append(previous).Append(')');
+                previous = layer;
+            }
+            sb.AppendLine();
+            sb.Append("SELECT * FROM ").Append(previous);
+        }
         sb.AppendLine(";");
         return sb.ToString();
     }

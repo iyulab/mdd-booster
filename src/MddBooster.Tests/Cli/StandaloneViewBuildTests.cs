@@ -208,6 +208,46 @@ public class StandaloneViewBuildTests
         finally { Cleanup(root); }
     }
 
+    /// <summary>
+    /// A computed column reads the view's own projected columns — here two rollups — so on PostgreSQL, as on SQL Server, the
+    /// projection becomes a CTE and each computed column a layer over it.
+    /// </summary>
+    [Fact]
+    public void A_computed_view_column_reads_the_projected_row_on_PostgreSQL()
+    {
+        const string model = """
+            # Namespace: live.views
+
+            ## Client
+            - id: identifier @pk @generated
+            - name: string(100) @not_null
+
+            ## Purchase
+            - id: identifier @pk @generated
+            - client_id: identifier @reference(Client)
+            - amount: decimal(12,2) @not_null
+
+            ## ClientAverage ::view
+            ### Source
+            - from: Client
+
+            - client_name: string @from(Client.name)
+            - purchases: integer @rollup(Purchase.client_id, count)
+            - spent: decimal(12,2) @rollup(Purchase.client_id, sum(amount))
+            - average: decimal(12,2) @computed("spent / NULLIF(purchases, 0)")
+            """;
+        var mddDir = Scaffold(model, PgTarget, out var root);
+        try
+        {
+            Assert.Equal(0, new BuildCommand().Run(mddDir));
+            var sql = File.ReadAllText(Path.Combine(root, "db", "views_gen", "client_average.sql"));
+            Assert.Contains("WITH r AS (", sql);
+            Assert.Contains("c1 AS (SELECT r.*, spent / nullif(purchases, 0) AS average FROM r)", sql);
+            Assert.Contains("SELECT * FROM c1;", sql);
+        }
+        finally { Cleanup(root); }
+    }
+
     [Fact]
     public void Without_a_Sql_target_the_build_says_the_views_are_not_generated()
     {
