@@ -51,6 +51,7 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
         ArgumentNullException.ThrowIfNull(context);
 
         var violations = context.Models.SelectMany(PgTableRenderer.RowVersionIndexViolations).ToList();
+        violations.AddRange(PostgresExpressions.Violations(context));
         if (violations.Count > 0)
         {
             throw new GeneratorRefusalException(GeneratorRefusalKind.Model, string.Join(Environment.NewLine, violations));
@@ -60,6 +61,9 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
     public void Generate(GeneratorContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+        var expressionViolations = PostgresExpressions.Violations(context);
+        if (expressionViolations.Count > 0)
+            throw new GeneratorRefusalException(GeneratorRefusalKind.Model, string.Join(Environment.NewLine, expressionViolations));
 
         var schemaViolation = PostgresIdentifiers.Check(_options.Schema);
         if (schemaViolation is not null)
@@ -226,23 +230,12 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
         IReadOnlyDictionary<string, IReadOnlySet<string>> derivedFieldsByModel,
         Action<string>? warn)
     {
-            // 이번 렌더러가 직접 지원하는 것은 Lookup/Rollup 파생 컬럼뿐이다 — Computed(표현식 문법이
-            // 방언마다 달라 안전한 자동 변환 불가) · @indexed Rollup(구체화 뷰 갱신 전략은 별도 결정)이
-            // 있는 모델은 스킵하고 경고한다. 부분 뷰(일부 파생 컬럼만 담은 FullView)는 만들지 않는다 —
-            // Model 타깃이 여전히 존재하지 않는 컬럼을 가리키는 이 이슈와 같은 결함 클래스가 재발한다.
+            // 이 렌더러가 방출하지 않는 것은 @indexed Rollup(구체화 뷰 갱신 전략은 별도 결정)뿐이다 — Computed 는
+            // M3L 0.20.0 의 이식 가능한 식을 번역해 낸다(PostgresExpressions; 번역 불가는 Validate 가 거절).
+            // 부분 뷰(일부 파생 컬럼만 담은 FullView)는 만들지 않는다 — Model 타깃이 존재하지 않는 컬럼을 가리키게 된다.
             var selfUnsupported = new HashSet<string>(StringComparer.Ordinal);
             foreach (var plan in allPlans.Where(p => p.NeedsFullView))
             {
-                var nonInternalComputeds = plan.Computeds.Where(f => !EntitySurface.IsFieldInternal(f)).ToList();
-                if (nonInternalComputeds.Count > 0)
-                {
-                    warn?.Invoke(
-                        $"[sql-pg] 경고: 모델 '{plan.Model.Name}'의 Computed 파생 필드는 PG 방언이 아직 " +
-                        "방출하지 않는다(표현식 문법 차이로 안전한 자동 변환 불가) — 해당 뷰를 직접 만들기 전까지 Ext 질의는 실패한다.");
-                    selfUnsupported.Add(plan.Model.Name);
-                    continue;
-                }
-
                 var indexedRollups = plan.Rollups
                     .Where(f => !EntitySurface.IsFieldInternal(f))
                     .Where(f => FieldAttributes.Has(f, "indexed"))

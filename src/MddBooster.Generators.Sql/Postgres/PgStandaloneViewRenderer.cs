@@ -4,9 +4,9 @@ namespace MddBooster.Generators.Sql.Postgres;
 
 /// <summary>
 /// Renders a standalone <c>::view</c> as a PostgreSQL <c>CREATE VIEW</c>, into
-/// <c>views_gen/{snake_name}.sql</c>. Only views without expressions reach it
-/// (<see cref="StandaloneViewSources.PostgresSkipped"/>); the T-SQL renderer is the reference for
-/// everything else — the same relations, sources, joins, rollups and group keys, in this dialect's names.
+/// <c>views_gen/{snake_name}.sql</c>. The T-SQL renderer is the reference — the same relations, sources, joins,
+/// rollups, group keys and expressions (the portable subset translated, or the <c>postgresql</c> platform expression),
+/// in this dialect's names.
 /// </summary>
 public static class PgStandaloneViewRenderer
 {
@@ -25,8 +25,6 @@ public static class PgStandaloneViewRenderer
     {
         ArgumentNullException.ThrowIfNull(view);
         ArgumentException.ThrowIfNullOrWhiteSpace(schema);
-        if (view.HasExpressions)
-            throw new InvalidOperationException($"View '{view.Name}' has expressions; this dialect does not render it.");
 
         var aliases = new Dictionary<string, string>(StringComparer.Ordinal);
         string Alias(ViewRelation r) => aliases[r.Name];
@@ -72,7 +70,21 @@ public static class PgStandaloneViewRenderer
                         rollup.Rollup, schema, Alias(view.From), key.Name, tableNameMap, fullViewNameMap, derivedFieldsByModel,
                         targetSoftDeletes: SoftDelete.IsEnabled(rollup.Target)) + $" AS {column.Name}");
                     break;
+                case ViewComputedColumn computed:
+                    var selected = ExpressionSelection.Select(computed.Computed, SqlDialect.PostgreSql)
+                        ?? throw new InvalidOperationException($"View column '{view.Name}.{column.Name}' has no PostgreSQL expression (MDD036).");
+                    columns.Add($"{PostgresExpressions.Render(selected, Reference)} AS {column.Name}");
+                    break;
             }
+        }
+
+        // `Relation.field` reads that relation's column; a bare name reads the view's `from`.
+        string Reference(string name)
+        {
+            var dot = name.IndexOf('.', StringComparison.Ordinal);
+            return dot > 0 && aliases.TryGetValue(name[..dot], out var alias)
+                ? $"{alias}.{name[(dot + 1)..]}"
+                : $"{Alias(view.From)}.{name}";
         }
 
         var sb = new StringBuilder();
@@ -87,6 +99,8 @@ public static class PgStandaloneViewRenderer
             sb.Append("INNER JOIN ").Append(Source(join.Target)).Append(" ON ")
               .AppendLine(string.Join(" AND ", join.On.Select(t => $"{Column(t.Left)} = {Column(t.Right)}")));
         }
+        if (view.WhereFor(SqlDialect.PostgreSql) is { } where)
+            sb.Append("WHERE ").AppendLine(PostgresExpressions.Render(where, Reference));
         if (view.GroupBy.Count > 0)
             sb.Append("GROUP BY ").AppendLine(string.Join(", ", view.GroupBy.Select(Column)));
         sb.Length -= Environment.NewLine.Length;

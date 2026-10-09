@@ -192,16 +192,18 @@ public class StandaloneViewBuildTests
     }
 
     [Fact]
-    public void A_view_with_an_expression_is_left_out_on_PostgreSQL_with_MDD029()
+    public void A_view_with_a_portable_expression_is_rendered_on_PostgreSQL()
     {
+        // The filter is written in M3L's portable subset (§10.7), so this dialect translates it rather than leaving the
+        // view out — before expressions had a defined language it could only skip it (MDD029).
         var mddDir = Scaffold(PgModel, PgTarget, out var root);
         using var stderr = new ConsoleErrorCapture(this);
         try
         {
             Assert.Equal(0, new BuildCommand().Run(mddDir));
-            Assert.False(File.Exists(Path.Combine(root, "db", "views_gen", "big_purchases.sql")));
-            Assert.Contains("MDD029", stderr.Text);
-            Assert.Contains("BigPurchases", stderr.Text);
+            var sql = File.ReadAllText(Path.Combine(root, "db", "views_gen", "big_purchases.sql"));
+            Assert.Contains("WHERE purchase.amount > 100", sql);
+            Assert.DoesNotContain("MDD029", stderr.Text);
         }
         finally { Cleanup(root); }
     }
