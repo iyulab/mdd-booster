@@ -166,9 +166,9 @@ public static class PgFullViewRenderer
         var whereClause = $"{fkColumn} = {baseAlias}.{basePkName}";
         if (targetSoftDeletes && !readsFullView)
             whereClause += $" AND {LiveRowColumnPredicate}";
-        if (!string.IsNullOrWhiteSpace(def.Where))
+        if (ExpressionSelection.Select(def.Where, def.WhereRaw, SqlDialect.PostgreSql) is { } filter)
         {
-            var where = ParentReferenceToken.Substitute(def.Where, field => $"{baseAlias}.{field}");
+            var where = ParentReferenceToken.Substitute(filter.Text, field => $"{baseAlias}.{field}");
             whereClause += $" AND ({where})";
         }
 

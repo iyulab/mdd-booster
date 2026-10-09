@@ -129,7 +129,7 @@ public static class FullViewRenderer
                 ?? throw new InvalidOperationException(
                     $"Computed field '{plan.Model.Name}.{computed.Name}' has no parsed ComputedDef.");
             computedColumns.Add((
-                expr: NormalizeComputedExpression(def.Expression ?? string.Empty),
+                expr: NormalizeComputedExpression(ExpressionSelection.Select(def, SqlDialect.SqlServer)?.Text ?? string.Empty),
                 alias: NameCasing.ToPascalCase(computed.Name)));
         }
 
@@ -254,10 +254,10 @@ public static class FullViewRenderer
         var whereClause = $"[{fkColumn}] = {baseAlias}.[{basePkColumn}]";
         if (targetSoftDeletes && !readsFullView)
             whereClause += " AND " + LiveRowPredicate;
-        if (!string.IsNullOrWhiteSpace(def.Where))
+        if (ExpressionSelection.Select(def.Where, def.WhereRaw, SqlDialect.SqlServer) is { } filter)
         {
             var where = ParentReferenceToken.Substitute(
-                def.Where, field => $"{baseAlias}.[{NameCasing.ToPascalCase(field)}]");
+                filter.Text, field => $"{baseAlias}.[{NameCasing.ToPascalCase(field)}]");
             whereClause += $" AND ({NormalizeComputedExpression(where)})";
         }
 
@@ -301,8 +301,8 @@ public static class FullViewRenderer
         if (!string.IsNullOrEmpty(def.Field)
             && IsDerivedColumn(derivedFieldsByModel, def.Target, NameCasing.ToPascalCase(def.Field)))
             return true;
-        return !string.IsNullOrWhiteSpace(def.Where)
-            && RollupWhereColumns(def.Where).Any(c => IsDerivedColumn(derivedFieldsByModel, def.Target, c));
+        return ExpressionSelection.Select(def.Where, def.WhereRaw, SqlDialect.SqlServer) is { } filter
+            && RollupWhereColumns(filter.Text).Any(c => IsDerivedColumn(derivedFieldsByModel, def.Target, c));
     }
 
     /// <summary>

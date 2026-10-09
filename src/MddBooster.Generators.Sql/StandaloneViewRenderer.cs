@@ -53,7 +53,7 @@ public static class StandaloneViewRenderer
                         targetSoftDeletes: SoftDelete.IsEnabled(rollup.Target)), alias));
                     break;
                 case ViewComputedColumn c:
-                    computed.Add((Expression(c.Expression, view), alias));
+                    computed.Add((Expression(ExpressionSelection.Select(c.Computed, SqlDialect.SqlServer)?.Text ?? string.Empty, view), alias));
                     break;
             }
         }
@@ -73,8 +73,8 @@ public static class StandaloneViewRenderer
                 .Append(" ON ")
                 .AppendLine(string.Join(" AND ", join.On.Select(t => $"{Column(t.Left)} = {Column(t.Right)}")));
         }
-        if (view.Where is { } where)
-            body.Append(indent).Append("WHERE ").AppendLine(Expression(where, view));
+        if (view.WhereFor(SqlDialect.SqlServer) is { } where)
+            body.Append(indent).Append("WHERE ").AppendLine(Expression(where.Text, view));
         if (view.GroupBy.Count > 0)
             body.Append(indent).Append("GROUP BY ").AppendLine(string.Join(", ", view.GroupBy.Select(Column)));
 

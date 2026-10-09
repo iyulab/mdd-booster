@@ -438,8 +438,10 @@ public static class EntityPairRenderer
                 sb.AppendLine(")]");
                 break;
             case FieldKind.Computed:
-                var computedExpr = GetAttributeFirstParam(f, "computed")
-                    ?? f.Computed?.Expression
+                // The metadata carries the expression this dialect's views use: the one declared for its platform,
+                // otherwise the portable one (as written — translation is the SQL target's).
+                var computedExpr = ExpressionSelection.Select(f.Computed, postgres ? SqlDialect.PostgreSql : SqlDialect.SqlServer)?.Text
+                    ?? GetAttributeFirstParam(f, "computed")
                     ?? string.Empty;
                 // Strip surrounding backticks that M3L uses to fence expressions
                 if (computedExpr.Length >= 2 && computedExpr.StartsWith('`') && computedExpr.EndsWith('`'))
