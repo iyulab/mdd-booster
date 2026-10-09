@@ -27,6 +27,7 @@ public sealed class SqlGenerator : IArtifactGenerator
     {
         ArgumentNullException.ThrowIfNull(context);
         RefuseCascadePaths(context);
+        SqlServerExpressions.RefuseMissingExpressions(context);
         if (_options.EmitSqlProj)
             FindSqlProj(ResolveProjectRoot(context.WorkingDirectory));
     }
@@ -53,6 +54,7 @@ public sealed class SqlGenerator : IArtifactGenerator
         ArgumentNullException.ThrowIfNull(context);
 
         RefuseCascadePaths(context);
+        SqlServerExpressions.RefuseMissingExpressions(context);
 
         var projectRoot = ResolveProjectRoot(context.WorkingDirectory);
         var tablesGenDir = Path.Combine(projectRoot, "dbo", "Tables_gen");

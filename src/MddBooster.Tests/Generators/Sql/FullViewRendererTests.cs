@@ -346,7 +346,7 @@ public class FullViewRendererTests
         var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", "Id", derivedFieldsByModel: null);
 
         Assert.Equal(
-            "(SELECT COUNT(*) FROM [dbo].[Order] WHERE [CustomerId] = b.[Id] AND ([Status] != 'cancelled'))",
+            "(SELECT COUNT(*) FROM [dbo].[Order] WHERE [CustomerId] = b.[Id] AND ([Status] <> 'cancelled'))",
             sql);
     }
 
@@ -444,7 +444,7 @@ public class FullViewRendererTests
             var plan = new ViewPlanner().Plan(customer);
             var sql = FullViewRenderer.Render(plan, "dbo", allModels: models);
 
-            Assert.Contains("WHERE [CustomerId] = b.[Id] AND ([Status] != 'cancelled')", sql);
+            Assert.Contains("WHERE [CustomerId] = b.[Id] AND ([Status] <> 'cancelled')", sql);
         }
         finally
         {

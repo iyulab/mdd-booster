@@ -84,7 +84,8 @@ public class StandaloneViewBuildTests
             Assert.Contains("[CustomerStats].[TotalSpent] AS [TotalSpent]", nested);
 
             var active = File.ReadAllText(Path.Combine(views, "ActiveProducts.sql"));
-            Assert.Contains("WHERE [IsActive] = true AND [StockQuantity] > 0", active);
+            // The portable `true` is SQL Server's 1 — the engine refuses `= true` as an unknown column.
+            Assert.Contains("WHERE [IsActive] = 1 AND [StockQuantity] > 0", active);
             Assert.DoesNotContain("ORDER BY", active);
         }
         finally { Cleanup(root); }

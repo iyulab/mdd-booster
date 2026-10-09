@@ -129,7 +129,10 @@ public static class FullViewRenderer
                 ?? throw new InvalidOperationException(
                     $"Computed field '{plan.Model.Name}.{computed.Name}' has no parsed ComputedDef.");
             computedColumns.Add((
-                expr: NormalizeComputedExpression(ExpressionSelection.Select(def, SqlDialect.SqlServer)?.Text ?? string.Empty),
+                expr: ExpressionSelection.Select(def, SqlDialect.SqlServer) is { } selected
+                    ? SqlServerExpressions.Render(selected, SqlServerExpressions.OwnColumn,
+                        booleanResult: computed.Type == "boolean", where: $"{plan.Model.Name}.{computed.Name}")
+                    : string.Empty,
                 alias: NameCasing.ToPascalCase(computed.Name)));
         }
 
@@ -256,9 +259,16 @@ public static class FullViewRenderer
             whereClause += " AND " + LiveRowPredicate;
         if (ExpressionSelection.Select(def.Where, def.WhereRaw, SqlDialect.SqlServer) is { } filter)
         {
-            var where = ParentReferenceToken.Substitute(
-                filter.Text, field => $"{baseAlias}.[{NameCasing.ToPascalCase(field)}]");
-            whereClause += $" AND ({NormalizeComputedExpression(where)})";
+            // A platform filter keeps its text; `$parent.field` names the row the rollup is computed for either way.
+            var where = filter.IsRaw
+                ? NormalizeComputedExpression(ParentReferenceToken.Substitute(
+                    filter.Text, field => $"{baseAlias}.[{NameCasing.ToPascalCase(field)}]"))
+                : SqlServerExpressions.Render(filter,
+                    name => name.StartsWith(ParentPrefix, StringComparison.Ordinal)
+                        ? $"{baseAlias}.[{NameCasing.ToPascalCase(name[ParentPrefix.Length..])}]"
+                        : SqlServerExpressions.OwnColumn(name),
+                    booleanResult: false, where: $"@rollup({def.Target}.{def.Fk}) where");
+            whereClause += $" AND ({where})";
         }
 
         return $"(SELECT {innerExpr} FROM [{schema}].[{fromTarget}] WHERE {whereClause})";
@@ -341,6 +351,8 @@ public static class FullViewRenderer
                     yield return NameCasing.ToPascalCase(m.Value);
         }
     }
+
+    private const string ParentPrefix = "$parent.";
 
     internal static string NormalizeComputedExpression(string expr)
     {

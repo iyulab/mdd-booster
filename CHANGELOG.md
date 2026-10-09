@@ -18,6 +18,22 @@
 
 ## [Unreleased]
 
+### 🔴 `M3L.Native` 0.20.0 — 식을 «이식 가능한 부분집합»으로 읽고 SQL Server 로 번역한다
+
+M3L 0.20.0 이 `@computed` · rollup `where:` · 뷰 `where` 의 언어를 정했다(명세 §10.7 — 리터럴 · 필드 참조 · 연산자 · `CASE` · 닫힌 함수 목록).
+이 생성기는 그 식을 SQL Server 원문이라고 가정하고 넘기던 것을 멈추고 **번역**한다.
+
+- 🔇 `true`/`false` → `1`/`0` · `!=` → `<>` · `concat`·`coalesce`·`date_add`·`date_diff`·`today`·`now`·`length`·`substring`·`round` 등 → T-SQL. 종전 생성물의
+  `is_active = true` 는 SQL Server 가 «열 이름 `true`»로 거절했다.
+- 🔇 불리언 필드의 비교식(`is_adult: boolean @computed("age >= 18")`)은 `CASE WHEN … THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END` — 종전엔 SELECT 목록에 술어를
+  그대로 내어 배포가 거절됐다.
+- `@computed_raw(…, platform: "sqlserver")`·`where_raw`(M3L 0.20.0)는 그 플랫폼 식으로 원문 그대로 쓰인다 — 같은 필드에 포터블 식이 있어도 이쪽이 이긴다.
+- 새 오류 `MDD036` — SQL Server 용 식이 없다(다른 플랫폼에만 `@computed_raw`/`where_raw` 가 있다). 빌드가 멈춘다.
+- 🔇 과도기: 이식 가능한 문맥에 SQL Server 문법(부분집합 밖 — 예 `DATEDIFF`·`GETDATE`·`[Name]`·문자열 `+`)을 쓴 식은 **이 판에서는** 경고 `MDD038` 과 함께 원문
+  그대로 나간다. **다음 마이너부터 거절**한다 — 부분집합으로 다시 쓰거나 `@computed_raw(…, platform: "sqlserver")` 로 옮길 것.
+- 생성 엔티티의 `[Computed]` 메타데이터는 그 방언의 플랫폼 식, 없으면 포터블 식 원문이다.
+- PostgreSQL 방언은 아직 Computed 와 식이 있는 standalone 뷰를 생성하지 않는다(다음 판에서 같은 번역기로).
+
 ### 필드의 `@system` — «이 칸은 애플리케이션 자신의 코드가 쓴다»
 
 상태·행위자·저장소 키처럼 사람이나 클라이언트가 직접 정하면 안 되는 칸을 모델에 선언한다. 지금까지는 그 사실을 적을

@@ -53,7 +53,9 @@ public static class StandaloneViewRenderer
                         targetSoftDeletes: SoftDelete.IsEnabled(rollup.Target)), alias));
                     break;
                 case ViewComputedColumn c:
-                    computed.Add((Expression(ExpressionSelection.Select(c.Computed, SqlDialect.SqlServer)?.Text ?? string.Empty, view), alias));
+                    computed.Add((ExpressionSelection.Select(c.Computed, SqlDialect.SqlServer) is { } selected
+                        ? Expression(selected, view, booleanResult: c.Field.Type == "boolean", $"{view.Name}.{c.Field.Name}")
+                        : string.Empty, alias));
                     break;
             }
         }
@@ -74,7 +76,7 @@ public static class StandaloneViewRenderer
                 .AppendLine(string.Join(" AND ", join.On.Select(t => $"{Column(t.Left)} = {Column(t.Right)}")));
         }
         if (view.WhereFor(SqlDialect.SqlServer) is { } where)
-            body.Append(indent).Append("WHERE ").AppendLine(Expression(where.Text, view));
+            body.Append(indent).Append("WHERE ").AppendLine(Expression(where, view, booleanResult: false, $"view {view.Name} where"));
         if (view.GroupBy.Count > 0)
             body.Append(indent).Append("GROUP BY ").AppendLine(string.Join(", ", view.GroupBy.Select(Column)));
 
@@ -134,6 +136,23 @@ public static class StandaloneViewRenderer
     /// The FullView expression contract, after qualifying each <c>Relation.field</c> that names one of
     /// the view's relations — the normalizer leaves bracketed text alone.
     /// </summary>
+    /// <summary>
+    /// A platform expression as written (relation-qualified names spelled as columns); a portable one translated, with
+    /// <c>Relation.field</c> as <c>[Relation].[Field]</c> and a bare name as the view row's column.
+    /// </summary>
+    private static string Expression(SelectedExpression selected, ResolvedView view, bool booleanResult, string where)
+    {
+        if (selected.IsRaw) return Expression(selected.Text, view);
+        var relations = new[] { view.From }.Concat(view.Joins.Select(j => j.Target)).Select(r => r.Name).ToHashSet(StringComparer.Ordinal);
+        return SqlServerExpressions.Render(selected, name =>
+        {
+            var dot = name.IndexOf('.', StringComparison.Ordinal);
+            return dot > 0 && relations.Contains(name[..dot])
+                ? $"[{name[..dot]}].[{NameCasing.ToPascalCase(name[(dot + 1)..])}]"
+                : SqlServerExpressions.OwnColumn(name);
+        }, booleanResult, where);
+    }
+
     private static string Expression(string text, ResolvedView view)
     {
         var relations = new[] { view.From }.Concat(view.Joins.Select(j => j.Target)).Select(r => r.Name);
