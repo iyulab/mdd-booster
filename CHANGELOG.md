@@ -16,7 +16,7 @@
 
 ---
 
-## [Unreleased]
+## 0.39.0
 
 ### 필드 단위 `@internal` — PostgreSQL 방언과 외부 계약에서 컴파일되는 생성물
 
