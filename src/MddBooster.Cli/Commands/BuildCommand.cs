@@ -496,6 +496,29 @@ public sealed class BuildCommand
                     + $"'{principal.Name}' 을(를) 등록하는 Api 타깃을 두거나, aspect 도 함께 빼라.",
                     aspect.Source.Loc, SemanticSeverity.Warning).Format());
             }
+
+            // 1.8c. `@searchable` 참조 키는 읽기 navigation 의 [Searchable] 이 된다 — 런타임 $search 는 그 navigation 을
+            // 따라 대상 셋의 텍스트를 찾는데, 대상 셋이 등록돼 있지 않으면 조용히 건너뛴다. 의존 셋은 OData 로 서빙되는데
+            // 대상은 같은 빌드의 어떤 Api 타깃도 등록하지 않으면, 그 선언은 아무것도 매칭하지 않는다(MDD035).
+            var searchNavigated = ManyToOneNavigations.Describe(allModels, oneToOne);
+            foreach (var model in allModels
+                .Where(m => odataRegisteredAnywhere.Contains(m.Name))
+                .OrderBy(m => m.Name, StringComparer.Ordinal))
+            {
+                var navigated = SearchableReferences.ReadNavigatedKeys(model.Name, oneToOne, searchNavigated);
+                foreach (var field in model.Fields.Where(f => f.Kind == M3L.Native.FieldKind.Stored
+                    && SearchableReferences.IsSearchableReference(f) && navigated.Contains(f.Name)))
+                {
+                    var target = MddBooster.Core.Ast.FieldAttributes.FirstArg(field, "reference")!;
+                    if (odataRegisteredAnywhere.Contains(target)) continue;
+
+                    ReportWarning("config", "MDD035", new SemanticDiagnostic("MDD035",
+                        $"'{model.Name}.{field.Name}' @searchable @reference({target}): 어떤 Api 타깃도 '{target}' 을(를) OData 로 "
+                        + "등록하지 않는다 — 런타임 $search 는 등록되지 않은 대상의 navigation 을 건너뛰어, 이 선언은 아무것도 매칭하지 않는다. "
+                        + $"'{target}' 을(를) 등록하는 Api 타깃을 두거나, 이 키의 @searchable 을 빼라.",
+                        field.Loc, SemanticSeverity.Warning).Format());
+                }
+            }
         }
 
         if (configViolations.Count > 0)

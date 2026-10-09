@@ -77,7 +77,7 @@ public class ModelTargetAxisCoverageTests
             ["implements"] = (Disposition.Carried, "additional interfaces on the generated classes"),
             ["inherits"] = (Disposition.Carried, "base class override"),
             ["binding"] = (Disposition.Carried, "[Binding]"),
-            ["searchable"] = (Disposition.Carried, "[Searchable] on both classes — the declaration the runtime's $search reads to narrow which string properties a term is matched against"),
+            ["searchable"] = (Disposition.Carried, "[Searchable] on both classes (a reference key's on the navigation that follows it) — the declaration the runtime's $search reads to narrow which string properties a term is matched against"),
             ["label"] = (Disposition.Carried, "[Display(Name)] — overrides the field description as the label source; FieldAttributes.EffectiveLabel/GetAttributeFirstParam(\"label\") is the shared priority (see also TsFieldSchemaRenderer and TsFormRenderer, which read the same override for the TypeScript targets)"),
             ["internal"] = (Disposition.Carried, "at field level: dropped from the interface and the Ext (read) class, kept on the write class. The FullView/UdView SELECT drops the same field in the same pass — see FullViewRendererTests/UdViewRendererTests. At model level it stays NotApplicable — that grain is EntitySurface.IsInternal, an Api/TypeScript-surface decision with no entity-generation counterpart"),
             ["help"] = (Disposition.Carried, "[Display(Description)] — GetAttributeString(\"help\") is the same free-text read TsFormRenderer's helpText already uses for the generated form"),

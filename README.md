@@ -566,6 +566,7 @@ UdView 위에 있어 이미 거르고, 기본 테이블을 읽는 서브쿼리�
 | `phone`·`email`·`url` | `[StringLength(n)]` | 상한이 **선언이 아니라 타입**에서 온다(명세 §10.4.2 — 30/320/2048). 컬럼·엔티티·필드 스키마·생성 폼이 같은 `n` 을 쓴다 |
 | `= <value>` | 속성 초기화자 | `= true;` · `= 3;` · `= "NEW";` · `= 0.5m;` · `= Status.Draft;` |
 | `rowversion` | `[Timestamp]` | 쓰기·읽기 두 클래스 모두. 쓰기 쪽은 EF 가 엔진이 생성하는 동시성 토큰으로 읽어 낡은 버전의 갱신이 아무 행도 바꾸지 않게 하고, 읽기 쪽은 OData 모델 빌더가 ETag 원천으로 읽는다. CLR 타입은 방언을 따른다 — SQL Server `byte[]`, PostgreSQL `uint`(`xmin`). `[Required]` 는 붙지 않는다(호출자가 주는 값이 아니다) |
+| `@searchable` | `[Searchable]` | 쓰기·읽기 두 클래스 모두. 런타임의 `$search` 는 `[Searchable]` 이 하나라도 있는 타입을 **선언된 문자열 속성만** 검색한다(없는 타입은 문자열 속성 전부). 🔴 **참조 키에 선언하면 키가 아니라 그 키의 navigation 에 붙는다** — 키는 텍스트가 아니라 어떤 낱말에도 매칭하지 않는다. 아래 «참조 키(N:1)» 절의 «검색» 행 |
 | `@immutable` | `[Editable(false)]` | 저장 필드에만 붙는다. 아래 TypeScript 타깃의 생성 폼 `disabled` prop과 같은 선언을 미러링 — 둘 다 메타데이터일 뿐, 이 리포가 생성하는 어떤 API 계층도 이를 강제하지 않는다 |
 | 필드 단위 `@unique` | `HasIndex(...).IsUnique()` | 엔티티 속성이 아니라 `DbContext.OnModelCreating`의 fluent 설정 — SQL 타깃의 `UK_{Model}_{Column}`/PG의 `uq_{table}_{field}`와 같은 이름을 `HasDatabaseName`으로 명시한다. 널 허용 컬럼도 분기 없이 같은 한 줄만 방출 — SQL Server 프로바이더가 unique index의 널 허용 컬럼에 `WHERE ... IS NOT NULL` 필터를 자동으로 붙이므로 (SQL 타깃의 filtered index와 동일 결과), PostgreSQL은 애초에 `UNIQUE`가 NULL을 distinct로 취급하므로 (둘 다 이 리포가 손으로 만드는 코드가 아니다) |
 | 필드 단위 `@index` | `HasIndex(...)` | 위와 같은 자리, `IX_{Model}_{Column}`/`ix_{table}_{field}` 이름. `@unique`와 함께 선언되면 `unique`만 방출한다(제약이 이미 인덱스를 소유 — SQL 타깃과 동일한 배제) |
@@ -664,6 +665,7 @@ GET /$data/Assets?$select=Name&$expand=LifecycleState($select=Code,Name)
 | **관계 구성** | 생성 `DbContext` 가 각 navigation 을 역방향 없는 다대일(`HasOne(…).WithMany().HasForeignKey(…)`)로 명시한다. 1:1 과 달리 관례에 맡기지 않는 이유: 같은 대상에 1:1 키와 일반 키를 함께 가진 모델에서 EF 가 어느 navigation 이 어느 관계인지 고르지 못하고 컨텍스트 생성을 거절한다 |
 | **제외** | `@unique`·`@pk` 키(위의 1:1) · `@internal` 키(읽기 타입에 키가 없다) · `_id` 로 끝나지 않는 키(쓰기 엔티티의 navigation 과 같은 규칙) |
 | **이름이 이미 있으면** | 읽기 타입이 그 이름을 이미 쓰면(키 이름에서 `_id` 를 뺀 lookup 필드, 1:1 navigation) **선언된 멤버가 이긴다** — navigation 은 생성하지 않고 빌드가 `MDD027` 경고로 알린다. 멤버 이름을 바꾸면 생긴다 |
+| **검색** | 키에 `@searchable` 을 두면 `[Searchable]` 이 키가 아니라 **navigation** 에 붙는다(1:1 정방향·쓰기 엔티티의 navigation 도 같다). 런타임의 `$search` 가 그 navigation 을 한 단계 따라 대상 타입의 검색 칸(대상이 선언한 `@searchable` 문자열, 없으면 문자열 전부)을 함께 찾는다 — 참조 대상의 이름·코드로 행을 찾는 길이다. 대상 셋의 읽기 정책을 통과하지 못하는 호출자에게는 그 참조가 검색에서 빠진다(런타임 문서). navigation 이 없는 키(위 «제외»·«이름이 이미 있으면»)는 선언이 키에 남고 `MDD034` 경고, 대상 모델을 같은 빌드의 어떤 Api 타깃도 OData 로 등록하지 않으면 `MDD035` 경고 — 둘 다 그 선언이 아무것도 매칭하지 않는다는 뜻이다 |
 
 `$expand` 가 닿는 셋의 읽기 정책은 런타임의 `$expand` 인가 검사가 적용한다. 쓰기 엔티티·인터페이스·SQL 은 이 navigation 과 무관하다.
 
@@ -1134,6 +1136,8 @@ consumer-repo/
 | MDD031(경고) | standalone `::view` 를 생성하지 않는 모양 — `@materialized`, `@lookup` 열(뷰는 소스에서 투영한다 — `@from`), 출력 열을 가리키는 `group_by`, 뷰 소스 위의 `@rollup`, 생성하지 않는 뷰를 읽는 뷰 |
 | MDD032(경고) | 뷰를 2단보다 깊게 겹쳐 읽는다 — 명세가 2단까지를 권장한다(생성은 한다) |
 | MDD033(경고) | `::aspect` 셋을 OData 로 등록하는데, 그 base 를 같은 빌드의 어떤 Api 타깃도 OData 로 등록하지 않는다 — 공유 키 선언(`DeclareSharedKey`)을 낼 곳이 없어 그 셋의 공유 키 거절이 꺼진다. base 를 등록하는 Api 타깃을 두거나 aspect 도 함께 뺀다(설정 단계에서 나온다) |
+| MDD034(경고) | `@searchable` 참조 키인데 읽기 타입에 그 키의 navigation 이 없다(`_id` 로 끝나지 않는 키, `MDD027` 이름 충돌) — 선언은 키에 남지만 키는 텍스트가 아니라 `$search` 가 그 참조를 따르지 못하고 어떤 낱말에도 매칭하지 않는다 |
+| MDD035(경고) | `@searchable` 참조의 대상 모델을 같은 빌드의 어떤 Api 타깃도 OData 로 등록하지 않는다 — 런타임 `$search` 는 등록되지 않은 대상의 navigation 을 건너뛰어 그 선언이 아무것도 매칭하지 않는다. 대상을 등록하는 Api 타깃을 두거나 그 키의 `@searchable` 을 뺀다(설정 단계에서 나온다) |
 
 `mdd build` 에서는 파서 검증기가 이 분석보다 먼저 돈다 — lookup 경로의 키에 `@reference` 가 없으면 `M3L-E002`, 경로 조각이
 그 자리의 모델에 없으면 `M3L-E022` 로 먼저 멈추므로 CLI 에서 `MDD004`·`MDD005`·`MDD006` 을 보는 일은 드물다. 이 분석기를

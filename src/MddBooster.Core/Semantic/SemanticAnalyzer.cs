@@ -55,8 +55,46 @@ public sealed class SemanticAnalyzer
         ExtensionRules.Check(_models, diagnostics);
         AspectRules.Check(_models, diagnostics);
         CheckManyToOneNavigationNames(diagnostics);
+        CheckSearchableReferences(diagnostics);
 
         return diagnostics;
+    }
+
+    /// <summary>
+    /// <c>MDD034</c> (warning): a reference key declared <c>@searchable</c> whose read type has no
+    /// navigation for it. The declaration lands on the navigation when there is one
+    /// (<see cref="Generation.SearchableReferences"/>); without one it stays on the key, which is not
+    /// text and matches no search term — and, being a declaration, still narrows the type's search to
+    /// the declared properties. Search cannot follow that reference, and that is said here rather than
+    /// discovered as an empty result.
+    /// </summary>
+    private void CheckSearchableReferences(List<SemanticDiagnostic> diagnostics)
+    {
+        var oneToOne = Generation.OneToOneRelationships.Describe(_models);
+        var manyToOne = Generation.ManyToOneNavigations.Describe(_models, oneToOne);
+        var known = _models.Select(m => m.Name).ToHashSet(StringComparer.Ordinal);
+        foreach (var model in _models)
+        {
+            var navigated = Generation.SearchableReferences.ReadNavigatedKeys(model.Name, oneToOne, manyToOne);
+            foreach (var field in model.Fields)
+            {
+                if (field.Kind != FieldKind.Stored || !Generation.SearchableReferences.IsSearchableReference(field)) continue;
+                // Not on the read type at all, or pointing outside the set (reported where references are checked).
+                if (Generation.EntitySurface.IsFieldInternal(field) || Ast.FieldAttributes.Has(field, "pk")) continue;
+                var target = Ast.FieldAttributes.FirstArg(field, "reference")!;
+                if (!known.Contains(target) || navigated.Contains(field.Name)) continue;
+
+                var why = Generation.ManyToOneNavigations.IsNavigableKey(field)
+                    ? "navigation 이 이름 충돌로 생성되지 않았다(MDD027)"
+                    : "키 이름이 '_id' 로 끝나지 않아 navigation 이 없다";
+                diagnostics.Add(new SemanticDiagnostic(
+                    "MDD034",
+                    $"'{model.Name}.{field.Name}' @searchable @reference({target}): 읽기 타입에 이 키의 navigation 이 없다({why}) — " +
+                    "$search 가 참조 대상의 텍스트를 따라가지 못한다. 선언은 키에 남지만 키는 텍스트가 아니라 어떤 낱말에도 매칭하지 않는다.",
+                    field.Loc,
+                    SemanticSeverity.Warning));
+            }
+        }
     }
 
     /// <summary>

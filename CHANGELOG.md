@@ -16,6 +16,24 @@
 
 ---
 
+## [Unreleased]
+
+### 🔴 참조 키의 `@searchable` 이 키가 아니라 navigation 에 붙는다
+
+- `@reference(X) @searchable` 키는 이제 그 키를 따르는 navigation — 읽기 타입의 N:1 navigation·1:1 정방향, 쓰기 엔티티의 navigation — 에
+  `[Searchable]` 을 낸다. 키 자신에는 붙지 않는다. 런타임(`Iyu.*` **0.37.0** 이상)의 `$search` 는 `[Searchable]` navigation 을 한 단계 따라
+  대상 타입의 검색 칸을 함께 찾는다 — 참조 대상의 이름·코드로 행을 찾는 길이 이것이다.
+- 종전 생성물은 키(identifier)에 `[Searchable]` 을 달았다. 런타임은 선언을 «검색을 선언된 칸으로 좁힘»으로 읽고 키는 텍스트가 아니어서, **참조
+  키에만 `@searchable` 을 둔 모델은 어떤 낱말로도 찾을 수 없었다.** 이 변경은 검색을 넓히는 것이 아니라 그 선언이 뜻하던 대상을 찾게 하는 수정이다.
+  같은 모델에 문자열 `@searchable` 도 있었다면, 종전엔 그 칸만 찾았고 이제는 참조 대상의 칸도 함께 찾는다.
+- 🔇 런타임이 0.37.0 미만이면 navigation 의 `[Searchable]` 은 아무 칸도 더하지 않는다 — 종전과 같은 결과다.
+- 새 경고 `MDD034` — `@searchable` 참조 키인데 읽기 타입에 그 키의 navigation 이 없다(`_id` 로 끝나지 않는 키, `MDD027` 이름 충돌). 선언은 키에
+  남고 검색은 그 참조를 따르지 못한다.
+- 새 경고 `MDD035` — `@searchable` 참조의 대상 모델을 같은 빌드의 어떤 Api 타깃도 OData 로 등록하지 않는다. 런타임은 등록되지 않은 대상의
+  navigation 을 건너뛴다(설정 단계에서 나온다).
+
+---
+
 ## 0.39.0
 
 ### 필드 단위 `@internal` — PostgreSQL 방언과 외부 계약에서 컴파일되는 생성물

@@ -229,19 +229,30 @@ public static class EntityPairRenderer
             sb.Append(", ").Append(iface);
         sb.AppendLine();
         sb.AppendLine("{");
+        // The keys this class follows with a navigation — where a key's @searchable lands instead of
+        // on the key (SearchableReferences). The write type navigates every navigable key; the read
+        // type only those whose navigation is emitted.
+        var navigatedKeys = isExt
+            ? SearchableReferences.ReadNavigatedKeys(modelName, oneToOne, manyToOne)
+            : storedFields.Where(HasWriteNavigation).Select(f => f.Name).ToHashSet(StringComparer.Ordinal);
+        var searchableKeys = storedFields
+            .Where(SearchableReferences.IsSearchableReference)
+            .Select(f => f.Name)
+            .Where(navigatedKeys.Contains)
+            .ToHashSet(StringComparer.Ordinal);
         foreach (var f in storedFields)
         {
-            RenderProperty(sb, f, knownEnumNames, nullableLookups, isExt, postgres);
+            RenderProperty(sb, f, knownEnumNames, nullableLookups, isExt, postgres, searchableKeys);
         }
         if (derivedFields is { Count: > 0 })
         {
             foreach (var f in derivedFields)
             {
-                RenderProperty(sb, f, knownEnumNames, nullableLookups, isExt, postgres);
+                RenderProperty(sb, f, knownEnumNames, nullableLookups, isExt, postgres, searchableKeys);
             }
         }
-        if (isExt) RenderOneToOneNavigation(sb, modelName, oneToOne);
-        if (isExt) RenderManyToOneNavigation(sb, modelName, manyToOne);
+        if (isExt) RenderOneToOneNavigation(sb, modelName, oneToOne, searchableKeys);
+        if (isExt) RenderManyToOneNavigation(sb, modelName, manyToOne, searchableKeys);
         sb.AppendLine("}");
         return sb.ToString();
     }
@@ -270,7 +281,8 @@ public static class EntityPairRenderer
     /// </para>
     /// </remarks>
     private static void RenderOneToOneNavigation(
-        StringBuilder sb, string modelName, IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne)
+        StringBuilder sb, string modelName, IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne,
+        IReadOnlySet<string> searchableKeys)
     {
         if (oneToOne is null || oneToOne.Count == 0) return;
 
@@ -282,6 +294,8 @@ public static class EntityPairRenderer
             {
                 var target = NameCasing.ToPascalCase(r.TargetModel) + "Ext";
                 sb.AppendLine();
+                if (searchableKeys.Contains(r.ForeignKeyField))
+                    sb.AppendLine("    [Searchable]");
                 if (r.IsOptional)
                     sb.Append("    public ").Append(target).Append("? ").Append(r.ForwardName)
                       .AppendLine(" { get; set; }");
@@ -310,7 +324,8 @@ public static class EntityPairRenderer
     /// class always compiles and the analyzer says what was left out.
     /// </remarks>
     private static void RenderManyToOneNavigation(
-        StringBuilder sb, string modelName, IReadOnlyList<ManyToOneNavigations.Navigation>? manyToOne)
+        StringBuilder sb, string modelName, IReadOnlyList<ManyToOneNavigations.Navigation>? manyToOne,
+        IReadOnlySet<string> searchableKeys)
     {
         if (manyToOne is null || manyToOne.Count == 0) return;
 
@@ -321,6 +336,8 @@ public static class EntityPairRenderer
 
             var target = NameCasing.ToPascalCase(n.TargetModel) + "Ext";
             sb.AppendLine();
+            if (searchableKeys.Contains(n.ForeignKeyField))
+                sb.AppendLine("    [Searchable]");
             if (n.IsOptional)
                 sb.Append("    public ").Append(target).Append("? ").Append(n.Name)
                   .AppendLine(" { get; set; }");
@@ -336,7 +353,8 @@ public static class EntityPairRenderer
         IReadOnlySet<string>? knownEnumNames,
         IReadOnlySet<string>? nullableLookups,
         bool isExt,
-        bool postgres)
+        bool postgres,
+        IReadOnlySet<string> searchableKeys)
     {
         var cs = CSharpTypeMapper.MapFieldType(f.Type!, knownEnumNames, postgres);
 
@@ -491,8 +509,9 @@ public static class EntityPairRenderer
         // [Searchable] — @searchable, the fields free-text search is meant for. The runtime's $search
         // reads it from the read type: once a type marks any property, only the marked ones are
         // searched. Emitted on both classes so the declaration does not depend on which one a
-        // consumer's own search code reflects over.
-        if (MddBooster.Core.Ast.FieldAttributes.Has(f, "searchable"))
+        // consumer's own search code reflects over. A reference key this class navigates carries it
+        // on the navigation instead (SearchableReferences) — a key is not text.
+        if (MddBooster.Core.Ast.FieldAttributes.Has(f, "searchable") && !searchableKeys.Contains(f.Name))
             sb.AppendLine("    [Searchable]");
 
         // [Display(Name, GroupName, Description)] — field label/group/help from M3L declaration.
@@ -526,6 +545,8 @@ public static class EntityPairRenderer
         if (!isExt && HasWriteNavigation(f))
         {
             var navName = NavPropertyName(f.Name);
+            if (searchableKeys.Contains(f.Name))
+                sb.AppendLine("    [Searchable]");
             if (effectiveNullable)
                 sb.Append("    public ").Append(referenceTarget).Append("? ")
                   .Append(navName).AppendLine(" { get; set; }");
