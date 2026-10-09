@@ -32,6 +32,7 @@ M3L 0.20.0 이 `@computed` · rollup `where:` · 뷰 `where` 의 언어를 정�
 - 🔇 과도기: 이식 가능한 문맥에 SQL Server 문법(부분집합 밖 — 예 `DATEDIFF`·`GETDATE`·`[Name]`·문자열 `+`)을 쓴 식은 **이 판에서는** 경고 `MDD038` 과 함께 원문
   그대로 나간다. **다음 마이너부터 거절**한다 — 부분집합으로 다시 쓰거나 `@computed_raw(…, platform: "sqlserver")` 로 옮길 것.
 - 생성 엔티티의 `[Computed]` 메타데이터는 그 방언의 플랫폼 식, 없으면 포터블 식 원문이다.
+- 번들 명세 사본 `docs/M3L.md` — §4.4 의 예를 이식 가능한 부분집합으로 바꾸고, §4.4.5 를 «Portable and Platform-Specific Expressions»(부분집합 · `@computed_raw`/`where_raw` · 이 생성기의 번역과 진단)로 다시 썼다. 종전 절은 플랫폼 문법을 `@computed` 로 보여 줬다.
 - 🆕 **PostgreSQL 방언이 Computed 와 식이 있는 standalone 뷰를 생성한다** — 종전엔 Computed 가 있는 모델의 FullView(와 그것을 체이닝으로 읽는 모델)를 경고와 함께 건너뛰고, 식이 있는 standalone
   뷰는 `MDD029` 로 건너뛰었다. 이제 같은 번역기로 낸다: FullView 의 Computed 는 SQL Server 와 같은 CTE 체인(뒤의 식이 앞의 Computed 를 이름으로 읽는다) · rollup `where:` · standalone `where`·`@computed`.
   번역할 수 없는 식은 **오류 `MDD037`**(이 방언은 식을 낸 적이 없어 과도기가 없다), `platform: "postgresql"` 식이 없고 포터블 식도 없으면 `MDD036`.

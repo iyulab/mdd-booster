@@ -1121,17 +1121,17 @@ Computed fields derive their values from expressions and other fields, providing
 
 **Simple Format (권장):**
 ```markdown
-- full_name: string @computed("first_name + ' ' + last_name")
-- age: integer @computed("DATEDIFF(YEAR, birth_date, GETDATE())")
+- full_name: string @computed("concat(first_name, ' ', last_name)")
+- age: integer @computed("date_diff('year', birth_date, today())")
 - total_amount: decimal(12,2) @computed("quantity * unit_price")
-- DisplayName: string @computed("ISNULL([Name], 'Anonymous User')")
+- DisplayName: string @computed("coalesce(Name, 'Anonymous User')")
 ```
 
 **With Persistence (성능 최적화):**
 ```markdown
 - total_amount: decimal(12,2) @computed("quantity * unit_price") @persisted
-- search_vector: string @computed("name + ' ' + description") @persisted
-- display_name: string @computed("COALESCE([nickname], [first_name] + ' ' + [last_name])") @persisted
+- search_vector: string @computed("concat(name, ' ', description)") @persisted
+- display_name: string @computed("coalesce(nickname, concat(first_name, ' ', last_name))") @persisted
 ```
 
 **실제 사용 예제:**
@@ -1140,8 +1140,8 @@ Computed fields derive their values from expressions and other fields, providing
 - Id: identifier @primary
 - Name: string(100)
 - Email: string(320) @unique
-- DisplayName: string @computed("ISNULL([Name], 'Anonymous User')")
-- SearchText: string @computed("[Name] + ' ' + [Email]") @persisted @index
+- DisplayName: string @computed("coalesce(Name, 'Anonymous User')")
+- SearchText: string @computed("concat(Name, ' ', Email)") @persisted @index
 ```
 
 #### 4.4.2 Advanced Computed Fields
@@ -1159,8 +1159,8 @@ Computed fields derive their values from expressions and other fields, providing
 
 **문자열 연산:**
 ```markdown
-- display_name: string @computed("COALESCE(nickname, first_name + ' ' + last_name)")
-- slug: string @computed("LOWER(REPLACE(title, ' ', '-'))") @persisted
+- display_name: string @computed("coalesce(nickname, concat(first_name, ' ', last_name))")
+- slug: string @computed("lower(replace(title, ' ', '-'))") @persisted
 ```
 
 **숫자 계산:**
@@ -1172,14 +1172,14 @@ Computed fields derive their values from expressions and other fields, providing
 
 **날짜/시간 계산:**
 ```markdown
-- age: integer @computed("DATEDIFF(YEAR, birth_date, GETDATE())")
-- days_since_created: integer @computed("DATEDIFF(DAY, created_at, GETDATE())")
-- is_recent: boolean @computed("created_at > DATEADD(DAY, -30, GETDATE())")
+- age: integer @computed("date_diff('year', birth_date, today())")
+- days_since_created: integer @computed("date_diff('day', created_at, now())")
+- is_recent: boolean @computed("created_at > date_add(now(), -30, 'day')")
 ```
 
 **조건부 계산:**
 ```markdown
-- status_label: string @computed("CASE WHEN is_active = 1 THEN 'Active' ELSE 'Inactive' END")
+- status_label: string @computed("CASE WHEN is_active = true THEN 'Active' ELSE 'Inactive' END")
 - discount_tier: string @computed("CASE WHEN total_purchases > 1000 THEN 'Gold' WHEN total_purchases > 500 THEN 'Silver' ELSE 'Bronze' END")
 ```
 
@@ -1188,10 +1188,10 @@ Computed fields derive their values from expressions and other fields, providing
 **성능 고려사항:**
 ```markdown
 # 자주 조회되는 복잡한 계산: @persisted 사용
-- search_text: string @computed("title + ' ' + description + ' ' + tags") @persisted
+- search_text: string @computed("concat(title, ' ', description, ' ', tags)") @persisted
 
 # 단순한 계산: 실시간 계산으로 두기
-- full_name: string @computed("first_name + ' ' + last_name")
+- full_name: string @computed("concat(first_name, ' ', last_name)")
 
 # 인덱스가 필요한 계산 필드: @persisted + @index
 - age_group: string @computed("CASE WHEN age < 18 THEN 'Minor' WHEN age < 65 THEN 'Adult' ELSE 'Senior' END") @persisted @index
@@ -1199,30 +1199,39 @@ Computed fields derive their values from expressions and other fields, providing
 
 **타입 추론:**
 ```markdown
-- age: integer @computed("DATEDIFF(YEAR, birth_date, GETDATE())")  # integer 타입 자동 추론
+- age: integer @computed("date_diff('year', birth_date, today())")  # integer 타입 자동 추론
 - total: decimal @computed("price * quantity")                     # decimal 타입 자동 추론
 - is_adult: boolean @computed("age >= 18")                         # boolean 타입 자동 추론
 ```
 
-#### 4.4.5 Database-Specific Expressions
+#### 4.4.5 Portable and Platform-Specific Expressions
 
-**SQL Server:**
+An expression in `@computed`, a rollup's `where:` or a view's `where` is written in M3L's **portable subset** — literals
+(`true`, `false`, `null`, numbers, `'text'`), field references, `+ - * / %` on numbers, comparisons, `AND`/`OR`/`NOT`,
+`IS NULL`, `IN`, `BETWEEN`, `LIKE`, `CASE`, and a closed list of functions: `coalesce`, `nullif`, `concat`, `lower`,
+`upper`, `trim`, `length`, `substring`, `replace`, `abs`, `round`, `floor`, `ceiling`, `today`, `now`, `date_add`,
+`date_diff`, `year`, `month`, `day`, `generate_uuid`. Strings are joined with `concat(…)`, not `+`. The authoritative
+definition is the upstream specification's §10.7 (M3L 0.20.0).
+
+Anything else is declared for its platform — once per platform, beside or instead of the portable expression:
+
 ```markdown
-- full_name: string @computed("CONCAT(first_name, ' ', last_name)")
-- year_created: integer @computed("YEAR(created_at)")
+- full_name: string @computed("concat(first_name, ' ', last_name)")
+- year_created: integer @computed_raw("YEAR(created_at)", platform: "sqlserver") @computed_raw("EXTRACT(YEAR FROM created_at)::int", platform: "postgresql")
+- recent: integer @rollup(Order.customer_id, count, where_raw: "ordered_at > DATEADD(DAY, -30, GETDATE())", platform: "sqlserver", where_raw: "ordered_at > now() - interval '30 days'", platform: "postgresql")
 ```
 
-**PostgreSQL:**
-```markdown
-- full_name: string @computed("first_name || ' ' || last_name")
-- json_extract: string @computed("metadata->>'category'")
-```
+A view's `### Source` takes `- where_raw: "…" platform: name` lines the same way.
 
-**MySQL:**
-```markdown
-- full_name: string @computed("CONCAT(first_name, ' ', last_name)")
-- json_extract: string @computed("JSON_EXTRACT(metadata, '$.category')")
-```
+**What this generator implements** — both SQL dialects, every expression context (model views, rollup filters,
+standalone views). A portable expression is translated: `true`/`false` → `1`/`0` on SQL Server and `TRUE`/`FALSE` on
+PostgreSQL, `concat` → `CONCAT`/`concat`, `date_add(d, n, 'day')` → `DATEADD(DAY, n, d)` / `(d + (n) * INTERVAL '1 day')`,
+`length(s)` counts trailing spaces on SQL Server too, and a boolean field's comparison becomes a `CASE` over `bit` on SQL
+Server. An expression declared for `sqlserver` or `postgresql` is emitted as written in that dialect. Missing an expression
+for the dialect stops the build (`MDD036`); an expression outside the subset stops the PostgreSQL build (`MDD037`) and, for
+one release, passes through to SQL Server with a warning (`MDD038`). Platform expressions for `mysql` or `sqlite` are
+carried and emitted by no target. The generated entity's `[Computed]` metadata is the dialect's platform expression, else
+the portable one as written.
 
 ### 4.5 Conditional Fields
 
@@ -1458,7 +1467,7 @@ output.
   - suspended: "Suspended"
   - inactive: "Inactive account"
 - last_login: timestamp?
-- full_name: string @computed("first_name + ' ' + last_name")
+- full_name: string @computed("concat(first_name, ' ', last_name)")
 
 - @index(email, username, name: "login_info")
 
