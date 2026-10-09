@@ -26,14 +26,14 @@ public class AspectSharedKeyOwnerSplitBuildTests
 
     private const string Module = """
 # Namespace: test.split
-# Prefix: fsa
+# Prefix: ops
 
-## FsaAssetProfile ::aspect(Asset)
+## OpsAssetProfile ::aspect(Asset)
 
 - grade: integer?
 """;
 
-    private const string Declaration = "options.ODataModel.DeclareSharedKey(\"FsaAssetProfiles\", \"Assets\");";
+    private const string Declaration = "options.ODataModel.DeclareSharedKey(\"OpsAssetProfiles\", \"Assets\");";
 
     private (int Exit, string Stderr, string? BaseReg, string? ModuleReg) Build(string targetsJson)
     {
@@ -41,9 +41,9 @@ public class AspectSharedKeyOwnerSplitBuildTests
         var mddDir = Path.Combine(root, "mdd");
         Directory.CreateDirectory(mddDir);
         File.WriteAllText(Path.Combine(mddDir, "base.m3l.md"), Base);
-        File.WriteAllText(Path.Combine(mddDir, "fsa.m3l.md"), Module);
+        File.WriteAllText(Path.Combine(mddDir, "ops.m3l.md"), Module);
         File.WriteAllText(Path.Combine(mddDir, "mdd.json"),
-            "{\n  \"sources\": [\"./base.m3l.md\", \"./fsa.m3l.md\"],\n  \"targets\": [" + targetsJson + "]\n}");
+            "{\n  \"sources\": [\"./base.m3l.md\", \"./ops.m3l.md\"],\n  \"targets\": [" + targetsJson + "]\n}");
         try
         {
             using var err = new ConsoleErrorCapture(this);
@@ -64,7 +64,7 @@ public class AspectSharedKeyOwnerSplitBuildTests
     {
         var (exit, stderr, baseReg, moduleReg) = Build(
             """{ "type": "Api", "projectPath": "../base", "namespace": "T.Base", "includeOwners": [""] }, """
-            + """{ "type": "Api", "projectPath": "../module", "namespace": "T.Module", "includeOwners": ["fsa"] }""");
+            + """{ "type": "Api", "projectPath": "../module", "namespace": "T.Module", "includeOwners": ["ops"] }""");
 
         Assert.Equal(0, exit);
         Assert.DoesNotContain("MDD033", stderr);
@@ -89,11 +89,11 @@ public class AspectSharedKeyOwnerSplitBuildTests
     public void An_aspect_whose_base_no_target_registers_is_reported()
     {
         var (exit, stderr, _, moduleReg) = Build(
-            """{ "type": "Api", "projectPath": "../module", "namespace": "T.Module", "includeOwners": ["fsa"] }""");
+            """{ "type": "Api", "projectPath": "../module", "namespace": "T.Module", "includeOwners": ["ops"] }""");
 
         Assert.Equal(0, exit);
         Assert.Contains("[MDD033]", stderr);
-        Assert.Contains("'FsaAssetProfile'", stderr);
+        Assert.Contains("'OpsAssetProfile'", stderr);
         Assert.DoesNotContain("DeclareSharedKey", moduleReg);
     }
 }
