@@ -131,7 +131,7 @@ public static class FullViewRenderer
             computedColumns.Add((
                 expr: ExpressionSelection.Select(def, SqlDialect.SqlServer) is { } selected
                     ? SqlServerExpressions.Render(selected, SqlServerExpressions.OwnColumn,
-                        booleanResult: computed.Type == "boolean", where: $"{plan.Model.Name}.{computed.Name}")
+                        booleanResult: computed.Type == "boolean")
                     : string.Empty,
                 alias: NameCasing.ToPascalCase(computed.Name)));
         }
@@ -267,7 +267,7 @@ public static class FullViewRenderer
                     name => name.StartsWith(ParentPrefix, StringComparison.Ordinal)
                         ? $"{baseAlias}.[{NameCasing.ToPascalCase(name[ParentPrefix.Length..])}]"
                         : SqlServerExpressions.OwnColumn(name),
-                    booleanResult: false, where: $"@rollup({def.Target}.{def.Fk}) where");
+                    booleanResult: false);
             whereClause += $" AND ({where})";
         }
 

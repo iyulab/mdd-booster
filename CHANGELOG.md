@@ -29,13 +29,18 @@ M3L 0.20.0 이 `@computed` · rollup `where:` · 뷰 `where` 의 언어를 정�
   그대로 내어 배포가 거절됐다.
 - `@computed_raw(…, platform: "sqlserver")`·`where_raw`(M3L 0.20.0)는 그 플랫폼 식으로 원문 그대로 쓰인다 — 같은 필드에 포터블 식이 있어도 이쪽이 이긴다.
 - 새 오류 `MDD036` — SQL Server 용 식이 없다(다른 플랫폼에만 `@computed_raw`/`where_raw` 가 있다). 빌드가 멈춘다.
-- 🔇 과도기: 이식 가능한 문맥에 SQL Server 문법(부분집합 밖 — 예 `DATEDIFF`·`GETDATE`·`[Name]`·문자열 `+`)을 쓴 식은 **이 판에서는** 경고 `MDD038` 과 함께 원문
-  그대로 나간다. **다음 마이너부터 거절**한다 — 부분집합으로 다시 쓰거나 `@computed_raw(…, platform: "sqlserver")` 로 옮길 것.
+- 🔴 **이식 가능한 문맥에 SQL Server 문법을 쓴 모델은 빌드가 멈춘다 — 새 오류 `MDD037`.** `@computed` · rollup `where:` · 뷰 `where` 의 식이 부분집합
+  밖이면(예 `DATEDIFF` · `GETDATE()` · `[Name]` · 문자열 `+` · `ISNULL`) 원문으로 내지 않는다. 한 번의 빌드가 해당하는 식을 전부 나열한다. 옮기는 방법은 둘 중 하나다:
+  - **부분집합으로 다시 쓴다** — `DATEDIFF(YEAR, birth, GETDATE())` → `date_diff('year', birth, today())`, `a + ' ' + b` → `concat(a, ' ', b)`, `ISNULL(x, 0)` → `coalesce(x, 0)`.
+    그러면 PostgreSQL 방언에서도 같은 모델이 빌드된다.
+  - **SQL Server 식임을 선언한다** — 식은 그대로 두고 속성만 바꾼다: `@computed("…")` → `@computed_raw("…", platform: "sqlserver")`, rollup 의 `where: "…"` →
+    `where_raw: "…", platform: "sqlserver"`, 뷰의 `- where: "…"` → `- where_raw: "…"` + `platform: "sqlserver"`. 생성물은 종전과 같다.
+  경고만 내고 한 판을 더 통과시키는 과도기는 두지 않았다 — 새 형태가 이 판에 함께 있고 옮기는 일이 기계적이어서, 과도기는 같은 모델을 두 번(이번 판의 경고, 다음 판의 오류) 손보게 할 뿐이다.
 - 생성 엔티티의 `[Computed]` 메타데이터는 그 방언의 플랫폼 식, 없으면 포터블 식 원문이다.
 - 번들 명세 사본 `docs/M3L.md` — §4.4 의 예를 이식 가능한 부분집합으로 바꾸고, §4.4.5 를 «Portable and Platform-Specific Expressions»(부분집합 · `@computed_raw`/`where_raw` · 이 생성기의 번역과 진단)로 다시 썼다. 종전 절은 플랫폼 문법을 `@computed` 로 보여 줬다.
 - 🆕 **PostgreSQL 방언이 Computed 와 식이 있는 standalone 뷰를 생성한다** — 종전엔 Computed 가 있는 모델의 FullView(와 그것을 체이닝으로 읽는 모델)를 경고와 함께 건너뛰고, 식이 있는 standalone
   뷰는 `MDD029` 로 건너뛰었다. 이제 같은 번역기로 낸다: FullView 의 Computed 는 SQL Server 와 같은 CTE 체인(뒤의 식이 앞의 Computed 를 이름으로 읽는다) · rollup `where:` · standalone `where`·`@computed`.
-  번역할 수 없는 식은 **오류 `MDD037`**(이 방언은 식을 낸 적이 없어 과도기가 없다), `platform: "postgresql"` 식이 없고 포터블 식도 없으면 `MDD036`.
+  번역할 수 없는 식은 SQL Server 와 같은 **오류 `MDD037`**, `platform: "postgresql"` 식이 없고 포터블 식도 없으면 `MDD036`.
 
 ### 필드의 `@system` — «이 칸은 애플리케이션 자신의 코드가 쓴다»
 

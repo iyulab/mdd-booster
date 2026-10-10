@@ -24,6 +24,14 @@ public class RollupWhereDerivedColumnTests
     private static RollupDef Count(string where) =>
         new() { Target = "OrderItem", Fk = "order_id", Aggregate = "count", Where = where };
 
+    /// <summary>The same rollup with its filter declared in SQL Server's own syntax (<c>where_raw</c>).</summary>
+    private static RollupDef CountSqlServer(string whereRaw) =>
+        new()
+        {
+            Target = "OrderItem", Fk = "order_id", Aggregate = "count",
+            WhereRaw = [new PlatformExpression { Expression = whereRaw, Platform = "sqlserver" }],
+        };
+
     [Fact]
     public void A_where_naming_a_derived_column_of_the_target_reads_its_FullView()
     {
@@ -36,10 +44,10 @@ public class RollupWhereDerivedColumnTests
     }
 
     [Fact]
-    public void A_bracketed_derived_column_counts_too()
+    public void A_bracketed_derived_column_in_a_platform_filter_counts_too()
     {
         var sql = FullViewRenderer.RenderRollupSubquery(
-            Count("[EffectiveChannel] IS NOT NULL"), "dbo", "b", "Id", OrderItemDerived);
+            CountSqlServer("[EffectiveChannel] IS NOT NULL"), "dbo", "b", "Id", OrderItemDerived);
 
         Assert.Contains("FROM [dbo].[OrderItemFullView]", sql);
     }
@@ -53,11 +61,20 @@ public class RollupWhereDerivedColumnTests
     [InlineData("channel = 'effective_channel'")]
     [InlineData("channel = $parent.effective_channel")]
     [InlineData("channel = b.effective_channel")]
-    [InlineData("channel = b.[EffectiveChannel]")]
     [InlineData("channel IS NOT NULL")]
     public void A_where_naming_no_derived_target_column_stays_on_the_base_table(string where)
     {
         var sql = FullViewRenderer.RenderRollupSubquery(Count(where), "dbo", "b", "Id", OrderItemDerived);
+
+        Assert.StartsWith("(SELECT COUNT(*) FROM [dbo].[OrderItem] WHERE", sql);
+    }
+
+    /// <summary>The parent's column in SQL Server's own spelling — a platform filter — is still the parent's.</summary>
+    [Fact]
+    public void A_bracketed_parent_column_in_a_platform_filter_stays_on_the_base_table()
+    {
+        var sql = FullViewRenderer.RenderRollupSubquery(
+            CountSqlServer("channel = b.[EffectiveChannel]"), "dbo", "b", "Id", OrderItemDerived);
 
         Assert.StartsWith("(SELECT COUNT(*) FROM [dbo].[OrderItem] WHERE", sql);
     }

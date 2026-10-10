@@ -51,7 +51,7 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
         ArgumentNullException.ThrowIfNull(context);
 
         var violations = context.Models.SelectMany(PgTableRenderer.RowVersionIndexViolations).ToList();
-        violations.AddRange(PostgresExpressions.Violations(context));
+        violations.AddRange(ExpressionRefusals.Violations(context, SqlDialect.PostgreSql));
         if (violations.Count > 0)
         {
             throw new GeneratorRefusalException(GeneratorRefusalKind.Model, string.Join(Environment.NewLine, violations));
@@ -61,9 +61,7 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
     public void Generate(GeneratorContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        var expressionViolations = PostgresExpressions.Violations(context);
-        if (expressionViolations.Count > 0)
-            throw new GeneratorRefusalException(GeneratorRefusalKind.Model, string.Join(Environment.NewLine, expressionViolations));
+        ExpressionRefusals.Refuse(context, SqlDialect.PostgreSql);
 
         var schemaViolation = PostgresIdentifiers.Check(_options.Schema);
         if (schemaViolation is not null)

@@ -5,8 +5,8 @@ namespace MddBooster.Tests.Cli;
 /// <summary>
 /// The SQL Server target translates expressions written in M3L's portable subset (§10.7) instead of passing them through:
 /// <c>true</c> is <c>1</c>, <c>date_add</c> is <c>DATEADD</c>, a boolean field's comparison is a <c>CASE</c>. An expression
-/// in SQL Server's own syntax still builds for one release, with a warning; one with no SQL Server expression at all stops
-/// the build.
+/// in SQL Server's own syntax stops the build until it is declared for the platform; so does a model with no SQL Server
+/// expression at all.
 /// </summary>
 [Collection(ConsoleCaptureCollection.Name)]
 public sealed class PortableExpressionSqlServerBuildTests
@@ -63,7 +63,7 @@ public sealed class PortableExpressionSqlServerBuildTests
 """, "MemberFullView.sql");
 
         Assert.Equal(0, exit);
-        Assert.DoesNotContain("MDD038", stderr);
+        Assert.DoesNotContain("MDD037", stderr);
         Assert.NotNull(view);
         Assert.Contains("CASE WHEN [Age] >= 18 THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END", view);
         Assert.Contains("DATEADD(DAY, -30, SYSDATETIMEOFFSET())", view);
@@ -72,18 +72,42 @@ public sealed class PortableExpressionSqlServerBuildTests
     }
 
     [Fact]
-    public void Sql_server_syntax_in_a_portable_context_still_builds_this_release_with_a_warning()
+    public void Sql_server_syntax_in_a_portable_context_stops_the_build_and_says_where_to_move_it()
     {
         var (exit, stderr, view) = Build("""
 ## Member : Timestampable
 - id: identifier @pk @generated
 - birth: date
 - age: integer @computed("DATEDIFF(YEAR, birth, GETDATE())")
+- open_tickets: integer @rollup(Ticket.member_id, count, where: "[IsOpen] = 1")
+
+## Ticket : Timestampable
+- id: identifier @pk @generated
+- member_id: identifier @reference(Member)
+- is_open: boolean
+""", "MemberFullView.sql");
+
+        Assert.NotEqual(0, exit);
+        // Both are reported in one run — fixing them one build at a time is the cost this check exists to remove.
+        Assert.Contains("MDD037", stderr);
+        Assert.Contains("'Member.age' @computed", stderr);
+        Assert.Contains("'Member.open_tickets' @rollup where", stderr);
+        Assert.Contains("platform: \"sqlserver\"", stderr);
+        Assert.Null(view);
+    }
+
+    [Fact]
+    public void The_same_expression_declared_for_sql_server_is_emitted_as_written()
+    {
+        var (exit, stderr, view) = Build("""
+## Member : Timestampable
+- id: identifier @pk @generated
+- birth: date
+- age: integer @computed_raw("DATEDIFF(YEAR, birth, GETDATE())", platform: "sqlserver")
 """, "MemberFullView.sql");
 
         Assert.Equal(0, exit);
-        Assert.Contains("MDD038", stderr);
-        Assert.Contains("Member.age", stderr);
+        Assert.DoesNotContain("MDD037", stderr);
         Assert.Contains("DATEDIFF(YEAR, [Birth], GETDATE())", view);
     }
 

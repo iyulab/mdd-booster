@@ -725,7 +725,7 @@ PostgreSQL `views_gen/<snake_name>.sql`. 빌드가 먼저 뷰를 모델에 대�
 | 읽는 모델 | 그 모델의 **읽기 표면**과 같은 행 — 파생 열(lookup·rollup·computed)을 읽으면 FullView, 소프트 삭제 모델이면 UdView, 아니면 테이블 |
 | `@from(Relation.field)` | 그 관계의 열 |
 | `@rollup(Target.fk, …)` | FullView 와 같은 상관 서브쿼리 — `from` 모델의 키에 상관 |
-| `where` · `@computed` | 두 방언 — M3L 의 이식 가능한 부분집합(명세 §10.7)을 방언으로 번역한다(T-SQL 은 식별자 → PascalCase 열, PostgreSQL 은 snake 그대로; `Relation.field` 는 관계로 한정). `platform:` 으로 선언한 식(`@computed_raw`·`where_raw`)은 그 방언에서 원문 그대로. 번역할 수 없는 식은 PostgreSQL 에서 `MDD037`, SQL Server 에서 이 판만 `MDD038` 경고 |
+| `where` · `@computed` | 두 방언 — M3L 의 이식 가능한 부분집합(명세 §10.7)을 방언으로 번역한다(T-SQL 은 식별자 → PascalCase 열, PostgreSQL 은 snake 그대로; `Relation.field` 는 관계로 한정). `platform:` 으로 선언한 식(`@computed_raw`·`where_raw`)은 그 방언에서 원문 그대로. 번역할 수 없는 식은 두 방언 모두 `MDD037` 로 빌드를 멈춘다 |
 | `group_by` | `Relation.field` 목록. 출력 열 이름으로 묶는 것은 생성하지 않는다(`MDD031`) |
 | `order_by` | 내지 않는다 — 뷰에는 순서가 없고, T-SQL 은 `TOP` 없는 뷰의 `ORDER BY` 를 거절한다(빌드 로그에 정보 한 줄) |
 
@@ -1171,9 +1171,8 @@ consumer-repo/
 | MDD032(경고) | 뷰를 2단보다 깊게 겹쳐 읽는다 — 명세가 2단까지를 권장한다(생성은 한다) |
 | MDD033(경고) | `::aspect` 셋을 OData 로 등록하는데, 그 base 를 같은 빌드의 어떤 Api 타깃도 OData 로 등록하지 않는다 — 공유 키 선언(`DeclareSharedKey`)을 낼 곳이 없어 그 셋의 공유 키 거절이 꺼진다. base 를 등록하는 Api 타깃을 두거나 aspect 도 함께 뺀다(설정 단계에서 나온다) |
 | MDD034(경고) | `@searchable` 참조 키인데 읽기 타입에 그 키의 navigation 이 없다(`_id` 로 끝나지 않는 키, `MDD027` 이름 충돌) — 선언은 키에 남지만 키는 텍스트가 아니라 `$search` 가 그 참조를 따르지 못하고 어떤 낱말에도 매칭하지 않는다 |
-| MDD037 | PostgreSQL 방언에서 이식 가능한 문맥의 식이 부분집합(M3L 명세 §10.7) 밖이다 — 원문으로 내지 않고 빌드를 멈춘다. 부분집합으로 다시 쓰거나 `@computed_raw(…, platform: "postgresql")`·`where_raw` 로 선언한다(생성 단계) |
+| MDD037 | 이식 가능한 문맥(`@computed`·rollup `where:`·뷰 `where`)의 식이 부분집합(M3L 명세 §10.7) 밖이다 — 두 SQL 방언 모두 원문으로 내지 않고 빌드를 멈추며, 해당하는 식을 한 번에 전부 나열한다. 부분집합으로 다시 쓰거나(`DATEDIFF(YEAR, a, GETDATE())` → `date_diff('year', a, today())`), 그 방언의 문법 그대로 두려면 `@computed_raw(…, platform: "sqlserver")`·`where_raw`(PostgreSQL 은 `"postgresql"`)로 옮긴다(생성 단계) |
 | MDD036 | SQL Server(또는 그 방언)용 식이 없다 — `@computed_raw`/`where_raw` 가 다른 플랫폼에만 있고 포터블 식(`@computed`/`where`)도 없다. 생성물이 식을 지어낼 수 없어 빌드가 멈춘다(생성 단계) |
-| MDD038(경고) | 이식 가능한 문맥(`@computed`·rollup `where:`·뷰 `where`)의 식이 부분집합(M3L 명세 §10.7) 밖이다 — 이 판은 SQL Server 에 원문 그대로 내고 다음 마이너부터 거절한다. 부분집합으로 다시 쓰거나 `@computed_raw(…, platform: "sqlserver")`·`where_raw` 로 선언한다(생성 단계, stderr) |
 | MDD035(경고) | `@searchable` 참조의 대상 모델을 같은 빌드의 어떤 Api 타깃도 OData 로 등록하지 않는다 — 런타임 `$search` 는 등록되지 않은 대상의 navigation 을 건너뛰어 그 선언이 아무것도 매칭하지 않는다. 대상을 등록하는 Api 타깃을 두거나 그 키의 `@searchable` 을 뺀다(설정 단계에서 나온다) |
 
 `mdd build` 에서는 파서 검증기가 이 분석보다 먼저 돈다 — lookup 경로의 키에 `@reference` 가 없으면 `M3L-E002`, 경로 조각이

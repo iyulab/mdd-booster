@@ -1228,8 +1228,8 @@ standalone views). A portable expression is translated: `true`/`false` → `1`/`
 PostgreSQL, `concat` → `CONCAT`/`concat`, `date_add(d, n, 'day')` → `DATEADD(DAY, n, d)` / `(d + (n) * INTERVAL '1 day')`,
 `length(s)` counts trailing spaces on SQL Server too, and a boolean field's comparison becomes a `CASE` over `bit` on SQL
 Server. An expression declared for `sqlserver` or `postgresql` is emitted as written in that dialect. Missing an expression
-for the dialect stops the build (`MDD036`); an expression outside the subset stops the PostgreSQL build (`MDD037`) and, for
-one release, passes through to SQL Server with a warning (`MDD038`). Platform expressions for `mysql` or `sqlite` are
+for the dialect stops the build (`MDD036`), and so does an expression outside the subset in a portable context (`MDD037`)
+— on either dialect, with every such expression listed at once. Platform expressions for `mysql` or `sqlite` are
 carried and emitted by no target. The generated entity's `[Computed]` metadata is the dialect's platform expression, else
 the portable one as written.
 

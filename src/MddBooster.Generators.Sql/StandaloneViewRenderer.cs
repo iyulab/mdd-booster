@@ -54,7 +54,7 @@ public static class StandaloneViewRenderer
                     break;
                 case ViewComputedColumn c:
                     computed.Add((ExpressionSelection.Select(c.Computed, SqlDialect.SqlServer) is { } selected
-                        ? Expression(selected, view, booleanResult: c.Field.Type == "boolean", $"{view.Name}.{c.Field.Name}")
+                        ? Expression(selected, view, booleanResult: c.Field.Type == "boolean")
                         : string.Empty, alias));
                     break;
             }
@@ -76,7 +76,7 @@ public static class StandaloneViewRenderer
                 .AppendLine(string.Join(" AND ", join.On.Select(t => $"{Column(t.Left)} = {Column(t.Right)}")));
         }
         if (view.WhereFor(SqlDialect.SqlServer) is { } where)
-            body.Append(indent).Append("WHERE ").AppendLine(Expression(where, view, booleanResult: false, $"view {view.Name} where"));
+            body.Append(indent).Append("WHERE ").AppendLine(Expression(where, view, booleanResult: false));
         if (view.GroupBy.Count > 0)
             body.Append(indent).Append("GROUP BY ").AppendLine(string.Join(", ", view.GroupBy.Select(Column)));
 
@@ -140,7 +140,7 @@ public static class StandaloneViewRenderer
     /// A platform expression as written (relation-qualified names spelled as columns); a portable one translated, with
     /// <c>Relation.field</c> as <c>[Relation].[Field]</c> and a bare name as the view row's column.
     /// </summary>
-    private static string Expression(SelectedExpression selected, ResolvedView view, bool booleanResult, string where)
+    private static string Expression(SelectedExpression selected, ResolvedView view, bool booleanResult)
     {
         if (selected.IsRaw) return Expression(selected.Text, view);
         var relations = new[] { view.From }.Concat(view.Joins.Select(j => j.Target)).Select(r => r.Name).ToHashSet(StringComparer.Ordinal);
@@ -150,7 +150,7 @@ public static class StandaloneViewRenderer
             return dot > 0 && relations.Contains(name[..dot])
                 ? $"[{name[..dot]}].[{NameCasing.ToPascalCase(name[(dot + 1)..])}]"
                 : SqlServerExpressions.OwnColumn(name);
-        }, booleanResult, where);
+        }, booleanResult);
     }
 
     private static string Expression(string text, ResolvedView view)

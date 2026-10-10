@@ -1,6 +1,7 @@
 using MddBooster.Core.Generation;
 using M3L.Native;
 using MddBooster.Core.Naming;
+using MddBooster.Core.Semantic;
 
 namespace MddBooster.Generators.Sql;
 
@@ -27,7 +28,7 @@ public sealed class SqlGenerator : IArtifactGenerator
     {
         ArgumentNullException.ThrowIfNull(context);
         RefuseCascadePaths(context);
-        SqlServerExpressions.RefuseMissingExpressions(context);
+        ExpressionRefusals.Refuse(context, SqlDialect.SqlServer);
         if (_options.EmitSqlProj)
             FindSqlProj(ResolveProjectRoot(context.WorkingDirectory));
     }
@@ -54,7 +55,7 @@ public sealed class SqlGenerator : IArtifactGenerator
         ArgumentNullException.ThrowIfNull(context);
 
         RefuseCascadePaths(context);
-        SqlServerExpressions.RefuseMissingExpressions(context);
+        ExpressionRefusals.Refuse(context, SqlDialect.SqlServer);
 
         var projectRoot = ResolveProjectRoot(context.WorkingDirectory);
         var tablesGenDir = Path.Combine(projectRoot, "dbo", "Tables_gen");
