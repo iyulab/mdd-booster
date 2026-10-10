@@ -42,7 +42,7 @@ M3L 0.20.0 이 `@computed` · rollup `where:` · 뷰 `where` 의 언어를 정�
   뷰는 `MDD029` 로 건너뛰었다. 이제 같은 번역기로 낸다: FullView 의 Computed 는 SQL Server 와 같은 CTE 체인(뒤의 식이 앞의 Computed 를 이름으로 읽는다) · rollup `where:` · standalone `where`·`@computed`.
   번역할 수 없는 식은 SQL Server 와 같은 **오류 `MDD037`**, `platform: "postgresql"` 식이 없고 포터블 식도 없으면 `MDD036`.
 
-### 🆕 키가 있는 standalone `::view` 가 읽기 모델이 된다 (Model · Api 타깃)
+### 🆕 키가 있는 standalone `::view` 가 읽기 모델이 된다 (Model · Api · TypeScript 타깃)
 
 지금까지 뷰는 Sql 타깃만 읽었다 — 뷰를 조회 API 로 쓰려면 앱이 엔티티 · 매핑 · 컨트롤러를 손으로 써야 했다.
 
@@ -52,14 +52,18 @@ M3L 0.20.0 이 `@computed` · rollup `where:` · 뷰 `where` 의 언어를 정�
   Sql 타깃이 만드는 그 뷰 · 키 `Id`; PostgreSQL 은 열 이름까지). **이미 그런 뷰를 가진 모델은 재생성하면 새 파일과 DbContext 변경이 생긴다.**
 - 🔇 **Api 타깃** — 읽기 전용 셋 등록과 읽기 전용 컨트롤러, 읽기 권한 키 하나. 쓰기 동사는 런타임이 거절한다. `surfaces` 에 `odata` 가 없으면
   내지 않는다(GraphQL 표면은 아직).
+- **TypeScript 타깃** — `entities_gen.ts` 에 뷰의 열만 가진 인터페이스(`IyuEntity` 를 잇지 않는다). 필드 스키마·폼은 없다.
+  🔇 `entity_names_gen.ts` 에 `READ_ONLY_SET_NAMES` / `ReadOnlySetName` 이 **항상** 생긴다(읽기 모델인 뷰가 없으면 빈 목록 — 재생성 diff).
+  `ENTITY_NAMES` / `EntitySetName` 은 그대로다: 뷰의 셋은 거기 들지 않는다 — 그 타입 위의 쓰기 코드가 쓰기를 거절하는 셋을 받게 되지 않도록.
+  Api 타깃이 뷰를 표면에서 뺐는데 TypeScript 타깃이 그대로면 경고한다.
 - 🔴 **런타임 요구가 올라간다 — 그런 뷰가 있는 모델에 한해.** 생성 코드가 키만 가진 읽기 타입과 읽기 전용 셋을 쓴다(런타임
   `Iyu.*` **0.38.0** 이상 — 런타임 패키지의 README «A set that is only read»). 런타임을 올릴 수 없으면 뷰에 `@internal` 을 붙여 종전처럼 SQL 만 생성한다.
 - **손으로 쓴 엔티티가 이미 있으면** 같은 이름의 클래스가 둘이 된다 — 손으로 쓴 쪽(엔티티 · 매핑 · 컨트롤러)을 지우거나, 뷰에 `@internal` 을
   붙여 생성을 끈다.
-- 키가 없는 뷰는 종전대로 SQL 만 생성되고, Model·Api 타깃이 있는 빌드는 그 사실을 정보 한 줄로 알린다(경고 아님 — 집계 뷰에는 키가 없다).
+- 키가 없는 뷰는 종전대로 SQL 만 생성되고, Model·Api·TypeScript 타깃이 있는 빌드는 그 사실을 정보 한 줄로 알린다(경고 아님 — 집계 뷰에는 키가 없다).
 - **`## Name ::view @internal`** 이 읽힌다(`M3L.Native` 0.20.0 — 그 전에는 뷰 머리의 속성이 AST 에 오지 않았다) — 키가 있어도 읽기 모델로 내지
   않는다. Api 타깃의 `excludeEntities`/`includeEntities` 도 뷰 이름을 받는다.
-- 새 오류 **`MDD038`** — 읽기 모델의 생성 이름(클래스 = 뷰 이름, 셋 = 그 복수형)이 모델의 엔티티 · 읽기 타입 · 셋이나 enum 과 같다.
+- 새 오류 **`MDD038`** — 읽기 모델의 생성 이름(클래스 = 뷰 이름, 셋 = 그 복수형)이 모델의 엔티티 · 읽기 타입 · 셋이나 enum, 다른 뷰의 것과 같다.
 - PostgreSQL 방언이 생성하지 않는 뷰(`MDD029`)는 읽기 모델로도 내지 않는다.
 - Sql 타깃이 없는 빌드의 경고가 «뷰의 `CREATE VIEW` 를 생성하는 타깃이 없다»로 바뀌었다 — 읽기 모델은 그 빌드에서도 나온다.
 - README «키가 있는 standalone `::view` → 읽기 모델».

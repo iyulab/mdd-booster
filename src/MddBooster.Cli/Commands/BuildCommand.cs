@@ -217,7 +217,7 @@ public sealed class BuildCommand
 
             // 읽기 모델(엔티티 · 읽기 전용 셋)은 행을 키로 가리킬 수 있는 뷰에만 낸다. 키 없는 뷰는 정당한 뷰다(집계에는
             // 행의 신원이 없다) — 경고가 아니라, 왜 그 뷰가 Model·Api 산출물에 없는지를 한 줄로 알린다.
-            if (cfg.Targets.Any(t => t.Type is "Model" or "Api"))
+            if (cfg.Targets.Any(t => t.Type is "Model" or "Api" or "TypeScript"))
             {
                 foreach (var view in viewResolution.Views.Where(v =>
                              !ViewReadModels.IsInternal(v) && ViewReadModels.KeyOf(v) is null))
@@ -231,7 +231,7 @@ public sealed class BuildCommand
             .ToList();
         // 읽기 모델이 내는 클래스·셋 이름이 모델이 내는 이름과 같으면 생성물이 한 이름을 두 번 선언한다 — 고르지 않고
         // 멈춘다(MDD038). 그 이름을 내는 타깃이 있을 때만 문제다.
-        if (cfg.Targets.Any(t => t.Type is "Model" or "Api"))
+        if (cfg.Targets.Any(t => t.Type is "Model" or "Api" or "TypeScript"))
         {
             foreach (var (view, reason) in ViewReadModels.NameClashes(
                          readViews, allModels.Select(m => m.Name), allEnums.Select(e => e.Name)))
@@ -474,10 +474,30 @@ public sealed class BuildCommand
                 .Where(m => !EntitySurface.IsInternal(m))
                 .Select(m => m.Name)
                 .ToHashSet(StringComparer.Ordinal);
+            // 읽기 모델인 뷰도 같은 계약이다 — `ReadOnlySetName` 은 Api 타깃이 읽기 전용으로 등록하는 셋의 미러다.
+            var registeredViews = apiTargets
+                .SelectMany(t => readViews.Where(
+                    (filters.TryGetValue(t, out var af) ? af : EntitySurfaceFilter.PassAll).Admits))
+                .Select(v => v.Name)
+                .ToHashSet(StringComparer.Ordinal);
 
             foreach (var ts in cfg.Targets.Where(t => t.Type == "TypeScript"))
             {
-                var extras = (filters.TryGetValue(ts, out var tf) ? tf : EntitySurfaceFilter.PassAll)
+                var tsFilter = filters.TryGetValue(ts, out var tf) ? tf : EntitySurfaceFilter.PassAll;
+                var viewExtras = readViews
+                    .Where(v => tsFilter.Admits(v) && !registeredViews.Contains(v.Name))
+                    .Select(v => v.Name)
+                    .ToList();
+                if (viewExtras.Count > 0)
+                {
+                    Console.Error.WriteLine(
+                        $"[config] 경고: TypeScript 타깃({TargetPathOf(ts)})의 ReadOnlySetName 이 "
+                        + $"어떤 Api 타깃도 등록하지 않는 뷰 {viewExtras.Count}개를 포함합니다 — "
+                        + $"이 TypeScript 타깃에 같은 필터를 지정하세요: {string.Join(", ", viewExtras.Take(10))}"
+                        + (viewExtras.Count > 10 ? $" … (+{viewExtras.Count - 10})" : ""));
+                }
+
+                var extras = tsFilter
                     .Apply(allModels)
                     .Where(m => !EntitySurface.IsInternal(m) && !registered.Contains(m.Name))
                     .Select(m => m.Name)

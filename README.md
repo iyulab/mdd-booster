@@ -730,9 +730,9 @@ PostgreSQL `views_gen/<snake_name>.sql`. 빌드가 먼저 뷰를 모델에 대�
 | `order_by` | 내지 않는다 — 뷰에는 순서가 없고, T-SQL 은 `TOP` 없는 뷰의 `ORDER BY` 를 거절한다(빌드 로그에 정보 한 줄) |
 
 생성하지 않는 것: SQL 코드 블록 소스(`MDD028`) · `@materialized` · `@lookup` 열(뷰는 소스에서 투영한다 — `@from`) · 뷰 소스 위의 `@rollup`(`MDD031`).
-키를 투영한 뷰는 Model·Api 타깃이 읽기 모델로 낸다(바로 아래 절). TypeScript 타깃은 뷰를 읽지 않는다. Sql 타깃이 없는 빌드는 뷰의 `CREATE VIEW` 를 만드는 타깃이 없다고 경고한다.
+키를 투영한 뷰는 Model·Api·TypeScript 타깃이 읽기 모델로 낸다(바로 아래 절). Sql 타깃이 없는 빌드는 뷰의 `CREATE VIEW` 를 만드는 타깃이 없다고 경고한다.
 
-### 키가 있는 standalone `::view` → 읽기 모델 (Model · Api 타깃)
+### 키가 있는 standalone `::view` → 읽기 모델 (Model · Api · TypeScript 타깃)
 
 뷰가 **`id` 라는 이름의 `identifier` 열을 `@from` 으로 투영하면** 그 뷰는 읽기 모델이다 — 조회 화면·목록·보고서가 테이블이 아니라
 그 뷰를 읽는다.
@@ -753,6 +753,7 @@ PostgreSQL `views_gen/<snake_name>.sql`. 빌드가 먼저 뷰를 모델에 대�
 |---|---|
 | Model | `Entity_gen/OpenOrders.cs` — 뷰의 출력 열만 가진 클래스 하나(쓰기 타입·`…Ext` 쌍·감사 타임스탬프 없음). DbContext 에 `DbSet<OpenOrders> OpenOrders` 와 매핑: 테이블 없음 · Sql 타깃이 만드는 그 뷰(`ToView`) · 키 `Id`. PostgreSQL 방언은 열마다 선언된 이름으로 매핑한다 |
 | Api | 읽기 전용 셋 등록 한 줄과 읽기 전용 컨트롤러(`OpenOrdersController`). 조회·`$filter`·`$select`·`$orderby`·키 조회는 모델의 셋과 같고, 쓰기 동사는 런타임이 전부 거절한다. 권한 키는 읽기 하나(`…Read`)만 낸다 |
+| TypeScript | `entities_gen.ts` 에 뷰의 열만 가진 `interface OpenOrders`(`IyuEntity` 를 잇지 않는다 — 감사 타임스탬프가 없다, 열은 전부 필수). `entity_names_gen.ts` 에 **따로** `READ_ONLY_SET_NAMES` / `ReadOnlySetName`. 필드 스키마·폼은 없다(쓰기 축) |
 | Sql | 변화 없음 — 뷰는 위 절대로 생성된다 |
 
 - **키는 작성자가 고른다 — 그리고 유일해야 한다.** 부모와 자식을 조인한 뷰는 부모의 키를 되풀이한다. 그때는 자식의 키를 투영한다. 유일하지
@@ -767,6 +768,9 @@ PostgreSQL `views_gen/<snake_name>.sql`. 빌드가 먼저 뷰를 모델에 대�
 - **Sql 타깃 없이 Model·Api 만 있는 빌드**도 읽기 모델을 낸다. 그 이름의 뷰가 데이터베이스에 있다는 것은 그 빌드 밖의 일이다.
 - **런타임 요구** — 생성 코드는 키만 가진 읽기 타입과 읽기 전용 셋을 쓴다(런타임 `Iyu.*` **0.38.0** 이상 — 런타임 패키지의 README
   «A set that is only read»). 그보다 낮은 런타임에서는 생성물이 컴파일되지 않는다 — 읽기 모델을 원치 않으면 뷰에 `@internal` 을 붙인다.
+- **`EntitySetName` 은 넓어지지 않는다.** 그 타입 위에 쓴 코드(편집 폼 · `…write` 권한 키)는 쓰기를 전부 거절하는 셋을 받으면 안 된다.
+  읽기만 하는 코드(목록 · 그리드)는 `EntitySetName | ReadOnlySetName` 을 받고, 읽기 권한 키는
+  `` `${Lowercase<ReadOnlySetName>}.read` `` 로 만든다. Api 타깃이 뷰를 표면에서 뺐는데 TypeScript 타깃이 그대로면 빌드가 경고한다(모델과 같은 규칙).
 - GraphQL 표면에는 아직 내지 않는다 — `surfaces` 에 `odata` 가 없는 Api 타깃은 뷰의 셋을 등록하지 않는다.
 
 ### `::aspect` → PK 가 곧 base FK 인 테이블
@@ -1209,7 +1213,7 @@ consumer-repo/
 | MDD033(경고) | `::aspect` 셋을 OData 로 등록하는데, 그 base 를 같은 빌드의 어떤 Api 타깃도 OData 로 등록하지 않는다 — 공유 키 선언(`DeclareSharedKey`)을 낼 곳이 없어 그 셋의 공유 키 거절이 꺼진다. base 를 등록하는 Api 타깃을 두거나 aspect 도 함께 뺀다(설정 단계에서 나온다) |
 | MDD034(경고) | `@searchable` 참조 키인데 읽기 타입에 그 키의 navigation 이 없다(`_id` 로 끝나지 않는 키, `MDD027` 이름 충돌) — 선언은 키에 남지만 키는 텍스트가 아니라 `$search` 가 그 참조를 따르지 못하고 어떤 낱말에도 매칭하지 않는다 |
 | MDD037 | 이식 가능한 문맥(`@computed`·rollup `where:`·뷰 `where`)의 식이 부분집합(M3L 명세 §10.7) 밖이다 — 두 SQL 방언 모두 원문으로 내지 않고 빌드를 멈추며, 해당하는 식을 한 번에 전부 나열한다. 부분집합으로 다시 쓰거나(`DATEDIFF(YEAR, a, GETDATE())` → `date_diff('year', a, today())`), 그 방언의 문법 그대로 두려면 `@computed_raw(…, platform: "sqlserver")`·`where_raw`(PostgreSQL 은 `"postgresql"`)로 옮긴다(생성 단계) |
-| MDD038 | 읽기 모델로 내는 standalone `::view` 의 생성 이름(클래스 = 뷰 이름, 셋 = 그 복수형)이 모델의 엔티티·읽기 타입(`…Ext`)·셋이나 enum, 다른 뷰의 것과 같다 — 뷰의 이름을 바꾸거나 `@internal` 로 읽기 모델에서 뺀다. Model·Api 타깃이 있는 빌드에서만 |
+| MDD038 | 읽기 모델로 내는 standalone `::view` 의 생성 이름(클래스 = 뷰 이름, 셋 = 그 복수형)이 모델의 엔티티·읽기 타입(`…Ext`)·셋이나 enum, 다른 뷰의 것과 같다 — 뷰의 이름을 바꾸거나 `@internal` 로 읽기 모델에서 뺀다. Model·Api·TypeScript 타깃이 있는 빌드에서만 |
 | MDD036 | SQL Server(또는 그 방언)용 식이 없다 — `@computed_raw`/`where_raw` 가 다른 플랫폼에만 있고 포터블 식(`@computed`/`where`)도 없다. 생성물이 식을 지어낼 수 없어 빌드가 멈춘다(생성 단계) |
 | MDD035(경고) | `@searchable` 참조의 대상 모델을 같은 빌드의 어떤 Api 타깃도 OData 로 등록하지 않는다 — 런타임 `$search` 는 등록되지 않은 대상의 navigation 을 건너뛰어 그 선언이 아무것도 매칭하지 않는다. 대상을 등록하는 Api 타깃을 두거나 그 키의 `@searchable` 을 뺀다(설정 단계에서 나온다) |
 

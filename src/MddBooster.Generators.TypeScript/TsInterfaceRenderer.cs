@@ -35,12 +35,18 @@ public static class TsInterfaceRenderer
     /// 주어지면 <c>IyuEntity</c> 를 선언하지 않고 이 모듈에서 가져와 재수출한다 — 두 타깃이 같은 이름의 타입을 두 벌
     /// 갖지 않게.
     /// </param>
+    /// <param name="readViews">
+    /// Standalone views served as read models. Each becomes an interface of the view's own columns — it does not
+    /// extend <c>IyuEntity</c>, because a view carries a key and what it returns, not the audit timestamps.
+    /// </param>
     public static string RenderAll(
         IReadOnlyList<ResolvedModel> models,
         IReadOnlySet<string>? knownEnumNames = null,
-        string? sharedTypesImport = null)
+        string? sharedTypesImport = null,
+        IReadOnlyList<ResolvedView>? readViews = null)
     {
         ArgumentNullException.ThrowIfNull(models);
+        var views = (readViews ?? []).OrderBy(v => v.Name, StringComparer.Ordinal).ToList();
 
         var sb = new StringBuilder();
         sb.AppendLine(Header);
@@ -58,6 +64,15 @@ public static class TsInterfaceRenderer
                 {
                     usedEnums.Add(NameCasing.ToPascalCase(f.Type));
                 }
+            }
+        }
+        foreach (var column in views.SelectMany(v => v.Columns))
+        {
+            if (knownEnumNames is not null
+                && !string.IsNullOrWhiteSpace(column.Field.Type)
+                && knownEnumNames.Contains(column.Field.Type))
+            {
+                usedEnums.Add(NameCasing.ToPascalCase(column.Field.Type));
             }
         }
 
@@ -91,7 +106,35 @@ public static class TsInterfaceRenderer
             RenderInterface(sb, model, models, knownEnumNames);
         }
 
+        foreach (var view in views)
+        {
+            RenderViewInterface(sb, view, knownEnumNames);
+        }
+
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// A read-model view: every column the view returns, each required — a view has no write body in which a
+    /// column could be absent.
+    /// </summary>
+    private static void RenderViewInterface(StringBuilder sb, ResolvedView view, IReadOnlySet<string>? knownEnumNames)
+    {
+        if (!string.IsNullOrWhiteSpace(view.Source.Description))
+        {
+            sb.Append("/** ").Append(view.Source.Description.Replace("*/", "* /").Replace('\n', ' ')).AppendLine(" */");
+        }
+
+        sb.Append("export interface ").Append(NameCasing.ToPascalCase(view.Name)).AppendLine(" {");
+        foreach (var column in view.Columns)
+        {
+            var field = column.Field;
+            var tsType = TypeScriptTypeMapper.MapFieldType(field.Type!, knownEnumNames);
+            sb.Append("  ").Append(NameCasing.ToPascalCase(field.Name)).Append(": ").Append(tsType)
+              .AppendLine(field.Nullable ? " | null" : string.Empty);
+        }
+        sb.AppendLine("}");
+        sb.AppendLine();
     }
 
     private static void RenderInterface(

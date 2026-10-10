@@ -48,6 +48,50 @@ public sealed class StandaloneViewReadModelBuildTests
 - stock: integer @from(Product.stock_quantity)
 """;
 
+    private const string TypeScriptTarget = """, { "type": "TypeScript", "outputPath": "../ts" }""";
+
+    [Fact]
+    public void The_typescript_target_gets_the_views_read_type_and_lists_its_set_apart_from_the_written_ones()
+    {
+        using var o = Build("tsql", ProductOnly, extraTargets: TypeScriptTarget);
+
+        // The view's own columns, each required, and no audit timestamps: it does not extend the entity base.
+        var entities = o.Read("ts", "entities_gen.ts");
+        Assert.Contains("export interface ActiveProducts {\n  Id: string\n  Name: string\n  Stock: number\n}\n", entities);
+
+        // A set that refuses every write is not an EntitySetName — code typed on that name writes.
+        var names = o.Read("ts", "entity_names_gen.ts");
+        Assert.Contains("export const ENTITY_NAMES = [\n  'Products',\n] as const", names);
+        Assert.Contains("export const READ_ONLY_SET_NAMES = [\n  'ActiveProducts',\n] as const", names);
+        Assert.Contains("export type ReadOnlySetName = typeof READ_ONLY_SET_NAMES[number]", names);
+
+        // Nothing is entered into a view: no write-side schema for it.
+        Assert.DoesNotContain("ActiveProducts", o.Read("ts", "field_schema_gen.ts"));
+    }
+
+    [Fact]
+    public void A_model_with_no_read_model_view_still_declares_the_read_only_list_empty()
+    {
+        var model = ProductOnly.Replace("## ActiveProducts ::view", "## ActiveProducts ::view @internal");
+        using var o = Build("tsql", model, extraTargets: TypeScriptTarget);
+
+        Assert.Contains("export const READ_ONLY_SET_NAMES = [\n] as const", o.Read("ts", "entity_names_gen.ts"));
+        Assert.DoesNotContain("ActiveProducts", o.Read("ts", "entities_gen.ts"));
+    }
+
+    [Fact]
+    public void A_typescript_target_listing_a_view_no_api_target_registers_is_warned()
+    {
+        var (output, exit, stderr) = Run(
+            "tsql", ProductOnly, apiExtra: """, "excludeEntities": ["ActiveProducts"]""", extraTargets: TypeScriptTarget);
+        using (output)
+        {
+            Assert.True(exit == 0, stderr);
+            Assert.Contains("ReadOnlySetName", stderr);
+            Assert.Contains("ActiveProducts", stderr);
+        }
+    }
+
     [Theory]
     [InlineData("ProductExt", "클래스 'ProductExt' 는 모델 'Product' 의 읽기 타입")]
     [InlineData("Products", "셋 'Products' 는 모델 'Product' 의 셋")]
@@ -87,9 +131,9 @@ public sealed class StandaloneViewReadModelBuildTests
         }
     }
 
-    private Output Build(string dialect, string? model = null, string apiExtra = "")
+    private Output Build(string dialect, string? model = null, string apiExtra = "", string extraTargets = "")
     {
-        var (output, exit, stderr) = Run(dialect, model, apiExtra);
+        var (output, exit, stderr) = Run(dialect, model, apiExtra, extraTargets);
         Assert.True(exit == 0, $"exit {exit}: {stderr}");
         return output;
     }
@@ -102,7 +146,8 @@ public sealed class StandaloneViewReadModelBuildTests
             return (exit, stderr);
     }
 
-    private (Output Output, int Exit, string Stderr) Run(string dialect, string? model, string apiExtra)
+    private (Output Output, int Exit, string Stderr) Run(
+        string dialect, string? model, string apiExtra, string extraTargets = "")
     {
         var root = Path.Combine(Path.GetTempPath(), $"mdd-view-read-{dialect}-{Guid.NewGuid():N}");
         var mddDir = Path.Combine(root, "mdd");
@@ -123,7 +168,7 @@ public sealed class StandaloneViewReadModelBuildTests
   "targets": [
     { "type": "Sql", "dialect": "{{dialect}}", "projectPath": "../db", "emitSqlProj": false },
     { "type": "Model", "dialect": "{{dialect}}", "projectPath": "../entities", "namespace": "X.Entities", "dbContextName": "XDbContext" },
-    { "type": "Api", "projectPath": "../api", "namespace": "X.Server", "permissionKeyTemplate": "{entitySet}.{verb}"{{apiExtra}} }
+    { "type": "Api", "projectPath": "../api", "namespace": "X.Server", "permissionKeyTemplate": "{entitySet}.{verb}"{{apiExtra}} }{{extraTargets}}
   ]
 }
 """);
