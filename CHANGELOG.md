@@ -33,6 +33,8 @@
 - **Sql 타깃** — 변화 없음. 값은 저장된다.
 - 이미 앱 코드에 같은 칸의 `ExcludeFromWrite` 가 있으면 그대로 두어도 되고(반복 선언), 모델로 옮긴 뒤 지워도 된다.
 - enum **값**의 `@system`(폼이 그 선택지를 권하지 않는다)은 그대로다 — 같은 말을 필드에 쓴 것이 이 항목이다.
+- 진단 둘: **`MDD039`**(경고) — 호출자가 쓸 수 없는 칸(lookup · rollup · computed · `rowversion`)의 `@system` 은 아무것도 바꾸지 않는다.
+  **`MDD040`**(오류) — 한 칸에 `@system` 과 `@immutable` 이 함께 있다(누가 값을 대는지를 다르게 말한다).
 - README «필드의 `@system` → 쓰기 제외 (Api 타깃)».
 
 ### 🔴 참조 키의 `@searchable` 이 키가 아니라 navigation 에 붙는다

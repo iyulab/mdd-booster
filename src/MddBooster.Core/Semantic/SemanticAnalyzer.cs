@@ -49,6 +49,7 @@ public sealed class SemanticAnalyzer
                 CheckBinding(model, field, diagnostics);
                 CheckAttributeTypos(model, field, diagnostics);
                 CheckRowVersionUse(model, field, diagnostics);
+                CheckSystemDeclaration(model, field, diagnostics);
             }
         }
 
@@ -193,6 +194,40 @@ public sealed class SemanticAnalyzer
                 "MDD026",
                 $"'{model.Name}.{field.Name}' @lookup({field.Lookup.Path}): '{owner}.{target.Name}' 는 그 행의 버전(rowversion)이다 — " +
                 "다른 행이 읽어 쓸 값이 아니다(PostgreSQL 에서는 조인으로 읽을 열도 없다). 그 행의 동시성은 그 행의 ETag 로 다루세요.",
+                field.Loc));
+        }
+    }
+
+    /// <summary>
+    /// A field <c>@system</c> that says nothing, or says the opposite of another declaration. <c>MDD039</c> (warning): on a
+    /// field no caller could write anyway — a lookup, a rollup, a computed value, a row version — so the declaration
+    /// changes nothing and the author's intent (someone's code writes this) has no column to land on. <c>MDD040</c>:
+    /// together with <c>@immutable</c>, which says a caller supplies the value once; the two answer «who supplies it»
+    /// differently, and the generator would otherwise pick one without saying so.
+    /// </summary>
+    private static void CheckSystemDeclaration(ResolvedModel model, FieldNode field, List<SemanticDiagnostic> diagnostics)
+    {
+        if (!Generation.FieldAuthorship.IsDeclaredSystem(field)) return;
+
+        var noCallerWrites = field.Kind != FieldKind.Stored
+            ? $"{field.Kind.ToString().ToLowerInvariant()} 칸은 저장되지 않는다"
+            : M3lPrimitives.IsRowVersion(field) ? "행 버전(rowversion)은 엔진이 쓴다" : null;
+        if (noCallerWrites is not null)
+        {
+            diagnostics.Add(new SemanticDiagnostic(
+                "MDD039",
+                $"'{model.Name}.{field.Name}': @system 은 아무것도 바꾸지 않는다 — {noCallerWrites}. 호출자가 쓸 수 없는 칸이라 쓰기 제외가 " +
+                "이미 성립한다. 애플리케이션 코드가 쓰는 값이면 그 값을 담을 저장 칸에 @system 을 두세요.",
+                field.Loc,
+                SemanticSeverity.Warning));
+        }
+
+        if (Ast.FieldAttributes.Has(field, "immutable"))
+        {
+            diagnostics.Add(new SemanticDiagnostic(
+                "MDD040",
+                $"'{model.Name}.{field.Name}': @system 과 @immutable 이 함께 있다 — @system 은 «애플리케이션 코드만 쓴다», @immutable 은 " +
+                "«호출자가 생성 때 한 번 준다»로 누가 값을 대는지를 다르게 말한다. 하나만 두세요.",
                 field.Loc));
         }
     }
