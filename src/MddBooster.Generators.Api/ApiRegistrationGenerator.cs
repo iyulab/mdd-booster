@@ -45,7 +45,7 @@ public sealed class ApiRegistrationGenerator(ApiRegistrationGeneratorOptions opt
             File.WriteAllText(
                 Path.Combine(apiDir, "Permissions_gen.cs"),
                 PermissionsRenderer.Render(models, _options.Namespace, _options.PermissionKeyTemplate, _options.EntitiesNamespace,
-                    _options.Surfaces.HasFlag(ApiSurfaces.OData) ? readViews : []));
+                    readViews));
         }
 
         // OData 컨트롤러는 OData 셋의 엔드포인트다 — 셋을 등록하지 않으면 낼 것이 없다

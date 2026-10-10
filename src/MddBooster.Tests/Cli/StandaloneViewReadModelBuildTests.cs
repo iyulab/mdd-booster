@@ -219,6 +219,8 @@ public sealed class StandaloneViewReadModelBuildTests
 
         var registration = o.Api("ApiRegistration_gen.cs");
         Assert.Contains("options.ODataModel.AddReadOnlySet<X.Entities.ActiveProducts>(\"ActiveProducts\");", registration);
+        // The GraphQL surface serves it too — a query field, named like a pair's (camelCase plural), with no mutation prefix.
+        Assert.Contains("options.GraphQL.AddReadOnlySet<X.Entities.ActiveProducts>(\"activeProducts\");", registration);
         Assert.DoesNotContain("AddEntityPair<X.Entities.ActiveProducts", registration);
 
         var controllers = o.Api("Controllers_gen.cs");
@@ -254,6 +256,30 @@ public sealed class StandaloneViewReadModelBuildTests
         Assert.DoesNotContain("ActiveProducts", o.Api("ApiRegistration_gen.cs"));
         // Kept off deliberately, so there is nothing to explain.
         Assert.DoesNotContain("뷰 'ActiveProducts' 은(는) 읽기 모델로 내지 않는다", o.Stdout);
+    }
+
+    [Fact]
+    public void A_graphql_only_api_target_serves_the_view_as_a_query_field_with_its_read_permission()
+    {
+        using var o = Build("tsql", apiExtra: """, "surfaces": ["graphql"]""");
+
+        var registration = o.Api("ApiRegistration_gen.cs");
+        Assert.Contains("options.GraphQL.AddReadOnlySet<X.Entities.ActiveProducts>(\"activeProducts\");", registration);
+        Assert.DoesNotContain("ODataModel", registration);
+        Assert.Empty(Directory.GetFiles(o.Root, "Controllers_gen.cs", SearchOption.AllDirectories));   // no OData set, no controller
+        // The field is guarded by the entity's read policy, so the read key is there for it.
+        var permissions = o.Api("Permissions_gen.cs");
+        Assert.Contains("[typeof(X.Entities.ActiveProducts)] = (ActiveProductsRead, ActiveProductsRead),", permissions);
+    }
+
+    [Fact]
+    public void An_odata_only_api_target_registers_no_query_field_for_the_view()
+    {
+        using var o = Build("tsql", apiExtra: """, "surfaces": ["odata"]""");
+
+        var registration = o.Api("ApiRegistration_gen.cs");
+        Assert.Contains("options.ODataModel.AddReadOnlySet<X.Entities.ActiveProducts>(\"ActiveProducts\");", registration);
+        Assert.DoesNotContain("GraphQL", registration);
     }
 
     [Fact]

@@ -112,15 +112,21 @@ public static class ApiRegistrationRenderer
         }
 
         // 읽기 모델로 서빙되는 standalone 뷰 — 쓰기 타입이 없는 셋. 읽기 타입 하나로 등록하고, 런타임이 모든
-        // 쓰기 동사를 거절한다. 쓰기 경로가 없으므로 선언은 OData 표면의 읽기 셋 하나뿐이다.
-        if (odata)
+        // 쓰기 동사를 거절한다(OData) · 뮤테이션 접두가 없다(GraphQL). 이름은 엔티티 페어와 같은 규칙이다.
+        foreach (var view in (readViews ?? []).OrderBy(v => v.Name, StringComparer.Ordinal))
         {
-            foreach (var view in (readViews ?? []).OrderBy(v => v.Name, StringComparer.Ordinal))
+            var entity = NameCasing.ToPascalCase(view.Name);
+            if (odata)
             {
-                var entity = NameCasing.ToPascalCase(view.Name);
                 sb.Append("        options.ODataModel.AddReadOnlySet<")
                   .Append(entityPrefix).Append(entity).Append(">(\"")
                   .Append(Pluralizer.Pluralize(entity)).AppendLine("\");");
+            }
+            if (graphql)
+            {
+                sb.Append("        options.GraphQL.AddReadOnlySet<")
+                  .Append(entityPrefix).Append(entity).Append(">(\"")
+                  .Append(Pluralizer.Pluralize(NameCasing.ToCamelCase(entity))).AppendLine("\");");
             }
         }
 

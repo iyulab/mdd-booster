@@ -50,8 +50,9 @@ M3L 0.20.0 이 `@computed` · rollup `where:` · 뷰 `where` 의 언어를 정�
   유지하는 것은 작성자의 일이다.
 - 🔇 **Model 타깃** — `Entity_gen/<View>.cs`(뷰의 출력 열만 가진 클래스 하나, 쓰기 타입 없음)와 DbContext 의 `DbSet` · 매핑(테이블 없음 ·
   Sql 타깃이 만드는 그 뷰 · 키 `Id`; PostgreSQL 은 열 이름까지). **이미 그런 뷰를 가진 모델은 재생성하면 새 파일과 DbContext 변경이 생긴다.**
-- 🔇 **Api 타깃** — 읽기 전용 셋 등록과 읽기 전용 컨트롤러, 읽기 권한 키 하나. 쓰기 동사는 런타임이 거절한다. `surfaces` 에 `odata` 가 없으면
-  내지 않는다(GraphQL 표면은 아직).
+- 🔇 **Api 타깃** — 읽기 전용 셋 등록과 읽기 전용 컨트롤러, 읽기 권한 키 하나. 쓰기 동사는 런타임이 거절한다. GraphQL 표면에도 쿼리 필드로
+  등록한다(`options.GraphQL.AddReadOnlySet<V>("<camelCase 복수>")` — 뮤테이션 접두 없음). `surfaces` 가 한 표면만 고르면 그 표면에만 내고,
+  읽기 권한 키는 어느 표면이든 낸다(읽기 정책이 두 표면을 함께 지킨다).
 - **TypeScript 타깃** — `entities_gen.ts` 에 뷰의 열만 가진 인터페이스(`IyuEntity` 를 잇지 않는다). 필드 스키마·폼은 없다.
   🔇 `entity_names_gen.ts` 에 `READ_ONLY_SET_NAMES` / `ReadOnlySetName` 이 **항상** 생긴다(읽기 모델인 뷰가 없으면 빈 목록 — 재생성 diff).
   `ENTITY_NAMES` / `EntitySetName` 은 그대로다: 뷰의 셋은 거기 들지 않는다 — 그 타입 위의 쓰기 코드가 쓰기를 거절하는 셋을 받게 되지 않도록.

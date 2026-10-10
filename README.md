@@ -752,7 +752,7 @@ PostgreSQL `views_gen/<snake_name>.sql`. 빌드가 먼저 뷰를 모델에 대�
 | 타깃 | 생성 |
 |---|---|
 | Model | `Entity_gen/OpenOrders.cs` — 뷰의 출력 열만 가진 클래스 하나(쓰기 타입·`…Ext` 쌍·감사 타임스탬프 없음). DbContext 에 `DbSet<OpenOrders> OpenOrders` 와 매핑: 테이블 없음 · Sql 타깃이 만드는 그 뷰(`ToView`) · 키 `Id`. PostgreSQL 방언은 열마다 선언된 이름으로 매핑한다 |
-| Api | 읽기 전용 셋 등록 한 줄과 읽기 전용 컨트롤러(`OpenOrdersController`). 조회·`$filter`·`$select`·`$orderby`·키 조회는 모델의 셋과 같고, 쓰기 동사는 런타임이 전부 거절한다. 권한 키는 읽기 하나(`…Read`)만 낸다 |
+| Api | 읽기 전용 셋 등록(OData 셋 · GraphQL 쿼리 필드)과 읽기 전용 컨트롤러(`OpenOrdersController`). 조회·`$filter`·`$select`·`$orderby`·키 조회는 모델의 셋과 같고, 쓰기 동사는 런타임이 전부 거절한다. 권한 키는 읽기 하나(`…Read`)만 낸다 |
 | TypeScript | `entities_gen.ts` 에 뷰의 열만 가진 `interface OpenOrders`(`IyuEntity` 를 잇지 않는다 — 감사 타임스탬프가 없다, 열은 전부 필수). `entity_names_gen.ts` 에 **따로** `READ_ONLY_SET_NAMES` / `ReadOnlySetName`. 필드 스키마·폼은 없다(쓰기 축) |
 | Sql | 변화 없음 — 뷰는 위 절대로 생성된다 |
 
@@ -771,7 +771,9 @@ PostgreSQL `views_gen/<snake_name>.sql`. 빌드가 먼저 뷰를 모델에 대�
 - **`EntitySetName` 은 넓어지지 않는다.** 그 타입 위에 쓴 코드(편집 폼 · `…write` 권한 키)는 쓰기를 전부 거절하는 셋을 받으면 안 된다.
   읽기만 하는 코드(목록 · 그리드)는 `EntitySetName | ReadOnlySetName` 을 받고, 읽기 권한 키는
   `` `${Lowercase<ReadOnlySetName>}.read` `` 로 만든다. Api 타깃이 뷰를 표면에서 뺐는데 TypeScript 타깃이 그대로면 빌드가 경고한다(모델과 같은 규칙).
-- GraphQL 표면에는 아직 내지 않는다 — `surfaces` 에 `odata` 가 없는 Api 타깃은 뷰의 셋을 등록하지 않는다.
+- **GraphQL 표면에도 낸다** — `options.GraphQL.AddReadOnlySet<OpenOrders>("openOrders")`: 모델의 쿼리 필드와 같은 이름 규칙(camelCase 복수)의
+  쿼리 필드이고 뮤테이션 접두가 없다. `surfaces` 가 `["graphql"]` 이면 그 한 줄과 읽기 권한 키만 낸다(OData 셋·컨트롤러 없음),
+  `["odata"]` 면 GraphQL 줄을 내지 않는다.
 
 ### `::aspect` → PK 가 곧 base FK 인 테이블
 
