@@ -168,8 +168,10 @@ public static class TsFormRenderer
             .Where(f => !EntitySurface.IsFieldInternal(f))
             .Where(f => !HasAttribute(f, "pk"))
             .Where(f => !IsInheritedTimestamp(f.Name))
-            // The row version is set by the database engine on every write — nobody enters it.
-            .Where(f => !MddBooster.Core.Types.M3lPrimitives.IsRowVersion(f))
+            // Nobody enters these: the application's own code writes a @system field, and the database
+            // engine sets the row version on every write. A control for either would collect a value the
+            // write then drops.
+            .Where(f => !FieldAuthorship.IsSystemWritten(f))
             .ToList();
 
         if (storedFields.Count == 0) return null;

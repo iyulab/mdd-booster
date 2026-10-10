@@ -18,6 +18,23 @@
 
 ## [Unreleased]
 
+### 필드의 `@system` — «이 칸은 애플리케이션 자신의 코드가 쓴다»
+
+상태·행위자·저장소 키처럼 사람이나 클라이언트가 직접 정하면 안 되는 칸을 모델에 선언한다. 지금까지는 그 사실을 적을
+자리가 없어, 앱이 쓰기 제외 목록을 생성물 밖에서 손으로 유지했고 칸을 더한 사람이 그 목록을 기억해야 했다.
+
+- **Api 타깃** — `ApiRegistration_gen.cs` 가 `options.ODataModel.ExcludeFromWrite<…Ext>(x => x.Status, …)` 를 낸다(모델마다 한 줄,
+  셋 등록 뒤). 런타임이 그 칸만 보낸 `PATCH` 를 거절하고, 생성 본문의 값을 버리고, `$metadata` 에 서버가 정하는 값으로 광고한다.
+  `surfaces` 에 `odata` 가 없으면 내지 않는다. 읽기 표면에서 뺀 칸(`@internal`)은 대상이 아니다.
+- **TypeScript 타깃** — 🔇 그 칸에 입력 컨트롤(슬롯 포함)을 그리지 않는다. `field_schema_gen.ts` 에는 `readOnly: true` 로 남고
+  `required`·`maxLength`·`min`·`max` 는 빠진다. `entities_gen.ts` 의 타입은 그대로다.
+- **Model 타깃** — 🔇 `[Editable(false)]`. 그리고 `@immutable` 은 이제 `[Editable(false, AllowInitialValue = true)]` 다 — «생성 때 한 번
+  준다»를 정확히 적은 것이고, 그러지 않으면 두 선언이 같은 메타데이터가 된다(재생성 diff, 동작 변화 없음).
+- **Sql 타깃** — 변화 없음. 값은 저장된다.
+- 이미 앱 코드에 같은 칸의 `ExcludeFromWrite` 가 있으면 그대로 두어도 되고(반복 선언), 모델로 옮긴 뒤 지워도 된다.
+- enum **값**의 `@system`(폼이 그 선택지를 권하지 않는다)은 그대로다 — 같은 말을 필드에 쓴 것이 이 항목이다.
+- README «필드의 `@system` → 쓰기 제외 (Api 타깃)».
+
 ### 🔴 참조 키의 `@searchable` 이 키가 아니라 navigation 에 붙는다
 
 - `@reference(X) @searchable` 키는 이제 그 키를 따르는 navigation — 읽기 타입의 N:1 navigation·1:1 정방향, 쓰기 엔티티의 navigation — 에

@@ -81,7 +81,7 @@ public class ModelTargetAxisCoverageTests
             ["label"] = (Disposition.Carried, "[Display(Name)] — overrides the field description as the label source; FieldAttributes.EffectiveLabel/GetAttributeFirstParam(\"label\") is the shared priority (see also TsFieldSchemaRenderer and TsFormRenderer, which read the same override for the TypeScript targets)"),
             ["internal"] = (Disposition.Carried, "at field level: dropped from the interface and the Ext (read) class, kept on the write class. The FullView/UdView SELECT drops the same field in the same pass — see FullViewRendererTests/UdViewRendererTests. At model level it stays NotApplicable — that grain is EntitySurface.IsInternal, an Api/TypeScript-surface decision with no entity-generation counterpart"),
             ["help"] = (Disposition.Carried, "[Display(Description)] — GetAttributeString(\"help\") is the same free-text read TsFormRenderer's helpText already uses for the generated form"),
-            ["immutable"] = (Disposition.Carried, "[Editable(false)], mirroring TypeScript's generated-form `disabled` (TsFormRenderer). Metadata only on both targets — nothing in this repo's generated API layer enforces either; an actual write-blocking guard is a separate capability this repository does not provide"),
+            ["immutable"] = (Disposition.Carried, "[Editable(false, AllowInitialValue = true)] — a caller supplies the value once, at creation — mirroring TypeScript's generated-form `disabled` (TsFormRenderer). Metadata only on both targets — nothing in this repo's generated API layer enforces either; an actual write-blocking guard is a separate capability this repository does not provide"),
             ["unique"] = (Disposition.Carried, "DbContextRenderer.AppendIndexes emits modelBuilder.Entity<T>().HasIndex(...).IsUnique().HasDatabaseName(...) on the write entity, field-for-field parity with TableRenderer/PgTableRenderer's own UK_/uq_ naming. Nullable needs no extra code — the SQL Server provider's own SqlServerIndexConvention adds the WHERE ... IS NOT NULL filter automatically, matching TableRenderer's manual filtered-index branch; Postgres's UNIQUE already treats NULL as distinct, matching PgTableRenderer with no filter either. Carried a second way as well: on a @reference field, @unique also declares a one-to-one, and the read types now gain the reciprocal navigation pair for it (OneToOneRelationships names them and refuses a colliding reverse name; EF infers the multiplicity from the pair, which is why both halves are emitted rather than only the forward one)"),
             ["index"] = (Disposition.Carried, "same AppendIndexes call as unique, IX_/ix_ naming; a field declaring both wins as unique-only, mirroring TableRenderer's own @unique @index exclusion"),
 
@@ -104,7 +104,7 @@ public class ModelTargetAxisCoverageTests
             ["from"] = (Disposition.NotApplicable, "identifier naming"),
             ["slot"] = (Disposition.NotApplicable, "form layout"),
             ["display_labels"] = (Disposition.NotApplicable, "form layout"),
-            ["system"] = (Disposition.NotApplicable, "enum value visibility in the generated UI"),
+            ["system"] = (Disposition.Carried, "on a field: [Editable(false)] — the application's own code writes the value. FieldAuthorship is the shared reading; the Api target turns the same declaration into a write exclusion and the TypeScript target draws no control for it. On an enum value it stays a TypeScript-only matter (which choices a form offers)"),
         };
 
     /// <summary>

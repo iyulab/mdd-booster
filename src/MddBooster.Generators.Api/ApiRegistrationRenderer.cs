@@ -1,4 +1,5 @@
 using System.Text;
+using M3L.Native;
 using MddBooster.Core.Generation;
 using MddBooster.Core.Naming;
 using MddBooster.Core.Semantic;
@@ -106,6 +107,28 @@ public static class ApiRegistrationRenderer
                   .Append(entityPrefix).Append(entity).Append("Ext, ")
                   .Append(entityPrefix).Append(entity).Append(">(\"")
                   .Append(queryName).Append("\", \"").Append(mutationPrefix).AppendLine("\");");
+            }
+        }
+
+        // @system 필드 — 애플리케이션 자신의 코드가 쓰는 칸(상태·행위자·저장소 키). 모델이 그 사실을 말했으므로
+        // 제네릭 쓰기 경로에서 빼 달라는 선언을 여기서 낸다: 손으로 유지하는 목록은 칸을 더한 사람이 그 목록을
+        // 기억할 때만 맞는다. 읽기 타입의 속성을 가리키므로 읽기 표면에 없는 칸(@internal)은 대상이 아니고,
+        // 파생 칸과 행 버전은 런타임이 이미 쓰기에서 뺀다. 쓰기 경로는 OData 의 것이다.
+        if (odata)
+        {
+            foreach (var model in models.OrderBy(m => m.Name, StringComparer.Ordinal))
+            {
+                if (EntitySurface.IsInternal(model)) continue;
+                var systemFields = model.Fields
+                    .Where(f => f.Kind == FieldKind.Stored)
+                    .Where(f => FieldAuthorship.IsDeclaredSystem(f) && !EntitySurface.IsFieldInternal(f))
+                    .Select(f => "x => x." + NameCasing.ToPascalCase(f.Name))
+                    .ToList();
+                if (systemFields.Count == 0) continue;
+
+                sb.Append("        options.ODataModel.ExcludeFromWrite<")
+                  .Append(entityPrefix).Append(NameCasing.ToPascalCase(model.Name)).Append("Ext>(")
+                  .Append(string.Join(", ", systemFields)).AppendLine(");");
             }
         }
 

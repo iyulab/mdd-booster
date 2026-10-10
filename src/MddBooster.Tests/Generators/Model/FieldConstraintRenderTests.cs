@@ -275,7 +275,8 @@ public class FieldConstraintRenderTests
     {
         var attrs = AttributesByProperty(RenderWrite());
 
-        Assert.Contains("[Editable(false)]", attrs["LockedNote"]);
+        // A caller supplies an immutable value once, at creation — AllowInitialValue is that half.
+        Assert.Contains("[Editable(false, AllowInitialValue = true)]", attrs["LockedNote"]);
     }
 
     [Fact]
@@ -284,7 +285,7 @@ public class FieldConstraintRenderTests
         var attrs = AttributesByProperty(RenderWrite());
 
         foreach (var prop in new[] { "BareName", "ExplicitName", "OptName", "Unbounded" })
-            Assert.DoesNotContain("[Editable(false)]", attrs[prop]);
+            Assert.DoesNotContain("[Editable(", attrs[prop]);
     }
 
     // ---------------------------------------------------------------- declared defaults

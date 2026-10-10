@@ -491,12 +491,15 @@ public static class EntityPairRenderer
             if (RangeBounds(f) is { } range)
                 sb.Append("    [Range(").Append(range.Min).Append(", ").Append(range.Max).AppendLine(")]");
 
-            // [Editable(false)] — mirrors TS's `disabled` (TsFormRenderer).
-            // Metadata only, like [Required]/[StringLength] above: nothing in this
-            // repo's generated API layer enforces it. An actual write-blocking
-            // guard is a separate capability, and this repository does not provide one.
-            if (MddBooster.Core.Ast.FieldAttributes.Has(f, "immutable"))
+            // [Editable] — who may supply the value, as metadata. @system: nobody outside the
+            // application's own code, at creation or after. @immutable: a caller supplies it once, at
+            // creation, which is what AllowInitialValue says — without it the two declarations would
+            // read the same. Metadata only, like [Required]/[StringLength] above; the enforced half of
+            // @system is the Api target's write exclusion, and @immutable has none.
+            if (FieldAuthorship.IsDeclaredSystem(f))
                 sb.AppendLine("    [Editable(false)]");
+            else if (MddBooster.Core.Ast.FieldAttributes.Has(f, "immutable"))
+                sb.AppendLine("    [Editable(false, AllowInitialValue = true)]");
 
             // [Timestamp] — the row version. On both classes, for two different readers: EF takes
             // the write type's as a concurrency token the engine generates (so an update with a

@@ -567,7 +567,8 @@ UdView 위에 있어 이미 거르고, 기본 테이블을 읽는 서브쿼리�
 | `= <value>` | 속성 초기화자 | `= true;` · `= 3;` · `= "NEW";` · `= 0.5m;` · `= Status.Draft;` |
 | `rowversion` | `[Timestamp]` | 쓰기·읽기 두 클래스 모두. 쓰기 쪽은 EF 가 엔진이 생성하는 동시성 토큰으로 읽어 낡은 버전의 갱신이 아무 행도 바꾸지 않게 하고, 읽기 쪽은 OData 모델 빌더가 ETag 원천으로 읽는다. CLR 타입은 방언을 따른다 — SQL Server `byte[]`, PostgreSQL `uint`(`xmin`). `[Required]` 는 붙지 않는다(호출자가 주는 값이 아니다) |
 | `@searchable` | `[Searchable]` | 쓰기·읽기 두 클래스 모두. 런타임의 `$search` 는 `[Searchable]` 이 하나라도 있는 타입을 **선언된 문자열 속성만** 검색한다(없는 타입은 문자열 속성 전부). 🔴 **참조 키에 선언하면 키가 아니라 그 키의 navigation 에 붙는다** — 키는 텍스트가 아니라 어떤 낱말에도 매칭하지 않는다. 아래 «참조 키(N:1)» 절의 «검색» 행 |
-| `@immutable` | `[Editable(false)]` | 저장 필드에만 붙는다. 아래 TypeScript 타깃의 생성 폼 `disabled` prop과 같은 선언을 미러링 — 둘 다 메타데이터일 뿐, 이 리포가 생성하는 어떤 API 계층도 이를 강제하지 않는다 |
+| `@immutable` | `[Editable(false, AllowInitialValue = true)]` | 저장 필드에만 붙는다. «생성 때 한 번 주고 그 뒤엔 바꾸지 않는다»는 뜻이라 초기값은 허용으로 적는다. 아래 TypeScript 타깃의 생성 폼 `disabled` prop과 같은 선언을 미러링 — 둘 다 메타데이터일 뿐, 이 리포가 생성하는 어떤 API 계층도 이를 강제하지 않는다 |
+| 필드의 `@system` | `[Editable(false)]` | «애플리케이션 자신의 코드가 쓰는 칸» — 전이 행위가 옮기는 상태, 행위를 한 사용자, 저장소가 돌려준 키. 값은 저장되고 읽힌다(테이블·읽기 타입 무변화). 메타데이터는 여기까지이고, **막는 것은 Api 타깃**이다: 생성 등록이 그 칸을 제네릭 쓰기 경로에서 뺀다(아래 「필드의 `@system` → 쓰기 제외」). TypeScript 타깃은 그 칸에 입력 컨트롤을 그리지 않는다. `@immutable`(호출자가 생성 때 한 번 준다)·`@internal`(읽기 표면에서 뺀다)과는 다른 선언이다 |
 | 필드 단위 `@unique` | `HasIndex(...).IsUnique()` | 엔티티 속성이 아니라 `DbContext.OnModelCreating`의 fluent 설정 — SQL 타깃의 `UK_{Model}_{Column}`/PG의 `uq_{table}_{field}`와 같은 이름을 `HasDatabaseName`으로 명시한다. 널 허용 컬럼도 분기 없이 같은 한 줄만 방출 — SQL Server 프로바이더가 unique index의 널 허용 컬럼에 `WHERE ... IS NOT NULL` 필터를 자동으로 붙이므로 (SQL 타깃의 filtered index와 동일 결과), PostgreSQL은 애초에 `UNIQUE`가 NULL을 distinct로 취급하므로 (둘 다 이 리포가 손으로 만드는 코드가 아니다) |
 | 필드 단위 `@index` | `HasIndex(...)` | 위와 같은 자리, `IX_{Model}_{Column}`/`ix_{table}_{field}` 이름. `@unique`와 함께 선언되면 `unique`만 방출한다(제약이 이미 인덱스를 소유 — SQL 타깃과 동일한 배제) |
 
@@ -668,6 +669,38 @@ GET /$data/Assets?$select=Name&$expand=LifecycleState($select=Code,Name)
 | **검색** | 키에 `@searchable` 을 두면 `[Searchable]` 이 키가 아니라 **navigation** 에 붙는다(1:1 정방향·쓰기 엔티티의 navigation 도 같다). 런타임의 `$search` 가 그 navigation 을 한 단계 따라 대상 타입의 검색 칸(대상이 선언한 `@searchable` 문자열, 없으면 문자열 전부)을 함께 찾는다 — 참조 대상의 이름·코드로 행을 찾는 길이다. 대상 셋의 읽기 정책을 통과하지 못하는 호출자에게는 그 참조가 검색에서 빠진다(런타임 문서). navigation 이 없는 키(위 «제외»·«이름이 이미 있으면»)는 선언이 키에 남고 `MDD034` 경고, 대상 모델을 같은 빌드의 어떤 Api 타깃도 OData 로 등록하지 않으면 `MDD035` 경고 — 둘 다 그 선언이 아무것도 매칭하지 않는다는 뜻이다 |
 
 `$expand` 가 닿는 셋의 읽기 정책은 런타임의 `$expand` 인가 검사가 적용한다. 쓰기 엔티티·인터페이스·SQL 은 이 navigation 과 무관하다.
+
+### 필드의 `@system` → 쓰기 제외 (Api 타깃)
+
+어떤 칸은 사람이나 클라이언트가 아니라 **애플리케이션 자신의 코드**가 쓴다 — 전이 행위로만 바뀌는 상태, 그 행위를 한
+사용자, 저장소 서비스가 돌려준 키, 채번 결과. 그것은 모델의 사실이므로 모델에 적는다:
+
+```markdown
+## WorkOrder : Timestampable
+- id: identifier @pk @generated
+- title: string(100)
+- status: string(20) = "planned" @system
+- closed_by_id: identifier? @reference(Account) @system
+```
+
+Api 타깃의 생성 등록(`ApiRegistration_gen.cs`)이 그 칸을 제네릭 쓰기 경로에서 뺀다:
+
+```csharp
+options.ODataModel.ExcludeFromWrite<WorkOrderExt>(x => x.Status, x => x.ClosedById);
+```
+
+그 뒤의 동작은 런타임의 것이다(런타임 문서의 쓰기 제외 절): 읽기·`$filter`·`$select` 는 그대로이고, 그 칸만 보낸
+`PATCH` 는 거절되며, 생성 본문에 실려 온 값은 버려지고, `$metadata` 는 그 칸을 서버가 정하는 값으로 광고한다. 전용
+끝점에서 쓰기 엔티티에 직접 쓰는 코드는 영향을 받지 않는다 — 그 칸을 쓰는 길이 그것 하나가 된다.
+
+| | |
+|---|---|
+| 선언이 하는 일 | 타깃마다: Api — 쓰기 제외 · TypeScript — 폼에 컨트롤 없음, 필드 스키마 `readOnly` · Model — `[Editable(false)]` · Sql — 변화 없음 |
+| 손 목록과의 관계 | 앱 코드에서 같은 칸을 `ExcludeFromWrite` 로 한 번 더 불러도 된다(같은 선언의 반복). 손 목록을 모델로 옮기고 나면 지워도 된다 — 칸을 더할 때 목록을 기억할 필요가 없어지는 것이 이 선언의 이유다 |
+| 생성 때의 값 | 제네릭 생성은 그 칸을 채우지 않는다. 값이 있어야 하는 칸이면 모델에 기본값(`= "planned"`)을 두거나, 그 엔티티를 만드는 일도 전용 끝점이 맡는다 |
+| 대상이 아닌 것 | 읽기 표면에서 뺀 칸(`@internal`)은 읽기 타입에 없어 쓰기 본문에 실릴 수 없으므로 선언을 내지 않는다. 파생 칸과 `rowversion` 은 런타임이 이미 쓰기에서 뺀다 |
+| 표면 | 쓰기 경로는 OData 의 것이다 — `surfaces` 에 `odata` 가 없는 Api 타깃은 선언을 내지 않는다 |
+| 다른 선언과의 차이 | `@immutable` — 호출자가 생성 때 한 번 준다(폼에 비활성 컨트롤로 그려진다) · `@internal` — 값을 읽기 표면에서 뺀다 · enum **값**의 `@system` — 폼이 그 선택지를 권하지 않는다(같은 말의 한 결 아래) |
 
 ### standalone `::view` → `CREATE VIEW` (Sql 타깃)
 
@@ -994,6 +1027,7 @@ mdd-booster 고유**이며, 다른 생성기는 이들을 무시한다.
 | `@slot` | 필드 | 인라인 컨트롤 대신 **슬롯**으로 렌더 — 호출부가 준 내용만 그린다(`slots` 의 키는 전부 필수, 빈 칸은 `null`). `@reference` FK 필드는 자동으로 슬롯 |
 | `@display_labels(다른Enum)` | enum 필드 | 표시 텍스트만 다른 enum의 라벨맵으로 교체. **저장/캐스트 타입은 그대로** |
 | `@system` | **enum 값** | 「시스템이 쓰는 값」 — 생성 폼 선택지에서 제외 (아래) |
+| `@system` | **필드** | 「시스템이 쓰는 칸」 — 폼에 입력 컨트롤(슬롯 포함)을 그리지 않는다. `field_schema_gen.ts` 에는 `readOnly: true` 로 남고 `required`·`maxLength`·`min`·`max` 는 빠진다(사람이 주는 값에 대한 말이라서). 타입(`entities_gen.ts`)에는 그대로 있다 — 읽는 값이다. 같은 선언이 Api 타깃에서는 쓰기 제외가 된다 |
 | `@deprecated` | **enum 값** | 「이제는 고르지 않는 값」 — 같은 규칙, 다른 이유 (아래) |
 
 ### enum 값의 `@system`·`@deprecated` — 표시 라벨과 입력 선택지의 분리

@@ -118,9 +118,10 @@ public static class TsFieldSchemaRenderer
         // for; the write-axis half is dropped.
         var isDerived = derived is not null;
 
-        // The row version is stored but never supplied: the database engine sets it on every write.
-        // Read-only for the same reason a derived field is, so the write-axis half is dropped too.
-        var engineSet = MddBooster.Core.Types.M3lPrimitives.IsRowVersion(field);
+        // Stored but never supplied by the caller: the database engine sets the row version on every
+        // write, and the application's own code writes a @system field. Read-only for the same reason a
+        // derived field is, so the write-axis half is dropped too.
+        var engineSet = FieldAuthorship.IsSystemWritten(field);
 
         var required = !isDerived && !engineSet && !field.Nullable;
 
@@ -128,11 +129,11 @@ public static class TsFieldSchemaRenderer
         // Extracting it separately here is how the two would drift into disagreeing about the
         // same column's limit. The effective bound, not the declared one: a field can be
         // bounded by its type without the declaration saying so.
-        int? maxLength = isDerived ? null : MddBooster.Core.Ast.FieldAttributes.EffectiveMaxLength(field);
+        int? maxLength = isDerived || engineSet ? null : MddBooster.Core.Ast.FieldAttributes.EffectiveMaxLength(field);
 
         // Shared with the Model target's [Range] — see FieldAttributes.Number.
-        double? min = isDerived ? null : MddBooster.Core.Ast.FieldAttributes.Number(field, "min");
-        double? max = isDerived ? null : MddBooster.Core.Ast.FieldAttributes.Number(field, "max");
+        double? min = isDerived || engineSet ? null : MddBooster.Core.Ast.FieldAttributes.Number(field, "min");
+        double? max = isDerived || engineSet ? null : MddBooster.Core.Ast.FieldAttributes.Number(field, "max");
         // @label(text) overrides the description; unlike FieldAttributes.EffectiveLabel this
         // does NOT fall back to the PascalCase field name — presence of a label here signals
         // authored, meaningful text, and every field mechanically has a PascalCase name.
