@@ -42,6 +42,28 @@ M3L 0.20.0 이 `@computed` · rollup `where:` · 뷰 `where` 의 언어를 정�
   뷰는 `MDD029` 로 건너뛰었다. 이제 같은 번역기로 낸다: FullView 의 Computed 는 SQL Server 와 같은 CTE 체인(뒤의 식이 앞의 Computed 를 이름으로 읽는다) · rollup `where:` · standalone `where`·`@computed`.
   번역할 수 없는 식은 SQL Server 와 같은 **오류 `MDD037`**, `platform: "postgresql"` 식이 없고 포터블 식도 없으면 `MDD036`.
 
+### 🆕 키가 있는 standalone `::view` 가 읽기 모델이 된다 (Model · Api 타깃)
+
+지금까지 뷰는 Sql 타깃만 읽었다 — 뷰를 조회 API 로 쓰려면 앱이 엔티티 · 매핑 · 컨트롤러를 손으로 써야 했다.
+
+- **조건** — 뷰가 `id` 라는 이름의 `identifier` 열을 `@from` 으로 투영한다(`- id: identifier @from(Order.id)`). 그 열이 행의 키이고, 유일하게
+  유지하는 것은 작성자의 일이다.
+- 🔇 **Model 타깃** — `Entity_gen/<View>.cs`(뷰의 출력 열만 가진 클래스 하나, 쓰기 타입 없음)와 DbContext 의 `DbSet` · 매핑(테이블 없음 ·
+  Sql 타깃이 만드는 그 뷰 · 키 `Id`; PostgreSQL 은 열 이름까지). **이미 그런 뷰를 가진 모델은 재생성하면 새 파일과 DbContext 변경이 생긴다.**
+- 🔇 **Api 타깃** — 읽기 전용 셋 등록과 읽기 전용 컨트롤러, 읽기 권한 키 하나. 쓰기 동사는 런타임이 거절한다. `surfaces` 에 `odata` 가 없으면
+  내지 않는다(GraphQL 표면은 아직).
+- 🔴 **런타임 요구가 올라간다 — 그런 뷰가 있는 모델에 한해.** 생성 코드가 키만 가진 읽기 타입과 읽기 전용 셋을 쓴다(런타임
+  `Iyu.*` **0.38.0** 이상 — 런타임 패키지의 README «A set that is only read»). 런타임을 올릴 수 없으면 뷰에 `@internal` 을 붙여 종전처럼 SQL 만 생성한다.
+- **손으로 쓴 엔티티가 이미 있으면** 같은 이름의 클래스가 둘이 된다 — 손으로 쓴 쪽(엔티티 · 매핑 · 컨트롤러)을 지우거나, 뷰에 `@internal` 을
+  붙여 생성을 끈다.
+- 키가 없는 뷰는 종전대로 SQL 만 생성되고, Model·Api 타깃이 있는 빌드는 그 사실을 정보 한 줄로 알린다(경고 아님 — 집계 뷰에는 키가 없다).
+- **`## Name ::view @internal`** 이 읽힌다(`M3L.Native` 0.20.0 — 그 전에는 뷰 머리의 속성이 AST 에 오지 않았다) — 키가 있어도 읽기 모델로 내지
+  않는다. Api 타깃의 `excludeEntities`/`includeEntities` 도 뷰 이름을 받는다.
+- 새 오류 **`MDD038`** — 읽기 모델의 생성 이름(클래스 = 뷰 이름, 셋 = 그 복수형)이 모델의 엔티티 · 읽기 타입 · 셋이나 enum 과 같다.
+- PostgreSQL 방언이 생성하지 않는 뷰(`MDD029`)는 읽기 모델로도 내지 않는다.
+- Sql 타깃이 없는 빌드의 경고가 «뷰의 `CREATE VIEW` 를 생성하는 타깃이 없다»로 바뀌었다 — 읽기 모델은 그 빌드에서도 나온다.
+- README «키가 있는 standalone `::view` → 읽기 모델».
+
 ### 필드의 `@system` — «이 칸은 애플리케이션 자신의 코드가 쓴다»
 
 상태·행위자·저장소 키처럼 사람이나 클라이언트가 직접 정하면 안 되는 칸을 모델에 선언한다. 지금까지는 그 사실을 적을

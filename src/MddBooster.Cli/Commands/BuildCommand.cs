@@ -188,15 +188,17 @@ public sealed class BuildCommand
         foreach (var w in warnings)
             ReportWarning("semantic", w.Code, w.Format());
 
-        // standalone ::view 는 Sql 타깃이 생성한다. 그 타깃이 없으면 해석된 뷰도 산출물이 없다 —
-        // 로더 회계와 같은 자리에서 알린다. PostgreSQL 방언이 건너뛰는 뷰는 이유와 함께 경고한다.
+        // standalone ::view 의 CREATE VIEW 는 Sql 타깃이 생성한다. 그 타깃이 없으면 뷰 자체는 이 빌드가 만들지 않는다 —
+        // 로더 회계와 같은 자리에서 알린다(읽기 모델은 그래도 나오고, 그 이름의 뷰가 데이터베이스에 있다고 전제한다).
+        // PostgreSQL 방언이 건너뛰는 뷰는 이유와 함께 경고하고, 읽기 모델로도 내지 않는다 — 가리킬 뷰가 없다.
+        var viewsNoSqlTargetCreates = new HashSet<string>(StringComparer.Ordinal);
         if (viewResolution.Views.Count > 0)
         {
             var sqlTargets = cfg.Targets.Where(t => t.Type == "Sql").ToList();
             if (sqlTargets.Count == 0)
             {
                 Console.Error.WriteLine(
-                    $"[m3l] 경고: standalone 뷰 {viewResolution.Views.Count}개를 생성하는 타깃이 없습니다(Sql 타깃이 생성한다): "
+                    $"[m3l] 경고: standalone 뷰 {viewResolution.Views.Count}개의 CREATE VIEW 를 생성하는 타깃이 없습니다(Sql 타깃이 생성한다): "
                     + string.Join(", ", viewResolution.Views.Select(v => v.Name)));
             }
             else if (sqlTargets.Any(IsPostgresDialect))
@@ -204,6 +206,7 @@ public sealed class BuildCommand
                 foreach (var (name, reason) in MddBooster.Generators.Sql.StandaloneViewSources.PostgresSkipped(viewResolution.Views, allModels))
                 {
                     var view = viewResolution.Views.Single(v => v.Name == name);
+                    viewsNoSqlTargetCreates.Add(name);
                     ReportWarning("semantic", "MDD029", new SemanticDiagnostic("MDD029",
                         $"뷰 '{name}' 을(를) PostgreSQL 방언에서 생성하지 않는다 — {reason}.",
                         view.Source.Loc, SemanticSeverity.Warning).Format());
@@ -211,6 +214,33 @@ public sealed class BuildCommand
             }
             foreach (var view in viewResolution.Views.Where(v => !string.IsNullOrWhiteSpace(v.Source.SourceDef?.OrderBy)))
                 Console.WriteLine($"[m3l] 정보: 뷰 '{view.Name}' 의 order_by 는 방출하지 않는다 — 뷰에는 순서가 없다(조회하는 쪽이 정렬한다).");
+
+            // 읽기 모델(엔티티 · 읽기 전용 셋)은 행을 키로 가리킬 수 있는 뷰에만 낸다. 키 없는 뷰는 정당한 뷰다(집계에는
+            // 행의 신원이 없다) — 경고가 아니라, 왜 그 뷰가 Model·Api 산출물에 없는지를 한 줄로 알린다.
+            if (cfg.Targets.Any(t => t.Type is "Model" or "Api"))
+            {
+                foreach (var view in viewResolution.Views.Where(v =>
+                             !ViewReadModels.IsInternal(v) && ViewReadModels.KeyOf(v) is null))
+                    Console.WriteLine(
+                        $"[m3l] 정보: 뷰 '{view.Name}' 은(는) 읽기 모델로 내지 않는다(SQL 만 생성) — 행을 가리킬 키가 없다. "
+                        + "읽기 셋으로 서빙하려면 `- id: identifier @from(<관계>.id)` 열을 투영한다.");
+            }
+        }
+        var readViews = viewResolution.Views
+            .Where(v => ViewReadModels.IsReadModel(v) && !viewsNoSqlTargetCreates.Contains(v.Name))
+            .ToList();
+        // 읽기 모델이 내는 클래스·셋 이름이 모델이 내는 이름과 같으면 생성물이 한 이름을 두 번 선언한다 — 고르지 않고
+        // 멈춘다(MDD038). 그 이름을 내는 타깃이 있을 때만 문제다.
+        if (cfg.Targets.Any(t => t.Type is "Model" or "Api"))
+        {
+            foreach (var (view, reason) in ViewReadModels.NameClashes(
+                         readViews, allModels.Select(m => m.Name), allEnums.Select(e => e.Name)))
+            {
+                errors.Add(new SemanticDiagnostic("MDD038",
+                    $"뷰 '{view.Name}' 을(를) 읽기 모델로 낼 수 없다 — {reason}. 뷰의 이름을 바꾸거나, 읽기 모델로 내지 않으려면 "
+                    + "`@internal` 을 붙인다.",
+                    view.Source.Loc));
+            }
         }
         if (errors.Count > 0)
         {
@@ -234,6 +264,7 @@ public sealed class BuildCommand
             WorkingDirectory = configDirectory,
             Enums = allEnums,
             Views = viewResolution.Views,
+            ReadViews = readViews,
         };
 
         // 1.6. 설정 위반 수집 — 전부 모아 한 번에 실패시킨다(한 건씩 고쳐가며 재실행하게 만들지 않는다).
@@ -324,7 +355,7 @@ public sealed class BuildCommand
 
             filters[target] = EntitySurfaceFilter.Validate(
                 target.IncludeEntities, target.ExcludeEntities, target.IncludeOwners, target.ExcludeOwners,
-                allModels, label, out var violations);
+                allModels, label, out var violations, readViews);
             configViolations.AddRange(violations);
 
             if (!string.IsNullOrWhiteSpace(target.SharedTypesImport))

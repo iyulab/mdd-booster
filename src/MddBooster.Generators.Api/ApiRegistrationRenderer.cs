@@ -43,7 +43,8 @@ public static class ApiRegistrationRenderer
         string? entitiesNamespace = null,
         string methodName = "RegisterGeneratedEntities",
         ApiSurfaces surfaces = ApiSurfaces.All,
-        IReadOnlySet<string>? registeredElsewhere = null)
+        IReadOnlySet<string>? registeredElsewhere = null,
+        IReadOnlyList<ResolvedView>? readViews = null)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentException.ThrowIfNullOrWhiteSpace(ns);
@@ -107,6 +108,19 @@ public static class ApiRegistrationRenderer
                   .Append(entityPrefix).Append(entity).Append("Ext, ")
                   .Append(entityPrefix).Append(entity).Append(">(\"")
                   .Append(queryName).Append("\", \"").Append(mutationPrefix).AppendLine("\");");
+            }
+        }
+
+        // 읽기 모델로 서빙되는 standalone 뷰 — 쓰기 타입이 없는 셋. 읽기 타입 하나로 등록하고, 런타임이 모든
+        // 쓰기 동사를 거절한다. 쓰기 경로가 없으므로 선언은 OData 표면의 읽기 셋 하나뿐이다.
+        if (odata)
+        {
+            foreach (var view in (readViews ?? []).OrderBy(v => v.Name, StringComparer.Ordinal))
+            {
+                var entity = NameCasing.ToPascalCase(view.Name);
+                sb.Append("        options.ODataModel.AddReadOnlySet<")
+                  .Append(entityPrefix).Append(entity).Append(">(\"")
+                  .Append(Pluralizer.Pluralize(entity)).AppendLine("\");");
             }
         }
 

@@ -24,7 +24,8 @@ public static class ODataControllerRenderer
     public static string Render(
         IReadOnlyList<ResolvedModel> models,
         string ns,
-        string? entitiesNamespace = null)
+        string? entitiesNamespace = null,
+        IReadOnlyList<ResolvedView>? readViews = null)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentException.ThrowIfNullOrWhiteSpace(ns);
@@ -53,6 +54,21 @@ public static class ODataControllerRenderer
             sb.Append("    : IyuODataController<")
               .Append(entityPrefix).Append(entity).Append("Ext, ")
               .Append(entityPrefix).Append(entity).AppendLine(">");
+            sb.AppendLine("{");
+            sb.Append("    public ").Append(setName).AppendLine("Controller(IyuDbContext context)");
+            sb.AppendLine("        : base(context) { }");
+            sb.AppendLine("}");
+            sb.AppendLine();
+        }
+
+        // 읽기 모델로 서빙되는 뷰 — 읽기만 하는 컨트롤러.
+        foreach (var view in (readViews ?? []).OrderBy(v => v.Name, StringComparer.Ordinal))
+        {
+            var entity = NameCasing.ToPascalCase(view.Name);
+            var setName = Pluralizer.Pluralize(entity);
+
+            sb.Append("public sealed partial class ").Append(setName).AppendLine("Controller");
+            sb.Append("    : IyuODataReadOnlyController<").Append(entityPrefix).Append(entity).AppendLine(">");
             sb.AppendLine("{");
             sb.Append("    public ").Append(setName).AppendLine("Controller(IyuDbContext context)");
             sb.AppendLine("        : base(context) { }");

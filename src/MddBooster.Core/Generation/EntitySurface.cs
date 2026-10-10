@@ -135,7 +135,8 @@ public sealed class EntitySurfaceFilter
         IReadOnlyList<string>? excludeOwners,
         IReadOnlyList<ResolvedModel> allModels,
         string targetLabel,
-        out IReadOnlyList<string> violations)
+        out IReadOnlyList<string> violations,
+        IReadOnlyList<ResolvedView>? readViews = null)
     {
         ArgumentNullException.ThrowIfNull(allModels);
 
@@ -148,7 +149,8 @@ public sealed class EntitySurfaceFilter
             found.Add($"{targetLabel}: includeEntities 와 excludeEntities 를 함께 지정할 수 없습니다 — 하나만 쓰세요.");
         }
 
-        var known = allModels.Select(m => m.Name).ToList();
+        // A view served as a read model is on the surface under its own name, so the lists may name it too.
+        var known = allModels.Select(m => m.Name).Concat((readViews ?? []).Select(v => v.Name)).ToList();
         var knownSet = new HashSet<string>(known, StringComparer.Ordinal);
 
         foreach (var (listName, list) in new[] { ("includeEntities", inc), ("excludeEntities", exc) })
@@ -204,6 +206,18 @@ public sealed class EntitySurfaceFilter
         => list is null || list.Count == 0
             ? null
             : new HashSet<string>(list.Select(s => s.Trim()), StringComparer.Ordinal);
+
+    /// <summary>
+    /// 읽기 모델로 서빙되는 뷰가 이 타깃의 표면에 드는지 — 모델과 같은 두 축(이름 목록 · 소유자)으로 판정한다.
+    /// 뷰의 소유자도 그것을 선언한 파일의 <c># Prefix:</c> 값이다.
+    /// </summary>
+    public bool Admits(ResolvedView view)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+        return (_include is null || _include.Contains(view.Name))
+               && (_exclude is null || !_exclude.Contains(view.Name))
+               && AdmitsOwner(view.Source.Prefix ?? "");
+    }
 
     /// <summary>필터를 적용한 모델 목록. 순서는 입력 순서를 보존한다.</summary>
     public IReadOnlyList<ResolvedModel> Apply(IReadOnlyList<ResolvedModel> models)

@@ -256,7 +256,7 @@ public class StandaloneViewBuildTests
         try
         {
             new BuildCommand().Run(mddDir);
-            Assert.Contains("standalone 뷰 3개를 생성하는 타깃이 없습니다", stderr.Text);
+            Assert.Contains("standalone 뷰 3개의 CREATE VIEW 를 생성하는 타깃이 없습니다", stderr.Text);
         }
         finally { Cleanup(root); }
     }
