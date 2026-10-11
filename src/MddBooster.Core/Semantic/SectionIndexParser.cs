@@ -18,10 +18,17 @@ namespace MddBooster.Core.Semantic;
 /// native behavior for a nullable unique column). Meaningless when <see cref="IsUnique"/> is
 /// <see langword="false"/> — a plain index has no uniqueness to attach a NULL policy to.
 /// </param>
+/// <param name="Name">
+/// The name the model gave the index — an <c>### Indexes</c> item's label, or a directive's <c>name:</c> — or
+/// <see langword="null"/>. Read so that it is accounted for; the generators name indexes from the model and columns.
+/// </param>
+/// <param name="FullText">Whether the model asked for a full-text index (<c>@index(…, fulltext: true)</c>).</param>
 public sealed record SectionIndexEntry(
     IReadOnlyList<string> Columns,
     bool IsUnique,
-    string? Nulls = null);
+    string? Nulls = null,
+    string? Name = null,
+    bool FullText = false);
 
 /// <summary>
 /// Reads a model's <c>### Indexes</c> section into column lists.
@@ -75,7 +82,12 @@ public static class SectionIndexParser
                         && nullsProp.ValueKind == JsonValueKind.String
                 ? nullsProp.GetString()
                 : null;
-            parsed.Add(new SectionIndexEntry(columns, isUnique, nulls));
+            var name = entry.TryGetProperty("name", out var nameProp) && nameProp.ValueKind == JsonValueKind.String
+                ? nameProp.GetString()
+                : null;
+            var fullText = entry.TryGetProperty("fulltext", out var fullTextProp)
+                           && fullTextProp.ValueKind == JsonValueKind.True;
+            parsed.Add(new SectionIndexEntry(columns, isUnique, nulls, name, fullText));
         }
         return parsed;
     }

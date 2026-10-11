@@ -56,8 +56,32 @@ public sealed class SemanticAnalyzer
         AspectRules.Check(_models, diagnostics);
         CheckManyToOneNavigationNames(diagnostics);
         CheckSearchableReferences(diagnostics);
+        CheckFullTextIndexes(diagnostics);
 
         return diagnostics;
+    }
+
+    /// <summary>
+    /// <c>MDD041</c> (warning): an index declared <c>fulltext: true</c>. Neither SQL target generates a full-text
+    /// index — SQL Server's needs a catalog and a key index, PostgreSQL's a text-search expression — so the entry is
+    /// emitted as the ordinary index on the same columns. Said out loud, because an ordinary index does not answer the
+    /// word searches the declaration was written for.
+    /// </summary>
+    private void CheckFullTextIndexes(List<SemanticDiagnostic> diagnostics)
+    {
+        foreach (var model in _models)
+        {
+            foreach (var entry in SectionIndexParser.Parse(model).Where(e => e.FullText))
+            {
+                diagnostics.Add(new SemanticDiagnostic(
+                    "MDD041",
+                    $"'{model.Name}' @index({string.Join(", ", entry.Columns)}, fulltext: true): 이 생성기는 전문(full-text) " +
+                    "인덱스를 만들지 않는다 — 같은 열의 일반 인덱스로 낸다. 단어 검색이 필요하면 전문 인덱스는 " +
+                    "생성물 밖(배포 스크립트)에서 만든다.",
+                    model.Source.Loc,
+                    SemanticSeverity.Warning));
+            }
+        }
     }
 
     /// <summary>
