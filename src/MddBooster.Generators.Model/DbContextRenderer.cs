@@ -345,7 +345,7 @@ public static class DbContextRenderer
             }
 
             // The same name the SQL targets give it: the directive's own, or one made from the model and columns.
-            var databaseName = entry.DeclaredName
+            var databaseName = entry.Name
                 ?? $"{(entry.IsUnique ? (isPostgres ? "uq_" : "UK_") : (isPostgres ? "ix_" : "IX_"))}{indexNamePrefix}_{nameJoined}";
             sb.Append(".HasDatabaseName(").Append(SourceLiteral.CSharpString(databaseName)).AppendLine(");");
         }

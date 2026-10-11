@@ -300,13 +300,13 @@ public static class PgTableRenderer
                     ? "UNIQUE NULLS NOT DISTINCT"
                     : "UNIQUE";
                 constraints.Add((
-                    entry.DeclaredName ?? $"uq_{tableName}_{string.Join("_", cols)}",
+                    entry.Name ?? $"uq_{tableName}_{string.Join("_", cols)}",
                     $"{uniqueKeyword} ({string.Join(", ", cols)})"));
             }
             else
             {
                 indexes.Add((
-                    entry.DeclaredName ?? $"ix_{tableName}_{string.Join("_", cols)}",
+                    entry.Name ?? $"ix_{tableName}_{string.Join("_", cols)}",
                     string.Join(", ", cols)));
             }
         }

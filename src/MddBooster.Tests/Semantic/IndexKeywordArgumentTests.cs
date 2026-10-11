@@ -67,9 +67,10 @@ public class IndexKeywordArgumentTests
 }
 
 /// <summary>
-/// A directive's <c>name:</c> is the database name of its index — in both SQL dialects and the EF model — while an
-/// <c>### Indexes</c> label is not (those indexes are deployed under the generated name). <c>MDD042</c> refuses a
-/// name that cannot be one: not an identifier, or used twice.
+/// The name the model gives an index is its database name — in both SQL dialects and the EF model — whichever form
+/// gave it: a directive's <c>name:</c>, or the item name of an <c>### Indexes</c> item (specification §3.3.3), in the
+/// <c>- name: @index(…)</c> form and the <c>fields:</c> form alike. <c>MDD042</c> refuses a name that cannot be one:
+/// not an identifier, or used twice. An item that names no columns is <c>MDD043</c> rather than nothing.
 /// </summary>
 public class DeclaredIndexNameTests
 {
@@ -103,25 +104,51 @@ public class DeclaredIndexNameTests
 
 ### Indexes
 - by_name: @index(name)
+- by_created(For the newest first)
+  - fields: [created_at]
+- uq_created_sku
+  - fields: [created_at, sku]
+  - unique: true
 """;
 
+    private static string Targets(string dialect) => $$"""
+        { "sources": ["model.m3l.md"], "targets": [
+          { "type": "Sql", "dialect": "{{dialect}}", "outputPath": "./sql", "emitSqlProj": false },
+          { "type": "Model", "dialect": "{{dialect}}", "outputPath": "./model", "namespace": "Probe", "dbContextName": "ProbeDb" } ] }
+        """;
+
     [Theory]
-    [InlineData("tsql", "[product_search]", "[uq_product_sku]", "[IX_Product_Name]")]
-    [InlineData("postgres", "product_search", "uq_product_sku", "ix_product_name")]
-    public void A_directive_name_names_the_index_and_a_label_does_not(string dialect, string index, string unique, string labelled)
+    [InlineData("tsql", "[product_search]", "[uq_product_sku]", "[by_name]")]
+    [InlineData("postgres", "product_search", "uq_product_sku", "by_name")]
+    public void A_directive_name_and_an_item_name_each_name_the_index(string dialect, string index, string unique, string item)
     {
-        var output = Build(Model, $$"""
-            { "sources": ["model.m3l.md"], "targets": [
-              { "type": "Sql", "dialect": "{{dialect}}", "outputPath": "./sql", "emitSqlProj": false },
-              { "type": "Model", "dialect": "{{dialect}}", "outputPath": "./model", "namespace": "Probe", "dbContextName": "ProbeDb" } ] }
-            """);
+        var output = Build(Model, Targets(dialect));
 
         Assert.Contains(index, output);
         Assert.Contains(unique, output);
-        Assert.Contains(labelled, output);
+        Assert.Contains(item, output);
         Assert.Contains("HasDatabaseName(\"product_search\")", output);
         Assert.Contains("HasDatabaseName(\"uq_product_sku\")", output);
-        Assert.DoesNotContain("by_name", output);
+        Assert.Contains("HasDatabaseName(\"by_name\")", output);
+        // The generated name is what the item name replaces — it must not be emitted as well.
+        Assert.DoesNotContain(dialect == "tsql" ? "IX_Product_Name" : "ix_product_name", output);
+    }
+
+    [Theory]
+    [InlineData("tsql", "INDEX [by_created]", "[CreatedAt]", "[uq_created_sku]")]
+    [InlineData("postgres", "INDEX by_created", "created_at", "uq_created_sku")]
+    public void An_item_written_with_fields_is_an_index(string dialect, string index, string column, string unique)
+    {
+        // The section form the specification recommends for several indexes (§3.3.3). It used to generate nothing at
+        // all, without a word — the entry carries `fields`, not the `args` the directive forms carry.
+        var output = Build(Model, Targets(dialect));
+
+        Assert.Contains(index, output);
+        Assert.Contains(column, output);
+        Assert.Contains(unique, output);
+        Assert.Contains("HasDatabaseName(\"by_created\")", output);
+        Assert.Contains("HasDatabaseName(\"uq_created_sku\")", output);
+        Assert.DoesNotContain("For the newest first", output);
     }
 
     private static IReadOnlyList<SemanticDiagnostic> Analyze(string m3l)
@@ -154,5 +181,40 @@ public class DeclaredIndexNameTests
         var diagnostic = Assert.Single(Analyze(twice), d => d.Code == "MDD042");
 
         Assert.Contains("'Product'", diagnostic.Message);
+    }
+
+    [Fact]
+    public void An_item_name_that_is_not_an_identifier_is_MDD042()
+    {
+        var diagnostic = Assert.Single(Analyze(Model.Replace("- by_created(", "- 최신순(", StringComparison.Ordinal)),
+            d => d.Code == "MDD042");
+
+        Assert.Contains("최신순", diagnostic.Message);
+    }
+
+    [Fact]
+    public void An_item_name_used_in_two_models_is_MDD042()
+    {
+        // A common item name (`by_name`) is easy to repeat from table to table, and index names are schema-wide.
+        var twice = Model + "\n## Order\n- id: identifier @pk @generated\n- name: string(20)\n\n### Indexes\n- by_name: @index(name)\n";
+
+        var diagnostic = Assert.Single(Analyze(twice), d => d.Code == "MDD042");
+
+        Assert.Contains("by_name", diagnostic.Message);
+    }
+
+    [Fact]
+    public void An_item_that_names_no_columns_is_MDD043_a_warning()
+    {
+        var diagnostic = Assert.Single(Analyze(Model + "\n- by_nothing\n  - unique: true\n"), d => d.Code == "MDD043");
+
+        Assert.Equal(SemanticSeverity.Warning, diagnostic.Severity);
+        Assert.Contains("by_nothing", diagnostic.Message);
+    }
+
+    [Fact]
+    public void A_model_whose_items_all_name_columns_is_not_MDD043()
+    {
+        Assert.DoesNotContain(Analyze(Model), d => d.Code == "MDD043");
     }
 }

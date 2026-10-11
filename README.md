@@ -536,7 +536,7 @@ MDD_DEBUG=1 mdd build ./mdd
 | `@computed("expr")` → `_ext` 뷰 표현식 컬럼 + `[Computed]` | ✅ |
 | `@indexed` + rollup → `WITH SCHEMABINDING` | ✅ |
 | `@unique(col1, col2)` 복합 | ✅ — 널 허용 컬럼이 섞이면 filtered unique index (`WHERE … IS NOT NULL`)로 방출한다. 그러지 않으면 두 번째 전체-NULL 행이 거부된다. `nulls: "not_distinct"`를 붙이면 그 필터를 만들지 않고 SQL:2023 `UNIQUE NULLS NOT DISTINCT` 의미(NULL도 그 자체로 유일성 경쟁에 참여)로 방출한다 — SQL Server는 필터 없는 inline `CONSTRAINT UNIQUE`(plain `UNIQUE`가 이미 이 의미), PostgreSQL 15+는 `UNIQUE NULLS NOT DISTINCT` 문법을 그대로 쓴다 |
-| `### Indexes` 섹션 (`- @unique(...)` / `- @index(...)`) | ✅ |
+| `### Indexes` 섹션 (`- @unique(...)` / `- @index(...)` · `- name: @index(...)` · `- name` + `fields:`/`unique:`) | ✅ — 항목의 이름(`- ux_scope: …`, `- customer_orders`)이 그 인덱스·제약의 데이터베이스 이름이다(SQL 두 방언 · EF `HasDatabaseName`, M3L 명세 §3.3.3). 괄호 안은 설명이다. 이름이 없는 지시자(`- @index(...)`)는 `name:` 을, 그것도 없으면 모델과 열에서 짓는다(`IX_{Model}_{Cols}` · `ix_{table}_{cols}`) |
 | `@inherits(FQN)` → C# 베이스클래스 오버라이드 (도메인 중립, verbatim) | ✅ |
 | `@implements(FQN, ...)` → C# 인터페이스 append (도메인 중립, verbatim) | ✅ |
 | enum 값의 `@system` → 생성 폼 선택지에서 제외 (아래) | ✅ |
@@ -1215,7 +1215,8 @@ consumer-repo/
 | MDD033(경고) | `::aspect` 셋을 OData 로 등록하는데, 그 base 를 같은 빌드의 어떤 Api 타깃도 OData 로 등록하지 않는다 — 공유 키 선언(`DeclareSharedKey`)을 낼 곳이 없어 그 셋의 공유 키 거절이 꺼진다. base 를 등록하는 Api 타깃을 두거나 aspect 도 함께 뺀다(설정 단계에서 나온다) |
 | MDD034(경고) | `@searchable` 참조 키인데 읽기 타입에 그 키의 navigation 이 없다(`_id` 로 끝나지 않는 키, `MDD027` 이름 충돌) — 선언은 키에 남지만 키는 텍스트가 아니라 `$search` 가 그 참조를 따르지 못하고 어떤 낱말에도 매칭하지 않는다 |
 | MDD037 | 이식 가능한 문맥(`@computed`·rollup `where:`·뷰 `where`)의 식이 부분집합(M3L 명세 §10.7) 밖이다 — 두 SQL 방언 모두 원문으로 내지 않고 빌드를 멈추며, 해당하는 식을 한 번에 전부 나열한다. 부분집합으로 다시 쓰거나(`DATEDIFF(YEAR, a, GETDATE())` → `date_diff('year', a, today())`), 그 방언의 문법 그대로 두려면 `@computed_raw(…, platform: "sqlserver")`·`where_raw`(PostgreSQL 은 `"postgresql"`)로 옮긴다(생성 단계) |
-| MDD042 | `@index`/`@unique` 지시자의 `name:` 이 데이터베이스 이름으로 쓸 수 없다 — 영문자·숫자·밑줄이 아니거나(생성 SQL 에 그대로 들어간다), 빌드 안의 다른 지시자가 같은 이름을 쓴다(대소문자 무시 — SQL Server 의 제약 이름과 PostgreSQL 의 인덱스 이름은 스키마 단위로 유일하다) |
+| MDD042 | 모델이 인덱스에 준 이름 — `### Indexes` 항목의 이름, 또는 `@index`/`@unique` 지시자의 `name:` — 을 데이터베이스 이름으로 쓸 수 없다: 영문자·숫자·밑줄이 아니거나(생성 SQL 에 그대로 들어간다), 빌드 안의 다른 인덱스가 같은 이름을 쓴다(대소문자 무시 — SQL Server 의 제약 이름과 PostgreSQL 의 인덱스 이름은 스키마 단위로 유일하다) |
+| MDD043(경고) | `### Indexes` 항목이 열을 하나도 말하지 않는다(`fields:` 가 없거나 비었다, 지시자에 열이 없다) — 인덱스를 만들지 않는다 |
 | MDD041(경고) | `@index(…, fulltext: true)` — 이 생성기는 전문(full-text) 인덱스를 만들지 않는다(SQL Server 는 카탈로그와 키 인덱스, PostgreSQL 은 텍스트 검색 식이 필요하다). 같은 열의 일반 인덱스로 낸다 — 단어 검색이 필요하면 전문 인덱스는 생성물 밖에서 만든다 |
 | MDD038 | 읽기 모델로 내는 standalone `::view` 의 생성 이름(클래스 = 뷰 이름, 셋 = 그 복수형)이 모델의 엔티티·읽기 타입(`…Ext`)·셋이나 enum, 다른 뷰의 것과 같다 — 뷰의 이름을 바꾸거나 `@internal` 로 읽기 모델에서 뺀다. Model·Api·TypeScript 타깃이 있는 빌드에서만 |
 | MDD036 | SQL Server(또는 그 방언)용 식이 없다 — `@computed_raw`/`where_raw` 가 다른 플랫폼에만 있고 포터블 식(`@computed`/`where`)도 없다. 생성물이 식을 지어낼 수 없어 빌드가 멈춘다(생성 단계) |

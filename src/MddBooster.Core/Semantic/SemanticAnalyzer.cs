@@ -58,15 +58,36 @@ public sealed class SemanticAnalyzer
         CheckSearchableReferences(diagnostics);
         CheckFullTextIndexes(diagnostics);
         CheckDeclaredIndexNames(diagnostics);
+        CheckUnreadIndexItems(diagnostics);
 
         return diagnostics;
     }
 
     /// <summary>
-    /// <c>MDD042</c>: a name an <c>@index</c>/<c>@unique</c> directive declares (<c>name: "…"</c>) that cannot be the
-    /// database object's name — not a plain identifier (it is written into the generated SQL as it is), or the same as
-    /// another declared name in the build (case-insensitively: SQL Server's constraint names and PostgreSQL's index
-    /// names are unique across the schema, not within one table).
+    /// <c>MDD043</c> (warning): an <c>### Indexes</c> item that names no columns — no <c>fields:</c>, an empty one, or
+    /// a directive without columns. No index can be generated from it, and nothing else would say so.
+    /// </summary>
+    private void CheckUnreadIndexItems(List<SemanticDiagnostic> diagnostics)
+    {
+        foreach (var model in _models)
+        {
+            foreach (var name in SectionIndexParser.Unread(model))
+            {
+                diagnostics.Add(new SemanticDiagnostic(
+                    "MDD043",
+                    $"'{model.Name}' ### Indexes 항목 '{name}' 이(가) 열을 하나도 말하지 않는다 — 인덱스를 만들지 않는다. " +
+                    "`- fields: [열, …]` 를 더하거나 `- {name}: @index(열, …)` 로 쓴다.",
+                    model.Source.Loc,
+                    SemanticSeverity.Warning));
+            }
+        }
+    }
+
+    /// <summary>
+    /// <c>MDD042</c>: a name the model gives an index — an <c>### Indexes</c> item's name, or a directive's
+    /// <c>name: "…"</c> — that cannot be the database object's name: not a plain identifier (it is written into the
+    /// generated SQL as it is), or the same as another declared name in the build (case-insensitively: SQL Server's
+    /// constraint names and PostgreSQL's index names are unique across the schema, not within one table).
     /// </summary>
     private void CheckDeclaredIndexNames(List<SemanticDiagnostic> diagnostics)
     {
@@ -75,7 +96,7 @@ public sealed class SemanticAnalyzer
         {
             foreach (var entry in SectionIndexParser.Parse(model))
             {
-                if (entry.DeclaredName is not { } name) continue;
+                if (entry.Name is not { } name) continue;
 
                 if (!PlainIdentifier.IsMatch(name))
                 {

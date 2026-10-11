@@ -44,9 +44,19 @@ M3L 0.20.0 이 `@computed` · rollup `where:` · 뷰 `where` 의 언어를 정�
 - 🔴 **`@index(…, name: "…")` · `@unique(…, name: "…")`(M3L 명세 §3.3.2 의 예 그대로)가 컴파일되는 생성물을 낸다.** 종전엔 키워드 인자가 열 목록에 섞여 와
   `HasIndex(x => new { x.Sku, x.Name: "productSearch" })` 같은 C# 과 없는 열 `[Name: "uqSku"]` 을 가리키는 SQL 을 냈다. M3L 0.20.0 이 키워드를 열 목록에서 빼고,
   이 생성기는 열만으로 인덱스를 내고, **지시자의 `name:` 을 그 인덱스·제약의 이름으로 쓴다** — SQL Server · PostgreSQL · EF(`HasDatabaseName`) 모두.
-  `name:` 이 없으면 종전처럼 모델과 열에서 짓는다(`IX_Product_Sku_Name`). `### Indexes` 항목의 라벨은 이름이 되지 않는다 — 그 인덱스들은 지금 생성된
-  이름으로 배포돼 있어, 라벨을 이름으로 삼으면 배포마다 다시 만들어진다. 새 오류 `MDD042` — 선언된 이름이 식별자가 아니거나(생성 SQL 에 그대로 들어간다)
+  `name:` 이 없으면 종전처럼 모델과 열에서 짓는다(`IX_Product_Sku_Name`). 새 오류 `MDD042` — 모델이 준 이름이 식별자가 아니거나(생성 SQL 에 그대로 들어간다)
   빌드 안에서 두 번 쓰였다(대소문자 무시 — 제약·인덱스 이름은 스키마 단위로 유일하다).
+- 🔴 **`### Indexes` 항목의 이름이 그 인덱스의 이름이다**(M3L 명세 §3.3.3) — `- ux_scope: @unique(…)` 는 `UK_<모델>_<열>`/`uq_<테이블>_<열>` 이 아니라
+  `ux_scope` 로 나온다(SQL Server · PostgreSQL · EF `HasDatabaseName`). **이미 배포된 데이터베이스에서는 그런 인덱스·제약마다 이름이 바뀐다** — 새
+  산출물을 그대로 적용하면 옛 이름의 것을 지우고 새 이름으로 다시 만든다. 다시 만들지 않으려면 적용 전에 이름만 바꾼다 — Schemorph 라면 사전 단계
+  스크립트(`V0001__rename_indexes.sql`)에 SQL Server `EXEC sp_rename N'[dbo].[Order].[UK_Order_CustomerId_Season]', N'idx_unique', N'INDEX';`
+  (제약이면 `N'OBJECT'` 와 `[dbo].[UK_…]`), PostgreSQL `ALTER INDEX ix_order_customer_id RENAME TO idx_customer;`(제약이면
+  `ALTER TABLE … RENAME CONSTRAINT …`). 옛 이름은 위 규칙대로 모델과 열에서 정해지므로 모델만 보고 쓸 수 있다. 식별자가 아닌 항목 이름
+  (`- 최신순`)은 `MDD042` 로 빌드가 멈춘다 — 영문 식별자로 바꾸고 설명은 괄호에 둔다(`- by_newest(최신순)`).
+- 🔴 **`fields:` 로 쓴 `### Indexes` 항목이 인덱스를 낸다.** 명세 §3.3.3 이 여러 인덱스에 권하는 형태(`- customer_orders` + `  - fields: [customer_id, order_date]`
+  + `  - unique: true`)를 종전엔 **아무 말 없이 건너뛰었다** — 그 항목은 지시자 형태의 `args` 가 아니라 `fields` 로 열을 싣는다. 이제 같은 인덱스(유일이면
+  제약)를 항목 이름으로 낸다. 이 형태를 써 온 모델에는 **새 인덱스가 생긴다.** 새 경고 `MDD043` — 열을 하나도 말하지 않는 항목(`fields:` 없음·빈 목록)은
+  인덱스를 만들 수 없다는 것을 말한다.
 - 새 경고 `MDD041` — `@index(…, fulltext: true)`. 두 SQL 방언 모두 전문 인덱스를 만들지 않고 같은 열의 일반 인덱스로 낸다는 것을 말한다.
 
 ### 🆕 키가 있는 standalone `::view` 가 읽기 모델이 된다 (Model · Api · TypeScript 타깃)

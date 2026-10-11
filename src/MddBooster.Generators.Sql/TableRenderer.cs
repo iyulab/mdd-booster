@@ -165,7 +165,7 @@ public static class TableRenderer
             var isUnique = entry.IsUnique;
             var colJoined = string.Join("_", cols);
             var colList = string.Join(", ", cols.Select(c => $"[{c}]"));
-            var name = entry.DeclaredName ?? $"{(isUnique ? "UK" : "IX")}_{model.Name}_{colJoined}";
+            var name = entry.Name ?? $"{(isUnique ? "UK" : "IX")}_{model.Name}_{colJoined}";
 
             if (isUnique)
             {

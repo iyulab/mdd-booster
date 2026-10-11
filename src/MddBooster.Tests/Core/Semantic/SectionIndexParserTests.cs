@@ -141,6 +141,32 @@ public class SectionIndexParserTests
     }
 
     [Fact]
+    public void An_item_written_with_fields_reads_its_columns_and_name_from_the_item()
+    {
+        // §3.3.3 의 `fields:` 형태 — 상류는 `type`·`args` 없이 하위 항목을 키 그대로 싣는다. 괄호 안
+        // 설명(`label`)은 이름이 아니다.
+        var entries = SectionIndexParser.Parse(WithEntries(
+            """{"name":"customer_orders","label":"For customer order lookup","fields":["customer_id","order_date"],"unique":true,"nulls":"not_distinct"}"""));
+
+        var entry = Assert.Single(entries);
+        Assert.Equal(["customer_id", "order_date"], entry.Columns);
+        Assert.Equal("customer_orders", entry.Name);
+        Assert.True(entry.IsUnique);
+        Assert.Equal("not_distinct", entry.Nulls);
+    }
+
+    [Fact]
+    public void Every_form_names_the_index_with_its_name()
+    {
+        var entries = SectionIndexParser.Parse(WithEntries(
+            """{"type":"directive","args":["a"],"name":"by_directive"}""",
+            """{"type":"indexed","attr":"index","args":["b"],"name":"by_item"}""",
+            """{"type":"directive","args":["c"]}"""));
+
+        Assert.Equal(["by_directive", "by_item", null], entries.Select(e => e.Name));
+    }
+
+    [Fact]
     public void Nulls_is_read_when_declared()
     {
         // `M3L.Native` 0.9.0+(`@unique(..., nulls: "not_distinct")`)이 실제로 내는 형태 —
@@ -181,7 +207,9 @@ public class SectionIndexParserTests
 
     [Theory]
     [InlineData("\"just a string\"")]                        // entry 가 객체가 아님
-    [InlineData("""{"args":["customer_id"]}""")]             // type 없음
+    [InlineData("""{"args":["customer_id"]}""")]             // type 없음 — 형태 없는 args 는 읽지 않는다
+    [InlineData("""{"name":"x","fields":[]}""")]             // fields 형태인데 컬럼 없음
+    [InlineData("""{"name":"x","unique":true}""")]           // fields 도 args 도 없음
     [InlineData("""{"type":"directive"}""")]                 // args 없음
     [InlineData("""{"type":"directive","args":[]}""")]       // 컬럼 없음
     [InlineData("""{"type":"directive","args":["  "]}""")]   // 공백뿐인 컬럼
@@ -189,5 +217,16 @@ public class SectionIndexParserTests
     {
         // 컬럼을 모르면 인덱스를 만들 수 없다 — 이름만 있는 산출물을 내지 않는다.
         Assert.Empty(SectionIndexParser.Parse(WithEntries(json)));
+    }
+
+    [Fact]
+    public void An_item_that_yields_no_index_is_reported_by_its_name()
+    {
+        // 탈락 자체는 위와 같다 — 다만 조용하지 않게, 분석기(MDD043)가 이 목록을 읽는다.
+        var unread = SectionIndexParser.Unread(WithEntries(
+            """{"name":"by_nothing","unique":true}""",
+            """{"type":"directive","args":["a"]}"""));
+
+        Assert.Equal(["by_nothing"], unread);
     }
 }
