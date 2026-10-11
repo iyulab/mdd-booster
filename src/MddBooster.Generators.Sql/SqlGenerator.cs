@@ -151,7 +151,7 @@ public sealed class SqlGenerator : IArtifactGenerator
 
         // 4. .sqlproj patch — tables + views + scripts_gen
         // When EmitSqlProj is false the consumer drives schema via a desired-state tool
-        // (e.g. Schemorph) and the .sqlproj is being retired, so we neither locate nor patch it.
+        // and the .sqlproj is being retired, so we neither locate nor patch it.
         if (_options.EmitSqlProj)
         {
             var sqlProjPath = FindSqlProj(projectRoot);

@@ -75,7 +75,7 @@
         "emitSqlProj": {
           "type": "boolean",
           "default": true,
-          "description": "tsql only — patch the .sqlproj ItemGroup with generated files. Set false when a desired-state tool (e.g. Schemorph) consumes the schema instead. Not supported under dialect:postgres (that dialect has no .sqlproj concept)."
+          "description": "tsql only — patch the .sqlproj ItemGroup with generated files. Set false when a desired-state tool consumes the schema instead. Not supported under dialect:postgres (that dialect has no .sqlproj concept)."
         },
         "emitRefreshScript": {
           "type": "boolean",
@@ -85,7 +85,7 @@
         "emitEnumCheckConstraints": {
           "type": "boolean",
           "default": false,
-          "description": "Emit table-level CK_{Table}_{Column} CHECK constraints for enum columns. Off by default because SSDT dacpac represents CHECK as drop+create on every diff; declarative-tool consumers (Schemorph) can opt in for DB-level enum enforcement."
+          "description": "Emit table-level CK_{Table}_{Column} CHECK constraints for enum columns. Off by default because SSDT dacpac represents CHECK as drop+create on every diff; declarative-tool consumers can opt in for DB-level enum enforcement."
         },
         "emitForeignKeyIndexes": {
           "type": "boolean",

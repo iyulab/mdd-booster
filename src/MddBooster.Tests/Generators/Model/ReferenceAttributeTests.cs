@@ -60,10 +60,8 @@ public class ReferenceAttributeTests
     {
         // ⚠️ TRIPWIRE — 이 단언이 깨지면 API 표면 격리 보장이 함께 깨진다. 고치기 전에 읽을 것.
         //
-        // 런타임(iyu-framework)은 **read 타입만** 스키마에 등록한다:
-        //   OData    IyuEdmModelBuilder.AddEntityPair → _modelBuilder.EntitySet<TRead>(setName)
-        //   GraphQL  IyuGraphQLSchemaBuilder.AddEntityPair → Field(queryName).Type<ListType<ObjectType<TRead>>>()
-        // write 타입은 어느 스키마에도 들어가지 않는다(레지스트리 전용).
+        // 생성물의 read 타입은 API 스키마(OData · GraphQL)에 실리는 쪽이고, write 타입은 어느 스키마에도
+        // 실리지 않는 쪽이다 — 이 생성기가 두 타입을 나누는 이유가 그것이다.
         //
         // 그래서 `@internal`(및 향후 타깃별 엔티티 필터)이 AddEntityPair 를 방출하지 않으면
         // 그 엔티티 타입은 **정말로** 스키마에서 사라진다 — 단, read 타입이 다른 엔티티 타입을

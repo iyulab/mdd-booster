@@ -11,8 +11,8 @@
 - **이 리포는 M3L을 NuGet 패키지(`M3L.Native`)로만 소비한다.** `m3l` 소스를 로컬에서 고쳐도
   pack·게시·버전 핀 상승 없이는 이 리포에 아무 영향이 없다 — `ProjectReference` 로 우회하지
   않는다(설계 앵커 「지식은 아래로만」 참조).
-- **생성 코드는 자신을 실행할 런타임을 모른다.** `Iyu.*` 네임스페이스를 아는 코드(예:
-  `using Iyu.Core.Entities;` 방출)를 추가하지 않는다 — 소비앱의 `GlobalUsings.cs` 가 그 자리다.
+- **생성 코드는 자신을 실행할 런타임을 모른다.** 런타임의 네임스페이스를 아는 코드(예: 그
+  네임스페이스의 `using` 방출)를 추가하지 않는다 — 소비앱의 `GlobalUsings.cs` 가 그 자리다.
   이 규칙을 어긴 전례(정규화 경로 `global::Iyu.*` 방출)의 회귀 가드가
   `EntityPairRendererTests`·`BuildCommandFullFixtureTests` 에 있다 — 새 코드가 이 가드를 우회하는
   형태(문자열 결합으로 같은 결과를 만드는 등)로 통과하게 하지 않는다.
@@ -48,7 +48,7 @@ description 의 `///` 연속, 널 허용 복합 유니크, 널 허용 64-bit 세
 ```
 src/
   MddBooster.Core/              # AST 소비(M3L.Native) · 시맨틱 분석 · 타깃 공통 모델
-  MddBooster.Generators.Sql/    # SSDT 스키마 + Schemorph 대상 SQL 방출
+  MddBooster.Generators.Sql/    # SSDT 스키마 + 선언형 스키마 도구용 SQL 방출
   MddBooster.Generators.Model/  # EF Core 엔티티 + DbContext 방출
   MddBooster.Generators.Api/    # OData/GraphQL 엔티티 페어 등록 코드 방출
   MddBooster.Generators.TypeScript/  # 타입·폼·enum 방출

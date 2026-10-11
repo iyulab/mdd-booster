@@ -26,8 +26,7 @@ public sealed class PostgresSqlGeneratorOptions
 /// PostgreSQL 방언 Sql 타깃 — 테이블은 <c>{projectPath}/tables_gen/{table}.sql</c>,
 /// Lookup/Rollup 파생 필드가 있는 모델의 <c>{table}_full_view.sql</c>(및 soft-delete가
 /// 있으면 <c>{table}_ud_view.sql</c>)은 <c>{projectPath}/views_gen/</c>로 방출한다
-/// (Schemorph desired-state 관례: 객체당 한 파일. §desired-state-format.md 상 이 레이아웃
-/// 자체는 규약이지 강제는 아니다). 게이트 위반은 **전 모델에 걸쳐 모아** 한 번에 실패시키고,
+/// (객체당 한 파일 — 파일 단위로 읽는 선언형 스키마 도구가 객체와 파일을 일대일로 대응시킬 수 있게). 게이트 위반은 **전 모델에 걸쳐 모아** 한 번에 실패시키고,
 /// 실패 시 기존 산출물을 지우지 않는다(부분 출력 금지). Computed 파생 필드·<c>@indexed</c>
 /// Rollup이 있는 모델(및 그런 모델을 체이닝으로 딛는 모델)은 아직 방출하지 않고 stderr
 /// 경고로 표면화한다 — 무음 탈락 금지.

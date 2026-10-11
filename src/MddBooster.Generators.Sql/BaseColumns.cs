@@ -19,7 +19,7 @@ namespace MddBooster.Generators.Sql;
 /// base table gains a column — it must be re-created or <c>sp_refreshview</c>'d.
 /// Under SSDT/sqlpackage the generated post-deployment refresh script masked
 /// this, but a declarative schema tool that diffs the generated SQL <i>text</i>
-/// (e.g. Schemorph) correctly sees "no change" for an unchanged <c>SELECT *</c>
+/// correctly sees "no change" for an unchanged <c>SELECT *</c>
 /// view and leaves it silently stale. Projecting the base columns by name makes
 /// an added column change the generated view text, so the declarative tool
 /// detects it and re-defines the view. See the mdd-booster issue

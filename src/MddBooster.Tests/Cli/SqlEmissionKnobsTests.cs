@@ -54,7 +54,7 @@ public class SqlEmissionKnobsTests
             var exit = new BuildCommand().Run(mddDir);
             Assert.Equal(0, exit);
 
-            // Desired-state SQL is still emitted for Schemorph to consume.
+            // Desired-state SQL is still emitted for a declarative tool to consume.
             Assert.True(File.Exists(Path.Combine(dbDir, "dbo", "Tables_gen", "Product.sql")));
             Assert.True(File.Exists(Path.Combine(dbDir, "dbo", "Views_gen", "ProductFullView.sql")));
 

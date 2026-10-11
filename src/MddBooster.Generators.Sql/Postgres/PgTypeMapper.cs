@@ -5,7 +5,7 @@ namespace MddBooster.Generators.Sql.Postgres;
 /// <summary>
 /// M3L 타입 → PostgreSQL 타입 매핑 (T-SQL <see cref="SqlTypeMapper"/>의 PG 대응).
 /// 타입 이름은 pg_catalog 별칭 관용(소문자, <c>varchar</c>/<c>timestamptz</c>)을 따른다 —
-/// Schemorph PG 비교는 카탈로그 정규화를 거치므로 별칭 표기가 diff를 흔들지 않는다.
+/// 엔진이 저장하는 형태도 이 별칭이라, 카탈로그와 비교하는 도구에서 표기 차이가 diff 를 만들지 않는다.
 /// </summary>
 public static class PgTypeMapper
 {

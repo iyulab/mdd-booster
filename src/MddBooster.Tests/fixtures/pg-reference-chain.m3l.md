@@ -15,8 +15,8 @@
 
 ## FacilityInspection
 
-> field-level `@index` · section-level `@index`는 PG 방언에서 방출 금지 대상
-> (Schemorph PG P1이 인덱스를 명시 거부) — 무음 탈락이 아니라 경고로 표면화한다.
+> field-level `@index` · section-level `@index`는 PG 방언에서 `CREATE TABLE` 뒤의 독립
+> `CREATE INDEX` 문으로 방출된다(경고 없음).
 > nullable `@unique`는 PG에선 filtered index 없이 UNIQUE 제약이 정확한 모델링
 > (PG는 NULL을 distinct로 취급).
 

@@ -58,7 +58,7 @@ public sealed class MddJsonTarget
     /// <summary>
     /// Sql target: SQL dialect. <c>"tsql"</c> (default — current SSDT/T-SQL behavior) or
     /// <c>"postgres"</c> (snake_case identifiers per naming gates, <c>tables_gen/</c> layout,
-    /// scope aligned with Schemorph PG capabilities). Unknown values are a build error.
+    /// tables, indexes, constraints and views). Unknown values are a build error.
     /// </summary>
     [JsonPropertyName("dialect")]
     public string? Dialect { get; set; }
@@ -68,7 +68,7 @@ public sealed class MddJsonTarget
 
     /// <summary>
     /// Sql target: whether to patch the <c>.sqlproj</c> ItemGroup with generated files.
-    /// Set <c>false</c> when consuming schema via a desired-state tool (e.g. Schemorph) so the
+    /// Set <c>false</c> when consuming schema via a desired-state tool so the
     /// <c>.sqlproj</c> can be retired. When omitted, defaults to <c>true</c> (current behavior).
     /// </summary>
     [JsonPropertyName("emitSqlProj")]
@@ -84,7 +84,7 @@ public sealed class MddJsonTarget
     /// <summary>
     /// Sql target: whether to emit table-level <c>CK_{Table}_{Column}</c> CHECK constraints
     /// for enum columns. Defaults to <c>false</c> (SSDT dacpac represents CHECK as
-    /// Drop→Create on every diff). Declarative-tool consumers (Schemorph) can opt in
+    /// Drop→Create on every diff). Declarative-tool consumers can opt in
     /// for DB-level enum enforcement.
     /// </summary>
     [JsonPropertyName("emitEnumCheckConstraints")]
