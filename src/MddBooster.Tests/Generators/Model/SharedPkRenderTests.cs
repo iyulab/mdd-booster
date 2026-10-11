@@ -27,7 +27,8 @@ public class SharedPkRenderTests
         var rendered = EntityPairRenderer.Render(profile, "Test.Entities");
 
         // PK 필드는 IyuEntity.Id로 표현된다 — 별도 AssetId 속성이 나오면 안 된다.
-        Assert.DoesNotContain("AssetId", rendered.Write);
+        // (속성을 본다: 모델 설명이 문서 주석으로 실리면 그 글이 열 이름을 말할 수 있다.)
+        Assert.DoesNotMatch(new System.Text.RegularExpressions.Regex(@"\bpublic\s+\S+\s+AssetId\b"), rendered.Write);
         // PK가 아닌 FK 필드는 그대로 스칼라 속성으로 렌더된다.
         Assert.Contains("public Guid? CriticalityId { get; set; }", rendered.Write);
     }

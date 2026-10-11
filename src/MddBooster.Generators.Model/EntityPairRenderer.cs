@@ -124,12 +124,12 @@ public static class EntityPairRenderer
             .ToHashSet(StringComparer.Ordinal);
 
         return new RenderedPair(
-            Interface: RenderInterface(entityName, readOnlyStoredFields, ns, knownEnumNames, postgres),
+            Interface: RenderInterface(entityName, readOnlyStoredFields, ns, knownEnumNames, postgres, model.Source.Description),
             Write: RenderClass(entityName, storedFields, derivedFields: null, ns, isExt: false, knownEnumNames, extBacking, model.Source, model.Name, oneToOne, manyToOne, nullableLookups, postgres),
             Read: RenderClass(entityName, readOnlyStoredFields, readOnlyDerivedFields, ns, isExt: true, knownEnumNames, extBacking, model.Source, model.Name, oneToOne, manyToOne, nullableLookups, postgres, externalContracts: readTypeKeepsContracts));
     }
 
-    private static string RenderInterface(string entityName, IReadOnlyList<FieldNode> fields, string ns, IReadOnlySet<string>? knownEnumNames, bool postgres)
+    private static string RenderInterface(string entityName, IReadOnlyList<FieldNode> fields, string ns, IReadOnlySet<string>? knownEnumNames, bool postgres, string? description)
     {
         var sb = new StringBuilder();
         sb.AppendLine(Header);
@@ -143,6 +143,9 @@ public static class EntityPairRenderer
         sb.AppendLine();
         sb.Append("namespace ").Append(ns).AppendLine(";");
         sb.AppendLine();
+        // The model's description — its blockquote or its header's description string — is the documentation
+        // a consumer reads on hover, on each of the three types the model becomes.
+        XmlDocComment.AppendSummary(sb, description, indent: "");
         sb.Append("public interface I").Append(entityName).AppendLine();
         sb.AppendLine("{");
         sb.AppendLine("    global::System.Guid Id { get; }");
@@ -222,6 +225,7 @@ public static class EntityPairRenderer
         sb.AppendLine();
         sb.Append("namespace ").Append(ns).AppendLine(";");
         sb.AppendLine();
+        XmlDocComment.AppendSummary(sb, source.Description, indent: "");
         sb.Append("[Table(\"").Append(tableName).AppendLine("\")]");
         sb.Append("public partial class ").Append(className)
           .Append(" : ").Append(baseClass).Append(", I").Append(entityName);
