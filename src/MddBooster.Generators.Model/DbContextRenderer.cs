@@ -288,14 +288,16 @@ public static class DbContextRenderer
             if (FieldAttributes.Has(field, "unique"))
             {
                 sb.Append(indent).Append(receiver).Append(".HasIndex(x => x.").Append(property)
-                  .Append(").IsUnique().HasDatabaseName(\"").Append(isPostgres ? "uq_" : "UK_")
-                  .Append(indexNamePrefix).Append('_').Append(columnToken).AppendLine("\");");
+                  .Append(").IsUnique().HasDatabaseName(")
+                  .Append(SourceLiteral.CSharpString(GeneratedObjectNames.For(isPostgres, GeneratedObjectNames.Kind.Unique, indexNamePrefix, columnToken)))
+                  .AppendLine(");");
             }
             else if (FieldAttributes.Has(field, "index"))
             {
                 sb.Append(indent).Append(receiver).Append(".HasIndex(x => x.").Append(property)
-                  .Append(").HasDatabaseName(\"").Append(isPostgres ? "ix_" : "IX_")
-                  .Append(indexNamePrefix).Append('_').Append(columnToken).AppendLine("\");");
+                  .Append(").HasDatabaseName(")
+                  .Append(SourceLiteral.CSharpString(GeneratedObjectNames.For(isPostgres, GeneratedObjectNames.Kind.Index, indexNamePrefix, columnToken)))
+                  .AppendLine(");");
             }
         }
     }
@@ -326,7 +328,6 @@ public static class DbContextRenderer
             var properties = entry.Columns.Select(NameCasing.ToPascalCase).ToList();
             var propertyAccess = string.Join(", ", properties.Select(p => $"x.{p}"));
             var nameTokens = isPostgres ? entry.Columns : properties;
-            var nameJoined = string.Join("_", nameTokens);
 
             sb.Append(indent).Append(receiver).Append(".HasIndex(x => new { ").Append(propertyAccess)
               .Append(" })");
@@ -344,9 +345,10 @@ public static class DbContextRenderer
                 }
             }
 
-            // The same name the SQL targets give it: the directive's own, or one made from the model and columns.
+            // The same name the SQL targets give it: the one the model gives (an item name or a directive's
+            // name:), or the generated one — from the same formula the SQL targets use.
             var databaseName = entry.Name
-                ?? $"{(entry.IsUnique ? (isPostgres ? "uq_" : "UK_") : (isPostgres ? "ix_" : "IX_"))}{indexNamePrefix}_{nameJoined}";
+                ?? GeneratedObjectNames.For(isPostgres, entry.IsUnique ? GeneratedObjectNames.Kind.Unique : GeneratedObjectNames.Kind.Index, indexNamePrefix, nameTokens);
             sb.Append(".HasDatabaseName(").Append(SourceLiteral.CSharpString(databaseName)).AppendLine(");");
         }
     }

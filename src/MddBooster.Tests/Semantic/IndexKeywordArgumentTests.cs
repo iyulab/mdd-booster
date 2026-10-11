@@ -203,6 +203,32 @@ public class DeclaredIndexNameTests
         Assert.Contains("by_name", diagnostic.Message);
     }
 
+    [Theory]
+    [InlineData("IX_Product_Sku")]   // the name SQL Server would give the field's index
+    [InlineData("ix_product_sku")]   // the name PostgreSQL would give it
+    public void A_declared_name_another_index_is_generated_under_is_MDD042(string declared)
+    {
+        // `sku` carries a field-level @index, so a generator names that index itself; declaring the same name for a
+        // different index puts two objects under one schema-wide name, which only the deployment would reveal.
+        var model = Model.Replace("- sku: string(20) @not_null", "- sku: string(20) @not_null @index", StringComparison.Ordinal)
+                    + $"\n- {declared}: @index(name)\n";
+
+        var diagnostic = Assert.Single(Analyze(model), d => d.Code == "MDD042");
+
+        Assert.Contains(declared, diagnostic.Message);
+        Assert.Contains("생성", diagnostic.Message);
+    }
+
+    [Fact]
+    public void A_declared_name_equal_to_its_own_generated_name_is_not_MDD042()
+    {
+        // Naming an index what it would have been called anyway takes that name out of the generated set — nothing
+        // else is generated under it.
+        var model = Model.Replace("- by_name: @index(name)", "- IX_Product_Name: @index(name)", StringComparison.Ordinal);
+
+        Assert.DoesNotContain(Analyze(model), d => d.Code == "MDD042");
+    }
+
     [Fact]
     public void An_item_that_names_no_columns_is_MDD043_a_warning()
     {

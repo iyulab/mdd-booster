@@ -56,13 +56,13 @@ public static class TableRenderer
             if (field.Nullable)
             {
                 postTableStatements.Add(
-                    $"CREATE UNIQUE NONCLUSTERED INDEX [UK_{model.Name}_{column}] " +
+                    $"CREATE UNIQUE NONCLUSTERED INDEX [{GeneratedObjectNames.For(false, GeneratedObjectNames.Kind.Unique, model.Name, column)}] " +
                     $"ON [{schema}].[{model.Name}]([{column}]) " +
                     $"WHERE [{column}] IS NOT NULL;");
             }
             else
             {
-                inlineConstraints.Add($"CONSTRAINT [UK_{model.Name}_{column}] UNIQUE NONCLUSTERED ([{column}])");
+                inlineConstraints.Add($"CONSTRAINT [{GeneratedObjectNames.For(false, GeneratedObjectNames.Kind.Unique, model.Name, column)}] UNIQUE NONCLUSTERED ([{column}])");
             }
         }
 
@@ -75,13 +75,12 @@ public static class TableRenderer
 
             var column = NameCasing.ToPascalCase(field.Name);
             postTableStatements.Add(
-                $"CREATE NONCLUSTERED INDEX [IX_{model.Name}_{column}] " +
+                $"CREATE NONCLUSTERED INDEX [{GeneratedObjectNames.For(false, GeneratedObjectNames.Kind.Index, model.Name, column)}] " +
                 $"ON [{schema}].[{model.Name}] ([{column}]);");
         }
 
-        // Sections.Indexes 처리 — table-level @unique(c1, c2) directive + @index(c1) directive를
-        // 각각 UNIQUE 제약 / NONCLUSTERED INDEX로 emit. M3L.Native가 directive 형식만 args를 보존하므로
-        // `idx_name: @index(col)` 형식은 args 없이 들어와 정보 부족(skip).
+        // Sections.Indexes 처리 — 항목의 세 형태(지시자 · 이름 붙은 지시자 · `fields:`)를 각각
+        // UNIQUE 제약 / NONCLUSTERED INDEX로 emit(읽기는 SectionIndexParser).
         AppendSectionIndexes(model, schema, storedFields, inlineConstraints, postTableStatements);
 
         // FK 자동 인덱스 — opt-in. 모델이 이미 덮은 컬럼은 판정기가 걸러낸다.
@@ -91,7 +90,7 @@ public static class TableRenderer
             {
                 var column = NameCasing.ToPascalCase(field.Name);
                 postTableStatements.Add(
-                    $"CREATE NONCLUSTERED INDEX [IX_{model.Name}_{column}] " +
+                    $"CREATE NONCLUSTERED INDEX [{GeneratedObjectNames.For(false, GeneratedObjectNames.Kind.Index, model.Name, column)}] " +
                     $"ON [{schema}].[{model.Name}] ([{column}]);");
             }
         }
@@ -109,7 +108,7 @@ public static class TableRenderer
 
                 var column = NameCasing.ToPascalCase(field.Name);
                 inlineConstraints.Add(
-                    $"CONSTRAINT [CK_{model.Name}_{column}] CHECK ({EnumSqlConvention.CheckExpression(enumNode, column)})");
+                    $"CONSTRAINT [{GeneratedObjectNames.For(false, GeneratedObjectNames.Kind.Check, model.Name, column)}] CHECK ({EnumSqlConvention.CheckExpression(enumNode, column)})");
             }
         }
 
@@ -163,9 +162,8 @@ public static class TableRenderer
         {
             var cols = entry.Columns.Select(NameCasing.ToPascalCase).ToList();
             var isUnique = entry.IsUnique;
-            var colJoined = string.Join("_", cols);
             var colList = string.Join(", ", cols.Select(c => $"[{c}]"));
-            var name = entry.Name ?? $"{(isUnique ? "UK" : "IX")}_{model.Name}_{colJoined}";
+            var name = entry.Name ?? GeneratedObjectNames.For(false, isUnique ? GeneratedObjectNames.Kind.Unique : GeneratedObjectNames.Kind.Index, model.Name, cols);
 
             if (isUnique)
             {

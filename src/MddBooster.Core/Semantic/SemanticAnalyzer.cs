@@ -91,6 +91,7 @@ public sealed class SemanticAnalyzer
     /// </summary>
     private void CheckDeclaredIndexNames(List<SemanticDiagnostic> diagnostics)
     {
+        var generated = GeneratedIndexNames();
         var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var model in _models)
         {
@@ -114,12 +115,52 @@ public sealed class SemanticAnalyzer
                         "스키마 안에서 유일해야 한다.",
                         model.Source.Loc));
                 }
+                else if (generated.TryGetValue(name, out var owner))
+                {
+                    diagnostics.Add(new SemanticDiagnostic(
+                        "MDD042",
+                        $"'{model.Name}' 인덱스 이름 \"{name}\" 은(는) '{owner}' 의 다른 인덱스가 생성되는 이름이다 — 인덱스·제약 " +
+                        "이름은 스키마 안에서 유일해야 한다. 다른 이름을 준다.",
+                        model.Source.Loc));
+                }
                 else
                 {
                     seen[name] = model.Name;
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// The names the generators give the indexes and unique constraints the model does not name — field-level
+    /// <c>@unique</c>/<c>@index</c> and unnamed <c>### Indexes</c> entries — in both dialects' forms, with the model each
+    /// belongs to. A declared name is checked against these: a name the model gives one index that a generator gives
+    /// another collides at deployment. Primary-key, foreign-key and check constraints are left out — whether a
+    /// generator writes them depends on the target's options and the model's relations, which this pass does not see;
+    /// a declared name of that shape is rare and the deployment reports it.
+    /// </summary>
+    private Dictionary<string, string> GeneratedIndexNames()
+    {
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        void Add(ResolvedModel model, Naming.GeneratedObjectNames.Kind kind, IReadOnlyList<string> fields)
+        {
+            names.TryAdd(Naming.GeneratedObjectNames.For(false, kind, model.Name, fields.Select(Naming.NameCasing.ToPascalCase)), model.Name);
+            names.TryAdd(Naming.GeneratedObjectNames.For(true, kind, Naming.PostgresIdentifiers.ToSnakeCase(model.Name), fields), model.Name);
+        }
+
+        foreach (var model in _models)
+        {
+            foreach (var field in model.Fields.Where(f => f.Kind == FieldKind.Stored && !Ast.FieldAttributes.Has(f, "pk")))
+            {
+                if (Ast.FieldAttributes.Has(field, "unique")) Add(model, Naming.GeneratedObjectNames.Kind.Unique, [field.Name]);
+                else if (Ast.FieldAttributes.Has(field, "index")) Add(model, Naming.GeneratedObjectNames.Kind.Index, [field.Name]);
+            }
+            foreach (var entry in SectionIndexParser.Parse(model).Where(e => e.Name is null))
+            {
+                Add(model, entry.IsUnique ? Naming.GeneratedObjectNames.Kind.Unique : Naming.GeneratedObjectNames.Kind.Index, entry.Columns);
+            }
+        }
+        return names;
     }
 
     private static readonly System.Text.RegularExpressions.Regex PlainIdentifier =

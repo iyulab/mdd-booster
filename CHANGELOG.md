@@ -56,6 +56,8 @@ M3L 0.20.0 이 `@computed` · rollup `where:` · 뷰 `where` 의 언어를 정�
   `ALTER INDEX ix_booking_customer_code RENAME TO idx_customer;`, 유일은 언제나 제약이라
   `ALTER TABLE booking RENAME CONSTRAINT uq_booking_customer_code_status TO ux_customer_status;`. 식별자가 아닌 항목 이름
   (`- 최신순`)은 `MDD042` 로 빌드가 멈춘다 — 영문 식별자로 바꾸고 설명은 괄호에 둔다(`- by_newest(최신순)`).
+  모델이 준 이름이 **다른 인덱스가 생성되는 이름**(필드 단위 `@unique`/`@index` · 이름 없는 항목의 `IX_…`/`ix_…`)과 같아도 `MDD042` 다 —
+  종전엔 배포가 «이미 있다»로 실패해서야 드러났다.
 - 🔴 **`fields:` 로 쓴 `### Indexes` 항목이 인덱스를 낸다.** 명세 §3.3.3 이 여러 인덱스에 권하는 형태(`- customer_orders` + `  - fields: [customer_id, order_date]`
   + `  - unique: true`)를 종전엔 **아무 말 없이 건너뛰었다** — 그 항목은 지시자 형태의 `args` 가 아니라 `fields` 로 열을 싣는다. 이제 같은 인덱스(유일이면
   제약)를 항목 이름으로 낸다. 이 형태를 써 온 모델에는 **새 인덱스가 생긴다.** 새 경고 `MDD043` — 열을 하나도 말하지 않는 항목(`fields:` 없음·빈 목록)은
