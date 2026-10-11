@@ -20,15 +20,21 @@ namespace MddBooster.Core.Semantic;
 /// </param>
 /// <param name="Name">
 /// The name the model gave the index — an <c>### Indexes</c> item's label, or a directive's <c>name:</c> — or
-/// <see langword="null"/>. Read so that it is accounted for; the generators name indexes from the model and columns.
+/// <see langword="null"/>.
 /// </param>
 /// <param name="FullText">Whether the model asked for a full-text index (<c>@index(…, fulltext: true)</c>).</param>
+/// <param name="DeclaredName">
+/// The database name to give the index: a directive's <c>name:</c>, or <see langword="null"/> to have the generators
+/// name it from the model and its columns. An <c>### Indexes</c> item's label is not one — those indexes were
+/// generated and deployed under the generated name, and taking the label now would rebuild each of them.
+/// </param>
 public sealed record SectionIndexEntry(
     IReadOnlyList<string> Columns,
     bool IsUnique,
     string? Nulls = null,
     string? Name = null,
-    bool FullText = false);
+    bool FullText = false,
+    string? DeclaredName = null);
 
 /// <summary>
 /// Reads a model's <c>### Indexes</c> section into column lists.
@@ -87,7 +93,8 @@ public static class SectionIndexParser
                 : null;
             var fullText = entry.TryGetProperty("fulltext", out var fullTextProp)
                            && fullTextProp.ValueKind == JsonValueKind.True;
-            parsed.Add(new SectionIndexEntry(columns, isUnique, nulls, name, fullText));
+            parsed.Add(new SectionIndexEntry(columns, isUnique, nulls, name, fullText,
+                DeclaredName: type == "directive" ? name : null));
         }
         return parsed;
     }

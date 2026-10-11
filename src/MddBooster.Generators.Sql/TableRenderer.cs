@@ -165,6 +165,7 @@ public static class TableRenderer
             var isUnique = entry.IsUnique;
             var colJoined = string.Join("_", cols);
             var colList = string.Join(", ", cols.Select(c => $"[{c}]"));
+            var name = entry.DeclaredName ?? $"{(isUnique ? "UK" : "IX")}_{model.Name}_{colJoined}";
 
             if (isUnique)
             {
@@ -183,20 +184,20 @@ public static class TableRenderer
                     var notNullPredicate = string.Join(" AND ",
                         cols.Select(c => $"[{c}] IS NOT NULL"));
                     postTableStatements.Add(
-                        $"CREATE UNIQUE NONCLUSTERED INDEX [UK_{model.Name}_{colJoined}] " +
+                        $"CREATE UNIQUE NONCLUSTERED INDEX [{name}] " +
                         $"ON [{schema}].[{model.Name}] ({colList}) " +
                         $"WHERE {notNullPredicate};");
                 }
                 else
                 {
                     inlineConstraints.Add(
-                        $"CONSTRAINT [UK_{model.Name}_{colJoined}] UNIQUE NONCLUSTERED ({colList})");
+                        $"CONSTRAINT [{name}] UNIQUE NONCLUSTERED ({colList})");
                 }
             }
             else
             {
                 postTableStatements.Add(
-                    $"CREATE NONCLUSTERED INDEX [IX_{model.Name}_{colJoined}] " +
+                    $"CREATE NONCLUSTERED INDEX [{name}] " +
                     $"ON [{schema}].[{model.Name}] ({colList});");
             }
         }

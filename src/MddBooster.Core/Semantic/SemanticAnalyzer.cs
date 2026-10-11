@@ -57,9 +57,52 @@ public sealed class SemanticAnalyzer
         CheckManyToOneNavigationNames(diagnostics);
         CheckSearchableReferences(diagnostics);
         CheckFullTextIndexes(diagnostics);
+        CheckDeclaredIndexNames(diagnostics);
 
         return diagnostics;
     }
+
+    /// <summary>
+    /// <c>MDD042</c>: a name an <c>@index</c>/<c>@unique</c> directive declares (<c>name: "…"</c>) that cannot be the
+    /// database object's name — not a plain identifier (it is written into the generated SQL as it is), or the same as
+    /// another declared name in the build (case-insensitively: SQL Server's constraint names and PostgreSQL's index
+    /// names are unique across the schema, not within one table).
+    /// </summary>
+    private void CheckDeclaredIndexNames(List<SemanticDiagnostic> diagnostics)
+    {
+        var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var model in _models)
+        {
+            foreach (var entry in SectionIndexParser.Parse(model))
+            {
+                if (entry.DeclaredName is not { } name) continue;
+
+                if (!PlainIdentifier.IsMatch(name))
+                {
+                    diagnostics.Add(new SemanticDiagnostic(
+                        "MDD042",
+                        $"'{model.Name}' 인덱스 이름 \"{name}\" 은(는) 데이터베이스 이름으로 쓸 수 없다 — 영문자·숫자·밑줄만, " +
+                        "숫자로 시작하지 않게.",
+                        model.Source.Loc));
+                }
+                else if (seen.TryGetValue(name, out var first))
+                {
+                    diagnostics.Add(new SemanticDiagnostic(
+                        "MDD042",
+                        $"'{model.Name}' 인덱스 이름 \"{name}\" 을(를) '{first}' 이(가) 이미 쓴다 — 인덱스·제약 이름은 " +
+                        "스키마 안에서 유일해야 한다.",
+                        model.Source.Loc));
+                }
+                else
+                {
+                    seen[name] = model.Name;
+                }
+            }
+        }
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex PlainIdentifier =
+        new("^[A-Za-z_][A-Za-z0-9_]*$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>
     /// <c>MDD041</c> (warning): an index declared <c>fulltext: true</c>. Neither SQL target generates a full-text

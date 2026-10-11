@@ -43,7 +43,10 @@ M3L 0.20.0 이 `@computed` · rollup `where:` · 뷰 `where` 의 언어를 정�
   번역할 수 없는 식은 SQL Server 와 같은 **오류 `MDD037`**, `platform: "postgresql"` 식이 없고 포터블 식도 없으면 `MDD036`.
 - 🔴 **`@index(…, name: "…")` · `@unique(…, name: "…")`(M3L 명세 §3.3.2 의 예 그대로)가 컴파일되는 생성물을 낸다.** 종전엔 키워드 인자가 열 목록에 섞여 와
   `HasIndex(x => new { x.Sku, x.Name: "productSearch" })` 같은 C# 과 없는 열 `[Name: "uqSku"]` 을 가리키는 SQL 을 냈다. M3L 0.20.0 이 키워드를 열 목록에서 빼고,
-  이 생성기는 열만으로 인덱스를 낸다. 인덱스 이름은 종전처럼 모델과 열에서 짓는다(`IX_Product_Sku_Name`) — 선언된 이름은 읽지만 쓰지 않는다.
+  이 생성기는 열만으로 인덱스를 내고, **지시자의 `name:` 을 그 인덱스·제약의 이름으로 쓴다** — SQL Server · PostgreSQL · EF(`HasDatabaseName`) 모두.
+  `name:` 이 없으면 종전처럼 모델과 열에서 짓는다(`IX_Product_Sku_Name`). `### Indexes` 항목의 라벨은 이름이 되지 않는다 — 그 인덱스들은 지금 생성된
+  이름으로 배포돼 있어, 라벨을 이름으로 삼으면 배포마다 다시 만들어진다. 새 오류 `MDD042` — 선언된 이름이 식별자가 아니거나(생성 SQL 에 그대로 들어간다)
+  빌드 안에서 두 번 쓰였다(대소문자 무시 — 제약·인덱스 이름은 스키마 단위로 유일하다).
 - 새 경고 `MDD041` — `@index(…, fulltext: true)`. 두 SQL 방언 모두 전문 인덱스를 만들지 않고 같은 열의 일반 인덱스로 낸다는 것을 말한다.
 
 ### 🆕 키가 있는 standalone `::view` 가 읽기 모델이 된다 (Model · Api · TypeScript 타깃)

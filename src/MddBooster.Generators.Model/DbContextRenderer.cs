@@ -342,15 +342,12 @@ public static class DbContextRenderer
                     sb.Append(isPostgres ? ".AreNullsDistinct(false)"
                         : anyNullable ? ".HasFilter(null)" : "");
                 }
+            }
 
-                sb.Append(".HasDatabaseName(\"").Append(isPostgres ? "uq_" : "UK_")
-                  .Append(indexNamePrefix).Append('_').Append(nameJoined).AppendLine("\");");
-            }
-            else
-            {
-                sb.Append(".HasDatabaseName(\"").Append(isPostgres ? "ix_" : "IX_")
-                  .Append(indexNamePrefix).Append('_').Append(nameJoined).AppendLine("\");");
-            }
+            // The same name the SQL targets give it: the directive's own, or one made from the model and columns.
+            var databaseName = entry.DeclaredName
+                ?? $"{(entry.IsUnique ? (isPostgres ? "uq_" : "UK_") : (isPostgres ? "ix_" : "IX_"))}{indexNamePrefix}_{nameJoined}";
+            sb.Append(".HasDatabaseName(").Append(SourceLiteral.CSharpString(databaseName)).AppendLine(");");
         }
     }
 
