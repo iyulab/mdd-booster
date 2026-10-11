@@ -48,10 +48,13 @@ M3L 0.20.0 이 `@computed` · rollup `where:` · 뷰 `where` 의 언어를 정�
   빌드 안에서 두 번 쓰였다(대소문자 무시 — 제약·인덱스 이름은 스키마 단위로 유일하다).
 - 🔴 **`### Indexes` 항목의 이름이 그 인덱스의 이름이다**(M3L 명세 §3.3.3) — `- ux_scope: @unique(…)` 는 `UK_<모델>_<열>`/`uq_<테이블>_<열>` 이 아니라
   `ux_scope` 로 나온다(SQL Server · PostgreSQL · EF `HasDatabaseName`). **이미 배포된 데이터베이스에서는 그런 인덱스·제약마다 이름이 바뀐다** — 새
-  산출물을 그대로 적용하면 옛 이름의 것을 지우고 새 이름으로 다시 만든다. 다시 만들지 않으려면 적용 전에 이름만 바꾼다 — Schemorph 라면 사전 단계
-  스크립트(`V0001__rename_indexes.sql`)에 SQL Server `EXEC sp_rename N'[dbo].[Order].[UK_Order_CustomerId_Season]', N'idx_unique', N'INDEX';`
-  (제약이면 `N'OBJECT'` 와 `[dbo].[UK_…]`), PostgreSQL `ALTER INDEX ix_order_customer_id RENAME TO idx_customer;`(제약이면
-  `ALTER TABLE … RENAME CONSTRAINT …`). 옛 이름은 위 규칙대로 모델과 열에서 정해지므로 모델만 보고 쓸 수 있다. 식별자가 아닌 항목 이름
+  산출물을 그대로 적용하면 옛 이름의 것을 지우고 새 이름으로 다시 만든다. 다시 만들지 않으려면 새 산출물을 적용하기 «전»에 이름만 바꾼다 —
+  선언형 스키마 도구로 적용한다면 그 도구가 비교하기 전에 실행되는 단계(이름 변경 스크립트)에 둔다. 옛 이름은 위 규칙대로 모델과 열에서 정해지므로
+  모델만 보고 쓸 수 있다. SQL Server — 인덱스(일반 인덱스, 널 허용 열이 섞여 필터 인덱스로 나간 유일)는
+  `EXEC sp_rename N'[dbo].[Booking].[IX_Booking_CustomerCode]', N'idx_customer', N'INDEX';`, 제약(널 허용 열이 없는 유일)은
+  `EXEC sp_rename N'[dbo].[UK_Booking_CustomerCode_Status]', N'ux_customer_status', N'OBJECT';`. PostgreSQL — 인덱스는
+  `ALTER INDEX ix_booking_customer_code RENAME TO idx_customer;`, 유일은 언제나 제약이라
+  `ALTER TABLE booking RENAME CONSTRAINT uq_booking_customer_code_status TO ux_customer_status;`. 식별자가 아닌 항목 이름
   (`- 최신순`)은 `MDD042` 로 빌드가 멈춘다 — 영문 식별자로 바꾸고 설명은 괄호에 둔다(`- by_newest(최신순)`).
 - 🔴 **`fields:` 로 쓴 `### Indexes` 항목이 인덱스를 낸다.** 명세 §3.3.3 이 여러 인덱스에 권하는 형태(`- customer_orders` + `  - fields: [customer_id, order_date]`
   + `  - unique: true`)를 종전엔 **아무 말 없이 건너뛰었다** — 그 항목은 지시자 형태의 `args` 가 아니라 `fields` 로 열을 싣는다. 이제 같은 인덱스(유일이면
