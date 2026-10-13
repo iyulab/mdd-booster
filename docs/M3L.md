@@ -795,7 +795,7 @@ Indexes are used to optimize query performance.
 ```
 
 After its columns, `@index` takes the keyword arguments `name:` (the index's name) and `fulltext:` (`true` or
-`false`); `@unique` takes `name:` and `nulls:`. Each is given once. A keyword argument is never a column:
+`false`); `@unique` takes `name:` and `nulls:` (§3.3.5.3). Each is given once. A keyword argument is never a column:
 an implementation reads the columns and the keywords apart, and a keyword the directive does not take is reported
 (`M3L-W010`).
 
@@ -860,6 +860,35 @@ For example:
 ```markdown
 - @unique(tenant_id, username) "Ensures username uniqueness within each tenant"
 ```
+
+#### 3.3.5.3 NULL Handling in Multi-Column Unique Constraints
+
+By default, a `NULL` in any column of a multi-column `@unique` constraint excludes that row from
+uniqueness enforcement — two rows that agree on every other column may both carry `NULL` in the
+same nullable column. This is the SQL standard's default (`NULLS DISTINCT`) and what PostgreSQL
+does natively; SQL Server's own `UNIQUE` counts a `NULL` as a value, so an implementation there
+has to leave the `NULL` rows out of the constraint to get it. It is the correct model for
+"a value here is unique, `NULL` means not set."
+
+Some multi-column constraints mean the opposite: a fallback/override table (organization → channel
+→ part, with a `NULL` column standing for "applies to the whole range") needs `NULL` to be **a
+distinct value that itself participates in uniqueness**, so that only one fallback row can exist
+per remaining scope. Declare that with the `nulls` kwarg, following SQL:2023's own vocabulary
+(`UNIQUE NULLS [NOT] DISTINCT`):
+
+```markdown
+- @unique(enterprise_id, channel, part, nulls: "not_distinct")
+```
+
+The default, unchanged, is `"distinct"` (the behavior above) — this kwarg only needs writing when
+a `NULL` should count as one more value competing for uniqueness rather than opting a row out.
+Implementations map the declared intent to whatever the target dialect calls it.
+
+**What this generator implements**: both meanings, on both SQL dialects and in the EF Core mapping. With the
+default, a multi-column `@unique` over a nullable column becomes a filtered unique index on SQL Server
+(`WHERE … IS NOT NULL`) and a plain unique constraint on PostgreSQL, whose default is already that meaning.
+With `nulls: "not_distinct"` it is an unfiltered `UNIQUE` constraint on SQL Server and
+`UNIQUE NULLS NOT DISTINCT` on PostgreSQL, which needs PostgreSQL 15 or later.
 
 **What this generator implements**: this one, in full — `### Indexes` is the only section any target
 reads, which is why it is the only one the build does not report as unconsumed.

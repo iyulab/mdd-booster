@@ -37,7 +37,7 @@ public class BundledSpecCopyDriftTests
     /// removing a note is a legitimate change, and updating this number in the same commit is
     /// how that change is made deliberate rather than accidental.
     /// </summary>
-    private const int ExpectedImplementationNoteCount = 24;
+    private const int ExpectedImplementationNoteCount = 25;
 
     private static readonly string SpecCopyPath =
         Path.Combine(AppContext.BaseDirectory, "contract", "M3L.md");
