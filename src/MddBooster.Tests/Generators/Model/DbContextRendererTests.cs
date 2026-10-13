@@ -167,7 +167,7 @@ public class DbContextRendererTests
             "modelBuilder.Entity<EnterpriseChannelDefault>()"
                 + ".HasIndex(x => new { x.EnterpriseId, x.Channel, x.Part })"
                 + ".IsUnique()"
-                + ".HasDatabaseName(\"UK_EnterpriseChannelDefault_EnterpriseId_Channel_Part\");",
+                + ".HasDatabaseName(\"ux_scope\");",
             output);
     }
 
@@ -183,7 +183,7 @@ public class DbContextRendererTests
             "modelBuilder.Entity<EnterpriseChannelDefault>()"
                 + ".HasIndex(x => new { x.EnterpriseId, x.Channel, x.Part })"
                 + ".IsUnique().HasFilter(null)"
-                + ".HasDatabaseName(\"UK_EnterpriseChannelDefault_EnterpriseId_Channel_Part\");",
+                + ".HasDatabaseName(\"ux_scope\");",
             output);
     }
 
@@ -201,7 +201,7 @@ public class DbContextRendererTests
             "modelBuilder.Entity<EnterpriseChannelDefault>()"
                 + ".HasIndex(x => new { x.EnterpriseId, x.Channel, x.Part })"
                 + ".IsUnique()"
-                + ".HasDatabaseName(\"UK_EnterpriseChannelDefault_EnterpriseId_Channel_Part\");",
+                + ".HasDatabaseName(\"ux_scope\");",
             output);
         Assert.DoesNotContain("HasFilter", output);
     }
@@ -216,7 +216,7 @@ public class DbContextRendererTests
         Assert.Contains(
             "e.HasIndex(x => new { x.EnterpriseId, x.Channel, x.Part })"
                 + ".IsUnique().AreNullsDistinct(false)"
-                + ".HasDatabaseName(\"uq_enterprise_channel_default_enterprise_id_channel_part\");",
+                + ".HasDatabaseName(\"ux_scope\");",
             output);
     }
 
@@ -229,7 +229,7 @@ public class DbContextRendererTests
         Assert.Contains(
             "modelBuilder.Entity<EnterpriseChannelDefault>()"
                 + ".HasIndex(x => new { x.EnterpriseId, x.Channel })"
-                + ".HasDatabaseName(\"IX_EnterpriseChannelDefault_EnterpriseId_Channel\");",
+                + ".HasDatabaseName(\"ix_scope\");",
             output);
         Assert.DoesNotContain("IsUnique", output);
     }

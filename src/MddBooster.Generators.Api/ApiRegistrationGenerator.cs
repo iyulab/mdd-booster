@@ -26,13 +26,15 @@ public sealed class ApiRegistrationGenerator(ApiRegistrationGeneratorOptions opt
         // 타깃별 방출 범위. context.Models 는 해상도 범위(전 sources)이며 두 축은 별개다 —
         // 여기서 좁혀야 다른 타깃의 산출물이 영향받지 않는다.
         var models = _options.SurfaceFilter.Apply(context.Models).ToList();
+        var readViews = context.ReadViews.Where(_options.SurfaceFilter.Admits).ToList();
 
         var rendered = ApiRegistrationRenderer.Render(
             models,
             _options.Namespace,
             _options.EntitiesNamespace,
             surfaces: _options.Surfaces,
-            registeredElsewhere: _options.RegisteredElsewhere);
+            registeredElsewhere: _options.RegisteredElsewhere,
+            readViews: readViews);
 
         File.WriteAllText(Path.Combine(apiDir, "ApiRegistration_gen.cs"), rendered);
 
@@ -42,7 +44,8 @@ public sealed class ApiRegistrationGenerator(ApiRegistrationGeneratorOptions opt
         {
             File.WriteAllText(
                 Path.Combine(apiDir, "Permissions_gen.cs"),
-                PermissionsRenderer.Render(models, _options.Namespace, _options.PermissionKeyTemplate, _options.EntitiesNamespace));
+                PermissionsRenderer.Render(models, _options.Namespace, _options.PermissionKeyTemplate, _options.EntitiesNamespace,
+                    readViews));
         }
 
         // OData 컨트롤러는 OData 셋의 엔드포인트다 — 셋을 등록하지 않으면 낼 것이 없다
@@ -52,7 +55,8 @@ public sealed class ApiRegistrationGenerator(ApiRegistrationGeneratorOptions opt
             var controllers = ODataControllerRenderer.Render(
                 models,
                 _options.Namespace,
-                _options.EntitiesNamespace);
+                _options.EntitiesNamespace,
+                readViews);
 
             File.WriteAllText(Path.Combine(apiDir, "Controllers_gen.cs"), controllers);
         }

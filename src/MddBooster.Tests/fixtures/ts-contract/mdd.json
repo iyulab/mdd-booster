@@ -3,7 +3,8 @@
     "../form-control-contract.m3l.md",
     "../large-model-acceptance.m3l.md",
     "../split-owner-base.m3l.md",
-    "../split-owner-module.m3l.md"
+    "../split-owner-module.m3l.md",
+    "../standalone-views.m3l.md"
   ],
   "targets": [
     {

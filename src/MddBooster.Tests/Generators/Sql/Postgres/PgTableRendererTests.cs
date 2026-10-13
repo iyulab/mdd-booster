@@ -197,7 +197,7 @@ CREATE TABLE public.asset_maintenance_profile
         var artifact = PgTableRenderer.Render(model, "public", tableNames, lookup);
 
         Assert.Contains(
-            "CONSTRAINT uq_enterprise_channel_default_enterprise_id_channel_part UNIQUE NULLS NOT DISTINCT (enterprise_id, channel, part)",
+            "CONSTRAINT ux_scope UNIQUE NULLS NOT DISTINCT (enterprise_id, channel, part)",
             artifact.Sql);
     }
 
@@ -212,7 +212,7 @@ CREATE TABLE public.asset_maintenance_profile
         var artifact = PgTableRenderer.Render(model, "public", tableNames, lookup);
 
         Assert.Contains(
-            "CONSTRAINT uq_enterprise_channel_default_enterprise_id_channel_part UNIQUE (enterprise_id, channel, part)",
+            "CONSTRAINT ux_scope UNIQUE (enterprise_id, channel, part)",
             artifact.Sql);
         Assert.DoesNotContain("NULLS NOT DISTINCT", artifact.Sql);
     }

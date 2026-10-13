@@ -57,8 +57,137 @@ public sealed class SemanticAnalyzer
         AspectRules.Check(_models, diagnostics);
         CheckManyToOneNavigationNames(diagnostics);
         CheckSearchableReferences(diagnostics);
+        CheckFullTextIndexes(diagnostics);
+        CheckDeclaredIndexNames(diagnostics);
+        CheckUnreadIndexItems(diagnostics);
 
         return diagnostics;
+    }
+
+    /// <summary>
+    /// <c>MDD043</c> (warning): an <c>### Indexes</c> item that names no columns — no <c>fields:</c>, an empty one, or
+    /// a directive without columns. No index can be generated from it, and nothing else would say so.
+    /// </summary>
+    private void CheckUnreadIndexItems(List<SemanticDiagnostic> diagnostics)
+    {
+        foreach (var model in _models)
+        {
+            foreach (var name in SectionIndexParser.Unread(model))
+            {
+                diagnostics.Add(new SemanticDiagnostic(
+                    "MDD043",
+                    $"'{model.Name}' ### Indexes 항목 '{name}' 이(가) 열을 하나도 말하지 않는다 — 인덱스를 만들지 않는다. " +
+                    "`- fields: [열, …]` 를 더하거나 `- {name}: @index(열, …)` 로 쓴다.",
+                    model.Source.Loc,
+                    SemanticSeverity.Warning));
+            }
+        }
+    }
+
+    /// <summary>
+    /// <c>MDD042</c>: a name the model gives an index — an <c>### Indexes</c> item's name, or a directive's
+    /// <c>name: "…"</c> — that cannot be the database object's name: not a plain identifier (it is written into the
+    /// generated SQL as it is), or the same as another declared name in the build (case-insensitively: SQL Server's
+    /// constraint names and PostgreSQL's index names are unique across the schema, not within one table).
+    /// </summary>
+    private void CheckDeclaredIndexNames(List<SemanticDiagnostic> diagnostics)
+    {
+        var generated = GeneratedIndexNames();
+        var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var model in _models)
+        {
+            foreach (var entry in SectionIndexParser.Parse(model))
+            {
+                if (entry.Name is not { } name) continue;
+
+                if (!PlainIdentifier.IsMatch(name))
+                {
+                    diagnostics.Add(new SemanticDiagnostic(
+                        "MDD042",
+                        $"'{model.Name}' 인덱스 이름 \"{name}\" 은(는) 데이터베이스 이름으로 쓸 수 없다 — 영문자·숫자·밑줄만, " +
+                        "숫자로 시작하지 않게.",
+                        model.Source.Loc));
+                }
+                else if (seen.TryGetValue(name, out var first))
+                {
+                    diagnostics.Add(new SemanticDiagnostic(
+                        "MDD042",
+                        $"'{model.Name}' 인덱스 이름 \"{name}\" 을(를) '{first}' 이(가) 이미 쓴다 — 인덱스·제약 이름은 " +
+                        "스키마 안에서 유일해야 한다.",
+                        model.Source.Loc));
+                }
+                else if (generated.TryGetValue(name, out var owner))
+                {
+                    diagnostics.Add(new SemanticDiagnostic(
+                        "MDD042",
+                        $"'{model.Name}' 인덱스 이름 \"{name}\" 은(는) '{owner}' 의 다른 인덱스가 생성되는 이름이다 — 인덱스·제약 " +
+                        "이름은 스키마 안에서 유일해야 한다. 다른 이름을 준다.",
+                        model.Source.Loc));
+                }
+                else
+                {
+                    seen[name] = model.Name;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// The names the generators give the indexes and unique constraints the model does not name — field-level
+    /// <c>@unique</c>/<c>@index</c> and unnamed <c>### Indexes</c> entries — in both dialects' forms, with the model each
+    /// belongs to. A declared name is checked against these: a name the model gives one index that a generator gives
+    /// another collides at deployment. Primary-key, foreign-key and check constraints are left out — whether a
+    /// generator writes them depends on the target's options and the model's relations, which this pass does not see;
+    /// a declared name of that shape is rare and the deployment reports it.
+    /// </summary>
+    private Dictionary<string, string> GeneratedIndexNames()
+    {
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        void Add(ResolvedModel model, Naming.GeneratedObjectNames.Kind kind, IReadOnlyList<string> fields)
+        {
+            names.TryAdd(Naming.GeneratedObjectNames.For(false, kind, model.Name, fields.Select(Naming.NameCasing.ToPascalCase)), model.Name);
+            names.TryAdd(Naming.GeneratedObjectNames.For(true, kind, Naming.PostgresIdentifiers.ToSnakeCase(model.Name), fields), model.Name);
+        }
+
+        foreach (var model in _models)
+        {
+            foreach (var field in model.Fields.Where(f => f.Kind == FieldKind.Stored && !Ast.FieldAttributes.Has(f, "pk")))
+            {
+                if (Ast.FieldAttributes.Has(field, "unique")) Add(model, Naming.GeneratedObjectNames.Kind.Unique, [field.Name]);
+                else if (Ast.FieldAttributes.Has(field, "index")) Add(model, Naming.GeneratedObjectNames.Kind.Index, [field.Name]);
+            }
+            foreach (var entry in SectionIndexParser.Parse(model).Where(e => e.Name is null))
+            {
+                Add(model, entry.IsUnique ? Naming.GeneratedObjectNames.Kind.Unique : Naming.GeneratedObjectNames.Kind.Index, entry.Columns);
+            }
+        }
+        return names;
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex PlainIdentifier =
+        new("^[A-Za-z_][A-Za-z0-9_]*$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// <c>MDD041</c> (warning): an index declared <c>fulltext: true</c>. Neither SQL target generates a full-text
+    /// index — SQL Server's needs a catalog and a key index, PostgreSQL's a text-search expression — so the entry is
+    /// emitted as the ordinary index on the same columns. Said out loud, because an ordinary index does not answer the
+    /// word searches the declaration was written for.
+    /// </summary>
+    private void CheckFullTextIndexes(List<SemanticDiagnostic> diagnostics)
+    {
+        foreach (var model in _models)
+        {
+            foreach (var entry in SectionIndexParser.Parse(model).Where(e => e.FullText))
+            {
+                diagnostics.Add(new SemanticDiagnostic(
+                    "MDD041",
+                    $"'{model.Name}' @index({string.Join(", ", entry.Columns)}, fulltext: true): 이 생성기는 전문(full-text) " +
+                    "인덱스를 만들지 않는다 — 같은 열의 일반 인덱스로 낸다. 단어 검색이 필요하면 전문 인덱스는 " +
+                    "생성물 밖(배포 스크립트)에서 만든다.",
+                    model.Source.Loc,
+                    SemanticSeverity.Warning));
+            }
+        }
     }
 
     /// <summary>

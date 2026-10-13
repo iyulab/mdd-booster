@@ -13,6 +13,7 @@
   "include": [
     "generated/**/*.ts",
     "generated/**/*.tsx",
+    "consumer/**/*.ts",
     "consumer/**/*.tsx"
   ]
 }

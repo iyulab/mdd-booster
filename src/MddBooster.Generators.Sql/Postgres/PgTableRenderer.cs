@@ -68,7 +68,7 @@ public static class PgTableRenderer
         var pkField = ModelPrimaryKey.Find(model);
         if (pkField is not null)
         {
-            constraints.Add(($"pk_{tableName}", $"PRIMARY KEY ({pkField.Name})"));
+            constraints.Add((GeneratedObjectNames.For(true, GeneratedObjectNames.Kind.PrimaryKey, tableName), $"PRIMARY KEY ({pkField.Name})"));
         }
 
         // FK — 대상 테이블명은 변환 맵, 대상 컬럼은 대상 모델의 PK 물리명
@@ -102,7 +102,7 @@ public static class PgTableRenderer
             };
 
             constraints.Add((
-                $"fk_{tableName}_{field.Name}",
+                GeneratedObjectNames.For(true, GeneratedObjectNames.Kind.ForeignKey, tableName, field.Name),
                 $"FOREIGN KEY ({field.Name}) REFERENCES {schema}.{targetTable} ({targetPk.Name}){cascade}"));
         }
 
@@ -111,14 +111,14 @@ public static class PgTableRenderer
         foreach (var field in storedFields)
         {
             if (!Has(field, "unique") || Has(field, "pk")) continue;
-            constraints.Add(($"uq_{tableName}_{field.Name}", $"UNIQUE ({field.Name})"));
+            constraints.Add((GeneratedObjectNames.For(true, GeneratedObjectNames.Kind.Unique, tableName, field.Name), $"UNIQUE ({field.Name})"));
         }
 
         // field-level @index — PK/UNIQUE 는 제약이 인덱스를 소유하므로 중복 방출하지 않는다
         foreach (var field in storedFields)
         {
             if (!Has(field, "index") || Has(field, "pk") || Has(field, "unique")) continue;
-            indexes.Add(($"ix_{tableName}_{field.Name}", field.Name));
+            indexes.Add((GeneratedObjectNames.For(true, GeneratedObjectNames.Kind.Index, tableName, field.Name), field.Name));
         }
 
         AppendSectionIndexes(model, tableName, constraints, indexes);
@@ -128,7 +128,7 @@ public static class PgTableRenderer
         {
             foreach (var field in ForeignKeyIndexPlanner.Plan(model))
             {
-                indexes.Add(($"ix_{tableName}_{field.Name}", field.Name));
+                indexes.Add((GeneratedObjectNames.For(true, GeneratedObjectNames.Kind.Index, tableName, field.Name), field.Name));
             }
         }
 
@@ -141,7 +141,7 @@ public static class PgTableRenderer
                 if (enumNode.Values.Count == 0) continue;
 
                 constraints.Add((
-                    $"ck_{tableName}_{field.Name}",
+                    GeneratedObjectNames.For(true, GeneratedObjectNames.Kind.Check, tableName, field.Name),
                     $"CHECK ({field.Name} IN ({AnsiCheckValues(enumNode)}))"));
             }
         }
@@ -300,13 +300,13 @@ public static class PgTableRenderer
                     ? "UNIQUE NULLS NOT DISTINCT"
                     : "UNIQUE";
                 constraints.Add((
-                    $"uq_{tableName}_{string.Join("_", cols)}",
+                    entry.Name ?? GeneratedObjectNames.For(true, GeneratedObjectNames.Kind.Unique, tableName, cols),
                     $"{uniqueKeyword} ({string.Join(", ", cols)})"));
             }
             else
             {
                 indexes.Add((
-                    $"ix_{tableName}_{string.Join("_", cols)}",
+                    entry.Name ?? GeneratedObjectNames.For(true, GeneratedObjectNames.Kind.Index, tableName, cols),
                     string.Join(", ", cols)));
             }
         }

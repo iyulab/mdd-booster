@@ -84,7 +84,8 @@ public class StandaloneViewBuildTests
             Assert.Contains("[CustomerStats].[TotalSpent] AS [TotalSpent]", nested);
 
             var active = File.ReadAllText(Path.Combine(views, "ActiveProducts.sql"));
-            Assert.Contains("WHERE [IsActive] = true AND [StockQuantity] > 0", active);
+            // The portable `true` is SQL Server's 1 — the engine refuses `= true` as an unknown column.
+            Assert.Contains("WHERE [IsActive] = 1 AND [StockQuantity] > 0", active);
             Assert.DoesNotContain("ORDER BY", active);
         }
         finally { Cleanup(root); }
@@ -191,16 +192,58 @@ public class StandaloneViewBuildTests
     }
 
     [Fact]
-    public void A_view_with_an_expression_is_left_out_on_PostgreSQL_with_MDD029()
+    public void A_view_with_a_portable_expression_is_rendered_on_PostgreSQL()
     {
+        // The filter is written in M3L's portable subset (§10.7), so this dialect translates it rather than leaving the
+        // view out — before expressions had a defined language it could only skip it (MDD029).
         var mddDir = Scaffold(PgModel, PgTarget, out var root);
         using var stderr = new ConsoleErrorCapture(this);
         try
         {
             Assert.Equal(0, new BuildCommand().Run(mddDir));
-            Assert.False(File.Exists(Path.Combine(root, "db", "views_gen", "big_purchases.sql")));
-            Assert.Contains("MDD029", stderr.Text);
-            Assert.Contains("BigPurchases", stderr.Text);
+            var sql = File.ReadAllText(Path.Combine(root, "db", "views_gen", "big_purchases.sql"));
+            Assert.Contains("WHERE purchase.amount > 100", sql);
+            Assert.DoesNotContain("MDD029", stderr.Text);
+        }
+        finally { Cleanup(root); }
+    }
+
+    /// <summary>
+    /// A computed column reads the view's own projected columns — here two rollups — so on PostgreSQL, as on SQL Server, the
+    /// projection becomes a CTE and each computed column a layer over it.
+    /// </summary>
+    [Fact]
+    public void A_computed_view_column_reads_the_projected_row_on_PostgreSQL()
+    {
+        const string model = """
+            # Namespace: live.views
+
+            ## Client
+            - id: identifier @pk @generated
+            - name: string(100) @not_null
+
+            ## Purchase
+            - id: identifier @pk @generated
+            - client_id: identifier @reference(Client)
+            - amount: decimal(12,2) @not_null
+
+            ## ClientAverage ::view
+            ### Source
+            - from: Client
+
+            - client_name: string @from(Client.name)
+            - purchases: integer @rollup(Purchase.client_id, count)
+            - spent: decimal(12,2) @rollup(Purchase.client_id, sum(amount))
+            - average: decimal(12,2) @computed("spent / NULLIF(purchases, 0)")
+            """;
+        var mddDir = Scaffold(model, PgTarget, out var root);
+        try
+        {
+            Assert.Equal(0, new BuildCommand().Run(mddDir));
+            var sql = File.ReadAllText(Path.Combine(root, "db", "views_gen", "client_average.sql"));
+            Assert.Contains("WITH r AS (", sql);
+            Assert.Contains("c1 AS (SELECT r.*, spent / nullif(purchases, 0) AS average FROM r)", sql);
+            Assert.Contains("SELECT * FROM c1;", sql);
         }
         finally { Cleanup(root); }
     }
@@ -213,7 +256,7 @@ public class StandaloneViewBuildTests
         try
         {
             new BuildCommand().Run(mddDir);
-            Assert.Contains("standalone 뷰 3개를 생성하는 타깃이 없습니다", stderr.Text);
+            Assert.Contains("standalone 뷰 3개의 CREATE VIEW 를 생성하는 타깃이 없습니다", stderr.Text);
         }
         finally { Cleanup(root); }
     }

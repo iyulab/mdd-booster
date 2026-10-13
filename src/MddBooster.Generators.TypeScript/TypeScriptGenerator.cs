@@ -42,6 +42,9 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
 
         // 타깃별 방출 범위 — 엔티티 파생 산출물에만 적용한다.
         var models = _options.SurfaceFilter.Apply(context.Models);
+        // 읽기 모델로 서빙되는 뷰 — 같은 필터(이름 · 소유자). 읽기 타입과 읽기 전용 셋 이름만 낸다:
+        // 필드 스키마와 폼은 쓰기 축이고, 뷰에는 쓰기가 없다.
+        var readViews = context.ReadViews.Where(_options.SurfaceFilter.Admits).ToList();
 
         // enums_gen.ts — 엔티티 필터(이름 목록)로는 가지치지 않는다: enum 은 엔티티 파생물이 아니고, 가지치면
         // 소비자가 그 파일에서 가져오던 enum 이 사라진다. 소유자 축이 있으면 enum 도 그 축으로 가른다(PartitionEnums).
@@ -53,14 +56,14 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
         // OData wire 모양의 미러인데, 그 칸은 읽기 타입에 없어 응답에도 쓰기 본문에도 실리지 않는다 —
         // 남겨 두면 어떤 응답도 싣지 않는 값을 약속한다. 엔티티 단위는 존중하지 않는다: 데이터 API 셋이
         // 아예 없는 엔티티의 타입은 OData 미러가 아니라 전용 엔드포인트가 쓰는 모양일 수 있다.
-        var entitiesContent = TsInterfaceRenderer.RenderAll(models, enumNames, _options.SharedTypesImport);
+        var entitiesContent = TsInterfaceRenderer.RenderAll(models, enumNames, _options.SharedTypesImport, readViews);
         File.WriteAllText(Path.Combine(outDir, "entities_gen.ts"), entitiesContent);
 
         // entity_names_gen.ts — @internal 을 **존중한다**. 이 목록은 OData entity set 이름의
         // 미러이고 소비자가 이걸로 OData URL 을 만든다. @internal 엔티티는 AddEntityPair 가
         // 등록하지 않으므로, 목록에 남겨 두면 타입세이프하게 404 경로를 광고하는 셈이 된다.
         var namesContent = TsEntityNamesRenderer.RenderAll(
-            [.. models.Where(m => !EntitySurface.IsInternal(m))]);
+            [.. models.Where(m => !EntitySurface.IsInternal(m))], readViews);
         File.WriteAllText(Path.Combine(outDir, "entity_names_gen.ts"), namesContent);
 
         // enum_labels_gen.ts — enums_gen.ts 와 같은 분할.

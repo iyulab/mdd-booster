@@ -69,23 +69,24 @@ public class TableSectionsIndexesTests
     }
 
     [Fact]
-    public void Labeled_indexes_emit_same_as_directive_form()
+    public void Labeled_indexes_emit_as_the_directive_form_under_their_item_name()
     {
         // M3L.Native 0.5.5+ 라벨드 형식 지원 — `- idx_xxx: @index(col)` 도
-        // attribute 정보를 보존하므로 directive 형식과 동등하게 emit되어야 함.
+        // attribute 정보를 보존하므로 directive 형식과 동등하게 emit되어야 함. 이름만 다르다 —
+        // 항목 이름이 그 인덱스의 이름이다(명세 §3.3.3).
         var ast = new M3lLoader().LoadFile(FixturePath("table-with-labeled-indexes.m3l.md"));
         var resolved = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Order");
 
         var sql = TableRenderer.Render(resolved, schema: "dbo");
 
         Assert.Contains(
-            "CREATE NONCLUSTERED INDEX [IX_Order_CustomerId] ON [dbo].[Order] ([CustomerId]);",
+            "CREATE NONCLUSTERED INDEX [idx_customer] ON [dbo].[Order] ([CustomerId]);",
             sql);
         Assert.Contains(
-            "CREATE NONCLUSTERED INDEX [IX_Order_Status_Season] ON [dbo].[Order] ([Status], [Season]);",
+            "CREATE NONCLUSTERED INDEX [idx_status_season] ON [dbo].[Order] ([Status], [Season]);",
             sql);
         Assert.Contains(
-            "CONSTRAINT [UK_Order_CustomerId_Season] UNIQUE NONCLUSTERED ([CustomerId], [Season])",
+            "CONSTRAINT [idx_unique] UNIQUE NONCLUSTERED ([CustomerId], [Season])",
             sql);
     }
 
@@ -108,10 +109,10 @@ public class TableSectionsIndexesTests
             LoadEnterpriseChannelDefault("table-with-nulls-not-distinct.m3l.md"), schema: "dbo");
 
         Assert.Contains(
-            "CONSTRAINT [UK_EnterpriseChannelDefault_EnterpriseId_Channel_Part] UNIQUE NONCLUSTERED ([EnterpriseId], [Channel], [Part])",
+            "CONSTRAINT [ux_scope] UNIQUE NONCLUSTERED ([EnterpriseId], [Channel], [Part])",
             sql);
         Assert.DoesNotContain(
-            "CREATE UNIQUE NONCLUSTERED INDEX [UK_EnterpriseChannelDefault_EnterpriseId_Channel_Part]",
+            "CREATE UNIQUE NONCLUSTERED INDEX [ux_scope]",
             sql);
     }
 
@@ -125,7 +126,7 @@ public class TableSectionsIndexesTests
             LoadEnterpriseChannelDefault("table-with-composite-unique.m3l.md"), schema: "dbo");
 
         Assert.Contains(
-            "CREATE UNIQUE NONCLUSTERED INDEX [UK_EnterpriseChannelDefault_EnterpriseId_Channel_Part] ON [dbo].[EnterpriseChannelDefault] ([EnterpriseId], [Channel], [Part]) WHERE [EnterpriseId] IS NOT NULL AND [Channel] IS NOT NULL AND [Part] IS NOT NULL;",
+            "CREATE UNIQUE NONCLUSTERED INDEX [ux_scope] ON [dbo].[EnterpriseChannelDefault] ([EnterpriseId], [Channel], [Part]) WHERE [EnterpriseId] IS NOT NULL AND [Channel] IS NOT NULL AND [Part] IS NOT NULL;",
             sql);
     }
 

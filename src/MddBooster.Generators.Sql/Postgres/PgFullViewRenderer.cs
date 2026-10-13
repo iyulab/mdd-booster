@@ -128,6 +128,39 @@ public static class PgFullViewRenderer
         }
         // FROM/JOIN 라인들은 전부 AppendLine으로 끝났다 — 마지막 개행을 지우고 문장을 종결한다.
         sb.Length -= Environment.NewLine.Length;
+
+        // Computed: T-SQL 과 같은 CTE 체인 — r = (기본 + Lookup + Rollup), computed 마다 한 층을 얹어 뒤의 식이 앞의
+        // computed 를 이름으로 읽을 수 있다. 식은 이식 가능한 부분집합의 번역(또는 postgresql 플랫폼 식 원문).
+        var computeds = plan.Computeds.Where(f => !EntitySurface.IsFieldInternal(f)).ToList();
+        if (computeds.Count > 0)
+        {
+            var header = $"CREATE VIEW {schema}.{viewName} AS";
+            var body = sb.ToString();
+            var selectAt = body.IndexOf(header, StringComparison.Ordinal) + header.Length;
+            var inner = body[selectAt..].Trim();
+            var cte = new StringBuilder();
+            cte.Append(body[..selectAt]).AppendLine();
+            cte.AppendLine("WITH r AS (");
+            cte.AppendLine(inner);
+            cte.Append(')');
+            var previous = "r";
+            for (var i = 0; i < computeds.Count; i++)
+            {
+                var f = computeds[i];
+                var selected = ExpressionSelection.Select(f.Computed, SqlDialect.PostgreSql)
+                    ?? throw new InvalidOperationException($"Computed 필드 '{model.Name}.{f.Name}' 에 PostgreSQL 식이 없다(MDD036 — Validate 가 먼저 거절해야 한다).");
+                var name = $"c{i + 1}";
+                cte.AppendLine(",");
+                cte.Append(name).Append(" AS (SELECT ").Append(previous).Append(".*, ")
+                   .Append(PostgresExpressions.Render(selected, column => column)).Append(" AS ").Append(f.Name)
+                   .Append(" FROM ").Append(previous).Append(')');
+                previous = name;
+            }
+            cte.AppendLine();
+            cte.Append("SELECT * FROM ").Append(previous).AppendLine(";");
+            return cte.ToString();
+        }
+
         sb.AppendLine(";");
         return sb.ToString();
     }
@@ -166,9 +199,13 @@ public static class PgFullViewRenderer
         var whereClause = $"{fkColumn} = {baseAlias}.{basePkName}";
         if (targetSoftDeletes && !readsFullView)
             whereClause += $" AND {LiveRowColumnPredicate}";
-        if (!string.IsNullOrWhiteSpace(def.Where))
+        if (ExpressionSelection.Select(def.Where, def.WhereRaw, SqlDialect.PostgreSql) is { } filter)
         {
-            var where = ParentReferenceToken.Substitute(def.Where, field => $"{baseAlias}.{field}");
+            var where = filter.IsRaw
+                ? ParentReferenceToken.Substitute(filter.Text, field => $"{baseAlias}.{field}")
+                : PostgresExpressions.Render(filter, name => name.StartsWith("$parent.", StringComparison.Ordinal)
+                    ? $"{baseAlias}.{name["$parent.".Length..]}"
+                    : name);
             whereClause += $" AND ({where})";
         }
 

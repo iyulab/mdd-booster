@@ -16,6 +16,81 @@
 
 ---
 
+## [Unreleased]
+
+### 🔴 `M3L.Native` 0.20.0 — 식을 «이식 가능한 부분집합»으로 읽고 SQL Server 로 번역한다
+
+M3L 0.20.0 이 `@computed` · rollup `where:` · 뷰 `where` 의 언어를 정했다(명세 §10.7 — 리터럴 · 필드 참조 · 연산자 · `CASE` · 닫힌 함수 목록).
+이 생성기는 그 식을 SQL Server 원문이라고 가정하고 넘기던 것을 멈추고 **번역**한다.
+
+- 🔇 `true`/`false` → `1`/`0` · `!=` → `<>` · `concat`·`coalesce`·`date_add`·`date_diff`·`today`·`now`·`length`·`substring`·`round` 등 → T-SQL. 종전 생성물의
+  `is_active = true` 는 SQL Server 가 «열 이름 `true`»로 거절했다.
+- 🔇 불리언 필드의 비교식(`is_adult: boolean @computed("age >= 18")`)은 `CASE WHEN … THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END` — 종전엔 SELECT 목록에 술어를
+  그대로 내어 배포가 거절됐다.
+- `@computed_raw(…, platform: "sqlserver")`·`where_raw`(M3L 0.20.0)는 그 플랫폼 식으로 원문 그대로 쓰인다 — 같은 필드에 포터블 식이 있어도 이쪽이 이긴다.
+- 새 오류 `MDD036` — SQL Server 용 식이 없다(다른 플랫폼에만 `@computed_raw`/`where_raw` 가 있다). 빌드가 멈춘다.
+- 🔴 **이식 가능한 문맥에 SQL Server 문법을 쓴 모델은 빌드가 멈춘다 — 새 오류 `MDD037`.** `@computed` · rollup `where:` · 뷰 `where` 의 식이 부분집합
+  밖이면(예 `DATEDIFF` · `GETDATE()` · `[Name]` · 문자열 `+` · `ISNULL`) 원문으로 내지 않는다. 한 번의 빌드가 해당하는 식을 전부 나열한다. 옮기는 방법은 둘 중 하나다:
+  - **부분집합으로 다시 쓴다** — `DATEDIFF(YEAR, birth, GETDATE())` → `date_diff('year', birth, today())`, `a + ' ' + b` → `concat(a, ' ', b)`, `ISNULL(x, 0)` → `coalesce(x, 0)`.
+    그러면 PostgreSQL 방언에서도 같은 모델이 빌드된다.
+  - **SQL Server 식임을 선언한다** — 식은 그대로 두고 속성만 바꾼다: `@computed("…")` → `@computed_raw("…", platform: "sqlserver")`, rollup 의 `where: "…"` →
+    `where_raw: "…", platform: "sqlserver"`, 뷰의 `- where: "…"` → `- where_raw: "…"` + `platform: "sqlserver"`. 생성물은 종전과 같다.
+  경고만 내고 한 판을 더 통과시키는 과도기는 두지 않았다 — 새 형태가 이 판에 함께 있고 옮기는 일이 기계적이어서, 과도기는 같은 모델을 두 번(이번 판의 경고, 다음 판의 오류) 손보게 할 뿐이다.
+- 생성 엔티티의 `[Computed]` 메타데이터는 그 방언의 플랫폼 식, 없으면 포터블 식 원문이다.
+- 번들 명세 사본 `docs/M3L.md` — §4.4 의 예를 이식 가능한 부분집합으로 바꾸고, §4.4.5 를 «Portable and Platform-Specific Expressions»(부분집합 · `@computed_raw`/`where_raw` · 이 생성기의 번역과 진단)로 다시 썼다. 종전 절은 플랫폼 문법을 `@computed` 로 보여 줬다.
+- 🆕 **PostgreSQL 방언이 Computed 와 식이 있는 standalone 뷰를 생성한다** — 종전엔 Computed 가 있는 모델의 FullView(와 그것을 체이닝으로 읽는 모델)를 경고와 함께 건너뛰고, 식이 있는 standalone
+  뷰는 `MDD029` 로 건너뛰었다. 이제 같은 번역기로 낸다: FullView 의 Computed 는 SQL Server 와 같은 CTE 체인(뒤의 식이 앞의 Computed 를 이름으로 읽는다) · rollup `where:` · standalone `where`·`@computed`.
+  번역할 수 없는 식은 SQL Server 와 같은 **오류 `MDD037`**, `platform: "postgresql"` 식이 없고 포터블 식도 없으면 `MDD036`.
+- 🔴 **`@index(…, name: "…")` · `@unique(…, name: "…")`(M3L 명세 §3.3.2 의 예 그대로)가 컴파일되는 생성물을 낸다.** 종전엔 키워드 인자가 열 목록에 섞여 와
+  `HasIndex(x => new { x.Sku, x.Name: "productSearch" })` 같은 C# 과 없는 열 `[Name: "uqSku"]` 을 가리키는 SQL 을 냈다. M3L 0.20.0 이 키워드를 열 목록에서 빼고,
+  이 생성기는 열만으로 인덱스를 내고, **지시자의 `name:` 을 그 인덱스·제약의 이름으로 쓴다** — SQL Server · PostgreSQL · EF(`HasDatabaseName`) 모두.
+  `name:` 이 없으면 종전처럼 모델과 열에서 짓는다(`IX_Product_Sku_Name`). 새 오류 `MDD042` — 모델이 준 이름이 식별자가 아니거나(생성 SQL 에 그대로 들어간다)
+  빌드 안에서 두 번 쓰였다(대소문자 무시 — 제약·인덱스 이름은 스키마 단위로 유일하다).
+- 🔴 **`### Indexes` 항목의 이름이 그 인덱스의 이름이다**(M3L 명세 §3.3.3) — `- ux_scope: @unique(…)` 는 `UK_<모델>_<열>`/`uq_<테이블>_<열>` 이 아니라
+  `ux_scope` 로 나온다(SQL Server · PostgreSQL · EF `HasDatabaseName`). **이미 배포된 데이터베이스에서는 그런 인덱스·제약마다 이름이 바뀐다** — 새
+  산출물을 그대로 적용하면 옛 이름의 것을 지우고 새 이름으로 다시 만든다. 다시 만들지 않으려면 새 산출물을 적용하기 «전»에 이름만 바꾼다 —
+  선언형 스키마 도구로 적용한다면 그 도구가 비교하기 전에 실행되는 단계(이름 변경 스크립트)에 둔다. 옛 이름은 위 규칙대로 모델과 열에서 정해지므로
+  모델만 보고 쓸 수 있다. SQL Server — 인덱스(일반 인덱스, 널 허용 열이 섞여 필터 인덱스로 나간 유일)는
+  `EXEC sp_rename N'[dbo].[Booking].[IX_Booking_CustomerCode]', N'idx_customer', N'INDEX';`, 제약(널 허용 열이 없는 유일)은
+  `EXEC sp_rename N'[dbo].[UK_Booking_CustomerCode_Status]', N'ux_customer_status', N'OBJECT';`. PostgreSQL — 인덱스는
+  `ALTER INDEX ix_booking_customer_code RENAME TO idx_customer;`, 유일은 언제나 제약이라
+  `ALTER TABLE booking RENAME CONSTRAINT uq_booking_customer_code_status TO ux_customer_status;`. 식별자가 아닌 항목 이름
+  (`- 최신순`)은 `MDD042` 로 빌드가 멈춘다 — 영문 식별자로 바꾸고 설명은 괄호에 둔다(`- by_newest(최신순)`).
+  모델이 준 이름이 **다른 인덱스가 생성되는 이름**(필드 단위 `@unique`/`@index` · 이름 없는 항목의 `IX_…`/`ix_…`)과 같아도 `MDD042` 다 —
+  종전엔 배포가 «이미 있다»로 실패해서야 드러났다.
+- 🔴 **`fields:` 로 쓴 `### Indexes` 항목이 인덱스를 낸다.** 명세 §3.3.3 이 여러 인덱스에 권하는 형태(`- customer_orders` + `  - fields: [customer_id, order_date]`
+  + `  - unique: true`)를 종전엔 **아무 말 없이 건너뛰었다** — 그 항목은 지시자 형태의 `args` 가 아니라 `fields` 로 열을 싣는다. 이제 같은 인덱스(유일이면
+  제약)를 항목 이름으로 낸다. 이 형태를 써 온 모델에는 **새 인덱스가 생긴다.** 새 경고 `MDD043` — 열을 하나도 말하지 않는 항목(`fields:` 없음·빈 목록)은
+  인덱스를 만들 수 없다는 것을 말한다.
+- 새 경고 `MDD041` — `@index(…, fulltext: true)`. 두 SQL 방언 모두 전문 인덱스를 만들지 않고 같은 열의 일반 인덱스로 낸다는 것을 말한다.
+
+### 🆕 키가 있는 standalone `::view` 가 읽기 모델이 된다 (Model · Api · TypeScript 타깃)
+
+지금까지 뷰는 Sql 타깃만 읽었다 — 뷰를 조회 API 로 쓰려면 앱이 엔티티 · 매핑 · 컨트롤러를 손으로 써야 했다.
+
+- **조건** — 뷰가 `id` 라는 이름의 `identifier` 열을 `@from` 으로 투영한다(`- id: identifier @from(Order.id)`). 그 열이 행의 키이고, 유일하게
+  유지하는 것은 작성자의 일이다.
+- 🔇 **Model 타깃** — `Entity_gen/<View>.cs`(뷰의 출력 열만 가진 클래스 하나, 쓰기 타입 없음)와 DbContext 의 `DbSet` · 매핑(테이블 없음 ·
+  Sql 타깃이 만드는 그 뷰 · 키 `Id`; PostgreSQL 은 열 이름까지). **이미 그런 뷰를 가진 모델은 재생성하면 새 파일과 DbContext 변경이 생긴다.**
+- 🔇 **Api 타깃** — 읽기 전용 셋 등록과 읽기 전용 컨트롤러, 읽기 권한 키 하나. 쓰기 동사는 런타임이 거절한다. GraphQL 표면에도 쿼리 필드로
+  등록한다(`options.GraphQL.AddReadOnlySet<V>("<camelCase 복수>")` — 뮤테이션 접두 없음). `surfaces` 가 한 표면만 고르면 그 표면에만 내고,
+  읽기 권한 키는 어느 표면이든 낸다(읽기 정책이 두 표면을 함께 지킨다).
+- **TypeScript 타깃** — `entities_gen.ts` 에 뷰의 열만 가진 인터페이스(`IyuEntity` 를 잇지 않는다). 필드 스키마·폼은 없다.
+  🔇 `entity_names_gen.ts` 에 `READ_ONLY_SET_NAMES` / `ReadOnlySetName` 이 **항상** 생긴다(읽기 모델인 뷰가 없으면 빈 목록 — 재생성 diff).
+  `ENTITY_NAMES` / `EntitySetName` 은 그대로다: 뷰의 셋은 거기 들지 않는다 — 그 타입 위의 쓰기 코드가 쓰기를 거절하는 셋을 받게 되지 않도록.
+  Api 타깃이 뷰를 표면에서 뺐는데 TypeScript 타깃이 그대로면 경고한다.
+- 🔴 **런타임 요구가 올라간다 — 그런 뷰가 있는 모델에 한해.** 생성 코드가 키만 가진 읽기 타입과 읽기 전용 셋을 쓴다(런타임
+  `Iyu.*` **0.38.0** 이상 — 런타임 패키지의 README «A set that is only read»). 런타임을 올릴 수 없으면 뷰에 `@internal` 을 붙여 종전처럼 SQL 만 생성한다.
+- **손으로 쓴 엔티티가 이미 있으면** 같은 이름의 클래스가 둘이 된다 — 손으로 쓴 쪽(엔티티 · 매핑 · 컨트롤러)을 지우거나, 뷰에 `@internal` 을
+  붙여 생성을 끈다.
+- 키가 없는 뷰는 종전대로 SQL 만 생성되고, Model·Api·TypeScript 타깃이 있는 빌드는 그 사실을 정보 한 줄로 알린다(경고 아님 — 집계 뷰에는 키가 없다).
+- **`## Name ::view @internal`** 이 읽힌다(`M3L.Native` 0.20.0 — 그 전에는 뷰 머리의 속성이 AST 에 오지 않았다) — 키가 있어도 읽기 모델로 내지
+  않는다. Api 타깃의 `excludeEntities`/`includeEntities` 도 뷰 이름을 받는다.
+- 새 오류 **`MDD038`** — 읽기 모델의 생성 이름(클래스 = 뷰 이름, 셋 = 그 복수형)이 모델의 엔티티 · 읽기 타입 · 셋이나 enum, 다른 뷰의 것과 같다.
+- PostgreSQL 방언이 생성하지 않는 뷰(`MDD029`)는 읽기 모델로도 내지 않는다.
+- Sql 타깃이 없는 빌드의 경고가 «뷰의 `CREATE VIEW` 를 생성하는 타깃이 없다»로 바뀌었다 — 읽기 모델은 그 빌드에서도 나온다.
+- README «키가 있는 standalone `::view` → 읽기 모델».
+
 ## 0.40.0
 
 ### 필드의 `@system` — «이 칸은 애플리케이션 자신의 코드가 쓴다»

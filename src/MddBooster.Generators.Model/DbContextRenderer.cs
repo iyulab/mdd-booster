@@ -29,7 +29,8 @@ public static class DbContextRenderer
         IReadOnlySet<string>? customExtViewModels = null,
         bool postgresNaming = false,
         IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne = null,
-        IReadOnlyList<ManyToOneNavigations.Navigation>? manyToOne = null)
+        IReadOnlyList<ManyToOneNavigations.Navigation>? manyToOne = null,
+        IReadOnlyList<ResolvedView>? readViews = null)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentException.ThrowIfNullOrWhiteSpace(contextName);
@@ -62,6 +63,16 @@ public static class DbContextRenderer
               .Append(plural).Append(" => Set<").Append(name).AppendLine(">();");
             sb.Append("    public DbSet<").Append(name).Append("Ext> ")
               .Append(plural).Append("Ext => Set<").Append(name).AppendLine("Ext>();");
+        }
+
+        // A standalone view served as a read model: one set, no write half.
+        var views = (readViews ?? []).OrderBy(v => v.Name, StringComparer.Ordinal).ToList();
+        foreach (var view in views)
+        {
+            var name = NameCasing.ToPascalCase(view.Name);
+            sb.AppendLine();
+            sb.Append("    public DbSet<").Append(name).Append("> ")
+              .Append(Pluralizer.Pluralize(name)).Append(" => Set<").Append(name).AppendLine(">();");
         }
 
         // OnModelCreating: map all Ext read models to their view layer.
@@ -170,6 +181,7 @@ public static class DbContextRenderer
             // 명시 매핑이 흡수한다 — 런타임 컨벤션 추론 없음. 테이블명은 PG 방언과
             // 같은 변환(PostgresIdentifiers), 컬럼명은 M3L 필드명 그대로.
             RenderPostgresMappings(sb, ordered, customExtViewModels);
+            AppendViewMappings(sb, views, postgres: true);
             sb.AppendLine("    }");
             sb.AppendLine("}");
             return sb.ToString();
@@ -213,10 +225,40 @@ public static class DbContextRenderer
             AppendIndexes(sb, model, NameCasing.ToPascalCase(model.Name), model.Name, isPostgres: false);
             AppendSectionIndexes(sb, model, NameCasing.ToPascalCase(model.Name), model.Name, isPostgres: false);
         }
+        AppendViewMappings(sb, views, postgres: false);
         sb.AppendLine("    }");
 
         sb.AppendLine("}");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Maps each read-model view's entity to the view the Sql target creates: no table, the view under the name
+    /// that target gives it, the key on <c>Id</c>. SQL Server's view columns are the property names; PostgreSQL's
+    /// are the declared column names, so each property is mapped to its column there.
+    /// </summary>
+    private static void AppendViewMappings(StringBuilder sb, IReadOnlyList<ResolvedView> views, bool postgres)
+    {
+        foreach (var view in views)
+        {
+            var name = NameCasing.ToPascalCase(view.Name);
+            sb.AppendLine();
+            sb.Append("        modelBuilder.Entity<").Append(name).AppendLine(">(e =>");
+            sb.AppendLine("        {");
+            sb.AppendLine("            e.ToTable((string?)null);");
+            sb.Append("            e.ToView(\"")
+              .Append(postgres ? PostgresIdentifiers.ToSnakeCase(view.Name) : view.Name).AppendLine("\");");
+            sb.AppendLine("            e.HasKey(x => x.Id);");
+            if (postgres)
+            {
+                foreach (var column in view.Columns)
+                {
+                    sb.Append("            e.Property(x => x.").Append(NameCasing.ToPascalCase(column.Name))
+                      .Append(").HasColumnName(\"").Append(column.Name).AppendLine("\");");
+                }
+            }
+            sb.AppendLine("        });");
+        }
     }
 
     /// <summary>
@@ -246,14 +288,16 @@ public static class DbContextRenderer
             if (FieldAttributes.Has(field, "unique"))
             {
                 sb.Append(indent).Append(receiver).Append(".HasIndex(x => x.").Append(property)
-                  .Append(").IsUnique().HasDatabaseName(\"").Append(isPostgres ? "uq_" : "UK_")
-                  .Append(indexNamePrefix).Append('_').Append(columnToken).AppendLine("\");");
+                  .Append(").IsUnique().HasDatabaseName(")
+                  .Append(SourceLiteral.CSharpString(GeneratedObjectNames.For(isPostgres, GeneratedObjectNames.Kind.Unique, indexNamePrefix, columnToken)))
+                  .AppendLine(");");
             }
             else if (FieldAttributes.Has(field, "index"))
             {
                 sb.Append(indent).Append(receiver).Append(".HasIndex(x => x.").Append(property)
-                  .Append(").HasDatabaseName(\"").Append(isPostgres ? "ix_" : "IX_")
-                  .Append(indexNamePrefix).Append('_').Append(columnToken).AppendLine("\");");
+                  .Append(").HasDatabaseName(")
+                  .Append(SourceLiteral.CSharpString(GeneratedObjectNames.For(isPostgres, GeneratedObjectNames.Kind.Index, indexNamePrefix, columnToken)))
+                  .AppendLine(");");
             }
         }
     }
@@ -284,7 +328,6 @@ public static class DbContextRenderer
             var properties = entry.Columns.Select(NameCasing.ToPascalCase).ToList();
             var propertyAccess = string.Join(", ", properties.Select(p => $"x.{p}"));
             var nameTokens = isPostgres ? entry.Columns : properties;
-            var nameJoined = string.Join("_", nameTokens);
 
             sb.Append(indent).Append(receiver).Append(".HasIndex(x => new { ").Append(propertyAccess)
               .Append(" })");
@@ -300,15 +343,13 @@ public static class DbContextRenderer
                     sb.Append(isPostgres ? ".AreNullsDistinct(false)"
                         : anyNullable ? ".HasFilter(null)" : "");
                 }
+            }
 
-                sb.Append(".HasDatabaseName(\"").Append(isPostgres ? "uq_" : "UK_")
-                  .Append(indexNamePrefix).Append('_').Append(nameJoined).AppendLine("\");");
-            }
-            else
-            {
-                sb.Append(".HasDatabaseName(\"").Append(isPostgres ? "ix_" : "IX_")
-                  .Append(indexNamePrefix).Append('_').Append(nameJoined).AppendLine("\");");
-            }
+            // The same name the SQL targets give it: the one the model gives (an item name or a directive's
+            // name:), or the generated one — from the same formula the SQL targets use.
+            var databaseName = entry.Name
+                ?? GeneratedObjectNames.For(isPostgres, entry.IsUnique ? GeneratedObjectNames.Kind.Unique : GeneratedObjectNames.Kind.Index, indexNamePrefix, nameTokens);
+            sb.Append(".HasDatabaseName(").Append(SourceLiteral.CSharpString(databaseName)).AppendLine(");");
         }
     }
 

@@ -536,7 +536,7 @@ MDD_DEBUG=1 mdd build ./mdd
 | `@computed("expr")` → `_ext` 뷰 표현식 컬럼 + `[Computed]` | ✅ |
 | `@indexed` + rollup → `WITH SCHEMABINDING` | ✅ |
 | `@unique(col1, col2)` 복합 | ✅ — 널 허용 컬럼이 섞이면 filtered unique index (`WHERE … IS NOT NULL`)로 방출한다. 그러지 않으면 두 번째 전체-NULL 행이 거부된다. `nulls: "not_distinct"`를 붙이면 그 필터를 만들지 않고 SQL:2023 `UNIQUE NULLS NOT DISTINCT` 의미(NULL도 그 자체로 유일성 경쟁에 참여)로 방출한다 — SQL Server는 필터 없는 inline `CONSTRAINT UNIQUE`(plain `UNIQUE`가 이미 이 의미), PostgreSQL 15+는 `UNIQUE NULLS NOT DISTINCT` 문법을 그대로 쓴다 |
-| `### Indexes` 섹션 (`- @unique(...)` / `- @index(...)`) | ✅ |
+| `### Indexes` 섹션 (`- @unique(...)` / `- @index(...)` · `- name: @index(...)` · `- name` + `fields:`/`unique:`) | ✅ — 항목의 이름(`- ux_scope: …`, `- customer_orders`)이 그 인덱스·제약의 데이터베이스 이름이다(SQL 두 방언 · EF `HasDatabaseName`, M3L 명세 §3.3.3). 괄호 안은 설명이다. 이름이 없는 지시자(`- @index(...)`)는 `name:` 을, 그것도 없으면 모델과 열에서 짓는다(`IX_{Model}_{Cols}` · `ix_{table}_{cols}`) |
 | `@inherits(FQN)` → C# 베이스클래스 오버라이드 (도메인 중립, verbatim) | ✅ |
 | `@implements(FQN, ...)` → C# 인터페이스 append (도메인 중립, verbatim) | ✅ |
 | enum 값의 `@system` → 생성 폼 선택지에서 제외 (아래) | ✅ |
@@ -725,12 +725,55 @@ PostgreSQL `views_gen/<snake_name>.sql`. 빌드가 먼저 뷰를 모델에 대�
 | 읽는 모델 | 그 모델의 **읽기 표면**과 같은 행 — 파생 열(lookup·rollup·computed)을 읽으면 FullView, 소프트 삭제 모델이면 UdView, 아니면 테이블 |
 | `@from(Relation.field)` | 그 관계의 열 |
 | `@rollup(Target.fk, …)` | FullView 와 같은 상관 서브쿼리 — `from` 모델의 키에 상관 |
-| `where` · `@computed` | **T-SQL 만** — FullView 와 같은 식 계약(식별자 → PascalCase 열, 문자열 리터럴 보존, `Relation.field` 는 관계로 한정). 식의 방언은 언어가 정하지 않는다 — PostgreSQL 은 식이 있는 뷰를 생성하지 않는다(`MDD029`) |
+| `where` · `@computed` | 두 방언 — M3L 의 이식 가능한 부분집합(명세 §10.7)을 방언으로 번역한다(T-SQL 은 식별자 → PascalCase 열, PostgreSQL 은 snake 그대로; `Relation.field` 는 관계로 한정). `platform:` 으로 선언한 식(`@computed_raw`·`where_raw`)은 그 방언에서 원문 그대로. 번역할 수 없는 식은 두 방언 모두 `MDD037` 로 빌드를 멈춘다 |
 | `group_by` | `Relation.field` 목록. 출력 열 이름으로 묶는 것은 생성하지 않는다(`MDD031`) |
 | `order_by` | 내지 않는다 — 뷰에는 순서가 없고, T-SQL 은 `TOP` 없는 뷰의 `ORDER BY` 를 거절한다(빌드 로그에 정보 한 줄) |
 
 생성하지 않는 것: SQL 코드 블록 소스(`MDD028`) · `@materialized` · `@lookup` 열(뷰는 소스에서 투영한다 — `@from`) · 뷰 소스 위의 `@rollup`(`MDD031`).
-Model·Api·TypeScript 타깃은 뷰를 읽지 않는다(읽기 전용 엔티티·셋은 다음 단계). Sql 타깃이 없는 빌드는 해석된 뷰가 생성되지 않는다고 경고한다.
+키를 투영한 뷰는 Model·Api·TypeScript 타깃이 읽기 모델로 낸다(바로 아래 절). Sql 타깃이 없는 빌드는 뷰의 `CREATE VIEW` 를 만드는 타깃이 없다고 경고한다.
+
+### 키가 있는 standalone `::view` → 읽기 모델 (Model · Api · TypeScript 타깃)
+
+뷰가 **`id` 라는 이름의 `identifier` 열을 `@from` 으로 투영하면** 그 뷰는 읽기 모델이다 — 조회 화면·목록·보고서가 테이블이 아니라
+그 뷰를 읽는다.
+
+```markdown
+## OpenOrders ::view
+### Source
+- from: Order
+- join: Customer on Order.customer_id = Customer.id
+- where: "status = 'open'"
+
+- id: identifier @from(Order.id)                     # 이 열이 행의 키다
+- customer_name: string @from(Customer.name)
+- total_amount: decimal(12,2) @from(Order.total_amount)
+```
+
+| 타깃 | 생성 |
+|---|---|
+| Model | `Entity_gen/OpenOrders.cs` — 뷰의 출력 열만 가진 클래스 하나(쓰기 타입·`…Ext` 쌍·감사 타임스탬프 없음). DbContext 에 `DbSet<OpenOrders> OpenOrders` 와 매핑: 테이블 없음 · Sql 타깃이 만드는 그 뷰(`ToView`) · 키 `Id`. PostgreSQL 방언은 열마다 선언된 이름으로 매핑한다 |
+| Api | 읽기 전용 셋 등록(OData 셋 · GraphQL 쿼리 필드)과 읽기 전용 컨트롤러(`OpenOrdersController`). 조회·`$filter`·`$select`·`$orderby`·키 조회는 모델의 셋과 같고, 쓰기 동사는 런타임이 전부 거절한다. 권한 키는 읽기 하나(`…Read`)만 낸다 |
+| TypeScript | `entities_gen.ts` 에 뷰의 열만 가진 `interface OpenOrders`(`IyuEntity` 를 잇지 않는다 — 감사 타임스탬프가 없다, 열은 전부 필수). `entity_names_gen.ts` 에 **따로** `READ_ONLY_SET_NAMES` / `ReadOnlySetName`. 필드 스키마·폼은 없다(쓰기 축) |
+| Sql | 변화 없음 — 뷰는 위 절대로 생성된다 |
+
+- **키는 작성자가 고른다 — 그리고 유일해야 한다.** 부모와 자식을 조인한 뷰는 부모의 키를 되풀이한다. 그때는 자식의 키를 투영한다. 유일하지
+  않은 키는 빌드가 알 수 없고, 키 조회가 여러 행 중 하나를 돌려주게 된다.
+- **키가 없는 뷰는 SQL 만 생성된다.** 집계 뷰에는 행의 신원이 없다 — 오류도 경고도 아니고, 빌드 로그에 정보 한 줄이 남는다. 읽기 셋으로
+  서빙하려면 키 열을 투영한다.
+- **`## Name ::view @internal`** — 키가 있어도 읽기 모델로 내지 않는다(SQL 만). 다른 뷰가 읽기 위한 중간 뷰에 쓴다. Api 타깃의
+  `excludeEntities`/`includeEntities` 에도 뷰 이름을 쓸 수 있다 — 그때는 엔티티와 DbSet 은 남고 셋·컨트롤러만 빠진다.
+- **이름이 이미 있으면 빌드가 멈춘다(`MDD038`).** 읽기 모델은 클래스(뷰 이름)와 셋(그 복수형)을 낸다. 모델이 내는 이름 — 엔티티 · 읽기 타입
+  `…Ext` · 셋 — 이나 enum 과 같으면 생성물이 한 이름을 두 번 선언하므로, 뷰의 이름을 바꾸거나 `@internal` 을 붙인다.
+- **PostgreSQL 방언이 생성하지 않는 뷰(`MDD029`)는 읽기 모델로도 내지 않는다** — 가리킬 뷰가 없다.
+- **Sql 타깃 없이 Model·Api 만 있는 빌드**도 읽기 모델을 낸다. 그 이름의 뷰가 데이터베이스에 있다는 것은 그 빌드 밖의 일이다.
+- **런타임 요구** — 생성 코드는 키만 가진 읽기 타입과 읽기 전용 셋을 쓴다(런타임 `Iyu.*` **0.38.0** 이상 — 런타임 패키지의 README
+  «A set that is only read»). 그보다 낮은 런타임에서는 생성물이 컴파일되지 않는다 — 읽기 모델을 원치 않으면 뷰에 `@internal` 을 붙인다.
+- **`EntitySetName` 은 넓어지지 않는다.** 그 타입 위에 쓴 코드(편집 폼 · `…write` 권한 키)는 쓰기를 전부 거절하는 셋을 받으면 안 된다.
+  읽기만 하는 코드(목록 · 그리드)는 `EntitySetName | ReadOnlySetName` 을 받고, 읽기 권한 키는
+  `` `${Lowercase<ReadOnlySetName>}.read` `` 로 만든다. Api 타깃이 뷰를 표면에서 뺐는데 TypeScript 타깃이 그대로면 빌드가 경고한다(모델과 같은 규칙).
+- **GraphQL 표면에도 낸다** — `options.GraphQL.AddReadOnlySet<OpenOrders>("openOrders")`: 모델의 쿼리 필드와 같은 이름 규칙(camelCase 복수)의
+  쿼리 필드이고 뮤테이션 접두가 없다. `surfaces` 가 `["graphql"]` 이면 그 한 줄과 읽기 권한 키만 낸다(OData 셋·컨트롤러 없음),
+  `["odata"]` 면 GraphQL 줄을 내지 않는다.
 
 ### `::aspect` → PK 가 곧 base FK 인 테이블
 
@@ -1165,12 +1208,18 @@ consumer-repo/
 | MDD026 | `@lookup` 이 다른 모델의 `rowversion` 을 읽음 — 행 버전은 그 행의 것이고, PostgreSQL 에서는 조인으로 읽을 열도 없다 |
 | MDD027(경고) | 참조 키의 읽기 타입 navigation 이름이 그 읽기 타입의 기존 멤버(lookup 필드·1:1 navigation)와 같다 — 선언된 멤버가 이름을 갖고 navigation 은 생성하지 않는다(그 키로는 `$expand` 불가) |
 | MDD028(경고) | standalone `::view` 의 `### Source` 가 SQL 코드 블록이다 — 모델 이름을 방언 이름으로 바꾸려면 SQL 을 해석해야 해서 그 뷰는 생성하지 않는다. from/join/where 항목으로 쓰면 생성된다 |
-| MDD029(경고) | standalone `::view` 를 PostgreSQL 방언에서 생성하지 않는다 — 식(`where`·`@computed`)이 있다(언어가 식의 방언을 정하지 않는다), 그 방언이 생성하지 않는 모델 뷰(`@computed`·`@indexed` rollup)를 읽는다, 또는 그런 뷰를 읽는다 |
+| MDD029(경고) | standalone `::view` 를 PostgreSQL 방언에서 생성하지 않는다 — 그 방언이 생성하지 않는 모델 뷰(`@indexed` rollup)를 읽는다, 또는 그런 뷰를 읽는다. (식이 있다는 것은 더 이상 사유가 아니다 — 번역된다) |
 | MDD030 | standalone `::view` 가 해석되지 않는다 — 정의되지 않은 관계(from/join), 뷰의 from/join 이 아닌 관계나 없는 열을 가리키는 `@from`·join 조건·`group_by`, `Model.field = Model.field` 항을 `AND` 로 이은 것이 아닌 join 조건, 조인 대상을 쓰지 않는 조건, 값의 원천(`@from`·`@rollup`·`@computed`)이 없는 열, 서로를 읽는 뷰 |
 | MDD031(경고) | standalone `::view` 를 생성하지 않는 모양 — `@materialized`, `@lookup` 열(뷰는 소스에서 투영한다 — `@from`), 출력 열을 가리키는 `group_by`, 뷰 소스 위의 `@rollup`, 생성하지 않는 뷰를 읽는 뷰 |
 | MDD032(경고) | 뷰를 2단보다 깊게 겹쳐 읽는다 — 명세가 2단까지를 권장한다(생성은 한다) |
 | MDD033(경고) | `::aspect` 셋을 OData 로 등록하는데, 그 base 를 같은 빌드의 어떤 Api 타깃도 OData 로 등록하지 않는다 — 공유 키 선언(`DeclareSharedKey`)을 낼 곳이 없어 그 셋의 공유 키 거절이 꺼진다. base 를 등록하는 Api 타깃을 두거나 aspect 도 함께 뺀다(설정 단계에서 나온다) |
 | MDD034(경고) | `@searchable` 참조 키인데 읽기 타입에 그 키의 navigation 이 없다(`_id` 로 끝나지 않는 키, `MDD027` 이름 충돌) — 선언은 키에 남지만 키는 텍스트가 아니라 `$search` 가 그 참조를 따르지 못하고 어떤 낱말에도 매칭하지 않는다 |
+| MDD037 | 이식 가능한 문맥(`@computed`·rollup `where:`·뷰 `where`)의 식이 부분집합(M3L 명세 §10.7) 밖이다 — 두 SQL 방언 모두 원문으로 내지 않고 빌드를 멈추며, 해당하는 식을 한 번에 전부 나열한다. 부분집합으로 다시 쓰거나(`DATEDIFF(YEAR, a, GETDATE())` → `date_diff('year', a, today())`), 그 방언의 문법 그대로 두려면 `@computed_raw(…, platform: "sqlserver")`·`where_raw`(PostgreSQL 은 `"postgresql"`)로 옮긴다(생성 단계) |
+| MDD042 | 모델이 인덱스에 준 이름 — `### Indexes` 항목의 이름, 또는 `@index`/`@unique` 지시자의 `name:` — 을 데이터베이스 이름으로 쓸 수 없다: 영문자·숫자·밑줄이 아니거나(생성 SQL 에 그대로 들어간다), 빌드 안의 다른 인덱스가 같은 이름을 쓰거나 다른 인덱스가 그 이름으로 생성된다(필드 단위 `@unique`/`@index` · 이름 없는 항목 — `IX_{Model}_{Cols}` · `ix_{table}_{cols}` 꼴, 두 방언 모두와 대조)(대소문자 무시 — SQL Server 의 제약 이름과 PostgreSQL 의 인덱스 이름은 스키마 단위로 유일하다) |
+| MDD043(경고) | `### Indexes` 항목이 열을 하나도 말하지 않는다(`fields:` 가 없거나 비었다, 지시자에 열이 없다) — 인덱스를 만들지 않는다 |
+| MDD041(경고) | `@index(…, fulltext: true)` — 이 생성기는 전문(full-text) 인덱스를 만들지 않는다(SQL Server 는 카탈로그와 키 인덱스, PostgreSQL 은 텍스트 검색 식이 필요하다). 같은 열의 일반 인덱스로 낸다 — 단어 검색이 필요하면 전문 인덱스는 생성물 밖에서 만든다 |
+| MDD038 | 읽기 모델로 내는 standalone `::view` 의 생성 이름(클래스 = 뷰 이름, 셋 = 그 복수형)이 모델의 엔티티·읽기 타입(`…Ext`)·셋이나 enum, 다른 뷰의 것과 같다 — 뷰의 이름을 바꾸거나 `@internal` 로 읽기 모델에서 뺀다. Model·Api·TypeScript 타깃이 있는 빌드에서만 |
+| MDD036 | SQL Server(또는 그 방언)용 식이 없다 — `@computed_raw`/`where_raw` 가 다른 플랫폼에만 있고 포터블 식(`@computed`/`where`)도 없다. 생성물이 식을 지어낼 수 없어 빌드가 멈춘다(생성 단계) |
 | MDD035(경고) | `@searchable` 참조의 대상 모델을 같은 빌드의 어떤 Api 타깃도 OData 로 등록하지 않는다 — 런타임 `$search` 는 등록되지 않은 대상의 navigation 을 건너뛰어 그 선언이 아무것도 매칭하지 않는다. 대상을 등록하는 Api 타깃을 두거나 그 키의 `@searchable` 을 뺀다(설정 단계에서 나온다) |
 | MDD039(경고) | 필드 `@system` 이 호출자가 애초에 쓸 수 없는 칸(lookup · rollup · computed · `rowversion`)에 있다 — 쓰기 제외가 이미 성립해 선언이 아무것도 바꾸지 않는다. 애플리케이션 코드가 쓰는 값이면 그 값을 담는 저장 칸에 둔다 |
 | MDD040 | 필드에 `@system` 과 `@immutable` 이 함께 있다 — «애플리케이션 코드만 쓴다»와 «호출자가 생성 때 한 번 준다»가 누가 값을 대는지를 다르게 말한다. 하나만 둔다 |

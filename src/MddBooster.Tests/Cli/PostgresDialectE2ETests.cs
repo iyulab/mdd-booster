@@ -299,16 +299,18 @@ public class PostgresDialectE2ETests
     }
 
     [Fact]
-    public void PostgresDialect_ComputedField_SkippedWithStderrWarning()
+    public void PostgresDialect_ComputedField_TranslatedIntoACteChain()
     {
-        // Computed는 방언별 표현식 문법 차이로 안전한 자동 변환이 불가해 아직 방출하지
-        // 않는다 — 무음 탈락 금지: stderr 경고 필수.
+        // A portable computed expression (M3L §10.7) is translated — one CTE layer per computed field, as on SQL Server,
+        // so a later expression can read an earlier one by name.
         var (mddDir, dbDir) = Scaffold("computed",
             "# Namespace: X\n\n" +
             "## Invoice\n" +
             "- id: identifier @pk @generated\n" +
             "- subtotal: decimal(12,2) @not_null\n" +
-            "- grand_total: decimal(12,2) @computed(`subtotal * 1.1`)\n");
+            "- is_paid: boolean\n" +
+            "- grand_total: decimal(12,2) @computed(`subtotal * 1.1`)\n" +
+            "- label: string @computed(`CASE WHEN is_paid = true THEN 'paid' ELSE concat('due ', grand_total) END`)\n");
         WriteConfig(mddDir, "{ \"type\": \"Sql\", \"dialect\": \"postgres\", \"projectPath\": \"../db\" }");
 
         using var captured = new ConsoleErrorCapture(this);
@@ -317,11 +319,12 @@ public class PostgresDialectE2ETests
             var exit = new BuildCommand().Run(mddDir);
             Assert.Equal(0, exit);
 
-            Assert.False(File.Exists(Path.Combine(dbDir, "views_gen", "invoice_full_view.sql")));
-            var stderr = captured.Text;
-            Assert.Contains("[sql-pg]", stderr);
-            Assert.Contains("Invoice", stderr);
-            Assert.Contains("Computed", stderr);
+            var sql = File.ReadAllText(Path.Combine(dbDir, "views_gen", "invoice_full_view.sql"));
+            Assert.Contains("WITH r AS (", sql);
+            Assert.Contains("c1 AS (SELECT r.*, subtotal * 1.1 AS grand_total FROM r)", sql);
+            Assert.Contains("c2 AS (SELECT c1.*, CASE WHEN is_paid = TRUE THEN 'paid' ELSE concat('due ', grand_total) END AS label FROM c1)", sql);
+            Assert.Contains("SELECT * FROM c2;", sql);
+            Assert.DoesNotContain("Computed 파생 필드는 PG 방언이 아직", captured.Text);
         }
         finally
         {
@@ -330,11 +333,41 @@ public class PostgresDialectE2ETests
     }
 
     [Fact]
-    public void PostgresDialect_ChainedLookupThroughUnsupportedTarget_SkippedWithStderrWarning()
+    public void PostgresDialect_UntranslatableComputed_StopsTheBuildWithMDD037()
     {
-        // Parent의 FullView는 Computed 때문에 아직 방출되지 않는다 — Child의 Lookup이 그
-        // Computed 파생 컬럼을 체이닝으로 읽으므로, Child도 존재하지 않을 뷰를 참조하지
-        // 않도록 함께 보류돼야 한다.
+        // An expression outside the portable subset has no PostgreSQL form this generator can vouch for — the build stops
+        // (MDD037) instead of emitting it unchanged. A model that also reads it through a chained lookup changes nothing.
+        var (mddDir, dbDir) = Scaffold("untranslatable",
+            "# Namespace: X\n\n" +
+            "## Parent\n" +
+            "- id: identifier @pk @generated\n" +
+            "- issued: date\n" +
+            "- age_days: integer @computed(`DATEDIFF(DAY, issued, GETDATE())`)\n\n" +
+            "## Child\n" +
+            "- id: identifier @pk @generated\n" +
+            "- parent_id: identifier @reference(Parent) @not_null\n" +
+            "- parent_age: integer @lookup(parent_id.age_days)\n");
+        WriteConfig(mddDir, "{ \"type\": \"Sql\", \"dialect\": \"postgres\", \"projectPath\": \"../db\" }");
+
+        using var captured = new ConsoleErrorCapture(this);
+        try
+        {
+            var exit = new BuildCommand().Run(mddDir);
+            Assert.NotEqual(0, exit);
+            Assert.Contains("MDD037", captured.Text);
+            Assert.Contains("'Parent.age_days'", captured.Text);
+            Assert.False(File.Exists(Path.Combine(dbDir, "views_gen", "parent_full_view.sql")));
+        }
+        finally
+        {
+            Cleanup(mddDir);
+        }
+    }
+
+    [Fact]
+    public void PostgresDialect_ChainedLookupThroughAComputedColumn_ReadsTheTargetsFullView()
+    {
+        // Parent's FullView now exists (its computed field is translated), so Child's chained lookup reads it.
         var (mddDir, dbDir) = Scaffold("chained",
             "# Namespace: X\n\n" +
             "## Parent\n" +
@@ -353,11 +386,8 @@ public class PostgresDialectE2ETests
             var exit = new BuildCommand().Run(mddDir);
             Assert.Equal(0, exit);
 
-            Assert.False(File.Exists(Path.Combine(dbDir, "views_gen", "parent_full_view.sql")));
-            Assert.False(File.Exists(Path.Combine(dbDir, "views_gen", "child_full_view.sql")));
-            var stderr = captured.Text;
-            Assert.Contains("'Parent'", stderr);
-            Assert.Contains("'Child'", stderr);
+            Assert.True(File.Exists(Path.Combine(dbDir, "views_gen", "parent_full_view.sql")));
+            Assert.Contains("parent_full_view", File.ReadAllText(Path.Combine(dbDir, "views_gen", "child_full_view.sql")));
         }
         finally
         {

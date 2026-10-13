@@ -40,8 +40,11 @@ public sealed record ViewFromColumn(FieldNode Field, ViewColumnRef Source) : Vie
 /// <summary><c>@rollup(Target.fk, aggregate)</c> — an aggregate over the rows of <paramref name="Target"/> that point at the view's <c>from</c> row.</summary>
 public sealed record ViewRollupColumn(FieldNode Field, ResolvedModel Target, RollupDef Rollup) : ViewColumn(Field);
 
-/// <summary><c>@computed("…")</c> — an expression; its dialect is not defined by the language, so rendering it is a target's decision.</summary>
-public sealed record ViewComputedColumn(FieldNode Field, string Expression) : ViewColumn(Field);
+/// <summary>
+/// <c>@computed("…")</c> and/or <c>@computed_raw(…, platform: …)</c> — the field's expressions; which one a dialect uses is
+/// <see cref="ExpressionSelection"/>'s rule.
+/// </summary>
+public sealed record ViewComputedColumn(FieldNode Field, ComputedDef Computed) : ViewColumn(Field);
 
 /// <summary>A standalone <c>::view</c> whose key-value <c>### Source</c> resolved completely.</summary>
 public sealed class ResolvedView
@@ -51,6 +54,8 @@ public sealed class ResolvedView
     public required ViewRelation From { get; init; }
     public required IReadOnlyList<ViewJoin> Joins { get; init; }
     public string? Where { get; init; }
+    /// <summary>The Source's <c>- where_raw:</c> filters, one per platform (M3L §10.7.5).</summary>
+    public IReadOnlyList<PlatformExpression> WhereRaw { get; init; } = [];
     public required IReadOnlyList<ViewColumnRef> GroupBy { get; init; }
     public required IReadOnlyList<ViewColumn> Columns { get; init; }
 
@@ -58,7 +63,10 @@ public sealed class ResolvedView
     public required int Depth { get; init; }
 
     /// <summary>Whether any part of the view is an expression string (<c>where</c>, <c>@computed</c>) rather than structure.</summary>
-    public bool HasExpressions => Where is not null || Columns.Any(c => c is ViewComputedColumn);
+    public bool HasExpressions => Where is not null || WhereRaw.Count > 0 || Columns.Any(c => c is ViewComputedColumn);
+
+    /// <summary>The filter <paramref name="dialect"/> uses (<see cref="ExpressionSelection"/>), or <c>null</c> for none.</summary>
+    public SelectedExpression? WhereFor(SqlDialect dialect) => ExpressionSelection.Select(Where, WhereRaw, dialect);
 }
 
 /// <summary>The views that resolved, in dependency order (a view after every view it reads), and what was said about all of them.</summary>
@@ -217,6 +225,7 @@ public static class ViewResolver
                 From = from,
                 Joins = joins,
                 Where = string.IsNullOrWhiteSpace(source.Where) ? null : source.Where,
+                WhereRaw = source.WhereRaw ?? [],
                 GroupBy = groupBy,
                 Columns = columns,
                 Depth = depth,
@@ -333,7 +342,7 @@ public static class ViewResolver
                     }
                     return new ViewRollupColumn(field, target, rollup);
                 case FieldKind.Computed when field.Computed is { } computed:
-                    return new ViewComputedColumn(field, computed.Expression);
+                    return new ViewComputedColumn(field, computed);
                 case FieldKind.Lookup:
                     diagnostics.Add(Unsupported(view, $"열 '{field.Name}' 이(가) @lookup 이다 — 뷰는 소스에서 투영한다(@from)"));
                     ok = false;

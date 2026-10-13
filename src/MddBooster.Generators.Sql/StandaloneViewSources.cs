@@ -75,11 +75,6 @@ public static class StandaloneViewSources
         var skipped = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var view in views) // dependency order: a view's sources were judged before it
         {
-            if (view.HasExpressions)
-            {
-                skipped[view.Name] = "식(where·@computed)이 있다 — 언어가 식의 방언을 정하지 않았고 이 방언은 식을 번역하지 않는다";
-                continue;
-            }
             var relations = new[] { view.From }.Concat(view.Joins.Select(j => j.Target));
             foreach (var relation in relations)
             {

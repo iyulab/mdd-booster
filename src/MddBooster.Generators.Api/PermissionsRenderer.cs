@@ -36,7 +36,8 @@ public static class PermissionsRenderer
     private static readonly IReadOnlyList<string> DefaultMapVerbs = ["read", "write"];
 
     public static string Render(
-        IReadOnlyList<ResolvedModel> models, string ns, string template, string? entitiesNamespace = null)
+        IReadOnlyList<ResolvedModel> models, string ns, string template, string? entitiesNamespace = null,
+        IReadOnlyList<ResolvedView>? readViews = null)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentException.ThrowIfNullOrWhiteSpace(ns);
@@ -51,6 +52,12 @@ public static class PermissionsRenderer
             .OrderBy(e => e.Set, StringComparer.Ordinal)
             .ToList();
         var sets = entities.Select(e => e.Set).ToList();
+        // A view served as a read model is read and nothing else: one key, the read one.
+        var viewSets = (readViews ?? [])
+            .Select(v => NameCasing.ToPascalCase(v.Name))
+            .Select(entity => (Entity: entity, Set: Pluralizer.Pluralize(entity)))
+            .OrderBy(e => e.Set, StringComparer.Ordinal)
+            .ToList();
         // Entities are referred to by qualified name, as the registration file does — see EntityTypeRef.
         var entityPrefix = EntityTypeRef.PrefixFor(ns, entitiesNamespace);
 
@@ -84,6 +91,12 @@ public static class PermissionsRenderer
             }
         }
 
+        foreach (var (_, set) in viewSets)
+        {
+            sb.Append("    public const string ").Append(set).Append(NameOf(Verbs[0])).Append(" = \"")
+              .Append(PermissionKeyTemplate.Expand(template, set, Verbs[0])).AppendLine("\";");
+        }
+
         sb.AppendLine();
         sb.AppendLine("    /// <summary>");
         sb.AppendLine("    /// Read type → (read, write) keys. A consumer declares each entity's policies");
@@ -104,6 +117,14 @@ public static class PermissionsRenderer
             sb.Append("            [typeof(").Append(entityPrefix).Append(entity).Append("Ext)] = (")
               .Append(set).Append(NameOf(DefaultMapVerbs[0])).Append(", ")
               .Append(set).Append(NameOf(DefaultMapVerbs[1])).AppendLine("),");
+        }
+        // A read-only set refuses every write whoever asks, so its write slot carries the read key: the map keeps
+        // one shape and no key is invented for a verb the set does not have.
+        foreach (var (entity, set) in viewSets)
+        {
+            sb.Append("            [typeof(").Append(entityPrefix).Append(entity).Append(")] = (")
+              .Append(set).Append(NameOf(Verbs[0])).Append(", ")
+              .Append(set).Append(NameOf(Verbs[0])).AppendLine("),");
         }
         sb.AppendLine("        };");
         sb.AppendLine("}");

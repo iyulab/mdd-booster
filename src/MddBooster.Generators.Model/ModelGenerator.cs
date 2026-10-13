@@ -93,6 +93,15 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
             }
         }
 
+        // A standalone view served as a read model: one read entity beside the pairs.
+        var viewEnumNames = context.Enums.Select(e => e.Name).ToHashSet(StringComparer.Ordinal);
+        foreach (var view in context.ReadViews)
+        {
+            File.WriteAllText(
+                Path.Combine(entityDir, $"{NameCasing.ToPascalCase(view.Name)}.cs"),
+                ViewEntityRenderer.Render(view, _options.Namespace, viewEnumNames, _options.PostgresNaming));
+        }
+
         var dbContext = DbContextRenderer.Render(
             context.Models.ToList(),
             _options.DbContextName,
@@ -100,7 +109,8 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
             customExtViewModels,
             _options.PostgresNaming,
             oneToOne,
-            manyToOne);
+            manyToOne,
+            context.ReadViews);
         File.WriteAllText(Path.Combine(contextDir, $"{_options.DbContextName}.cs"), dbContext);
     }
 

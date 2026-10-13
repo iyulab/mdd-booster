@@ -4,9 +4,9 @@ namespace MddBooster.Generators.Sql.Postgres;
 
 /// <summary>
 /// Renders a standalone <c>::view</c> as a PostgreSQL <c>CREATE VIEW</c>, into
-/// <c>views_gen/{snake_name}.sql</c>. Only views without expressions reach it
-/// (<see cref="StandaloneViewSources.PostgresSkipped"/>); the T-SQL renderer is the reference for
-/// everything else — the same relations, sources, joins, rollups and group keys, in this dialect's names.
+/// <c>views_gen/{snake_name}.sql</c>. The T-SQL renderer is the reference — the same relations, sources, joins,
+/// rollups, group keys and expressions (the portable subset translated, or the <c>postgresql</c> platform expression),
+/// in this dialect's names.
 /// </summary>
 public static class PgStandaloneViewRenderer
 {
@@ -25,8 +25,6 @@ public static class PgStandaloneViewRenderer
     {
         ArgumentNullException.ThrowIfNull(view);
         ArgumentException.ThrowIfNullOrWhiteSpace(schema);
-        if (view.HasExpressions)
-            throw new InvalidOperationException($"View '{view.Name}' has expressions; this dialect does not render it.");
 
         var aliases = new Dictionary<string, string>(StringComparer.Ordinal);
         string Alias(ViewRelation r) => aliases[r.Name];
@@ -58,6 +56,7 @@ public static class PgStandaloneViewRenderer
         }
 
         var columns = new List<string>();
+        var computed = new List<(string Expr, string Name)>();
         foreach (var column in view.Columns)
         {
             switch (column)
@@ -72,12 +71,28 @@ public static class PgStandaloneViewRenderer
                         rollup.Rollup, schema, Alias(view.From), key.Name, tableNameMap, fullViewNameMap, derivedFieldsByModel,
                         targetSoftDeletes: SoftDelete.IsEnabled(rollup.Target)) + $" AS {column.Name}");
                     break;
+                case ViewComputedColumn computedColumn:
+                    var selected = ExpressionSelection.Select(computedColumn.Computed, SqlDialect.PostgreSql)
+                        ?? throw new InvalidOperationException($"View column '{view.Name}.{column.Name}' has no PostgreSQL expression (MDD036).");
+                    // Over the projected row (the CTE below): a bare name is a column the view already carries.
+                    computed.Add((PostgresExpressions.Render(selected, name => name), column.Name));
+                    break;
             }
+        }
+
+        // `Relation.field` reads that relation's column; a bare name reads the view's `from`.
+        string Reference(string name)
+        {
+            var dot = name.IndexOf('.', StringComparison.Ordinal);
+            return dot > 0 && aliases.TryGetValue(name[..dot], out var alias)
+                ? $"{alias}.{name[(dot + 1)..]}"
+                : $"{Alias(view.From)}.{name}";
         }
 
         var sb = new StringBuilder();
         sb.AppendLine(Header);
         sb.Append("CREATE VIEW ").Append(schema).Append('.').Append(viewNameMap[view.Name]).AppendLine(" AS");
+        if (computed.Count > 0) sb.AppendLine("WITH r AS (");
         sb.AppendLine("SELECT");
         for (var i = 0; i < columns.Count; i++)
             sb.Append("    ").Append(columns[i]).AppendLine(i < columns.Count - 1 ? "," : "");
@@ -87,9 +102,28 @@ public static class PgStandaloneViewRenderer
             sb.Append("INNER JOIN ").Append(Source(join.Target)).Append(" ON ")
               .AppendLine(string.Join(" AND ", join.On.Select(t => $"{Column(t.Left)} = {Column(t.Right)}")));
         }
+        if (view.WhereFor(SqlDialect.PostgreSql) is { } where)
+            sb.Append("WHERE ").AppendLine(PostgresExpressions.Render(where, Reference));
         if (view.GroupBy.Count > 0)
             sb.Append("GROUP BY ").AppendLine(string.Join(", ", view.GroupBy.Select(Column)));
         sb.Length -= Environment.NewLine.Length;
+        if (computed.Count > 0)
+        {
+            // r = the projected columns; one layer per computed column, each able to read every column before it —
+            // the same shape as the T-SQL renderer.
+            sb.AppendLine().Append(')');
+            var previous = "r";
+            for (var i = 0; i < computed.Count; i++)
+            {
+                var layer = "c" + (i + 1);
+                sb.AppendLine(",");
+                sb.Append(layer).Append(" AS (SELECT ").Append(previous).Append(".*, ").Append(computed[i].Expr)
+                  .Append(" AS ").Append(computed[i].Name).Append(" FROM ").Append(previous).Append(')');
+                previous = layer;
+            }
+            sb.AppendLine();
+            sb.Append("SELECT * FROM ").Append(previous);
+        }
         sb.AppendLine(";");
         return sb.ToString();
     }

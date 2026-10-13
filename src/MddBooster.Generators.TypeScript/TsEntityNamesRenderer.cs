@@ -11,6 +11,12 @@ namespace MddBooster.Generators.TypeScript;
 /// The generated <c>ENTITY_NAMES</c> const array mirrors the OData entity set
 /// names (PascalCase plural) registered by the API generator. Consumers use
 /// <c>EntitySetName</c> as a type-safe key for building OData URLs.
+/// <para>
+/// Sets that are only read — standalone views served as read models — are listed apart, as
+/// <c>READ_ONLY_SET_NAMES</c> / <c>ReadOnlySetName</c>. <c>EntitySetName</c> keeps meaning «a set that is read and
+/// written»: code typed on it (an edit form, a write permission key) must not start accepting a set that refuses
+/// every write.
+/// </para>
 /// </remarks>
 public static class TsEntityNamesRenderer
 {
@@ -19,9 +25,14 @@ public static class TsEntityNamesRenderer
     /// <summary>
     /// Renders all entity set names into a single <c>entity_names_gen.ts</c> file.
     /// </summary>
-    public static string RenderAll(IReadOnlyList<ResolvedModel> models)
+    public static string RenderAll(IReadOnlyList<ResolvedModel> models, IReadOnlyList<ResolvedView>? readViews = null)
     {
         ArgumentNullException.ThrowIfNull(models);
+
+        var readOnlyNames = (readViews ?? [])
+            .Select(v => Pluralizer.Pluralize(NameCasing.ToPascalCase(v.Name)))
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
 
         var names = models
             .Select(m => Pluralizer.Pluralize(NameCasing.ToPascalCase(m.Name)))
@@ -39,6 +50,15 @@ public static class TsEntityNamesRenderer
         sb.AppendLine("] as const");
         sb.AppendLine();
         sb.AppendLine("export type EntitySetName = typeof ENTITY_NAMES[number]");
+        sb.AppendLine();
+        sb.AppendLine("export const READ_ONLY_SET_NAMES = [");
+        foreach (var name in readOnlyNames)
+        {
+            sb.Append("  '").Append(name).AppendLine("',");
+        }
+        sb.AppendLine("] as const");
+        sb.AppendLine();
+        sb.AppendLine("export type ReadOnlySetName = typeof READ_ONLY_SET_NAMES[number]");
         sb.AppendLine();
         return sb.ToString();
     }
