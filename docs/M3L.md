@@ -794,6 +794,16 @@ Indexes are used to optimize query performance.
 - @unique(order_id, product_id) "Ensures uniqueness of products per order"
 ```
 
+After its columns, `@index` takes the keyword arguments `name:` (the index's name) and `fulltext:` (`true` or
+`false`); `@unique` takes `name:` and `nulls:`. Each is given once. A keyword argument is never a column:
+an implementation reads the columns and the keywords apart, and a keyword the directive does not take is reported
+(`M3L-W010`).
+
+**What this generator implements**: `name:` names the index or constraint in the generated SQL; without it the
+name is built from the model and the columns. A name that is not an identifier, or one another generated index
+already has, stops the build (`MDD042`). `fulltext: true` does not produce a full-text index in either SQL
+dialect — the columns get an ordinary index, and the build says so (`MDD041`).
+
 #### 3.3.3 Index Section (Recommended for Multiple Indexes)
 
 ```markdown
@@ -806,6 +816,18 @@ Indexes are used to optimize query performance.
   - fields: [status, order_date]
   - unique: false
 ```
+
+An item may also carry its index as a directive after the name:
+
+```markdown
+### Indexes
+- customer_orders: @index(customer_id, order_date)
+- uq_order_product: @unique(order_id, product_id)
+```
+
+The item's name is the index's name — `customer_orders` above names the same index as `name: "customer_orders"` in
+§3.3.2. The text in parentheses is a description, not part of the name. Because the item already has a name, a
+`name:` argument on its directive is not read and is reported (`M3L-W010`).
 
 ### 3.3.5 Unique Constraints
 
@@ -1055,35 +1077,90 @@ marked as keys. The build reports the section as unconsumed. Declare composite k
 
 ### 4.2 Comments and Documentation
 
-M3L provides two types of comments:
+M3L provides multiple documentation mechanisms with distinct purposes, ordered by preference:
 
-#### 4.2.1 Visible Comments
+#### 4.2.1 Description Strings `"text"` — Primary Documentation
 
-Documentation using markdown blockquotes (`>`):
+Rendered as part of the field definition. Recommended for all user-facing descriptions:
+
 ```markdown
-> This is visible documentation that appears in the rendered output,
-> which should be processed by documentation generators.
+- email: string(320) @unique "Primary contact email"
+- name: string(200) "Product display name, shown in catalog"
 ```
 
-Header comments using `#`:
+An element header takes one too — a model, interface, enum, view, flow or any other `::kind`. It is that
+element's description, and a blockquote below the header continues it (§4.2.2):
+
 ```markdown
-## Timestampable # Timestampable interface
+## Product(Product) : BaseModel "A sellable item" @audited
+## OnSale ::view "Products currently on sale" @materialized
 ```
 
-Description for fields:
+A header takes one description string: a second one, or a quote that never closes, is reported (`M3L-W010`) and is
+not part of the definition. Only a quoted string outside parentheses is the description; quoted text inside a label or an attribute's
+arguments (`@table("orders")`) belongs to them.
+
+#### 4.2.2 Blockquotes `>` — Model and Section Documentation
+
+Rendered as styled quote blocks. Use for multi-line descriptions, usage notes, and design rationale:
+
 ```markdown
+## User
+> User account information for the platform.
+> Supports both Google OAuth and email authentication.
+
 - username: string(50) @unique @index
   > Unique identifier used for login
 ```
 
-#### 4.2.2 Hidden Comments
+#### 4.2.3 Header Comments `#` — Inline Model Annotations
 
-Developer comments using HTML comment syntax:
+Brief annotations appended to model headers:
+
 ```markdown
-<!-- This is a hidden comment for development purposes.
-     It doesn't appear in rendered markdown and
-     should be ignored by the parser. -->
+## Timestampable ::interface # Common timestamp fields
+## Product : BaseModel # Priced in the store currency
 ```
+
+The comment runs from ` # ` to the end of the line, on any element header. It is not part of the definition —
+not the name, a parent, or an attribute — and not the element's description.
+
+#### 4.2.4 Inline Comments `#` — Developer Notes
+
+Not intended for end-user documentation. Use sparingly for technical notes that aid schema developers:
+
+```markdown
+- cache_key: string(100)  # TTL: 3600s, invalidated on profile update
+- tenant_id: identifier @index  # Shard key for multi-tenancy
+```
+
+**Guidelines:**
+- Prefer description strings (`"..."`) over `#` comments for field explanations
+- Use `#` comments only for technical/implementation notes that should not appear in generated documentation
+- `#` comments must appear after all field attributes on the same line
+- Avoid `#` at the beginning of a line outside of header contexts
+
+#### 4.2.5 Hidden Comments `<!-- -->` — Development Notes
+
+Completely hidden in rendered output. Use for TODOs, temporary notes, and parser directives:
+
+```markdown
+<!-- TODO: Migrate to composite key after v2.0 release -->
+<!-- This model is deprecated, see UserV2 -->
+```
+
+#### 4.2.6 Field-level Blockquote Descriptions
+
+Fields can use indented blockquotes for multi-line descriptions:
+
+```markdown
+- email: string(320) @unique @not_null
+  > Primary contact email.
+  > Used for login, notifications, and account recovery.
+  > Must be verified before account activation.
+```
+
+Indented blockquotes (2+ spaces before `>`) are attached to the preceding field as its description. Non-indented blockquotes remain model-level descriptions. Both inline `"description"` and blockquote forms are valid; if both are present on the same field, the blockquote takes precedence.
 
 ### 4.3 Behavior Definition
 

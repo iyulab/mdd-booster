@@ -27,13 +27,7 @@ public static class ViewEntityRenderer
         sb.Append("namespace ").Append(ns).AppendLine(";");
         sb.AppendLine();
 
-        if (!string.IsNullOrWhiteSpace(view.Source.Description))
-        {
-            sb.AppendLine("/// <summary>");
-            foreach (var line in view.Source.Description.ReplaceLineEndings("\n").Split('\n'))
-                sb.Append("/// ").AppendLine(System.Security.SecurityElement.Escape(line));
-            sb.AppendLine("/// </summary>");
-        }
+        XmlDocComment.AppendSummary(sb, view.Source.Description, indent: "");
         sb.Append("public partial class ").Append(NameCasing.ToPascalCase(view.Name)).AppendLine(" : IKeyed");
         sb.AppendLine("{");
 

@@ -38,6 +38,8 @@ M3L 0.20.0 이 `@computed` · rollup `where:` · 뷰 `where` 의 언어를 정�
   경고만 내고 한 판을 더 통과시키는 과도기는 두지 않았다 — 새 형태가 이 판에 함께 있고 옮기는 일이 기계적이어서, 과도기는 같은 모델을 두 번(이번 판의 경고, 다음 판의 오류) 손보게 할 뿐이다.
 - 생성 엔티티의 `[Computed]` 메타데이터는 그 방언의 플랫폼 식, 없으면 포터블 식 원문이다.
 - 번들 명세 사본 `docs/M3L.md` — §4.4 의 예를 이식 가능한 부분집합으로 바꾸고, §4.4.5 를 «Portable and Platform-Specific Expressions»(부분집합 · `@computed_raw`/`where_raw` · 이 생성기의 번역과 진단)로 다시 썼다. 종전 절은 플랫폼 문법을 `@computed` 로 보여 줬다.
+  §3.3.2(인덱스 지시문의 키워드 인자) · §3.3.3(`### Indexes` 항목의 이름이 인덱스의 이름) · §4.2(머리의 설명 문자열 · 머리 주석)도 M3L 0.20.0 명세대로 가져왔고,
+  §3.3.2 에 이 생성기가 구현하는 범위를 적었다 — `name:` 은 생성 SQL 의 이름이 되고, `fulltext: true` 는 전문 인덱스가 아니라 일반 인덱스가 된다(`MDD041`).
 - 🆕 **PostgreSQL 방언이 Computed 와 식이 있는 standalone 뷰를 생성한다** — 종전엔 Computed 가 있는 모델의 FullView(와 그것을 체이닝으로 읽는 모델)를 경고와 함께 건너뛰고, 식이 있는 standalone
   뷰는 `MDD029` 로 건너뛰었다. 이제 같은 번역기로 낸다: FullView 의 Computed 는 SQL Server 와 같은 CTE 체인(뒤의 식이 앞의 Computed 를 이름으로 읽는다) · rollup `where:` · standalone `where`·`@computed`.
   번역할 수 없는 식은 SQL Server 와 같은 **오류 `MDD037`**, `platform: "postgresql"` 식이 없고 포터블 식도 없으면 `MDD036`.
