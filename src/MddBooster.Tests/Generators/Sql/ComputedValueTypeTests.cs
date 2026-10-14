@@ -25,13 +25,26 @@ public class ComputedValueTypeTests
     private static SelectedExpression Portable(string text) => new(text, IsRaw: false);
 
     [Theory]
-    [InlineData("integer", "floor(price)", "CAST(FLOOR([Price]) AS INT)", "CAST(floor(price) AS integer)")]
+    [InlineData("integer", "floor(price)", "CAST(FLOOR([Price]) AS INT)", "CAST(trunc((floor(price))::numeric) AS integer)")]
     [InlineData("date", "date_add(due, 30, 'day')", "CAST(DATEADD(DAY, 30, [Due]) AS DATE)", "CAST((due + (30) * INTERVAL '1 day') AS date)")]
-    [InlineData("long", "abs(delta)", "CAST(ABS([Delta]) AS BIGINT)", "CAST(abs(delta) AS bigint)")]
+    [InlineData("long", "abs(delta)", "CAST(ABS([Delta]) AS BIGINT)", "CAST(trunc((abs(delta))::numeric) AS bigint)")]
     public void A_computed_value_is_cast_to_the_declared_type(string type, string expression, string sqlServer, string postgres)
     {
         Assert.Equal(sqlServer, SqlServerExpressions.RenderValue(Portable(expression), SqlServerExpressions.OwnColumn, Field(type)));
         Assert.Equal(postgres, PostgresExpressions.RenderValue(Portable(expression), name => name, Field(type)));
+    }
+
+    /// <summary>
+    /// A fractional value becomes an integer the same way on both: SQL Server's cast truncates toward zero, PostgreSQL's
+    /// rounds — so PostgreSQL truncates first. 2.5 is 2 on both, -2.5 is -2.
+    /// </summary>
+    [Fact]
+    public void A_fractional_value_becomes_an_integer_by_truncation_on_both()
+    {
+        Assert.Equal("CAST([Price] * 0.5 AS INT)",
+            SqlServerExpressions.RenderValue(Portable("price * 0.5"), SqlServerExpressions.OwnColumn, Field("integer")));
+        Assert.Equal("CAST(trunc((price * 0.5)::numeric) AS integer)",
+            PostgresExpressions.RenderValue(Portable("price * 0.5"), name => name, Field("integer")));
     }
 
     [Fact]

@@ -99,6 +99,26 @@ public static class PortableExpression
         return new Result(sql, unsupported);
     }
 
+    /// <summary>
+    /// The field references an expression names — every name that is not a keyword or a function — in the order they
+    /// appear. Read the way <see cref="Translate"/> reads them, so it answers for platform text too, as far as that text
+    /// is made of the same words.
+    /// </summary>
+    public static IReadOnlyList<string> FieldNames(string expression)
+    {
+        ArgumentNullException.ThrowIfNull(expression);
+        var tokens = Tokenize(expression, _ => { });
+        var names = new List<string>();
+        for (var i = 0; i < tokens.Count; i++)
+        {
+            var t = tokens[i];
+            if (t.Kind != Kind.Name || Keywords.Contains(t.Value)) continue;
+            if (i + 1 < tokens.Count && tokens[i + 1].Kind == Kind.Open) continue;
+            if (!names.Contains(t.Value)) names.Add(t.Value);
+        }
+        return names;
+    }
+
     private sealed record RenderContext(SqlDialect Dialect, Func<string, string> Column, Action<string> Note, Func<string, string?> FieldType,
         Func<string, string?> OutOfScope)
     {
@@ -271,10 +291,21 @@ public static class PortableExpression
     {
         var sb = new StringBuilder();
         var unary = false;
-        var rangeAnds = RangeAnds(nodes);
+        var notJoining = RangeAnds(nodes);
+        notJoining.UnionWith(ValueWhens(nodes));
         for (var k = 0; k < nodes.Count; k++)
         {
             var node = nodes[k];
+            // A CASE standing as a condition yields a value — on SQL Server, a bit to compare with 1.
+            if (cx.SqlServer && node is Leaf { Token: { Kind: Kind.Name } c } && c.Value.Equals("case", StringComparison.OrdinalIgnoreCase)
+                && EndOf(nodes, k) is { } end && IsConditionSpan(nodes, k, end, condition, notJoining))
+            {
+                if (sb.Length > 0 && !unary) sb.Append(' ');
+                sb.Append('(').Append(Render(nodes.GetRange(k, end - k + 1), cx)).Append(" = 1)");
+                unary = false;
+                k = end;
+                continue;
+            }
             if (node is Leaf { Token: { Kind: Kind.Operator, Value: "+" } }
                 && (IsText(nodes, k - 1, cx) || IsText(nodes, k + 1, cx)))
                 cx.Note("+ joining text (write concat(…))");
@@ -282,7 +313,7 @@ public static class PortableExpression
             // written where an operator belongs.
             if (k > 0 && IsOperand(nodes[k - 1]) && IsOperand(node))
                 cx.Note($"{Describe(nodes[k - 1])} {Describe(node)} (no operator between them)");
-            var piece = cx.SqlServer && IsConditionAt(nodes, k, condition, rangeAnds)
+            var piece = cx.SqlServer && IsConditionAt(nodes, k, condition, notJoining)
                 ? RenderCondition(node, cx)
                 : RenderNode(node, cx);
             // Glued, two minus signs open a line comment that ends the expression early.
@@ -303,13 +334,50 @@ public static class PortableExpression
     /// one) and the words that join conditions — AND, OR, NOT, WHEN before it; AND, OR, THEN after. A BETWEEN's AND joins
     /// the two ends of a range, not conditions.
     /// </summary>
-    private static bool IsConditionAt(List<Node> nodes, int k, bool condition, HashSet<int> rangeAnds)
+    private static bool IsConditionAt(List<Node> nodes, int k, bool condition, HashSet<int> notJoining)
+        => IsConditionSpan(nodes, k, k, condition, notJoining);
+
+    /// <summary>Whether the nodes from <paramref name="first"/> to <paramref name="last"/> stand together as a condition.</summary>
+    private static bool IsConditionSpan(List<Node> nodes, int first, int last, bool condition, HashSet<int> notJoining)
     {
         bool Joins(int i, HashSet<string> words)
-            => !rangeAnds.Contains(i) && nodes[i] is Leaf { Token: { Kind: Kind.Name } t } && words.Contains(t.Value);
-        var before = k == 0 ? condition : Joins(k - 1, ConditionJoinsBefore);
-        var after = k == nodes.Count - 1 ? condition : Joins(k + 1, ConditionJoinsAfter);
+            => !notJoining.Contains(i) && nodes[i] is Leaf { Token: { Kind: Kind.Name } t } && words.Contains(t.Value);
+        var before = first == 0 ? condition : Joins(first - 1, ConditionJoinsBefore);
+        var after = last == nodes.Count - 1 ? condition : Joins(last + 1, ConditionJoinsAfter);
         return before && after;
+    }
+
+    /// <summary>The END that closes the CASE at <paramref name="k"/>, or <c>null</c> when it is not closed here.</summary>
+    private static int? EndOf(List<Node> nodes, int k)
+    {
+        var depth = 0;
+        for (var i = k; i < nodes.Count; i++)
+        {
+            if (nodes[i] is not Leaf { Token: { Kind: Kind.Name } t }) continue;
+            if (t.Value.Equals("case", StringComparison.OrdinalIgnoreCase)) depth++;
+            else if (t.Value.Equals("end", StringComparison.OrdinalIgnoreCase) && --depth == 0) return i;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The positions of the WHENs of a simple CASE (<c>CASE x WHEN value THEN …</c>) — those take a value to compare
+    /// with, not a condition.
+    /// </summary>
+    private static HashSet<int> ValueWhens(List<Node> nodes)
+    {
+        var whens = new HashSet<int>();
+        var simple = new Stack<bool>();
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            if (nodes[i] is not Leaf { Token: { Kind: Kind.Name } t }) continue;
+            if (t.Value.Equals("case", StringComparison.OrdinalIgnoreCase))
+                simple.Push(!(i + 1 < nodes.Count && nodes[i + 1] is Leaf { Token: { Kind: Kind.Name } w }
+                              && w.Value.Equals("when", StringComparison.OrdinalIgnoreCase)));
+            else if (t.Value.Equals("end", StringComparison.OrdinalIgnoreCase) && simple.Count > 0) simple.Pop();
+            else if (t.Value.Equals("when", StringComparison.OrdinalIgnoreCase) && simple.Count > 0 && simple.Peek()) whens.Add(i);
+        }
+        return whens;
     }
 
     /// <summary>The positions of the ANDs that close a BETWEEN's range.</summary>
@@ -340,6 +408,8 @@ public static class PortableExpression
         Leaf { Token: { Kind: Kind.Name } t } when t.Value.Equals("false", StringComparison.OrdinalIgnoreCase) => "1 = 0",
         Leaf { Token: { Kind: Kind.Name } t } when !Keywords.Contains(t.Value) => $"({RenderLeaf(t, cx)} = 1)",
         Group { Items: [var only] } => "(" + Render(only, cx, condition: true) + ")",
+        // No function of the subset is a predicate: a call standing as a condition yields a value (coalesce of booleans).
+        Call => "(" + RenderNode(node, cx) + " = 1)",
         _ => RenderNode(node, cx),
     };
 
@@ -498,7 +568,13 @@ public static class PortableExpression
     /// <summary>Whether an argument is known to be a date: <c>today()</c>, or a field the caller says is a <c>date</c>.</summary>
     private static bool IsDate(List<Node> argument, RenderContext cx) => argument switch
     {
-        [Call call] => call.Name.Equals("today", StringComparison.OrdinalIgnoreCase),
+        [Call call] when call.Name.Equals("today", StringComparison.OrdinalIgnoreCase) => true,
+        // Moved by whole units, a date stays a date; the first non-null of dates is a date.
+        [Call call] when call.Name.Equals("date_add", StringComparison.OrdinalIgnoreCase) && call.Args.Count == 3
+            => call.Args[2] is [Leaf { Token: { Kind: Kind.Text } u }] && u.Value.Length >= 2
+               && u.Value[1..^1].ToLowerInvariant() is "year" or "month" or "day" && IsDate(call.Args[0], cx),
+        [Call call] when call.Name.Equals("coalesce", StringComparison.OrdinalIgnoreCase) && call.Args.Count > 0
+            => call.Args.All(a => IsDate(a, cx)),
         [Leaf { Token: { Kind: Kind.Name } t }] => cx.FieldType(t.Value) == "date",
         _ => false,
     };
@@ -519,6 +595,7 @@ public static class PortableExpression
     /// </summary>
     private static bool IsPredicate(List<Node> nodes)
     {
+        if (nodes is [Group { Items: [var only] }]) return IsPredicate(only);
         var caseDepth = 0;
         foreach (var node in nodes)
         {

@@ -144,6 +144,74 @@ public sealed class ViewExpressionScopeTests
         finally { Directory.Delete(root, recursive: true); }
     }
 
+    private const string DerivedPurchase = """
+        ## Purchase
+        - id: identifier @pk @generated
+        - client_id: identifier @reference(Client)
+        - region: string(20)
+        - amount: decimal(12,2) @not_null
+        - net: decimal(12,2) @computed("amount * 2")
+        """;
+
+    /// <summary>
+    /// A filter that reads a derived column — qualified by the rolled-up model, or in a view's filter — reads it where it
+    /// exists: the model's FullView, not its table.
+    /// </summary>
+    [Fact]
+    public void A_filter_reading_a_derived_column_reads_the_full_view()
+    {
+        var models = Models.Replace("""
+            ## Purchase
+            - id: identifier @pk @generated
+            - client_id: identifier @reference(Client)
+            - region: string(20)
+            - amount: decimal(12,2) @not_null
+            """, DerivedPurchase).Replace("- active: boolean", """
+            - active: boolean
+            - big_spends: integer @rollup(Purchase.client_id, count, where: "Purchase.net > 100")
+            """);
+        var view = View.Replace("- where: \"region = 'east' AND Client.active\"", "- where: \"Purchase.net > 0\"");
+        var (exit, stderr, root) = Build(models + view, TsqlTarget);
+        try
+        {
+            Assert.True(exit == 0, stderr);
+            Assert.Contains("FROM [dbo].[PurchaseFullView] WHERE [ClientId] = b.[Id] AND ([Net] > 100)", Read(root, "ClientFullView.sql"));
+            Assert.Contains("FROM [dbo].[PurchaseFullView] AS [Purchase]", Read(root, "ClientPurchase.sql"));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    /// <summary>A field kept off the read surface is not in the views that read the model, so no expression there reads it.</summary>
+    [Fact]
+    public void An_internal_field_is_out_of_an_expression_s_reach()
+    {
+        var (exit, stderr, root) = Build(Models.Replace("- active: boolean", """
+            - active: boolean
+            - secret: integer @internal
+            - shown: integer @computed("secret * 2")
+            """), TsqlTarget);
+        try
+        {
+            Assert.NotEqual(0, exit);
+            Assert.Contains("'secret' is @internal", stderr);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    /// <summary>Text inside a string literal of a PostgreSQL filter is the author's data, not a relation to rename.</summary>
+    [Fact]
+    public void A_postgresql_filter_s_string_literals_are_left_alone()
+    {
+        var (exit, stderr, root) = Build(Models + View.Replace("- where: \"region = 'east' AND Client.active\"",
+            "- where_raw: \"Client.region <> 'Client.region'\" platform: postgresql"), PgTarget);
+        try
+        {
+            Assert.True(exit == 0, stderr);
+            Assert.Contains("WHERE client.region <> 'Client.region'", Read(root, "client_purchase.sql"));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     [Fact]
     public void A_rollup_filter_may_name_the_rolled_up_model_and_the_qualifier_is_quoted()
     {

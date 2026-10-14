@@ -95,6 +95,13 @@ public static class PgStandaloneViewRenderer
         // spelled with the alias each relation has here.
         string Qualified(string text)
         {
+            // Outside string literals only: a quoted 'Client.region' is the author's data.
+            var parts = text.Split('\'');
+            for (var i = 0; i < parts.Length; i += 2) parts[i] = Rename(parts[i]);
+            return string.Join('\'', parts);
+        }
+        string Rename(string text)
+        {
             foreach (var (relation, alias) in aliases)
                 text = System.Text.RegularExpressions.Regex.Replace(text,
                     $@"(?<![\w.""]){System.Text.RegularExpressions.Regex.Escape(relation)}\.([a-z_][a-z0-9_]*)\b", m => $"{alias}.{m.Groups[1].Value}");

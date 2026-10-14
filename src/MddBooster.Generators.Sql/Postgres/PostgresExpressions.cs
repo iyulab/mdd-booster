@@ -31,8 +31,11 @@ internal static class PostgresExpressions
     internal static string RenderValue(SelectedExpression selected, Func<string, string> column, FieldNode field)
     {
         var sql = Render(selected, column);
-        return selected.IsRaw || !ComputedValues.IsCast(field)
-            ? sql
-            : $"CAST({sql} AS {PgTypeMapper.Map(field.Type!, FieldAttributes.StringArgs(field.Params))})";
+        if (selected.IsRaw || !ComputedValues.IsCast(field)) return sql;
+        var type = PgTypeMapper.Map(field.Type!, FieldAttributes.StringArgs(field.Params));
+        // PostgreSQL's cast to an integer rounds; SQL Server's truncates toward zero — truncate first, so both agree.
+        return ComputedValues.IsIntegral(field)
+            ? $"CAST(trunc(({sql})::numeric) AS {type})"
+            : $"CAST({sql} AS {type})";
     }
 }

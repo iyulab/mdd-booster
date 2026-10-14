@@ -21,4 +21,10 @@ internal static class ComputedValues
     };
 
     internal static bool IsCast(FieldNode field) => field.Type is { } type && CastTypes.Contains(type);
+
+    /// <summary>
+    /// An integer type — where a fractional value has to be made whole the same way on both platforms: SQL Server's cast
+    /// truncates toward zero, PostgreSQL's rounds, so the PostgreSQL value is truncated first.
+    /// </summary>
+    internal static bool IsIntegral(FieldNode field) => field.Type is "integer" or "long" or "short" or "byte";
 }

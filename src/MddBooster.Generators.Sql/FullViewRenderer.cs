@@ -310,8 +310,16 @@ public static class FullViewRenderer
             && IsDerivedColumn(derivedFieldsByModel, def.Target, NameCasing.ToPascalCase(def.Field)))
             return true;
         return ExpressionSelection.Select(def.Where, def.WhereRaw, SqlDialect.SqlServer) is { } filter
-            && RollupWhereColumns(filter.Text).Any(c => IsDerivedColumn(derivedFieldsByModel, def.Target, c));
+            && RollupWhereColumns(WithoutTargetQualifier(filter.Text, def.Target))
+                .Any(c => IsDerivedColumn(derivedFieldsByModel, def.Target, c));
     }
+
+    /// <summary>
+    /// The filter with each <c>Target.field</c> read as the bare field it is (<see cref="RolledUpField"/>) — so a qualified
+    /// name counts as the target's column when deciding where the rows are read from.
+    /// </summary>
+    private static string WithoutTargetQualifier(string where, string target)
+        => Regex.Replace(where, "(?<![A-Za-z0-9_.$[])" + Regex.Escape(target) + "[.](?=[a-z_])", "");
 
     /// <summary>
     /// The target columns a rollup's <c>where:</c> names, PascalCased: bare snake_case

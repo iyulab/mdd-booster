@@ -1,4 +1,5 @@
 using MddBooster.Core.Naming;
+using MddBooster.Core.Semantic;
 
 namespace MddBooster.Generators.Sql;
 
@@ -25,7 +26,10 @@ public enum StandaloneViewSourceKind
 /// </summary>
 public static class StandaloneViewSources
 {
-    /// <summary>Every <c>Relation.column</c> the view reads: projected columns, join terms, group keys.</summary>
+    /// <summary>
+    /// Every <c>Relation.column</c> the view reads: projected columns, join terms, group keys, and the columns its filter
+    /// names (a bare name is the <c>from</c>'s) — a filter on a derived column reads it from the FullView too.
+    /// </summary>
     public static IEnumerable<ViewColumnRef> ReferencedColumns(ResolvedView view)
     {
         ArgumentNullException.ThrowIfNull(view);
@@ -36,6 +40,16 @@ public static class StandaloneViewSources
             yield return term.Right;
         }
         foreach (var key in view.GroupBy) yield return key;
+
+        var relations = new[] { view.From }.Concat(view.Joins.Select(j => j.Target)).ToList();
+        var filters = new[] { view.Where }.Concat(view.WhereRaw.Select(r => r.Expression));
+        foreach (var name in filters.Where(f => !string.IsNullOrWhiteSpace(f)).SelectMany(f => PortableExpression.FieldNames(f!)))
+        {
+            var dot = name.IndexOf('.', StringComparison.Ordinal);
+            var relation = dot > 0 ? relations.FirstOrDefault(r => r.Name == name[..dot]) : view.From;
+            var column = dot > 0 ? name[(dot + 1)..] : name;
+            if (relation is not null && relation.HasColumn(column)) yield return new ViewColumnRef(relation, column);
+        }
     }
 
     /// <summary>The object read for <paramref name="relation"/>.</summary>

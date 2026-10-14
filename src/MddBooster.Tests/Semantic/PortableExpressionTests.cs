@@ -152,6 +152,40 @@ public class PortableExpressionTests
     }
 
     /// <summary>
+    /// Conditions that are not a bare field: a parenthesised predicate is still a predicate, a simple CASE's WHEN takes a
+    /// value (not a condition), and a boolean-valued call or CASE standing as a condition is compared with 1 on SQL
+    /// Server — SQL Server selects no predicate and filters on no bit.
+    /// </summary>
+    [Fact]
+    public void Predicates_and_conditions_beyond_a_bare_field()
+    {
+        Assert.Equal("CASE WHEN (<due> < CAST(SYSDATETIME() AS date)) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END",
+            Sql("(due < today())", SqlDialect.SqlServer, booleanResult: true));
+        Assert.Equal("CASE <kind> WHEN <preferred_kind> THEN 1 ELSE 0 END",
+            Sql("CASE kind WHEN preferred_kind THEN 1 ELSE 0 END", SqlDialect.SqlServer));
+        string Condition(string expression)
+        {
+            var result = PortableExpression.Translate(expression, SqlDialect.SqlServer, c => $"<{c}>", condition: true);
+            Assert.True(result.Unsupported.Count == 0, string.Join("; ", result.Unsupported));
+            return result.Sql!;
+        }
+        Assert.Equal("(COALESCE(<is_active>, 1) = 1)", Condition("coalesce(is_active, true)"));
+        Assert.Equal("(CASE WHEN <a> > 1 THEN 1 ELSE 0 END = 1) AND <b> > 0", Condition("CASE WHEN a > 1 THEN true ELSE false END AND b > 0"));
+        // A searched CASE's WHEN is still a condition.
+        Assert.Equal("CASE WHEN (<flag> = 1) THEN 1 ELSE 0 END > 0", Condition("CASE WHEN flag THEN 1 ELSE 0 END > 0"));
+    }
+
+    /// <summary>A date stays a date through date_add by whole units and through coalesce of dates.</summary>
+    [Fact]
+    public void A_date_is_known_through_whole_unit_moves_and_coalesce()
+    {
+        const string Hint = "date_add() on a date takes 'year', 'month' or 'day'";
+        Func<string, string?> types = name => name == "due" ? "date" : null;
+        Assert.Contains(Hint, PortableExpression.Translate("date_add(date_add(due, 1, 'day'), 1, 'hour')", SqlDialect.SqlServer, c => c, fieldType: types).Unsupported);
+        Assert.Contains(Hint, PortableExpression.Translate("date_add(coalesce(due, today()), 1, 'hour')", SqlDialect.SqlServer, c => c, fieldType: types).Unsupported);
+    }
+
+    /// <summary>
     /// A date has no hours: moving one by hours, minutes or seconds is refused on SQL Server and turns it into a timestamp
     /// on PostgreSQL. Known from a date field (the caller names field types) and from <c>today()</c>.
     /// </summary>

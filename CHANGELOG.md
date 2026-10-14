@@ -58,23 +58,30 @@ M3L 0.20.0 이 `@computed` · rollup `where:` · 뷰 `where` 의 언어를 정�
 - 🔇 같은 이식 가능한 식이 두 플랫폼에서 **같은 값과 같은 형**을 낸다:
   - `@computed` 의 값은 필드가 선언한 형으로 캐스팅된다(`CAST(… AS INT)` · `CAST(… AS numeric(12,2))` — 숫자 · 날짜/시각 · 식별자). `floor`·`round` 의 결과,
     날짜에 `date_add` 한 결과는 방언마다 형이 달라(SQL Server 의 `decimal` 대 PostgreSQL 의 `numeric`, `date` 대 `timestamp`) 읽기 타입이 선언 형으로 읽지 못했다.
-    텍스트는 캐스팅하지 않는다(선언 길이로 잘리지 않게). `@computed_raw` 는 원문 그대로다.
+    텍스트는 캐스팅하지 않는다(선언 길이로 잘리지 않게). `@computed_raw` 는 원문 그대로다. 정수 형(`integer`·`long`·`short`·`byte`)으로는 두 플랫폼 모두
+    **0 쪽으로 버린다**(2.5 → 2, -2.5 → -2) — SQL Server 의 캐스트는 버리고 PostgreSQL 의 캐스트는 반올림하므로 PostgreSQL 쪽이 먼저 `trunc` 한다.
   - SQL Server 의 불리언 계산 열은 술어가 아닌 값도 `bit` 이다(`CASE WHEN … THEN true ELSE false END` 가 `int` 열이 되어 불리언 속성으로 읽히지 않았다).
-  - 조건 자리에 홀로 선 불리언 필드(rollup `where: "is_open"` · 뷰 `where` · `WHEN flag` · `NOT flag` · `flag AND …`)는 SQL Server 에서 `= 1` 비교가 된다 —
-    SQL Server 는 조건 자리에 `bit` 을 받지 않아 배포가 거절됐다(PostgreSQL 은 그대로 통과).
+  - 조건 자리에 홀로 선 불리언 값(rollup `where: "is_open"` · 뷰 `where` · `WHEN flag` · `NOT flag` · `flag AND …` · `coalesce(is_active, true)` · 조건 자리의
+    `CASE … END`)은 SQL Server 에서 `= 1` 비교가 된다 — SQL Server 는 조건 자리에 `bit` 을 받지 않아 배포가 거절됐다(PostgreSQL 은 그대로 통과).
+    단순 `CASE x WHEN v` 의 `WHEN` 은 값을 받으므로 조건 자리가 아니다. 괄호로 감싼 비교(`(due < today())`)도 불리언 계산 필드의 술어로 읽힌다.
+  - `length` 는 SQL Server 에서 UTF-16 단위로 센다 — 서로게이트 쌍으로 쓰이는 문자(일부 이모지 등)는 PostgreSQL 의 1 이 아니라 2 다(남은 차이).
   - `length(null)` 은 두 플랫폼 모두 `null`(SQL Server 에서 0 이었다).
   - SQL Server 의 문자열 리터럴은 `N'…'` — 유니코드가 아닌 정렬의 데이터베이스에서 한글 등이 `?` 로 바뀌었다.
-  - `date_add` 로 날짜(`date` 필드 · `today()`)를 시·분·초 단위로 옮기는 식은 `MDD037` — SQL Server 는 거절하고 PostgreSQL 은 시각으로 바꾼다.
+  - `date_add` 로 날짜(`date` 필드 · `today()` · 날짜를 일·월·년 단위로 옮긴 것 · 날짜들의 `coalesce`)를 시·분·초 단위로 옮기는 식은 `MDD037` — SQL Server 는
+    거절하고 PostgreSQL 은 시각으로 바꾼다.
 - 🔴 식 안의 **이름을 그 자리가 읽을 수 있는 것에 대어 본다**(명세 §10.7.1) — 범위 밖의 이름은 `MDD037` 로 이름을 대어 멈춘다. 종전엔 배포에서 «없는 열» 또는
   «모호한 열»로 깨졌다:
-  - 모델의 `@computed` 는 그 모델의 필드를, 앞에 선언된 계산 필드까지 읽는다(뒤의 것 · 자기 자신 · `Relation.field` 는 범위 밖).
+  - 모델의 `@computed` 는 그 모델의 필드를, 앞에 선언된 계산 필드까지 읽는다(뒤의 것 · 자기 자신 · `Relation.field` 는 범위 밖). `@internal` 필드는 읽기 면을
+    이루는 뷰에 없으므로 모델·뷰의 식 어디서도 범위 밖이다.
   - rollup 의 `where:` 는 대상 모델의 필드(`Order.status` 처럼 대상 이름으로 한정해도 된다 — 대상을 테이블에서 읽든 FullView 에서 읽든 같은 열)와
     `$parent.field` 를 읽는다. 생성기 내부 별칭으로 부모 행을 가리키던 `b.field` 는 이제 거절된다 — `$parent.field` 로 옮긴다.
   - 뷰의 `where` 는 조인된 행을 거른다: `Relation.field` 는 그 관계의 열, **맨 이름은 `from` 의 열**이다 — SQL Server 에서 맨 이름이 한정 없이 나가
-    두 관계에 같은 이름의 열이 있으면 모호했다(PostgreSQL 은 이미 `from` 으로 읽었다).
+    두 관계에 같은 이름의 열이 있으면 모호했다(PostgreSQL 은 이미 `from` 으로 읽었다). 필터가 파생 열(Lookup·Rollup·Computed)을 읽으면 뷰는 그 관계를
+    FullView 에서 읽는다 — rollup `where:` 가 대상 이름으로 한정한 파생 열도 같다(종전엔 테이블을 읽어 없는 열을 가리켰다).
   - 뷰의 `@computed` 는 뷰 자신의 행 위에서 계산된다: 맨 이름은 뷰의 열(투영 · rollup 열, 앞에 선언된 계산 열)이고, `Relation.field` 는 그것을 투영하는
     열로 읽힌다 — 종전엔 관계가 범위에 없는 자리에 관계로 한정해 내보냈다. 투영되지 않은 `Relation.field` 는 거절된다(`@from` 으로 투영한다).
-  - PostgreSQL 뷰의 `where_raw` 에 쓴 `Relation.field` 는 그 관계의 별칭으로 바뀐다(명세 §10.7.5 의 예 그대로 — SQL Server 쪽은 이미 그랬다).
+  - PostgreSQL 뷰의 `where_raw` 에 쓴 `Relation.field` 는 그 관계의 별칭으로 바뀐다(명세 §10.7.5 의 예 그대로 — SQL Server 쪽은 이미 그랬다). 문자열 리터럴
+    안은 건드리지 않는다.
   - SQL Server 에서 한정자는 따옴표로 감싼다(`[Order].[Status]` — 예약어 이름의 모델).
 - 읽기 모델로 내는 standalone 뷰가 **생성 클래스가 가질 수 없는 모양**이면 `MDD038` 로 멈춘다 — 종전엔 빌드는 지나고 소비 앱의 컴파일이 멈췄다:
   키 열 `id` 가 널을 허용한다(`identifier?` — 클래스는 널이 될 수 없는 키를 구현한다, `CS0535`) · 열의 속성 이름이 클래스 이름과 같다(`CS0542`).

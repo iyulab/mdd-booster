@@ -1,4 +1,5 @@
 using M3L.Native;
+using MddBooster.Core.Generation;
 using MddBooster.Core.Semantic;
 
 namespace MddBooster.Generators.Sql;
@@ -32,6 +33,7 @@ internal static class ExpressionScopes
         var index = IndexOf(model, name);
         if (index < 0) return Resolved.Not($"'{name}' is not a field of {model.Name}");
         var field = model.Fields[index];
+        if (EntitySurface.IsFieldInternal(field)) return Internal(name);
         if (field.Computed is not null && index >= IndexOf(model, computed.Name))
             return Resolved.Not($"'{name}' is computed after '{computed.Name}' (a computed field reads the ones before it)");
         return Resolved.To(field);
@@ -73,7 +75,10 @@ internal static class ExpressionScopes
         var (relation, column) = Split(view, name);
         if (relation is null) return Resolved.Not($"'{name[..name.IndexOf('.', StringComparison.Ordinal)]}' is not a relation of view {view.Name}");
         if (!relation.HasColumn(column)) return Resolved.Not($"'{column}' is not a column of {relation.Name}");
-        return new Resolved(ColumnField(relation, column), null);
+        var field = ColumnField(relation, column);
+        return field is not null && relation.Kind == ViewRelationKind.Model && EntitySurface.IsFieldInternal(field)
+            ? Internal(column)
+            : new Resolved(field, null);
     };
 
     /// <summary>
@@ -97,6 +102,10 @@ internal static class ExpressionScopes
             return Resolved.Not($"'{name}' is computed after '{computed.Name}' (a computed column reads the ones before it)");
         return Resolved.To(columns[index].Field);
     };
+
+    /// <summary>A field kept off the read surface: the views a model is read through do not carry it.</summary>
+    private static Resolved Internal(string name)
+        => Resolved.Not($"'{name}' is @internal (kept off the read surface the views are built from)");
 
     /// <summary>The view column that projects <c>Relation.field</c>, if the view projects it.</summary>
     internal static ViewFromColumn? ProjectionOf(ResolvedView view, string qualifiedName)
