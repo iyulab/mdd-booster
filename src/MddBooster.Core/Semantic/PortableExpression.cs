@@ -59,12 +59,16 @@ public static class PortableExpression
     /// known, and only what literals and functions produce is: whether <c>+</c> stands between text, whether
     /// <c>date_add</c> moves a date.
     /// </param>
+    /// <param name="outOfScope">
+    /// Why a field reference names nothing the expression's context can read, or <c>null</c> when it does. Without it
+    /// every name is taken as a field.
+    /// </param>
     /// <param name="condition">
     /// The expression is a condition (a filter), not a value. SQL Server takes no bit there, so a boolean field standing
     /// alone as a condition is compared with 1.
     /// </param>
     public static Result Translate(string expression, SqlDialect dialect, Func<string, string> column, bool booleanResult = false,
-        Func<string, string?>? fieldType = null, bool condition = false)
+        Func<string, string?>? fieldType = null, bool condition = false, Func<string, string?>? outOfScope = null)
     {
         ArgumentNullException.ThrowIfNull(expression);
         ArgumentNullException.ThrowIfNull(column);
@@ -80,7 +84,7 @@ public static class PortableExpression
         var nodes = ParseSequence(tokens, ref position, Note);
         if (position < tokens.Count) Note($"unbalanced '{tokens[position].Value}'");
 
-        var context = new RenderContext(dialect, column, Note, fieldType ?? (_ => null));
+        var context = new RenderContext(dialect, column, Note, fieldType ?? (_ => null), outOfScope ?? (_ => null));
         // A boolean field's predicate is selected through a CASE, whose WHEN is a condition.
         var sql = Render(nodes, context, condition || (booleanResult && IsPredicate(nodes)));
         if (unsupported.Count > 0) return new Result(null, unsupported);
@@ -95,7 +99,8 @@ public static class PortableExpression
         return new Result(sql, unsupported);
     }
 
-    private sealed record RenderContext(SqlDialect Dialect, Func<string, string> Column, Action<string> Note, Func<string, string?> FieldType)
+    private sealed record RenderContext(SqlDialect Dialect, Func<string, string> Column, Action<string> Note, Func<string, string?> FieldType,
+        Func<string, string?> OutOfScope)
     {
         public bool SqlServer => Dialect == SqlDialect.SqlServer;
     }
@@ -333,7 +338,7 @@ public static class PortableExpression
     {
         Leaf { Token: { Kind: Kind.Name } t } when t.Value.Equals("true", StringComparison.OrdinalIgnoreCase) => "1 = 1",
         Leaf { Token: { Kind: Kind.Name } t } when t.Value.Equals("false", StringComparison.OrdinalIgnoreCase) => "1 = 0",
-        Leaf { Token: { Kind: Kind.Name } t } when !Keywords.Contains(t.Value) => $"({cx.Column(t.Value)} = 1)",
+        Leaf { Token: { Kind: Kind.Name } t } when !Keywords.Contains(t.Value) => $"({RenderLeaf(t, cx)} = 1)",
         Group { Items: [var only] } => "(" + Render(only, cx, condition: true) + ")",
         _ => RenderNode(node, cx),
     };
@@ -392,6 +397,7 @@ public static class PortableExpression
         if (lower is "true" or "false")
             return cx.SqlServer ? (lower == "true" ? "1" : "0") : lower.ToUpperInvariant();
         if (Keywords.Contains(lower)) return lower.ToUpperInvariant();
+        if (cx.OutOfScope(token.Value) is { } why) cx.Note(why);
         return cx.Column(token.Value);
     }
 

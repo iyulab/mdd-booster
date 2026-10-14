@@ -265,7 +265,7 @@ public static class FullViewRenderer
                 : SqlServerExpressions.RenderCondition(filter,
                     name => name.StartsWith(ParentPrefix, StringComparison.Ordinal)
                         ? $"{baseAlias}.[{NameCasing.ToPascalCase(name[ParentPrefix.Length..])}]"
-                        : SqlServerExpressions.OwnColumn(name));
+                        : SqlServerExpressions.OwnColumn(RolledUpField(name, target)));
             whereClause += $" AND ({where})";
         }
 
@@ -351,6 +351,13 @@ public static class FullViewRenderer
     }
 
     private const string ParentPrefix = "$parent.";
+
+    /// <summary>
+    /// A rollup filter's name for a field of the rolled-up rows: <c>Target.field</c> is that model's field, read from
+    /// whichever relation the subquery takes its rows from (the table or its FullView).
+    /// </summary>
+    internal static string RolledUpField(string name, string target)
+        => name.StartsWith(target + ".", StringComparison.Ordinal) ? name[(target.Length + 1)..] : name;
 
     internal static string NormalizeComputedExpression(string expr)
     {

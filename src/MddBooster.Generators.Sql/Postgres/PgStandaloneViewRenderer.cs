@@ -75,7 +75,9 @@ public static class PgStandaloneViewRenderer
                     var selected = ExpressionSelection.Select(computedColumn.Computed, SqlDialect.PostgreSql)
                         ?? throw new InvalidOperationException($"View column '{view.Name}.{column.Name}' has no PostgreSQL expression (MDD036).");
                     // Over the projected row (the CTE below): a bare name is a column the view already carries.
-                    computed.Add((PostgresExpressions.RenderValue(selected, name => name, computedColumn.Field), column.Name));
+                    // Relation.field is the column projecting it — the relation is not in scope over the row.
+                    computed.Add((PostgresExpressions.RenderValue(selected,
+                        name => ExpressionScopes.ProjectionOf(view, name)?.Name ?? name, computedColumn.Field), column.Name));
                     break;
             }
         }
@@ -87,6 +89,16 @@ public static class PgStandaloneViewRenderer
             return dot > 0 && aliases.TryGetValue(name[..dot], out var alias)
                 ? $"{alias}.{name[(dot + 1)..]}"
                 : $"{Alias(view.From)}.{name}";
+        }
+
+        // A platform filter is the author's text, but its Relation.field names the view's relations as the model does —
+        // spelled with the alias each relation has here.
+        string Qualified(string text)
+        {
+            foreach (var (relation, alias) in aliases)
+                text = System.Text.RegularExpressions.Regex.Replace(text,
+                    $@"(?<![\w.""]){System.Text.RegularExpressions.Regex.Escape(relation)}\.([a-z_][a-z0-9_]*)\b", m => $"{alias}.{m.Groups[1].Value}");
+            return text;
         }
 
         var sb = new StringBuilder();
@@ -103,7 +115,7 @@ public static class PgStandaloneViewRenderer
               .AppendLine(string.Join(" AND ", join.On.Select(t => $"{Column(t.Left)} = {Column(t.Right)}")));
         }
         if (view.WhereFor(SqlDialect.PostgreSql) is { } where)
-            sb.Append("WHERE ").AppendLine(PostgresExpressions.Render(where, Reference));
+            sb.Append("WHERE ").AppendLine(where.IsRaw ? Qualified(where.Text) : PostgresExpressions.Render(where, Reference));
         if (view.GroupBy.Count > 0)
             sb.Append("GROUP BY ").AppendLine(string.Join(", ", view.GroupBy.Select(Column)));
         sb.Length -= Environment.NewLine.Length;

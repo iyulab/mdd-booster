@@ -65,6 +65,17 @@ M3L 0.20.0 이 `@computed` · rollup `where:` · 뷰 `where` 의 언어를 정�
   - `length(null)` 은 두 플랫폼 모두 `null`(SQL Server 에서 0 이었다).
   - SQL Server 의 문자열 리터럴은 `N'…'` — 유니코드가 아닌 정렬의 데이터베이스에서 한글 등이 `?` 로 바뀌었다.
   - `date_add` 로 날짜(`date` 필드 · `today()`)를 시·분·초 단위로 옮기는 식은 `MDD037` — SQL Server 는 거절하고 PostgreSQL 은 시각으로 바꾼다.
+- 🔴 식 안의 **이름을 그 자리가 읽을 수 있는 것에 대어 본다**(명세 §10.7.1) — 범위 밖의 이름은 `MDD037` 로 이름을 대어 멈춘다. 종전엔 배포에서 «없는 열» 또는
+  «모호한 열»로 깨졌다:
+  - 모델의 `@computed` 는 그 모델의 필드를, 앞에 선언된 계산 필드까지 읽는다(뒤의 것 · 자기 자신 · `Relation.field` 는 범위 밖).
+  - rollup 의 `where:` 는 대상 모델의 필드(`Order.status` 처럼 대상 이름으로 한정해도 된다 — 대상을 테이블에서 읽든 FullView 에서 읽든 같은 열)와
+    `$parent.field` 를 읽는다. 생성기 내부 별칭으로 부모 행을 가리키던 `b.field` 는 이제 거절된다 — `$parent.field` 로 옮긴다.
+  - 뷰의 `where` 는 조인된 행을 거른다: `Relation.field` 는 그 관계의 열, **맨 이름은 `from` 의 열**이다 — SQL Server 에서 맨 이름이 한정 없이 나가
+    두 관계에 같은 이름의 열이 있으면 모호했다(PostgreSQL 은 이미 `from` 으로 읽었다).
+  - 뷰의 `@computed` 는 뷰 자신의 행 위에서 계산된다: 맨 이름은 뷰의 열(투영 · rollup 열, 앞에 선언된 계산 열)이고, `Relation.field` 는 그것을 투영하는
+    열로 읽힌다 — 종전엔 관계가 범위에 없는 자리에 관계로 한정해 내보냈다. 투영되지 않은 `Relation.field` 는 거절된다(`@from` 으로 투영한다).
+  - PostgreSQL 뷰의 `where_raw` 에 쓴 `Relation.field` 는 그 관계의 별칭으로 바뀐다(명세 §10.7.5 의 예 그대로 — SQL Server 쪽은 이미 그랬다).
+  - SQL Server 에서 한정자는 따옴표로 감싼다(`[Order].[Status]` — 예약어 이름의 모델).
 - 🔴 **`@index(…, name: "…")` · `@unique(…, name: "…")`(M3L 명세 §3.3.2 의 예 그대로)가 컴파일되는 생성물을 낸다.** 종전엔 키워드 인자가 열 목록에 섞여 와
   `HasIndex(x => new { x.Sku, x.Name: "productSearch" })` 같은 C# 과 없는 열 `[Name: "uqSku"]` 을 가리키는 SQL 을 냈다. M3L 0.20.0 이 키워드를 열 목록에서 빼고,
   이 생성기는 열만으로 인덱스를 내고, **지시자의 `name:` 을 그 인덱스·제약의 이름으로 쓴다** — SQL Server · PostgreSQL · EF(`HasDatabaseName`) 모두.

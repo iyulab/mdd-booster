@@ -59,14 +59,14 @@ internal static class SqlServerExpressions
 
     /// <summary>
     /// A field reference as a column of the row the expression is evaluated on: <c>first_name</c> → <c>[FirstName]</c>; a
-    /// qualified one keeps its qualifier, <c>b.first_name</c> → <c>b.[FirstName]</c> (a rollup filter may name the base row's
+    /// qualified one keeps its qualifier, quoted: <c>b.first_name</c> → <c>[b].[FirstName]</c> (a rollup filter may name the base row's
     /// alias directly).
     /// </summary>
     internal static string OwnColumn(string name)
     {
         var dot = name.LastIndexOf('.');
         return dot > 0
-            ? $"{name[..dot]}.[{NameCasing.ToPascalCase(name[(dot + 1)..])}]"
+            ? $"[{name[..dot]}].[{NameCasing.ToPascalCase(name[(dot + 1)..])}]"
             : $"[{NameCasing.ToPascalCase(name)}]";
     }
 }

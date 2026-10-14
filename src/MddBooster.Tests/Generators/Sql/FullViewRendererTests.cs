@@ -386,7 +386,8 @@ public class FullViewRendererTests
     {
         // Regression: the identifier-bracketing pass used to match `b` itself (a
         // word-boundary lowercase token like any other) and rewrite it to `[B]`,
-        // which only happened to still work under a case-insensitive collation.
+        // which only happened to still work under a case-insensitive collation. A model can no longer write it — the
+        // build refuses it for `$parent.field` (MDD037) — but the renderer still keeps the alias's case, now quoted.
         var def = new RollupDef
         {
             Target = "Order",
@@ -398,15 +399,15 @@ public class FullViewRendererTests
         var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", "Id", derivedFieldsByModel: null);
 
         Assert.Equal(
-            "(SELECT COUNT(*) FROM [dbo].[Order] WHERE [CustomerId] = b.[Id] AND (b.[ProductionState] = N'active'))",
+            "(SELECT COUNT(*) FROM [dbo].[Order] WHERE [CustomerId] = b.[Id] AND ([b].[ProductionState] = N'active'))",
             sql);
     }
 
     [Fact]
     public void Rollup_where_clause_dollar_parent_token_resolves_to_the_base_alias()
     {
-        // `$parent.<snake_field>` is the documented way to reach the parent row —
-        // it must render identically to a hand-written base-alias reference.
+        // `$parent.<snake_field>` is the language's way to reach the parent row — the
+        // base row's alias, whatever the generator calls it.
         var def = new RollupDef
         {
             Target = "Order",

@@ -15,12 +15,12 @@ namespace MddBooster.Generators.Sql;
 /// FullView's correlated subquery, correlated on the <c>from</c> model's key.
 /// </para>
 /// <para>
-/// <c>where</c> and <c>@computed</c> follow the FullView's expression contract: identifiers become
-/// PascalCase columns, string literals are kept — the language does not define the expression
-/// dialect, so the text is otherwise passed through. A <c>Relation.field</c> naming one of the
-/// view's relations is qualified first. A computed column may read the columns before it, so the
-/// view is layered (one CTE per computed column) and the final select lists the columns in
-/// declaration order. <c>order_by</c> is not emitted: a view has no order, and T-SQL refuses one
+/// <c>where</c> and <c>@computed</c> are M3L's portable subset translated (§10.7), or the
+/// <c>sqlserver</c> platform expression as written. The filter reads the joined rows —
+/// <c>Relation.field</c> that relation's column, a bare name the <c>from</c>'s. A computed column
+/// reads the view's own row — a bare name a view column, <c>Relation.field</c> the column projecting
+/// it — and the columns before it, so the view is layered (one CTE per computed column) and the
+/// final select lists the columns in declaration order. <c>order_by</c> is not emitted: a view has no order, and T-SQL refuses one
 /// without <c>TOP</c>.
 /// </para>
 /// </remarks>
@@ -134,30 +134,36 @@ public static class StandaloneViewRenderer
     }
 
     /// <summary>
-    /// The FullView expression contract, after qualifying each <c>Relation.field</c> that names one of
-    /// the view's relations — the normalizer leaves bracketed text alone.
-    /// </summary>
-    /// <summary>
-    /// A platform expression as written (relation-qualified names spelled as columns); a portable one translated, with
-    /// <c>Relation.field</c> as <c>[Relation].[Field]</c> and a bare name as the view row's column.
+    /// A platform expression as written (relation-qualified names spelled as columns); a portable one translated, its
+    /// names read in the filter's or the computed column's scope.
     /// </summary>
     /// <param name="valueOf">The field the expression is the value of — its declared type decides the column's — or <c>null</c> for a filter.</param>
     private static string Expression(SelectedExpression selected, ResolvedView view, FieldNode? valueOf)
     {
         if (selected.IsRaw) return Expression(selected.Text, view);
         var relations = new[] { view.From }.Concat(view.Joins.Select(j => j.Target)).Select(r => r.Name).ToHashSet(StringComparer.Ordinal);
-        string Column(string name)
+        // A filter reads the joined rows: Relation.field is that relation's column, a bare name the from's.
+        string FilterColumn(string name)
         {
             var dot = name.IndexOf('.', StringComparison.Ordinal);
             return dot > 0 && relations.Contains(name[..dot])
                 ? $"[{name[..dot]}].[{NameCasing.ToPascalCase(name[(dot + 1)..])}]"
-                : SqlServerExpressions.OwnColumn(name);
+                : $"{Alias(view.From)}.[{NameCasing.ToPascalCase(name)}]";
         }
+        // A computed column reads the view's own row: a bare name is a view column, Relation.field the column projecting it.
+        string RowColumn(string name)
+            => ExpressionScopes.ProjectionOf(view, name) is { } projecting
+                ? $"[{NameCasing.ToPascalCase(projecting.Name)}]"
+                : SqlServerExpressions.OwnColumn(name);
         return valueOf is null
-            ? SqlServerExpressions.RenderCondition(selected, Column)
-            : SqlServerExpressions.RenderValue(selected, Column, valueOf);
+            ? SqlServerExpressions.RenderCondition(selected, FilterColumn)
+            : SqlServerExpressions.RenderValue(selected, RowColumn, valueOf);
     }
 
+    /// <summary>
+    /// A platform expression: each <c>Relation.field</c> naming one of the view's relations is qualified, then the
+    /// FullView normalizer spells the rest as columns (it leaves bracketed text alone).
+    /// </summary>
     private static string Expression(string text, ResolvedView view)
     {
         var relations = new[] { view.From }.Concat(view.Joins.Select(j => j.Target)).Select(r => r.Name);

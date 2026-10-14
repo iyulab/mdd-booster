@@ -203,7 +203,7 @@ public static class PgFullViewRenderer
                 ? ParentReferenceToken.Substitute(filter.Text, field => $"{baseAlias}.{field}")
                 : PostgresExpressions.Render(filter, name => name.StartsWith("$parent.", StringComparison.Ordinal)
                     ? $"{baseAlias}.{name["$parent.".Length..]}"
-                    : name);
+                    : FullViewRenderer.RolledUpField(name, def.Target));
             whereClause += $" AND ({where})";
         }
 
