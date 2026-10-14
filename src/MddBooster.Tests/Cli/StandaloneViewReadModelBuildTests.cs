@@ -106,6 +106,23 @@ public sealed class StandaloneViewReadModelBuildTests
         Assert.Contains(expected, stderr);
     }
 
+    /// <summary>
+    /// Two read-model shapes the generated class cannot take: a key that may be null (the class implements a key that is
+    /// never null), and a column whose property would be named as the class (C# gives no member its type's name). Both
+    /// stopped the consumer's compile instead of the build.
+    /// </summary>
+    [Theory]
+    [InlineData("- id: identifier @from(Product.id)", "- id: identifier? @from(Product.id)", "키 열 'id' 가 널을 허용한다")]
+    [InlineData("- stock: integer @from(Product.stock_quantity)", "- active_products: integer @from(Product.stock_quantity)", "열 'active_products' 의 속성 이름이 클래스 이름 'ActiveProducts' 와 같다")]
+    public void A_view_whose_read_model_cannot_compile_stops_the_build(string column, string replacement, string expected)
+    {
+        var (exit, stderr) = TryBuild(ProductOnly.Replace(column, replacement));
+
+        Assert.Equal(3, exit);
+        Assert.Contains("MDD038", stderr);
+        Assert.Contains(expected, stderr);
+    }
+
     [Fact]
     public void An_internal_view_may_share_a_generated_name_because_it_generates_none()
     {

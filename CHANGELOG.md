@@ -76,6 +76,10 @@ M3L 0.20.0 이 `@computed` · rollup `where:` · 뷰 `where` 의 언어를 정�
     열로 읽힌다 — 종전엔 관계가 범위에 없는 자리에 관계로 한정해 내보냈다. 투영되지 않은 `Relation.field` 는 거절된다(`@from` 으로 투영한다).
   - PostgreSQL 뷰의 `where_raw` 에 쓴 `Relation.field` 는 그 관계의 별칭으로 바뀐다(명세 §10.7.5 의 예 그대로 — SQL Server 쪽은 이미 그랬다).
   - SQL Server 에서 한정자는 따옴표로 감싼다(`[Order].[Status]` — 예약어 이름의 모델).
+- 읽기 모델로 내는 standalone 뷰가 **생성 클래스가 가질 수 없는 모양**이면 `MDD038` 로 멈춘다 — 종전엔 빌드는 지나고 소비 앱의 컴파일이 멈췄다:
+  키 열 `id` 가 널을 허용한다(`identifier?` — 클래스는 널이 될 수 없는 키를 구현한다, `CS0535`) · 열의 속성 이름이 클래스 이름과 같다(`CS0542`).
+- 생성 C# 의 문자열 리터럴(권한 키 · 셋 이름 · `ToView`/`ToTable`/`HasColumnName` · `[Table]`/`[Reference]`/`[Binding]`)이 전부 이스케이프를 거친다 — 설정의
+  권한 키 템플릿에 백슬래시나 따옴표가 있으면(`orders\read`) 종전엔 `\r` 이 줄 바꿈 문자가 되거나 리터럴이 끊겼다.
 - 🔴 **`@index(…, name: "…")` · `@unique(…, name: "…")`(M3L 명세 §3.3.2 의 예 그대로)가 컴파일되는 생성물을 낸다.** 종전엔 키워드 인자가 열 목록에 섞여 와
   `HasIndex(x => new { x.Sku, x.Name: "productSearch" })` 같은 C# 과 없는 열 `[Name: "uqSku"]` 을 가리키는 SQL 을 냈다. M3L 0.20.0 이 키워드를 열 목록에서 빼고,
   이 생성기는 열만으로 인덱스를 내고, **지시자의 `name:` 을 그 인덱스·제약의 이름으로 쓴다** — SQL Server · PostgreSQL · EF(`HasDatabaseName`) 모두.

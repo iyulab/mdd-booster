@@ -39,6 +39,23 @@ public static class ViewReadModels
             .Any(a => string.Equals(a.Name, "internal", StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// Why the read model's class cannot be the view's shape — reported, not resolved: a key that may be null (the class
+    /// is addressed by a key that never is), and a column whose property would carry the class's own name (no C# member
+    /// may).
+    /// </summary>
+    public static IReadOnlyList<string> ShapeProblems(ResolvedView view)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+        var problems = new List<string>();
+        if (KeyOf(view) is { Field.Nullable: true })
+            problems.Add("키 열 'id' 가 널을 허용한다 — 읽기 모델의 행은 널이 될 수 없는 키로 가리킨다(`?` 를 뗀다)");
+        var entity = NameCasing.ToPascalCase(view.Name);
+        foreach (var column in view.Columns.Where(c => NameCasing.ToPascalCase(c.Name) == entity))
+            problems.Add($"열 '{column.Name}' 의 속성 이름이 클래스 이름 '{entity}' 와 같다 — C# 멤버는 자기를 담은 타입의 이름을 가질 수 없다(열 이름을 바꾼다)");
+        return problems;
+    }
+
     /// <summary>Whether the view is served as a read model: it has a key and is not kept off the surface.</summary>
     public static bool IsReadModel(ResolvedView view) => KeyOf(view) is not null && !IsInternal(view);
 

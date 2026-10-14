@@ -241,6 +241,16 @@ public sealed class BuildCommand
                     + "`@internal` 을 붙인다.",
                     view.Source.Loc));
             }
+            // 이름이 비어 있어도 생성 클래스가 그 모양을 가질 수 없으면 소비 앱의 컴파일이 멈춘다 — 여기서 멈춘다.
+            foreach (var view in readViews)
+            {
+                foreach (var reason in ViewReadModels.ShapeProblems(view))
+                {
+                    errors.Add(new SemanticDiagnostic("MDD038",
+                        $"뷰 '{view.Name}' 을(를) 읽기 모델로 낼 수 없다 — {reason}. 읽기 모델로 내지 않으려면 `@internal` 을 붙인다.",
+                        view.Source.Loc));
+                }
+            }
         }
         if (errors.Count > 0)
         {

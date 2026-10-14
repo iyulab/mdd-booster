@@ -1218,7 +1218,7 @@ consumer-repo/
 | MDD042 | 모델이 인덱스에 준 이름 — `### Indexes` 항목의 이름, 또는 `@index`/`@unique` 지시자의 `name:` — 을 데이터베이스 이름으로 쓸 수 없다: 영문자·숫자·밑줄이 아니거나(생성 SQL 에 그대로 들어간다), 빌드 안의 다른 인덱스가 같은 이름을 쓰거나 다른 인덱스가 그 이름으로 생성된다(필드 단위 `@unique`/`@index` · 이름 없는 항목 — `IX_{Model}_{Cols}` · `ix_{table}_{cols}` 꼴, 두 방언 모두와 대조)(대소문자 무시 — SQL Server 의 제약 이름과 PostgreSQL 의 인덱스 이름은 스키마 단위로 유일하다) |
 | MDD043(경고) | `### Indexes` 항목이 열을 하나도 말하지 않는다(`fields:` 가 없거나 비었다, 지시자에 열이 없다) — 인덱스를 만들지 않는다 |
 | MDD041(경고) | `@index(…, fulltext: true)` — 이 생성기는 전문(full-text) 인덱스를 만들지 않는다(SQL Server 는 카탈로그와 키 인덱스, PostgreSQL 은 텍스트 검색 식이 필요하다). 같은 열의 일반 인덱스로 낸다 — 단어 검색이 필요하면 전문 인덱스는 생성물 밖에서 만든다 |
-| MDD038 | 읽기 모델로 내는 standalone `::view` 의 생성 이름(클래스 = 뷰 이름, 셋 = 그 복수형)이 모델의 엔티티·읽기 타입(`…Ext`)·셋이나 enum, 다른 뷰의 것과 같다 — 뷰의 이름을 바꾸거나 `@internal` 로 읽기 모델에서 뺀다. Model·Api·TypeScript 타깃이 있는 빌드에서만 |
+| MDD038 | 읽기 모델로 내는 standalone `::view` 의 생성 이름(클래스 = 뷰 이름, 셋 = 그 복수형)이 모델의 엔티티·읽기 타입(`…Ext`)·셋이나 enum, 다른 뷰의 것과 같다 — 뷰의 이름을 바꾸거나 `@internal` 로 읽기 모델에서 뺀다. 생성 클래스가 가질 수 없는 모양도 같다: 키 열 `id` 가 널을 허용한다(`identifier?`) · 열의 속성 이름이 클래스 이름과 같다. Model·Api·TypeScript 타깃이 있는 빌드에서만 |
 | MDD036 | SQL Server(또는 그 방언)용 식이 없다 — `@computed_raw`/`where_raw` 가 다른 플랫폼에만 있고 포터블 식(`@computed`/`where`)도 없다. 생성물이 식을 지어낼 수 없어 빌드가 멈춘다(생성 단계) |
 | MDD035(경고) | `@searchable` 참조의 대상 모델을 같은 빌드의 어떤 Api 타깃도 OData 로 등록하지 않는다 — 런타임 `$search` 는 등록되지 않은 대상의 navigation 을 건너뛰어 그 선언이 아무것도 매칭하지 않는다. 대상을 등록하는 Api 타깃을 두거나 그 키의 `@searchable` 을 뺀다(설정 단계에서 나온다) |
 | MDD039(경고) | 필드 `@system` 이 호출자가 애초에 쓸 수 없는 칸(lookup · rollup · computed · `rowversion`)에 있다 — 쓰기 제외가 이미 성립해 선언이 아무것도 바꾸지 않는다. 애플리케이션 코드가 쓰는 값이면 그 값을 담는 저장 칸에 둔다 |
