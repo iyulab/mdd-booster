@@ -75,7 +75,7 @@ public static class PgStandaloneViewRenderer
                     var selected = ExpressionSelection.Select(computedColumn.Computed, SqlDialect.PostgreSql)
                         ?? throw new InvalidOperationException($"View column '{view.Name}.{column.Name}' has no PostgreSQL expression (MDD036).");
                     // Over the projected row (the CTE below): a bare name is a column the view already carries.
-                    computed.Add((PostgresExpressions.Render(selected, name => name), column.Name));
+                    computed.Add((PostgresExpressions.RenderValue(selected, name => name, computedColumn.Field), column.Name));
                     break;
             }
         }

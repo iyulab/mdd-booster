@@ -346,7 +346,7 @@ public class FullViewRendererTests
         var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", "Id", derivedFieldsByModel: null);
 
         Assert.Equal(
-            "(SELECT COUNT(*) FROM [dbo].[Order] WHERE [CustomerId] = b.[Id] AND ([Status] <> 'cancelled'))",
+            "(SELECT COUNT(*) FROM [dbo].[Order] WHERE [CustomerId] = b.[Id] AND ([Status] <> N'cancelled'))",
             sql);
     }
 
@@ -364,7 +364,7 @@ public class FullViewRendererTests
         var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", "Id", derivedFieldsByModel: null);
 
         Assert.Equal(
-            "(SELECT COUNT(*) FROM [dbo].[OrderItem] WHERE [OrderId] = b.[Id] AND ([RowType] IN ('product', 'print_order')))",
+            "(SELECT COUNT(*) FROM [dbo].[OrderItem] WHERE [OrderId] = b.[Id] AND ([RowType] IN (N'product', N'print_order')))",
             sql);
     }
 
@@ -398,7 +398,7 @@ public class FullViewRendererTests
         var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", "Id", derivedFieldsByModel: null);
 
         Assert.Equal(
-            "(SELECT COUNT(*) FROM [dbo].[Order] WHERE [CustomerId] = b.[Id] AND (b.[ProductionState] = 'active'))",
+            "(SELECT COUNT(*) FROM [dbo].[Order] WHERE [CustomerId] = b.[Id] AND (b.[ProductionState] = N'active'))",
             sql);
     }
 
@@ -418,7 +418,7 @@ public class FullViewRendererTests
         var sql = FullViewRenderer.RenderRollupSubquery(def, "dbo", "b", "Id", derivedFieldsByModel: null);
 
         Assert.Equal(
-            "(SELECT COUNT(*) FROM [dbo].[Order] WHERE [CustomerId] = b.[Id] AND (b.[ProductionState] = 'active'))",
+            "(SELECT COUNT(*) FROM [dbo].[Order] WHERE [CustomerId] = b.[Id] AND (b.[ProductionState] = N'active'))",
             sql);
     }
 
@@ -444,7 +444,7 @@ public class FullViewRendererTests
             var plan = new ViewPlanner().Plan(customer);
             var sql = FullViewRenderer.Render(plan, "dbo", allModels: models);
 
-            Assert.Contains("WHERE [CustomerId] = b.[Id] AND ([Status] <> 'cancelled')", sql);
+            Assert.Contains("WHERE [CustomerId] = b.[Id] AND ([Status] <> N'cancelled')", sql);
         }
         finally
         {
@@ -469,8 +469,8 @@ public class FullViewRendererTests
         Assert.Contains("c0 AS (", sql);
         Assert.Contains("c1 AS (", sql);
         Assert.Contains("SELECT * FROM c1", sql);
-        Assert.Contains("[Subtotal] * 0.1 AS [TaxAmount]", sql);
-        Assert.Contains("[Subtotal] + [TaxAmount] AS [GrandTotal]", sql);
+        Assert.Contains("CAST([Subtotal] * 0.1 AS DECIMAL(12,2)) AS [TaxAmount]", sql);
+        Assert.Contains("CAST([Subtotal] + [TaxAmount] AS DECIMAL(12,2)) AS [GrandTotal]", sql);
     }
 
     [Fact]

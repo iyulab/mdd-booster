@@ -26,7 +26,7 @@ internal static class ExpressionRefusals
         var modelsByName = context.Models.ToDictionary(m => m.Name, StringComparer.Ordinal);
 
         void Check(SelectedExpression? selected, bool declared, string where, IEnumerable<PlatformExpression> raw,
-            Func<string, bool>? isText = null)
+            Func<string, string?>? fieldType = null)
         {
             if (selected is null)
             {
@@ -36,7 +36,7 @@ internal static class ExpressionRefusals
                 return;
             }
             if (selected.IsRaw) return;
-            var result = PortableExpression.Translate(selected.Text, dialect, c => c, isText: isText);
+            var result = PortableExpression.Translate(selected.Text, dialect, c => c, fieldType: fieldType);
             if (result.Sql is null)
                 violations.Add($"MDD037: {where} — \"{selected.Text}\" 은(는) 이식 가능한 식이 아니다({string.Join(", ", result.Unsupported)}). " +
                                $"부분집합(M3L 명세 §10.7)으로 다시 쓰거나, {product} 문법 그대로 두려면 @computed_raw(…, platform: \"{platform}\") / " +
@@ -49,11 +49,11 @@ internal static class ExpressionRefusals
             {
                 if (field.Computed is { } computed)
                     Check(ExpressionSelection.Select(computed, dialect), declared: true,
-                        $"'{model.Name}.{field.Name}' @computed", computed.Raw, TextFields(model, parent: null));
+                        $"'{model.Name}.{field.Name}' @computed", computed.Raw, FieldTypes(model, parent: null));
                 if (field.Rollup is { } rollup)
                     Check(ExpressionSelection.Select(rollup.Where, rollup.WhereRaw, dialect),
                         declared: rollup.WhereRaw.Count > 0, $"'{model.Name}.{field.Name}' @rollup where", rollup.WhereRaw,
-                        TextFields(modelsByName.GetValueOrDefault(rollup.Target ?? string.Empty), parent: model));
+                        FieldTypes(modelsByName.GetValueOrDefault(rollup.Target ?? string.Empty), parent: model));
             }
         }
         foreach (var view in context.Views)
@@ -72,17 +72,17 @@ internal static class ExpressionRefusals
     }
 
     /// <summary>
-    /// Which field references hold text, for the rule that arithmetic is for numbers (§10.7.2): <c>+</c> between text
-    /// joins on SQL Server and fails on PostgreSQL. A plain name is a field of <paramref name="own"/>; <c>$parent.field</c>
-    /// one of <paramref name="parent"/>. A name the model does not have is not text — what it is, is not decided here.
+    /// The M3L type of each field reference, for the rules that depend on it — <c>+</c> is for numbers (§10.7.2), a date
+    /// moves by whole days. A plain name is a field of <paramref name="own"/>; <c>$parent.field</c> one of
+    /// <paramref name="parent"/>. A name the model does not have has no type here — what it is, is not decided here.
     /// </summary>
-    private static Func<string, bool> TextFields(ResolvedModel? own, ResolvedModel? parent) => name =>
+    private static Func<string, string?> FieldTypes(ResolvedModel? own, ResolvedModel? parent) => name =>
     {
         const string ParentPrefix = "$parent.";
         var (model, field) = name.StartsWith(ParentPrefix, StringComparison.Ordinal)
             ? (parent, name[ParentPrefix.Length..])
             : (own, name);
-        return model?.Fields.FirstOrDefault(f => f.Name == field)?.Type is "string" or "text" or "email" or "phone" or "url";
+        return model?.Fields.FirstOrDefault(f => f.Name == field)?.Type;
     };
 
     /// <summary>Stops the build with every refusal at once, before anything is written.</summary>

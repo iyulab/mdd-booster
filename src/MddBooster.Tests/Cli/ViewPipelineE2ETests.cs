@@ -65,7 +65,7 @@ public class ViewPipelineE2ETests
             Assert.Contains("LEFT JOIN [dbo].[Customer]", fullSql);
             Assert.Contains("COUNT(*)", fullSql);
             Assert.Contains("WITH SCHEMABINDING", fullSql);
-            Assert.Contains("[Subtotal] * 0.1 AS [TaxAmount]", fullSql);
+            Assert.Contains("CAST([Subtotal] * 0.1 AS DECIMAL(12,2)) AS [TaxAmount]", fullSql);
 
             // Ext class maps to FullView (no user ExtView present).
             var orderExt = File.ReadAllText(Path.Combine(modelDir, "Entity_gen", "OrderExt.cs"));

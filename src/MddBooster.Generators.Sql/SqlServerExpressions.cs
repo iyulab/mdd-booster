@@ -1,3 +1,5 @@
+using M3L.Native;
+using MddBooster.Core.Ast;
 using MddBooster.Core.Naming;
 using MddBooster.Core.Semantic;
 
@@ -27,6 +29,19 @@ internal static class SqlServerExpressions
         var result = PortableExpression.Translate(selected.Text, SqlDialect.SqlServer, column, booleanResult);
         return result.Sql ?? throw new InvalidOperationException(
             $"Untranslatable expression reached the SQL Server renderer: {selected.Text}");
+    }
+
+    /// <summary>
+    /// The SQL Server text for <paramref name="selected"/> as the value of <paramref name="field"/>: a portable expression
+    /// is cast to the type the field declares (<see cref="ComputedValues"/>), a boolean is a bit. A platform expression is
+    /// the author's, as written.
+    /// </summary>
+    internal static string RenderValue(SelectedExpression selected, Func<string, string> column, FieldNode field)
+    {
+        var sql = Render(selected, column, booleanResult: field.Type == "boolean");
+        return selected.IsRaw || !ComputedValues.IsCast(field)
+            ? sql
+            : $"CAST({sql} AS {SqlTypeMapper.Map(field.Type!, FieldAttributes.StringArgs(field.Params))})";
     }
 
     /// <summary>

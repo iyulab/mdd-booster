@@ -120,7 +120,7 @@ public class StandaloneViewBuildTests
             Assert.Equal(0, new BuildCommand().Run(mddDir));
             var sql = File.ReadAllText(Path.Combine(root, "db", "dbo", "Views_gen", "ClientAverage.sql"));
             Assert.Contains("c0 AS (", sql);
-            Assert.Contains("SELECT r.*, [Spent] / NULLIF([Purchases], 0) AS [Average]", sql);
+            Assert.Contains("SELECT r.*, CAST([Spent] / NULLIF([Purchases], 0) AS DECIMAL(12,2)) AS [Average]", sql);
             Assert.Contains("SELECT [ClientName], [Average], [Purchases], [Spent] FROM c0", sql);
         }
         finally { Cleanup(root); }
@@ -242,7 +242,7 @@ public class StandaloneViewBuildTests
             Assert.Equal(0, new BuildCommand().Run(mddDir));
             var sql = File.ReadAllText(Path.Combine(root, "db", "views_gen", "client_average.sql"));
             Assert.Contains("WITH r AS (", sql);
-            Assert.Contains("c1 AS (SELECT r.*, spent / nullif(purchases, 0) AS average FROM r)", sql);
+            Assert.Contains("c1 AS (SELECT r.*, CAST(spent / nullif(purchases, 0) AS numeric(12,2)) AS average FROM r)", sql);
             Assert.Contains("SELECT * FROM c1;", sql);
         }
         finally { Cleanup(root); }

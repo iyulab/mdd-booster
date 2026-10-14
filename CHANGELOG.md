@@ -55,6 +55,14 @@ M3L 0.20.0 이 `@computed` · rollup `where:` · 뷰 `where` 의 언어를 정�
   `coalesce`·`concat`(명세는 둘 이상 — SQL Server 가 하나를 거절한다). 텍스트 사이의 `+` 는 문자열 리터럴 옆뿐 아니라 텍스트를 내는 함수(`lower(a) + upper(b)`)와
   모델이 문자열로 선언한 필드 사이에서도 잡는다(`first_name + last_name` — rollup `where:` 에서는 대상 모델의 필드와 `$parent.` 필드). 연이은 부호(`- -1`)는
   띄어 써서 줄 주석(`--`)이 되지 않는다.
+- 🔇 같은 이식 가능한 식이 두 플랫폼에서 **같은 값과 같은 형**을 낸다:
+  - `@computed` 의 값은 필드가 선언한 형으로 캐스팅된다(`CAST(… AS INT)` · `CAST(… AS numeric(12,2))` — 숫자 · 날짜/시각 · 식별자). `floor`·`round` 의 결과,
+    날짜에 `date_add` 한 결과는 방언마다 형이 달라(SQL Server 의 `decimal` 대 PostgreSQL 의 `numeric`, `date` 대 `timestamp`) 읽기 타입이 선언 형으로 읽지 못했다.
+    텍스트는 캐스팅하지 않는다(선언 길이로 잘리지 않게). `@computed_raw` 는 원문 그대로다.
+  - SQL Server 의 불리언 계산 열은 술어가 아닌 값도 `bit` 이다(`CASE WHEN … THEN true ELSE false END` 가 `int` 열이 되어 불리언 속성으로 읽히지 않았다).
+  - `length(null)` 은 두 플랫폼 모두 `null`(SQL Server 에서 0 이었다).
+  - SQL Server 의 문자열 리터럴은 `N'…'` — 유니코드가 아닌 정렬의 데이터베이스에서 한글 등이 `?` 로 바뀌었다.
+  - `date_add` 로 날짜(`date` 필드 · `today()`)를 시·분·초 단위로 옮기는 식은 `MDD037` — SQL Server 는 거절하고 PostgreSQL 은 시각으로 바꾼다.
 - 🔴 **`@index(…, name: "…")` · `@unique(…, name: "…")`(M3L 명세 §3.3.2 의 예 그대로)가 컴파일되는 생성물을 낸다.** 종전엔 키워드 인자가 열 목록에 섞여 와
   `HasIndex(x => new { x.Sku, x.Name: "productSearch" })` 같은 C# 과 없는 열 `[Name: "uqSku"]` 을 가리키는 SQL 을 냈다. M3L 0.20.0 이 키워드를 열 목록에서 빼고,
   이 생성기는 열만으로 인덱스를 내고, **지시자의 `name:` 을 그 인덱스·제약의 이름으로 쓴다** — SQL Server · PostgreSQL · EF(`HasDatabaseName`) 모두.

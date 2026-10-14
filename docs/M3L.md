@@ -1332,8 +1332,10 @@ A view's `### Source` takes `- where_raw: "…" platform: name` lines the same w
 **What this generator implements** — both SQL dialects, every expression context (model views, rollup filters,
 standalone views). A portable expression is translated: `true`/`false` → `1`/`0` on SQL Server and `TRUE`/`FALSE` on
 PostgreSQL, `concat` → `CONCAT`/`concat`, `date_add(d, n, 'day')` → `DATEADD(DAY, n, d)` / `(d + (n) * INTERVAL '1 day')`,
-`length(s)` counts trailing spaces on SQL Server too, and a boolean field's comparison becomes a `CASE` over `bit` on SQL
-Server. An expression declared for `sqlserver` or `postgresql` is emitted as written in that dialect. Missing an expression
+`length(s)` counts trailing spaces on SQL Server too (and is null for null, as on PostgreSQL), a string literal is
+`N'…'` on SQL Server, and a boolean field's value is a `bit` there (a comparison becomes a `CASE`). A computed value of a
+numeric, date/time or identifier field is cast to the type the field declares, since the same expression yields
+different types per dialect; text is not cast. An expression declared for `sqlserver` or `postgresql` is emitted as written in that dialect. Missing an expression
 for the dialect stops the build (`MDD036`), and so does an expression outside the subset in a portable context (`MDD037`)
 — on either dialect, with every such expression listed at once. An expression that is not well formed is outside the
 subset too: an unclosed string, a malformed number, a missing parenthesis, an empty argument, two operands with no

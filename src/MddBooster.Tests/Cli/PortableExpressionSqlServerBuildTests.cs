@@ -67,7 +67,7 @@ public sealed class PortableExpressionSqlServerBuildTests
         Assert.NotNull(view);
         Assert.Contains("CASE WHEN [Age] >= 18 THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END", view);
         Assert.Contains("DATEADD(DAY, -30, SYSDATETIMEOFFSET())", view);
-        Assert.Contains("CONCAT('#', [Age])", view);
+        Assert.Contains("CONCAT(N'#', [Age])", view);
         Assert.Contains("([IsOpen] = 1)", view);
     }
 

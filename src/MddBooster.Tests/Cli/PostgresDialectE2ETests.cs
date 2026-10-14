@@ -321,7 +321,7 @@ public class PostgresDialectE2ETests
 
             var sql = File.ReadAllText(Path.Combine(dbDir, "views_gen", "invoice_full_view.sql"));
             Assert.Contains("WITH r AS (", sql);
-            Assert.Contains("c1 AS (SELECT r.*, subtotal * 1.1 AS grand_total FROM r)", sql);
+            Assert.Contains("c1 AS (SELECT r.*, CAST(subtotal * 1.1 AS numeric(12,2)) AS grand_total FROM r)", sql);
             Assert.Contains("c2 AS (SELECT c1.*, CASE WHEN is_paid = TRUE THEN 'paid' ELSE concat('due ', grand_total) END AS label FROM c1)", sql);
             Assert.Contains("SELECT * FROM c2;", sql);
             Assert.DoesNotContain("Computed 파생 필드는 PG 방언이 아직", captured.Text);

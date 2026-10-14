@@ -54,12 +54,13 @@ public static class PortableExpression
     /// The expression is a boolean field's value. SQL Server's select list takes no predicate, so a predicate there becomes
     /// <c>CASE WHEN … THEN 1 ELSE 0 END</c> (as <c>bit</c>).
     /// </param>
-    /// <param name="isText">
-    /// Whether a field reference names a field that holds text. Without it a field is not known to be text, and only
-    /// literals and text-returning functions are.
+    /// <param name="fieldType">
+    /// The M3L type of the field a reference names, or <c>null</c> when it is not known. Without it a field's type is not
+    /// known, and only what literals and functions produce is: whether <c>+</c> stands between text, whether
+    /// <c>date_add</c> moves a date.
     /// </param>
     public static Result Translate(string expression, SqlDialect dialect, Func<string, string> column, bool booleanResult = false,
-        Func<string, bool>? isText = null)
+        Func<string, string?>? fieldType = null)
     {
         ArgumentNullException.ThrowIfNull(expression);
         ArgumentNullException.ThrowIfNull(column);
@@ -75,24 +76,30 @@ public static class PortableExpression
         var nodes = ParseSequence(tokens, ref position, Note);
         if (position < tokens.Count) Note($"unbalanced '{tokens[position].Value}'");
 
-        var context = new RenderContext(dialect, column, Note, isText ?? (_ => false));
+        var context = new RenderContext(dialect, column, Note, fieldType ?? (_ => null));
         var sql = Render(nodes, context);
         if (unsupported.Count > 0) return new Result(null, unsupported);
 
         if (dialect == SqlDialect.SqlServer && booleanResult)
         {
-            if (IsPredicate(nodes))
-                sql = $"CASE WHEN {sql} THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END";
-            else if (nodes is [Leaf { Token: { Kind: Kind.Name } t }] && IsBooleanLiteral(t.Value))
-                sql = $"CAST({sql} AS bit)";
+            // SQL Server selects no predicate, and 1 and 0 alone are int — a boolean property is read from a bit.
+            sql = IsPredicate(nodes)
+                ? $"CASE WHEN {sql} THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END"
+                : $"CAST({sql} AS bit)";
         }
         return new Result(sql, unsupported);
     }
 
-    private sealed record RenderContext(SqlDialect Dialect, Func<string, string> Column, Action<string> Note, Func<string, bool> IsTextField)
+    private sealed record RenderContext(SqlDialect Dialect, Func<string, string> Column, Action<string> Note, Func<string, string?> FieldType)
     {
         public bool SqlServer => Dialect == SqlDialect.SqlServer;
     }
+
+    /// <summary>The M3L types that hold text — what <c>+</c> must not stand between (§10.7.2).</summary>
+    private static readonly HashSet<string> TextTypes = new(StringComparer.Ordinal)
+    {
+        "string", "text", "email", "phone", "url",
+    };
 
     // ---- tokens ----
 
@@ -285,7 +292,7 @@ public static class PortableExpression
         => index >= 0 && index < nodes.Count && nodes[index] switch
         {
             Leaf { Token.Kind: Kind.Text } => true,
-            Leaf { Token: { Kind: Kind.Name } t } => !Keywords.Contains(t.Value) && cx.IsTextField(t.Value),
+            Leaf { Token: { Kind: Kind.Name } t } => !Keywords.Contains(t.Value) && cx.FieldType(t.Value) is { } type && TextTypes.Contains(type),
             Call call => TextFunctions.Contains(call.Name),
             _ => false,
         };
@@ -322,6 +329,8 @@ public static class PortableExpression
 
     private static string RenderLeaf(Token token, RenderContext cx)
     {
+        // Without N a T-SQL literal is narrowed to the database's code page — non-Latin text becomes '?'.
+        if (token.Kind == Kind.Text) return cx.SqlServer ? "N" + token.Value : token.Value;
         if (token.Kind != Kind.Name) return token.Value;
         var lower = token.Value.ToLowerInvariant();
         if (lower is "true" or "false")
@@ -372,8 +381,9 @@ public static class PortableExpression
             case "ceiling": return Arity(1) ? Same("CEILING") : string.Empty;
             case "length":
                 if (!Arity(1)) return string.Empty;
-                // LEN leaves trailing spaces uncounted; the language means every character.
-                return cx.SqlServer ? $"(LEN(CONCAT({args[0]}, '.')) - 1)" : $"length({args[0]})";
+                // LEN leaves trailing spaces uncounted; the language means every character. '+' keeps a null null, where
+                // CONCAT would read it as empty and give 0.
+                return cx.SqlServer ? $"(LEN(CAST({args[0]} AS nvarchar(max)) + N'.') - 1)" : $"length({args[0]})";
             case "substring":
                 if (!Arity(3)) return string.Empty;
                 return cx.SqlServer
@@ -395,6 +405,12 @@ public static class PortableExpression
             case "date_add":
             {
                 if (!Arity(3) || Unit(call.Args[2], name, cx) is not { } unit) return string.Empty;
+                // A date has no hours: SQL Server refuses to move one by them, PostgreSQL makes it a timestamp.
+                if (unit is "hour" or "minute" or "second" && IsDate(call.Args[0], cx))
+                {
+                    cx.Note($"{name}() on a date takes 'year', 'month' or 'day'");
+                    return string.Empty;
+                }
                 return cx.SqlServer
                     ? $"DATEADD({unit.ToUpperInvariant()}, {args[1]}, {args[0]})"
                     : $"({args[0]} + ({args[1]}) * INTERVAL '1 {unit}')";
@@ -416,6 +432,14 @@ public static class PortableExpression
                 return string.Empty;
         }
     }
+
+    /// <summary>Whether an argument is known to be a date: <c>today()</c>, or a field the caller says is a <c>date</c>.</summary>
+    private static bool IsDate(List<Node> argument, RenderContext cx) => argument switch
+    {
+        [Call call] => call.Name.Equals("today", StringComparison.OrdinalIgnoreCase),
+        [Leaf { Token: { Kind: Kind.Name } t }] => cx.FieldType(t.Value) == "date",
+        _ => false,
+    };
 
     /// <summary>A unit argument: a string literal naming one of the units §10.7.4 lists.</summary>
     private static string? Unit(List<Node> argument, string function, RenderContext cx)
@@ -445,7 +469,4 @@ public static class PortableExpression
         }
         return false;
     }
-
-    private static bool IsBooleanLiteral(string value)
-        => value.Equals("true", StringComparison.OrdinalIgnoreCase) || value.Equals("false", StringComparison.OrdinalIgnoreCase);
 }

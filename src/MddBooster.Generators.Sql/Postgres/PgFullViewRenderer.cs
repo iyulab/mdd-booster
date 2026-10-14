@@ -150,7 +150,7 @@ public static class PgFullViewRenderer
                 var name = $"c{i + 1}";
                 cte.AppendLine(",");
                 cte.Append(name).Append(" AS (SELECT ").Append(previous).Append(".*, ")
-                   .Append(PostgresExpressions.Render(selected, column => column)).Append(" AS ").Append(f.Name)
+                   .Append(PostgresExpressions.RenderValue(selected, column => column, f)).Append(" AS ").Append(f.Name)
                    .Append(" FROM ").Append(previous).Append(')');
                 previous = name;
             }

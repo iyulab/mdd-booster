@@ -26,14 +26,14 @@ public class PortableExpressionTests
     [Theory]
     [InlineData("quantity * unit_price", "<quantity> * <unit_price>", "<quantity> * <unit_price>")]
     [InlineData("is_active = true", "<is_active> = 1", "<is_active> = TRUE")]
-    [InlineData("status != 'cancelled'", "<status> <> 'cancelled'", "<status> <> 'cancelled'")]
-    [InlineData("concat(a, ' ', b)", "CONCAT(<a>, ' ', <b>)", "concat(<a>, ' ', <b>)")]
-    [InlineData("coalesce(nickname, 'x')", "COALESCE(<nickname>, 'x')", "coalesce(<nickname>, 'x')")]
+    [InlineData("status != 'cancelled'", "<status> <> N'cancelled'", "<status> <> 'cancelled'")]
+    [InlineData("concat(a, ' ', b)", "CONCAT(<a>, N' ', <b>)", "concat(<a>, ' ', <b>)")]
+    [InlineData("coalesce(nickname, 'x')", "COALESCE(<nickname>, N'x')", "coalesce(<nickname>, 'x')")]
     [InlineData("NULLIF(n, 0)", "NULLIF(<n>, 0)", "nullif(<n>, 0)")]
-    [InlineData("length(name)", "(LEN(CONCAT(<name>, '.')) - 1)", "length(<name>)")]
+    [InlineData("length(name)", "(LEN(CAST(<name> AS nvarchar(max)) + N'.') - 1)", "length(<name>)")]
     [InlineData("substring(code, 2, 3)", "SUBSTRING(<code>, 2, 3)", "substring(<code> from 2 for 3)")]
     [InlineData("round(price, 2)", "ROUND(<price>, 2)", "round((<price>)::numeric, 2)")]
-    [InlineData("lower(replace(title, ' ', '-'))", "LOWER(REPLACE(<title>, ' ', '-'))", "lower(replace(<title>, ' ', '-'))")]
+    [InlineData("lower(replace(title, ' ', '-'))", "LOWER(REPLACE(<title>, N' ', N'-'))", "lower(replace(<title>, ' ', '-'))")]
     [InlineData("today()", "CAST(SYSDATETIME() AS date)", "CURRENT_DATE")]
     [InlineData("now()", "SYSDATETIMEOFFSET()", "now()")]
     [InlineData("generate_uuid()", "NEWID()", "gen_random_uuid()")]
@@ -41,10 +41,10 @@ public class PortableExpressionTests
     [InlineData("date_add(now(), -30, 'day')", "DATEADD(DAY, -30, SYSDATETIMEOFFSET())", "(now() + (-30) * INTERVAL '1 day')")]
     [InlineData("date_diff('day', s, e)", "DATEDIFF(DAY, <s>, <e>)", "((<e>)::date - (<s>)::date)")]
     [InlineData("date_diff('year', s, e)", "DATEDIFF(YEAR, <s>, <e>)", "(EXTRACT(YEAR FROM <e>) - EXTRACT(YEAR FROM <s>))::int")]
-    [InlineData("status IN ('a', 'b') AND NOT (x IS NULL)", "<status> IN ('a', 'b') AND NOT (<x> IS NULL)", "<status> IN ('a', 'b') AND NOT (<x> IS NULL)")]
-    [InlineData("CASE WHEN t > 1000 THEN 'Gold' ELSE 'Bronze' END", "CASE WHEN <t> > 1000 THEN 'Gold' ELSE 'Bronze' END", "CASE WHEN <t> > 1000 THEN 'Gold' ELSE 'Bronze' END")]
-    [InlineData("Order.status = 'paid' AND $parent.region = Order.region", "<Order.status> = 'paid' AND <$parent.region> = <Order.region>", "<Order.status> = 'paid' AND <$parent.region> = <Order.region>")]
-    [InlineData("'it''s' = label", "'it''s' = <label>", "'it''s' = <label>")]
+    [InlineData("status IN ('a', 'b') AND NOT (x IS NULL)", "<status> IN (N'a', N'b') AND NOT (<x> IS NULL)", "<status> IN ('a', 'b') AND NOT (<x> IS NULL)")]
+    [InlineData("CASE WHEN t > 1000 THEN 'Gold' ELSE 'Bronze' END", "CASE WHEN <t> > 1000 THEN N'Gold' ELSE N'Bronze' END", "CASE WHEN <t> > 1000 THEN 'Gold' ELSE 'Bronze' END")]
+    [InlineData("Order.status = 'paid' AND $parent.region = Order.region", "<Order.status> = N'paid' AND <$parent.region> = <Order.region>", "<Order.status> = 'paid' AND <$parent.region> = <Order.region>")]
+    [InlineData("'it''s' = label", "N'it''s' = <label>", "'it''s' = <label>")]
     public void The_subset_translates_into_each_dialect(string expression, string sqlServer, string postgres)
     {
         Assert.Equal(sqlServer, Sql(expression, SqlDialect.SqlServer));
@@ -60,9 +60,11 @@ public class PortableExpressionTests
         Assert.Equal("<age> >= 18", Sql("age >= 18", SqlDialect.PostgreSql, booleanResult: true));
         Assert.Equal("CAST(1 AS bit)", Sql("true", SqlDialect.SqlServer, booleanResult: true));
         // A CASE that yields the value is not itself a predicate, whatever its conditions compare.
-        Assert.Equal("CASE WHEN <a> > 1 THEN 1 ELSE 0 END",
+        // A value of a boolean field is a bit whatever produced it — 1 and 0 alone are int, which a boolean property
+        // cannot be read from.
+        Assert.Equal("CAST(CASE WHEN <a> > 1 THEN 1 ELSE 0 END AS bit)",
             Sql("CASE WHEN a > 1 THEN true ELSE false END", SqlDialect.SqlServer, booleanResult: true));
-        Assert.Equal("<flag>", Sql("flag", SqlDialect.SqlServer, booleanResult: true));
+        Assert.Equal("CAST(<flag> AS bit)", Sql("flag", SqlDialect.SqlServer, booleanResult: true));
     }
 
     [Fact]
@@ -109,6 +111,36 @@ public class PortableExpressionTests
         Assert.Equal("<a> IS NOT NULL AND <b> = TRUE", Sql("a IS NOT NULL AND b = true", SqlDialect.PostgreSql));
     }
 
+    /// <summary>
+    /// The language's meaning, not one platform's: the length of null is null (SQL Server's <c>CONCAT</c> made it 0), and
+    /// a string literal keeps every character (a T-SQL literal without <c>N</c> is narrowed to the database's code page,
+    /// where non-Latin text becomes <c>?</c>).
+    /// </summary>
+    [Fact]
+    public void Null_has_no_length_and_text_literals_are_unicode_on_sql_server()
+    {
+        Assert.Equal("(LEN(CAST(<name> AS nvarchar(max)) + N'.') - 1)", Sql("length(name)", SqlDialect.SqlServer));
+        Assert.Equal("<name> = N'가나다'", Sql("name = '가나다'", SqlDialect.SqlServer));
+        Assert.Equal("<name> = '가나다'", Sql("name = '가나다'", SqlDialect.PostgreSql));
+    }
+
+    /// <summary>
+    /// A date has no hours: moving one by hours, minutes or seconds is refused on SQL Server and turns it into a timestamp
+    /// on PostgreSQL. Known from a date field (the caller names field types) and from <c>today()</c>.
+    /// </summary>
+    [Fact]
+    public void A_date_moves_by_whole_days_months_or_years()
+    {
+        const string Hint = "date_add() on a date takes 'year', 'month' or 'day'";
+        var result = PortableExpression.Translate("date_add(due, 2, 'hour')", SqlDialect.PostgreSql, c => c,
+            fieldType: name => name == "due" ? "date" : null);
+        Assert.Null(result.Sql);
+        Assert.Contains(Hint, result.Unsupported);
+        Assert.Contains(Hint, Unsupported("date_add(today(), 1, 'minute')"));
+        Assert.Equal("DATEADD(DAY, 2, <due>)", PortableExpression.Translate("date_add(due, 2, 'day')", SqlDialect.SqlServer,
+            c => $"<{c}>", fieldType: name => name == "due" ? "date" : null).Sql);
+    }
+
     /// <summary>Signs next to each other stay apart — glued, two minus signs open a line comment.</summary>
     [Fact]
     public void Two_signs_never_become_a_comment()
@@ -140,12 +172,12 @@ public class PortableExpressionTests
         const string Hint = "+ joining text (write concat(…))";
         Assert.Contains(Hint, Unsupported("lower(a) + upper(b)"));
         var result = PortableExpression.Translate("first_name + last_name", SqlDialect.SqlServer, c => c,
-            isText: name => name is "first_name" or "last_name");
+            fieldType: name => name is "first_name" or "last_name" ? "string" : null);
         Assert.Null(result.Sql);
         Assert.Contains(Hint, result.Unsupported);
         // Numbers still add.
         Assert.Equal("<qty> + <extra>", PortableExpression.Translate("qty + extra", SqlDialect.SqlServer, c => $"<{c}>",
-            isText: name => name is "first_name").Sql);
+            fieldType: name => name is "qty" or "extra" ? "integer" : null).Sql);
     }
 }
 

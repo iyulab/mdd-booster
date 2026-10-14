@@ -130,8 +130,7 @@ public static class FullViewRenderer
                     $"Computed field '{plan.Model.Name}.{computed.Name}' has no parsed ComputedDef.");
             computedColumns.Add((
                 expr: ExpressionSelection.Select(def, SqlDialect.SqlServer) is { } selected
-                    ? SqlServerExpressions.Render(selected, SqlServerExpressions.OwnColumn,
-                        booleanResult: computed.Type == "boolean")
+                    ? SqlServerExpressions.RenderValue(selected, SqlServerExpressions.OwnColumn, computed)
                     : string.Empty,
                 alias: NameCasing.ToPascalCase(computed.Name)));
         }

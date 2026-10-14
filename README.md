@@ -725,7 +725,7 @@ PostgreSQL `views_gen/<snake_name>.sql`. 빌드가 먼저 뷰를 모델에 대�
 | 읽는 모델 | 그 모델의 **읽기 표면**과 같은 행 — 파생 열(lookup·rollup·computed)을 읽으면 FullView, 소프트 삭제 모델이면 UdView, 아니면 테이블 |
 | `@from(Relation.field)` | 그 관계의 열 |
 | `@rollup(Target.fk, …)` | FullView 와 같은 상관 서브쿼리 — `from` 모델의 키에 상관 |
-| `where` · `@computed` | 두 방언 — M3L 의 이식 가능한 부분집합(명세 §10.7)을 방언으로 번역한다(T-SQL 은 식별자 → PascalCase 열, PostgreSQL 은 snake 그대로; `Relation.field` 는 관계로 한정). `platform:` 으로 선언한 식(`@computed_raw`·`where_raw`)은 그 방언에서 원문 그대로. 번역할 수 없는 식은 두 방언 모두 `MDD037` 로 빌드를 멈춘다 |
+| `where` · `@computed` | 두 방언 — M3L 의 이식 가능한 부분집합(명세 §10.7)을 방언으로 번역한다(T-SQL 은 식별자 → PascalCase 열, PostgreSQL 은 snake 그대로; `Relation.field` 는 관계로 한정). `platform:` 으로 선언한 식(`@computed_raw`·`where_raw`)은 그 방언에서 원문 그대로. 번역할 수 없는 식은 두 방언 모두 `MDD037` 로 빌드를 멈춘다. `@computed` 의 값은 필드가 선언한 형으로 캐스팅된다(숫자 · 날짜/시각 · 식별자 — 같은 식이 방언마다 다른 형을 내기 때문이다; 텍스트는 잘리지 않게 캐스팅하지 않는다), T-SQL 의 불리언 값은 `bit`, 문자열 리터럴은 `N'…'` |
 | `group_by` | `Relation.field` 목록. 출력 열 이름으로 묶는 것은 생성하지 않는다(`MDD031`) |
 | `order_by` | 내지 않는다 — 뷰에는 순서가 없고, T-SQL 은 `TOP` 없는 뷰의 `ORDER BY` 를 거절한다(빌드 로그에 정보 한 줄) |
 

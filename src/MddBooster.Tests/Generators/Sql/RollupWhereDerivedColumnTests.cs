@@ -39,7 +39,7 @@ public class RollupWhereDerivedColumnTests
             Count("effective_channel = 'partner'"), "dbo", "b", "Id", OrderItemDerived);
 
         Assert.Equal(
-            "(SELECT COUNT(*) FROM [dbo].[OrderItemFullView] WHERE [OrderId] = b.[Id] AND ([EffectiveChannel] = 'partner'))",
+            "(SELECT COUNT(*) FROM [dbo].[OrderItemFullView] WHERE [OrderId] = b.[Id] AND ([EffectiveChannel] = N'partner'))",
             sql);
     }
 
@@ -139,7 +139,7 @@ public class RollupWhereDerivedColumnTests
 
         var orderSql = FullViewRenderer.Render(plans.Single(p => p.Model.Name == "Order"), "dbo", derived, models);
 
-        Assert.Contains("FROM [dbo].[OrderItemFullView] WHERE [OrderId] = b.[Id] AND ([EffectiveChannel] = 'partner')", orderSql);
+        Assert.Contains("FROM [dbo].[OrderItemFullView] WHERE [OrderId] = b.[Id] AND ([EffectiveChannel] = N'partner')", orderSql);
         Assert.Null(FullViewCycleDetector.Detect(plans, derived));
     }
 

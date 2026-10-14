@@ -1,3 +1,5 @@
+using M3L.Native;
+using MddBooster.Core.Ast;
 using MddBooster.Core.Semantic;
 
 namespace MddBooster.Generators.Sql.Postgres;
@@ -19,5 +21,18 @@ internal static class PostgresExpressions
         var result = PortableExpression.Translate(selected.Text, SqlDialect.PostgreSql, column);
         return result.Sql ?? throw new InvalidOperationException(
             $"Untranslatable expression reached the PostgreSQL renderer: {selected.Text}");
+    }
+
+    /// <summary>
+    /// The PostgreSQL text for <paramref name="selected"/> as the value of <paramref name="field"/>: a portable expression
+    /// is cast to the type the field declares (<see cref="ComputedValues"/>). A platform expression is the author's, as
+    /// written.
+    /// </summary>
+    internal static string RenderValue(SelectedExpression selected, Func<string, string> column, FieldNode field)
+    {
+        var sql = Render(selected, column);
+        return selected.IsRaw || !ComputedValues.IsCast(field)
+            ? sql
+            : $"CAST({sql} AS {PgTypeMapper.Map(field.Type!, FieldAttributes.StringArgs(field.Params))})";
     }
 }
