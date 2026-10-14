@@ -8,17 +8,15 @@ namespace MddBooster.Generators.Sql.Postgres;
 
 /// <summary>
 /// PG 방언 <c>{table}_full_view</c> 렌더러 — T-SQL <see cref="FullViewRenderer"/>의 등가물.
-/// Lookup(LEFT JOIN)·Rollup(상관 서브쿼리) 파생 필드만 지원한다. 식별자는 ADR-0001을 따라
+/// Lookup(LEFT JOIN)·Rollup(상관 서브쿼리)·Computed(CTE 층) 파생 필드를 지원한다. 식별자는 ADR-0001을 따라
 /// 전부 비인용 snake_case이고, JOIN/서브쿼리 대상 컬럼은 m3l 필드명을 그대로 쓴다(대소문자
 /// 변환 없음 — PascalCase 변환은 <see cref="FullViewRenderer.IsDerivedColumn"/> 게이트를
 /// 재사용할 때만 국소적으로 계산한다).
 /// <para>
-/// <b>Computed 필드는 이 렌더러의 범위 밖이다.</b> T-SQL 쪽의 <c>NormalizeComputedExpression</c>은
-/// 저자가 쓴 표현식 문자열을 정규식으로 재작성하는데, PG는 문자열 연결(<c>||</c> vs T-SQL
-/// <c>+</c>) 등 표현식 문법 자체가 달라 같은 방식의 안전한 재작성을 보장할 수 없다 — 검증 없는
-/// 변환기가 조용히 틀린 SQL을 만드는 위험이, 지금처럼 명시적으로 거절하는 것보다 나쁘다. Computed
-/// 필드가 있는 모델은 호출자(<see cref="PostgresSqlGenerator"/>)가 이 렌더러를 아예 부르지 않고
-/// 기존 stderr 경고로 표면화한다.
+/// <b>Computed 필드</b>는 T-SQL 과 같은 CTE 체인으로 낸다 — 식은 M3L 의 이식 가능한 부분집합을
+/// 번역한 것(<see cref="PostgresExpressions"/>)이거나 <c>postgresql</c> 플랫폼 식 원문이고, 번역할 수 없는
+/// 식은 Validate 가 먼저 거절한다(MDD036·MDD037). 열 이름은 필드 이름 그대로(snake) — Model 타깃의
+/// Ext 매핑이 같은 이름을 가리킨다.
 /// </para>
 /// <para>
 /// <b>인덱싱된 Rollup(<c>@indexed</c>)도 범위 밖이다.</b> T-SQL의 <c>WITH SCHEMABINDING</c> +

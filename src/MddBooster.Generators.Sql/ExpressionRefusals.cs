@@ -58,6 +58,11 @@ internal static class ExpressionRefusals
             foreach (var c in view.Columns.OfType<ViewComputedColumn>())
                 Check(ExpressionSelection.Select(c.Computed, dialect), declared: true,
                     $"view '{view.Name}.{c.Field.Name}' @computed", c.Computed.Raw);
+            // A view's rollup filters like a model's: unchecked, a non-portable one reached the renderer as an exception,
+            // and one declared only for another platform left this dialect's view counting every row.
+            foreach (var c in view.Columns.OfType<ViewRollupColumn>())
+                Check(ExpressionSelection.Select(c.Rollup.Where, c.Rollup.WhereRaw, dialect),
+                    declared: c.Rollup.WhereRaw.Count > 0, $"view '{view.Name}.{c.Field.Name}' @rollup where", c.Rollup.WhereRaw);
         }
         return violations;
     }

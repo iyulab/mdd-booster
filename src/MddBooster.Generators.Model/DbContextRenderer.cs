@@ -444,16 +444,16 @@ public static class DbContextRenderer
     }
 
     /// <summary>
-    /// Ext 읽기 모델 전용 — FullView가 프로젝션하는 비-internal Lookup/Rollup 컬럼의 물리명을
-    /// 명시한다. 이게 없으면 EF 기본 컨벤션이 속성 PascalCase(<c>WorkerName</c>)를 그대로 컬럼명
-    /// 삼아 실제 뷰 컬럼(<c>worker_name</c>)과 어긋난다 — <see cref="AppendPostgresColumns"/>가
-    /// 저장 필드만 훑는 이유와 대칭인 공백. Computed는 이 뷰 자체를 아직 방출하지 않으므로
-    /// (<c>PostgresSqlGenerator</c>) 여기서도 매핑하지 않는다 — 매핑해도 쿼리는 어차피 실패한다.
+    /// Ext 읽기 모델 전용 — FullView가 프로젝션하는 비-internal Lookup/Rollup/Computed 컬럼의
+    /// 물리명을 명시한다. 이게 없으면 EF 기본 컨벤션이 속성 PascalCase(<c>WorkerName</c>)를 그대로
+    /// 컬럼명 삼아 실제 뷰 컬럼(<c>worker_name</c>)과 어긋난다 — <see cref="AppendPostgresColumns"/>가
+    /// 저장 필드만 훑는 이유와 대칭인 공백. Computed 는 PG FullView 가 이식 가능한 식의 번역으로
+    /// 같은 snake 이름(<c>AS grand_total</c>)으로 낸다.
     /// </summary>
     private static void AppendPostgresDerivedColumns(StringBuilder sb, ResolvedModel model)
     {
         var derived = model.Fields
-            .Where(f => f.Kind is FieldKind.Lookup or FieldKind.Rollup)
+            .Where(f => f.Kind is FieldKind.Lookup or FieldKind.Rollup or FieldKind.Computed)
             .Where(f => !EntitySurface.IsFieldInternal(f));
         foreach (var field in derived)
         {

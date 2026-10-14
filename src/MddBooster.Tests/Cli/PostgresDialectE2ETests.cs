@@ -333,6 +333,41 @@ public class PostgresDialectE2ETests
     }
 
     [Fact]
+    public void PostgresDialect_ViewRollupFilterDeclaredOnlyForSqlServer_StopsTheBuildWithMDD036()
+    {
+        // The filter exists for SQL Server alone: emitting the view here without it would count every row.
+        var (mddDir, dbDir) = Scaffold("view-rollup-raw",
+            "# Namespace: X\n\n" +
+            "## Client\n" +
+            "- id: identifier @pk @generated\n" +
+            "- name: string(50)\n\n" +
+            "## Purchase\n" +
+            "- id: identifier @pk @generated\n" +
+            "- client_id: identifier @reference(Client)\n" +
+            "- is_open: boolean\n\n" +
+            "## ClientOpen ::view\n" +
+            "### Source\n" +
+            "- from: Client\n\n" +
+            "- client_name: string @from(Client.name)\n" +
+            "- open_purchases: integer @rollup(Purchase.client_id, count, where_raw: \"[IsOpen] = 1\", platform: \"sqlserver\")\n");
+        WriteConfig(mddDir, "{ \"type\": \"Sql\", \"dialect\": \"postgres\", \"projectPath\": \"../db\" }");
+
+        using var captured = new ConsoleErrorCapture(this);
+        try
+        {
+            var exit = new BuildCommand().Run(mddDir);
+            Assert.NotEqual(0, exit);
+            Assert.Contains("MDD036", captured.Text);
+            Assert.Contains("view 'ClientOpen.open_purchases' @rollup where", captured.Text);
+            Assert.Empty(Directory.GetFiles(dbDir, "*client_open*", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            Cleanup(mddDir);
+        }
+    }
+
+    [Fact]
     public void PostgresDialect_UntranslatableComputed_StopsTheBuildWithMDD037()
     {
         // An expression outside the portable subset has no PostgreSQL form this generator can vouch for — the build stops

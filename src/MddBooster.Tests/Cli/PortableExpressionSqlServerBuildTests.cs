@@ -97,6 +97,35 @@ public sealed class PortableExpressionSqlServerBuildTests
     }
 
     [Fact]
+    public void A_view_column_s_rollup_filter_in_sql_server_syntax_stops_the_build_too()
+    {
+        // A rollup in a view is translated like a model's: its filter is asked the same question before anything is
+        // written, instead of failing in the renderer with an exception that names no rule.
+        var (exit, stderr, view) = Build("""
+## Client : Timestampable
+- id: identifier @pk @generated
+- name: string(50)
+
+## Purchase : Timestampable
+- id: identifier @pk @generated
+- client_id: identifier @reference(Client)
+- is_open: boolean
+
+## ClientOpen ::view
+### Source
+- from: Client
+
+- client_name: string @from(Client.name)
+- open_purchases: integer @rollup(Purchase.client_id, count, where: "[IsOpen] = 1")
+""", "ClientOpen.sql");
+
+        Assert.NotEqual(0, exit);
+        Assert.Contains("MDD037", stderr);
+        Assert.Contains("view 'ClientOpen.open_purchases' @rollup where", stderr);
+        Assert.Null(view);
+    }
+
+    [Fact]
     public void The_same_expression_declared_for_sql_server_is_emitted_as_written()
     {
         var (exit, stderr, view) = Build("""

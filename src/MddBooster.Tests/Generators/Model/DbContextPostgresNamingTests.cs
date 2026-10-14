@@ -99,6 +99,32 @@ public class DbContextPostgresNamingTests
         }
     }
 
+    [Fact]
+    public void PostgresNaming_ComputedField_MapsItsViewColumn()
+    {
+        // The PostgreSQL full view now computes the field (as its snake_case name); without the mapping EF would read a
+        // PascalCase column the view does not have, and every query of the read type would fail.
+        var tmp = Path.Combine(Path.GetTempPath(), $"mdd-dbctx-{Guid.NewGuid():N}.m3l.md");
+        File.WriteAllText(tmp,
+            "# Namespace: test\n\n" +
+            "## Invoice\n" +
+            "- id: identifier @pk @generated\n" +
+            "- subtotal: decimal(12,2) @not_null\n" +
+            "- grand_total: decimal(12,2) @computed(`subtotal * 1.1`)\n");
+        try
+        {
+            var models = new InterfaceResolver(new M3lLoader().LoadFile(tmp)).ResolveAll().ToList();
+            var output = DbContextRenderer.Render(models, "TestDbContext", "Test.Ns", postgresNaming: true);
+
+            Assert.Contains("e.ToView(\"invoice_full_view\");", output);
+            Assert.Contains("e.Property(x => x.GrandTotal).HasColumnName(\"grand_total\");", output);
+        }
+        finally
+        {
+            File.Delete(tmp);
+        }
+    }
+
     /// <summary>
     /// A field-level <c>@internal</c> field is stored — the write type maps its column — but the read
     /// type has no such property, so its mapping must not name it (CS1061). Both backings: the read

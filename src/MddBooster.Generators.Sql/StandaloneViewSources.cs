@@ -54,11 +54,12 @@ public static class StandaloneViewSources
     }
 
     /// <summary>
-    /// The views the PostgreSQL dialect does not generate, each with its reason: a view with an
-    /// expression (<c>where</c>, <c>@computed</c> — the language does not define their dialect, and
-    /// this dialect does not translate one), a view that reads a model through a view this dialect
-    /// does not render (<see cref="Postgres.PostgresSqlGenerator.UnsupportedModels"/>), and a view
-    /// that reads one of those views. The T-SQL dialect generates them all.
+    /// The views the PostgreSQL dialect does not generate, each with its reason: a view that reads a
+    /// model through a view this dialect does not render
+    /// (<see cref="Postgres.PostgresSqlGenerator.UnsupportedModels"/> — an <c>@indexed</c> rollup), and a
+    /// view that reads one of those views. Expressions (<c>where</c>, <c>@computed</c>) are no longer a
+    /// reason: the portable subset is translated, and what cannot be is refused by validation. The
+    /// T-SQL dialect generates them all.
     /// </summary>
     public static IReadOnlyDictionary<string, string> PostgresSkipped(
         IReadOnlyList<ResolvedView> views,
@@ -87,7 +88,7 @@ public static class StandaloneViewSources
                     && viewsNotRendered.Contains(relation.Name)
                     && SourceOf(view, relation, derived) is StandaloneViewSourceKind.FullView or StandaloneViewSourceKind.UdView)
                 {
-                    skipped[view.Name] = $"모델 '{relation.Name}' 을(를) 그 모델의 뷰로 읽는데, 이 방언이 그 뷰를 생성하지 않는다(@computed·@indexed rollup)";
+                    skipped[view.Name] = $"모델 '{relation.Name}' 을(를) 그 모델의 뷰로 읽는데, 이 방언이 그 뷰를 생성하지 않는다(@indexed rollup)";
                     break;
                 }
             }

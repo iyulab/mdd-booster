@@ -45,6 +45,10 @@ M3L 0.20.0 이 `@computed` · rollup `where:` · 뷰 `where` 의 언어를 정�
 - 🆕 **PostgreSQL 방언이 Computed 와 식이 있는 standalone 뷰를 생성한다** — 종전엔 Computed 가 있는 모델의 FullView(와 그것을 체이닝으로 읽는 모델)를 경고와 함께 건너뛰고, 식이 있는 standalone
   뷰는 `MDD029` 로 건너뛰었다. 이제 같은 번역기로 낸다: FullView 의 Computed 는 SQL Server 와 같은 CTE 체인(뒤의 식이 앞의 Computed 를 이름으로 읽는다) · rollup `where:` · standalone `where`·`@computed`.
   번역할 수 없는 식은 SQL Server 와 같은 **오류 `MDD037`**, `platform: "postgresql"` 식이 없고 포터블 식도 없으면 `MDD036`.
+  🔇 PostgreSQL 방언의 Model 타깃이 Computed 열의 이름도 매핑한다(`HasColumnName("grand_total")`) — 매핑이 없으면 읽기 타입의 질의가 뷰에 없는
+  PascalCase 열을 찾아 실패한다. «PG 방언은 Computed 를 방출하지 않는다»던 Model 타깃 경고는 `@indexed` rollup 에만 남는다.
+- standalone 뷰 열의 rollup `where:`/`where_raw` 도 모델 필드의 rollup 과 같은 검사를 받는다(`MDD037`·`MDD036`) — 검사하지 않던 동안, SQL Server 에서는
+  부분집합 밖의 필터가 규칙 이름 없는 예외로 빌드를 멈췄고, PostgreSQL 에서는 다른 플랫폼에만 선언된 필터를 조용히 버려 그 열이 모든 행을 셌다.
 - 🔴 **`@index(…, name: "…")` · `@unique(…, name: "…")`(M3L 명세 §3.3.2 의 예 그대로)가 컴파일되는 생성물을 낸다.** 종전엔 키워드 인자가 열 목록에 섞여 와
   `HasIndex(x => new { x.Sku, x.Name: "productSearch" })` 같은 C# 과 없는 열 `[Name: "uqSku"]` 을 가리키는 SQL 을 냈다. M3L 0.20.0 이 키워드를 열 목록에서 빼고,
   이 생성기는 열만으로 인덱스를 내고, **지시자의 `name:` 을 그 인덱스·제약의 이름으로 쓴다** — SQL Server · PostgreSQL · EF(`HasDatabaseName`) 모두.
