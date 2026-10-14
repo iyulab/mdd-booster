@@ -54,7 +54,12 @@ public static class PortableExpression
     /// The expression is a boolean field's value. SQL Server's select list takes no predicate, so a predicate there becomes
     /// <c>CASE WHEN … THEN 1 ELSE 0 END</c> (as <c>bit</c>).
     /// </param>
-    public static Result Translate(string expression, SqlDialect dialect, Func<string, string> column, bool booleanResult = false)
+    /// <param name="isText">
+    /// Whether a field reference names a field that holds text. Without it a field is not known to be text, and only
+    /// literals and text-returning functions are.
+    /// </param>
+    public static Result Translate(string expression, SqlDialect dialect, Func<string, string> column, bool booleanResult = false,
+        Func<string, bool>? isText = null)
     {
         ArgumentNullException.ThrowIfNull(expression);
         ArgumentNullException.ThrowIfNull(column);
@@ -67,10 +72,10 @@ public static class PortableExpression
 
         var tokens = Tokenize(expression, Note);
         var position = 0;
-        var nodes = ParseSequence(tokens, ref position);
+        var nodes = ParseSequence(tokens, ref position, Note);
         if (position < tokens.Count) Note($"unbalanced '{tokens[position].Value}'");
 
-        var context = new RenderContext(dialect, column, Note);
+        var context = new RenderContext(dialect, column, Note, isText ?? (_ => false));
         var sql = Render(nodes, context);
         if (unsupported.Count > 0) return new Result(null, unsupported);
 
@@ -84,7 +89,7 @@ public static class PortableExpression
         return new Result(sql, unsupported);
     }
 
-    private sealed record RenderContext(SqlDialect Dialect, Func<string, string> Column, Action<string> Note)
+    private sealed record RenderContext(SqlDialect Dialect, Func<string, string> Column, Action<string> Note, Func<string, bool> IsTextField)
     {
         public bool SqlServer => Dialect == SqlDialect.SqlServer;
     }
@@ -104,21 +109,40 @@ public static class PortableExpression
             if (c == '\'')
             {
                 i++;
+                var closed = false;
                 while (i < s.Length)
                 {
                     if (s[i] == '\'')
                     {
                         if (i + 1 < s.Length && s[i + 1] == '\'') { i += 2; continue; }
+                        closed = true;
                         break;
                     }
                     i++;
                 }
-                i = Math.Min(i + 1, s.Length);
+                if (!closed)
+                {
+                    // Emitted, an open literal would run on into whatever the generator writes after the expression.
+                    note($"unterminated string literal {s[start..]}");
+                    break;
+                }
+                i++;
                 tokens.Add(new Token(Kind.Text, s[start..i]));
             }
             else if (char.IsAsciiDigit(c))
             {
-                while (i < s.Length && (char.IsAsciiDigit(s[i]) || s[i] == '.')) i++;
+                // §10.7.1: digits, with at most one decimal point that digits follow.
+                while (i < s.Length && char.IsAsciiDigit(s[i])) i++;
+                if (i + 1 < s.Length && s[i] == '.' && char.IsAsciiDigit(s[i + 1]))
+                {
+                    i++;
+                    while (i < s.Length && char.IsAsciiDigit(s[i])) i++;
+                }
+                if (i < s.Length && (char.IsLetterOrDigit(s[i]) || s[i] is '.' or '_' or '$'))
+                {
+                    while (i < s.Length && (char.IsLetterOrDigit(s[i]) || s[i] is '.' or '_' or '$')) i++;
+                    note($"malformed number {s[start..i]}");
+                }
                 tokens.Add(new Token(Kind.Number, s[start..i]));
             }
             else if (char.IsLetter(c) || c == '_' || c == '$')
@@ -133,6 +157,8 @@ public static class PortableExpression
                 while (i < s.Length && s[i] != close) i++;
                 i = Math.Min(i + 1, s.Length);
                 note($"{(c == '[' ? "bracketed" : "quoted")} identifier {s[start..i]}");
+                // Kept as what it stands for, so the rest is read in the shape the author wrote it.
+                tokens.Add(new Token(Kind.Name, s[start..i]));
             }
             else
             {
@@ -142,6 +168,7 @@ public static class PortableExpression
                     note(two == "->" ? "JSON operator ->" : two == "||" ? "|| (write concat(…))" : ":: cast");
                     i += 2;
                     if (two == "->" && i < s.Length && s[i] == '>') i++;
+                    tokens.Add(new Token(Kind.Operator, s[start..i]));
                     continue;
                 }
                 if (two is "<>" or "!=" or "<=" or ">=")
@@ -161,6 +188,7 @@ public static class PortableExpression
                         break;
                     default:
                         note($"'{c}'");
+                        tokens.Add(new Token(Kind.Operator, c.ToString()));
                         break;
                 }
             }
@@ -171,7 +199,7 @@ public static class PortableExpression
     // ---- structure: calls and parenthesised lists ----
 
     /// <summary>Nodes up to a closing parenthesis or comma at this level (not consumed).</summary>
-    private static List<Node> ParseSequence(List<Token> tokens, ref int position)
+    private static List<Node> ParseSequence(List<Token> tokens, ref int position, Action<string> note)
     {
         var nodes = new List<Node>();
         while (position < tokens.Count && tokens[position].Kind is not (Kind.Close or Kind.Comma))
@@ -181,12 +209,12 @@ public static class PortableExpression
                 && position + 1 < tokens.Count && tokens[position + 1].Kind == Kind.Open)
             {
                 position += 2;
-                nodes.Add(new Call(token.Value, ParseItems(tokens, ref position)));
+                nodes.Add(new Call(token.Value, ParseItems(tokens, ref position, note)));
             }
             else if (token.Kind == Kind.Open)
             {
                 position++;
-                nodes.Add(new Group(ParseItems(tokens, ref position)));
+                nodes.Add(new Group(ParseItems(tokens, ref position, note)));
             }
             else
             {
@@ -198,7 +226,7 @@ public static class PortableExpression
     }
 
     /// <summary>Comma-separated items after an opening parenthesis, through its close.</summary>
-    private static List<List<Node>> ParseItems(List<Token> tokens, ref int position)
+    private static List<List<Node>> ParseItems(List<Token> tokens, ref int position, Action<string> note)
     {
         var items = new List<List<Node>>();
         if (position < tokens.Count && tokens[position].Kind == Kind.Close)
@@ -208,8 +236,13 @@ public static class PortableExpression
         }
         while (true)
         {
-            items.Add(ParseSequence(tokens, ref position));
-            if (position >= tokens.Count) return items;
+            items.Add(ParseSequence(tokens, ref position, note));
+            if (position >= tokens.Count)
+            {
+                // Closing it for the author would be guessing where the parenthesis was meant to end.
+                note("missing ')'");
+                return items;
+            }
             var t = tokens[position++];
             if (t.Kind == Kind.Close) return items;
         }
@@ -225,10 +258,16 @@ public static class PortableExpression
         {
             var node = nodes[k];
             if (node is Leaf { Token: { Kind: Kind.Operator, Value: "+" } }
-                && (IsText(nodes, k - 1) || IsText(nodes, k + 1)))
+                && (IsText(nodes, k - 1, cx) || IsText(nodes, k + 1, cx)))
                 cx.Note("+ joining text (write concat(…))");
-            if (sb.Length > 0 && !unary) sb.Append(' ');
-            sb.Append(RenderNode(node, cx));
+            // The subset joins operands with an operator or a keyword. Two side by side is a word it does not have,
+            // written where an operator belongs.
+            if (k > 0 && IsOperand(nodes[k - 1]) && IsOperand(node))
+                cx.Note($"{Describe(nodes[k - 1])} {Describe(node)} (no operator between them)");
+            var piece = RenderNode(node, cx);
+            // Glued, two minus signs open a line comment that ends the expression early.
+            if (sb.Length > 0 && (!unary || (sb[^1] == '-' && piece.StartsWith('-')))) sb.Append(' ');
+            sb.Append(piece);
             // A sign with nothing to subtract from — first, or after an operator, keyword or comma — binds to what follows.
             unary = node is Leaf { Token: { Kind: Kind.Operator, Value: "-" or "+" } }
                 && (k == 0 || nodes[k - 1] is Leaf { Token.Kind: Kind.Operator } || nodes[k - 1] is Leaf { Token: { Kind: Kind.Name } p } && Keywords.Contains(p.Value));
@@ -236,16 +275,50 @@ public static class PortableExpression
         return sb.ToString();
     }
 
-    private static bool IsText(List<Node> nodes, int index)
-        => index >= 0 && index < nodes.Count && nodes[index] is Leaf { Token.Kind: Kind.Text };
+    private static readonly HashSet<string> TextFunctions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "concat", "lower", "upper", "trim", "replace", "substring",
+    };
+
+    /// <summary>Whether the node is known to be text: a literal, a function that returns text, a field the caller says holds text.</summary>
+    private static bool IsText(List<Node> nodes, int index, RenderContext cx)
+        => index >= 0 && index < nodes.Count && nodes[index] switch
+        {
+            Leaf { Token.Kind: Kind.Text } => true,
+            Leaf { Token: { Kind: Kind.Name } t } => !Keywords.Contains(t.Value) && cx.IsTextField(t.Value),
+            Call call => TextFunctions.Contains(call.Name),
+            _ => false,
+        };
+
+    /// <summary>A value: a literal, a field, a call, a parenthesised list — or <c>true</c>, <c>false</c>, <c>null</c>.</summary>
+    private static bool IsOperand(Node node) => node switch
+    {
+        Leaf { Token.Kind: Kind.Text or Kind.Number } => true,
+        Leaf { Token: { Kind: Kind.Name } t } => !Keywords.Contains(t.Value) || t.Value.ToLowerInvariant() is "true" or "false" or "null",
+        Call or Group => true,
+        _ => false,
+    };
+
+    private static string Describe(Node node) => node switch
+    {
+        Leaf leaf => leaf.Token.Value,
+        Call call => call.Name + "(…)",
+        _ => "(…)",
+    };
 
     private static string RenderNode(Node node, RenderContext cx) => node switch
     {
         Leaf leaf => RenderLeaf(leaf.Token, cx),
-        Group group => "(" + string.Join(", ", group.Items.Select(i => Render(i, cx))) + ")",
+        Group group => RenderGroup(group, cx),
         Call call => RenderCall(call, cx),
         _ => throw new InvalidOperationException(),
     };
+
+    private static string RenderGroup(Group group, RenderContext cx)
+    {
+        if (group.Items.Count == 0 || group.Items.Any(i => i.Count == 0)) cx.Note("empty ( )");
+        return "(" + string.Join(", ", group.Items.Select(i => Render(i, cx))) + ")";
+    }
 
     private static string RenderLeaf(Token token, RenderContext cx)
     {
@@ -268,6 +341,7 @@ public static class PortableExpression
         var name = call.Name.ToLowerInvariant();
         // Named before its arguments, so what is unsupported reads in the order it is written.
         if (!Functions.Contains(name)) cx.Note($"function {call.Name}()");
+        if (call.Args.Any(a => a.Count == 0)) cx.Note($"empty argument in {name}()");
         var args = call.Args.Select(a => Render(a, cx)).ToList();
         string Same(string sqlServer) => $"{(cx.SqlServer ? sqlServer : name)}({string.Join(", ", args)})";
         bool Arity(params int[] counts)
@@ -276,11 +350,18 @@ public static class PortableExpression
             cx.Note($"{name}() takes {string.Join(" or ", counts)} argument(s), not {args.Count}");
             return false;
         }
+        bool AtLeast(int count)
+        {
+            if (args.Count >= count) return true;
+            cx.Note($"{name}() takes at least {count} argument(s), not {args.Count}");
+            return false;
+        }
 
         switch (name)
         {
-            case "coalesce": return Same("COALESCE");
-            case "concat": return Same("CONCAT");
+            // §10.7.4 writes both as (a, b, …): SQL Server refuses a single argument where PostgreSQL takes it.
+            case "coalesce": return AtLeast(2) ? Same("COALESCE") : string.Empty;
+            case "concat": return AtLeast(2) ? Same("CONCAT") : string.Empty;
             case "nullif": return Arity(2) ? Same("NULLIF") : string.Empty;
             case "lower": return Arity(1) ? Same("LOWER") : string.Empty;
             case "upper": return Arity(1) ? Same("UPPER") : string.Empty;

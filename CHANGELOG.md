@@ -49,6 +49,12 @@ M3L 0.20.0 이 `@computed` · rollup `where:` · 뷰 `where` 의 언어를 정�
   PascalCase 열을 찾아 실패한다. «PG 방언은 Computed 를 방출하지 않는다»던 Model 타깃 경고는 `@indexed` rollup 에만 남는다.
 - standalone 뷰 열의 rollup `where:`/`where_raw` 도 모델 필드의 rollup 과 같은 검사를 받는다(`MDD037`·`MDD036`) — 검사하지 않던 동안, SQL Server 에서는
   부분집합 밖의 필터가 규칙 이름 없는 예외로 빌드를 멈췄고, PostgreSQL 에서는 다른 플랫폼에만 선언된 필터를 조용히 버려 그 열이 모든 행을 셌다.
+- `MDD037` 은 식의 **모양이 틀린 것**도 이름을 대어 멈춘다 — 그대로 내면 배포에서 깨지거나 뒤따르는 문장을 조용히 바꾸는 것들이다: 닫히지 않은 문자열 리터럴
+  (생성 DDL 의 나머지를 삼킨다) · `1.2.3`·`2d` 같은 숫자 · 닫는 괄호 누락(대신 닫아 주지 않는다) · 빈 인자(`concat(a, )`)와 빈 괄호 · 연산자 없이 나란한
+  두 피연산자(`name ilike '%x%'` · `now() - interval '30 days'` — 한 플랫폼의 낱말이 연산자 자리에 온 모양으로, 그 플랫폼에서만 통과했다) · 인자가 하나인
+  `coalesce`·`concat`(명세는 둘 이상 — SQL Server 가 하나를 거절한다). 텍스트 사이의 `+` 는 문자열 리터럴 옆뿐 아니라 텍스트를 내는 함수(`lower(a) + upper(b)`)와
+  모델이 문자열로 선언한 필드 사이에서도 잡는다(`first_name + last_name` — rollup `where:` 에서는 대상 모델의 필드와 `$parent.` 필드). 연이은 부호(`- -1`)는
+  띄어 써서 줄 주석(`--`)이 되지 않는다.
 - 🔴 **`@index(…, name: "…")` · `@unique(…, name: "…")`(M3L 명세 §3.3.2 의 예 그대로)가 컴파일되는 생성물을 낸다.** 종전엔 키워드 인자가 열 목록에 섞여 와
   `HasIndex(x => new { x.Sku, x.Name: "productSearch" })` 같은 C# 과 없는 열 `[Name: "uqSku"]` 을 가리키는 SQL 을 냈다. M3L 0.20.0 이 키워드를 열 목록에서 빼고,
   이 생성기는 열만으로 인덱스를 내고, **지시자의 `name:` 을 그 인덱스·제약의 이름으로 쓴다** — SQL Server · PostgreSQL · EF(`HasDatabaseName`) 모두.

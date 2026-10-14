@@ -1335,7 +1335,10 @@ PostgreSQL, `concat` → `CONCAT`/`concat`, `date_add(d, n, 'day')` → `DATEADD
 `length(s)` counts trailing spaces on SQL Server too, and a boolean field's comparison becomes a `CASE` over `bit` on SQL
 Server. An expression declared for `sqlserver` or `postgresql` is emitted as written in that dialect. Missing an expression
 for the dialect stops the build (`MDD036`), and so does an expression outside the subset in a portable context (`MDD037`)
-— on either dialect, with every such expression listed at once. Platform expressions for `mysql` or `sqlite` are
+— on either dialect, with every such expression listed at once. An expression that is not well formed is outside the
+subset too: an unclosed string, a malformed number, a missing parenthesis, an empty argument, two operands with no
+operator between them (a platform word such as `ilike` written where an operator belongs), and `+` beside text — a
+literal, a function that returns text, or a field the model declares as a string. Platform expressions for `mysql` or `sqlite` are
 carried and emitted by no target. The generated entity's `[Computed]` metadata is the dialect's platform expression, else
 the portable one as written.
 

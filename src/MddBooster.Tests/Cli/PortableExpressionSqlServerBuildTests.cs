@@ -97,6 +97,33 @@ public sealed class PortableExpressionSqlServerBuildTests
     }
 
     [Fact]
+    public void Plus_between_text_fields_stops_the_build_where_it_would_only_work_on_sql_server()
+    {
+        // SQL Server joins two strings with +, PostgreSQL has no + for text: the model's own types decide, so the
+        // expression is refused on both platforms rather than building on one.
+        var (exit, stderr, view) = Build("""
+## Member : Timestampable
+- id: identifier @pk @generated
+- first_name: string(50)
+- last_name: string(50)
+- name: string @computed("first_name + last_name")
+- vip_tickets: integer @rollup(Ticket.member_id, count, where: "label + $parent.first_name = 'x'")
+
+## Ticket : Timestampable
+- id: identifier @pk @generated
+- member_id: identifier @reference(Member)
+- label: string(20)
+""", "MemberFullView.sql");
+
+        Assert.NotEqual(0, exit);
+        Assert.Contains("MDD037", stderr);
+        Assert.Contains("'Member.name' @computed", stderr);
+        Assert.Contains("'Member.vip_tickets' @rollup where", stderr);
+        Assert.Contains("+ joining text", stderr);
+        Assert.Null(view);
+    }
+
+    [Fact]
     public void A_view_column_s_rollup_filter_in_sql_server_syntax_stops_the_build_too()
     {
         // A rollup in a view is translated like a model's: its filter is asked the same question before anything is

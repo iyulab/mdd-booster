@@ -76,6 +76,77 @@ public class PortableExpressionTests
             Unsupported("date_add(d, 1, unit_column)"));
         Assert.Contains("substring() takes 3 argument(s), not 2", Unsupported("substring(a, 1)"));
     }
+
+    /// <summary>
+    /// Text that is not a well-formed expression is named, never emitted: each of these once reached the DDL as written,
+    /// where it either broke the statement or silently changed what follows it.
+    /// </summary>
+    [Fact]
+    public void Malformed_text_is_named_not_emitted()
+    {
+        // An unclosed literal would swallow the rest of the generated statement.
+        Assert.Contains("unterminated string literal 'abc", Unsupported("name = 'abc"));
+        // A number has one decimal point and ends where a letter would begin a name.
+        Assert.Contains("malformed number 1.2.3", Unsupported("a + 1.2.3"));
+        Assert.Contains("malformed number 2d", Unsupported("a + 2d"));
+        // A missing ')' is not closed for the author, and an empty argument is not dropped.
+        Assert.Contains("missing ')'", Unsupported("concat(a, b"));
+        Assert.Contains("empty argument in concat()", Unsupported("concat(a, )"));
+        Assert.Contains("empty ( )", Unsupported("a IN ()"));
+    }
+
+    /// <summary>
+    /// Two operands with nothing between them are not the subset's grammar — the shape a platform word takes when it is
+    /// written where an operator belongs (PostgreSQL's <c>ilike</c>, <c>interval '…'</c>), which would otherwise pass on
+    /// the platform that knows it and break on the other.
+    /// </summary>
+    [Fact]
+    public void An_operand_next_to_an_operand_is_named()
+    {
+        Assert.Contains("name ilike (no operator between them)", Unsupported("name ilike '%x%'", SqlDialect.PostgreSql));
+        Assert.Contains("interval '30 days' (no operator between them)", Unsupported("d > now() - interval '30 days'", SqlDialect.PostgreSql));
+        // Keywords join operands; true, false and null are operands themselves.
+        Assert.Equal("<a> IS NOT NULL AND <b> = TRUE", Sql("a IS NOT NULL AND b = true", SqlDialect.PostgreSql));
+    }
+
+    /// <summary>Signs next to each other stay apart — glued, two minus signs open a line comment.</summary>
+    [Fact]
+    public void Two_signs_never_become_a_comment()
+    {
+        Assert.Equal("- -1", Sql("- -1", SqlDialect.SqlServer));
+        Assert.Equal("<a> * - -1", Sql("a * - -1", SqlDialect.SqlServer));
+        Assert.Equal("<a> - -1", Sql("a - -1", SqlDialect.PostgreSql));
+    }
+
+    /// <summary>
+    /// <c>coalesce</c> and <c>concat</c> take two or more arguments (§10.7.4) — SQL Server refuses one, PostgreSQL takes it,
+    /// so a single-argument call would build for one platform only.
+    /// </summary>
+    [Fact]
+    public void Coalesce_and_concat_take_at_least_two_arguments()
+    {
+        Assert.Contains("concat() takes at least 2 argument(s), not 1", Unsupported("concat(a)"));
+        Assert.Contains("coalesce() takes at least 2 argument(s), not 1", Unsupported("coalesce(a)", SqlDialect.PostgreSql));
+    }
+
+    /// <summary>
+    /// Arithmetic is for numbers only (§10.7.2): <c>+</c> between text joins on SQL Server and fails on PostgreSQL. Text is
+    /// known from a literal, from a function that returns text, and — when the caller says which fields hold text — from a
+    /// field.
+    /// </summary>
+    [Fact]
+    public void Plus_between_text_is_named_wherever_the_text_comes_from()
+    {
+        const string Hint = "+ joining text (write concat(…))";
+        Assert.Contains(Hint, Unsupported("lower(a) + upper(b)"));
+        var result = PortableExpression.Translate("first_name + last_name", SqlDialect.SqlServer, c => c,
+            isText: name => name is "first_name" or "last_name");
+        Assert.Null(result.Sql);
+        Assert.Contains(Hint, result.Unsupported);
+        // Numbers still add.
+        Assert.Equal("<qty> + <extra>", PortableExpression.Translate("qty + extra", SqlDialect.SqlServer, c => $"<{c}>",
+            isText: name => name is "first_name").Sql);
+    }
 }
 
 /// <summary>Which expression a dialect uses: the one declared for its platform, otherwise the portable one.</summary>
