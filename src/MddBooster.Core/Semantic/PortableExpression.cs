@@ -59,8 +59,12 @@ public static class PortableExpression
     /// known, and only what literals and functions produce is: whether <c>+</c> stands between text, whether
     /// <c>date_add</c> moves a date.
     /// </param>
+    /// <param name="condition">
+    /// The expression is a condition (a filter), not a value. SQL Server takes no bit there, so a boolean field standing
+    /// alone as a condition is compared with 1.
+    /// </param>
     public static Result Translate(string expression, SqlDialect dialect, Func<string, string> column, bool booleanResult = false,
-        Func<string, string?>? fieldType = null)
+        Func<string, string?>? fieldType = null, bool condition = false)
     {
         ArgumentNullException.ThrowIfNull(expression);
         ArgumentNullException.ThrowIfNull(column);
@@ -77,7 +81,8 @@ public static class PortableExpression
         if (position < tokens.Count) Note($"unbalanced '{tokens[position].Value}'");
 
         var context = new RenderContext(dialect, column, Note, fieldType ?? (_ => null));
-        var sql = Render(nodes, context);
+        // A boolean field's predicate is selected through a CASE, whose WHEN is a condition.
+        var sql = Render(nodes, context, condition || (booleanResult && IsPredicate(nodes)));
         if (unsupported.Count > 0) return new Result(null, unsupported);
 
         if (dialect == SqlDialect.SqlServer && booleanResult)
@@ -257,10 +262,11 @@ public static class PortableExpression
 
     // ---- rendering ----
 
-    private static string Render(List<Node> nodes, RenderContext cx)
+    private static string Render(List<Node> nodes, RenderContext cx, bool condition = false)
     {
         var sb = new StringBuilder();
         var unary = false;
+        var rangeAnds = RangeAnds(nodes);
         for (var k = 0; k < nodes.Count; k++)
         {
             var node = nodes[k];
@@ -271,7 +277,9 @@ public static class PortableExpression
             // written where an operator belongs.
             if (k > 0 && IsOperand(nodes[k - 1]) && IsOperand(node))
                 cx.Note($"{Describe(nodes[k - 1])} {Describe(node)} (no operator between them)");
-            var piece = RenderNode(node, cx);
+            var piece = cx.SqlServer && IsConditionAt(nodes, k, condition, rangeAnds)
+                ? RenderCondition(node, cx)
+                : RenderNode(node, cx);
             // Glued, two minus signs open a line comment that ends the expression early.
             if (sb.Length > 0 && (!unary || (sb[^1] == '-' && piece.StartsWith('-')))) sb.Append(' ');
             sb.Append(piece);
@@ -281,6 +289,54 @@ public static class PortableExpression
         }
         return sb.ToString();
     }
+
+    private static readonly HashSet<string> ConditionJoinsBefore = new(StringComparer.OrdinalIgnoreCase) { "and", "or", "not", "when" };
+    private static readonly HashSet<string> ConditionJoinsAfter = new(StringComparer.OrdinalIgnoreCase) { "and", "or", "then" };
+
+    /// <summary>
+    /// Whether the node at <paramref name="k"/> stands as a condition: between the sequence's edges (when the sequence is
+    /// one) and the words that join conditions — AND, OR, NOT, WHEN before it; AND, OR, THEN after. A BETWEEN's AND joins
+    /// the two ends of a range, not conditions.
+    /// </summary>
+    private static bool IsConditionAt(List<Node> nodes, int k, bool condition, HashSet<int> rangeAnds)
+    {
+        bool Joins(int i, HashSet<string> words)
+            => !rangeAnds.Contains(i) && nodes[i] is Leaf { Token: { Kind: Kind.Name } t } && words.Contains(t.Value);
+        var before = k == 0 ? condition : Joins(k - 1, ConditionJoinsBefore);
+        var after = k == nodes.Count - 1 ? condition : Joins(k + 1, ConditionJoinsAfter);
+        return before && after;
+    }
+
+    /// <summary>The positions of the ANDs that close a BETWEEN's range.</summary>
+    private static HashSet<int> RangeAnds(List<Node> nodes)
+    {
+        var ands = new HashSet<int>();
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            if (nodes[i] is not Leaf { Token: { Kind: Kind.Name } t } || !t.Value.Equals("between", StringComparison.OrdinalIgnoreCase)) continue;
+            for (var j = i + 1; j < nodes.Count; j++)
+            {
+                if (nodes[j] is not Leaf { Token: { Kind: Kind.Name } a } || !a.Value.Equals("and", StringComparison.OrdinalIgnoreCase)) continue;
+                ands.Add(j);
+                break;
+            }
+        }
+        return ands;
+    }
+
+    /// <summary>
+    /// A node standing as a condition on SQL Server: a bare field — which a condition can only be if it is boolean — is
+    /// compared with 1, a boolean literal becomes a comparison that holds or does not, and parentheses carry the condition
+    /// inside. Anything else is already a condition or is not one, and renders as it is.
+    /// </summary>
+    private static string RenderCondition(Node node, RenderContext cx) => node switch
+    {
+        Leaf { Token: { Kind: Kind.Name } t } when t.Value.Equals("true", StringComparison.OrdinalIgnoreCase) => "1 = 1",
+        Leaf { Token: { Kind: Kind.Name } t } when t.Value.Equals("false", StringComparison.OrdinalIgnoreCase) => "1 = 0",
+        Leaf { Token: { Kind: Kind.Name } t } when !Keywords.Contains(t.Value) => $"({cx.Column(t.Value)} = 1)",
+        Group { Items: [var only] } => "(" + Render(only, cx, condition: true) + ")",
+        _ => RenderNode(node, cx),
+    };
 
     private static readonly HashSet<string> TextFunctions = new(StringComparer.OrdinalIgnoreCase)
     {

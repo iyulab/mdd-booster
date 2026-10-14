@@ -262,11 +262,10 @@ public static class FullViewRenderer
             var where = filter.IsRaw
                 ? NormalizeComputedExpression(ParentReferenceToken.Substitute(
                     filter.Text, field => $"{baseAlias}.[{NameCasing.ToPascalCase(field)}]"))
-                : SqlServerExpressions.Render(filter,
+                : SqlServerExpressions.RenderCondition(filter,
                     name => name.StartsWith(ParentPrefix, StringComparison.Ordinal)
                         ? $"{baseAlias}.[{NameCasing.ToPascalCase(name[ParentPrefix.Length..])}]"
-                        : SqlServerExpressions.OwnColumn(name),
-                    booleanResult: false);
+                        : SqlServerExpressions.OwnColumn(name));
             whereClause += $" AND ({where})";
         }
 

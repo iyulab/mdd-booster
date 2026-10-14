@@ -55,6 +55,7 @@ public sealed class PortableExpressionSqlServerBuildTests
 - recent: boolean @computed("created_at > date_add(now(), -30, 'day')")
 - label: string @computed("concat('#', age)")
 - order_count: integer @rollup(Ticket.member_id, count, where: "is_open = true")
+- open_count: integer @rollup(Ticket.member_id, count, where: "is_open")
 
 ## Ticket : Timestampable
 - id: identifier @pk @generated
@@ -64,6 +65,8 @@ public sealed class PortableExpressionSqlServerBuildTests
 
         Assert.Equal(0, exit);
         Assert.DoesNotContain("MDD037", stderr);
+        // A boolean field standing alone as the filter: SQL Server takes no bit where a condition belongs.
+        Assert.Contains("(([IsOpen] = 1))", view);
         Assert.NotNull(view);
         Assert.Contains("CASE WHEN [Age] >= 18 THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END", view);
         Assert.Contains("DATEADD(DAY, -30, SYSDATETIMEOFFSET())", view);

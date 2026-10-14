@@ -125,6 +125,33 @@ public class PortableExpressionTests
     }
 
     /// <summary>
+    /// SQL Server takes no bit where a condition belongs: a bare boolean field there is compared with 1 — wherever a
+    /// condition stands (a filter, a WHEN, beside AND/OR/NOT, inside a condition's parentheses). PostgreSQL's boolean is a
+    /// condition already. The AND of a BETWEEN joins a range, not conditions.
+    /// </summary>
+    [Fact]
+    public void A_boolean_field_standing_as_a_condition_is_compared_on_sql_server()
+    {
+        string Condition(string expression, SqlDialect dialect)
+        {
+            var result = PortableExpression.Translate(expression, dialect, c => $"<{c}>", condition: true);
+            Assert.True(result.Unsupported.Count == 0, string.Join("; ", result.Unsupported));
+            return result.Sql!;
+        }
+        Assert.Equal("(<is_open> = 1)", Condition("is_open", SqlDialect.SqlServer));
+        Assert.Equal("NOT (<is_open> = 1) AND <x> > 1", Condition("NOT is_open AND x > 1", SqlDialect.SqlServer));
+        Assert.Equal("((<a> = 1) OR (<b> = 1)) AND <c> IS NULL", Condition("(a OR b) AND c IS NULL", SqlDialect.SqlServer));
+        Assert.Equal("<x> BETWEEN <lo> AND <hi>", Condition("x BETWEEN lo AND hi", SqlDialect.SqlServer));
+        Assert.Equal("<is_open> = 1", Condition("is_open = true", SqlDialect.SqlServer));
+        Assert.Equal("is_open AND NOT closed".Replace("is_open", "<is_open>").Replace("closed", "<closed>"),
+            Condition("is_open AND NOT closed", SqlDialect.PostgreSql));
+        // A value is not a condition, but its WHEN is; a boolean field's predicate is one too.
+        Assert.Equal("CASE WHEN (<flag> = 1) THEN N'a' ELSE N'b' END", Sql("CASE WHEN flag THEN 'a' ELSE 'b' END", SqlDialect.SqlServer));
+        Assert.Equal("CASE WHEN (<is_active> = 1) AND <age> > 18 THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END",
+            Sql("is_active AND age > 18", SqlDialect.SqlServer, booleanResult: true));
+    }
+
+    /// <summary>
     /// A date has no hours: moving one by hours, minutes or seconds is refused on SQL Server and turns it into a timestamp
     /// on PostgreSQL. Known from a date field (the caller names field types) and from <c>today()</c>.
     /// </summary>

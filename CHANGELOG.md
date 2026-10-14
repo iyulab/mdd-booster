@@ -60,6 +60,8 @@ M3L 0.20.0 이 `@computed` · rollup `where:` · 뷰 `where` 의 언어를 정�
     날짜에 `date_add` 한 결과는 방언마다 형이 달라(SQL Server 의 `decimal` 대 PostgreSQL 의 `numeric`, `date` 대 `timestamp`) 읽기 타입이 선언 형으로 읽지 못했다.
     텍스트는 캐스팅하지 않는다(선언 길이로 잘리지 않게). `@computed_raw` 는 원문 그대로다.
   - SQL Server 의 불리언 계산 열은 술어가 아닌 값도 `bit` 이다(`CASE WHEN … THEN true ELSE false END` 가 `int` 열이 되어 불리언 속성으로 읽히지 않았다).
+  - 조건 자리에 홀로 선 불리언 필드(rollup `where: "is_open"` · 뷰 `where` · `WHEN flag` · `NOT flag` · `flag AND …`)는 SQL Server 에서 `= 1` 비교가 된다 —
+    SQL Server 는 조건 자리에 `bit` 을 받지 않아 배포가 거절됐다(PostgreSQL 은 그대로 통과).
   - `length(null)` 은 두 플랫폼 모두 `null`(SQL Server 에서 0 이었다).
   - SQL Server 의 문자열 리터럴은 `N'…'` — 유니코드가 아닌 정렬의 데이터베이스에서 한글 등이 `?` 로 바뀌었다.
   - `date_add` 로 날짜(`date` 필드 · `today()`)를 시·분·초 단위로 옮기는 식은 `MDD037` — SQL Server 는 거절하고 PostgreSQL 은 시각으로 바꾼다.

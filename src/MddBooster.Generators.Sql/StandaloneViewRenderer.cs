@@ -154,7 +154,7 @@ public static class StandaloneViewRenderer
                 : SqlServerExpressions.OwnColumn(name);
         }
         return valueOf is null
-            ? SqlServerExpressions.Render(selected, Column, booleanResult: false)
+            ? SqlServerExpressions.RenderCondition(selected, Column)
             : SqlServerExpressions.RenderValue(selected, Column, valueOf);
     }
 

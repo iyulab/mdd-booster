@@ -32,6 +32,19 @@ internal static class SqlServerExpressions
     }
 
     /// <summary>
+    /// The SQL Server text for <paramref name="selected"/> as a condition — a rollup's or a view's filter. A boolean field
+    /// standing alone as a condition is compared with 1 (SQL Server takes no bit there); a platform expression is as written.
+    /// </summary>
+    internal static string RenderCondition(SelectedExpression selected, Func<string, string> column)
+    {
+        if (selected.IsRaw) return FullViewRenderer.NormalizeComputedExpression(selected.Text);
+
+        var result = PortableExpression.Translate(selected.Text, SqlDialect.SqlServer, column, condition: true);
+        return result.Sql ?? throw new InvalidOperationException(
+            $"Untranslatable expression reached the SQL Server renderer: {selected.Text}");
+    }
+
+    /// <summary>
     /// The SQL Server text for <paramref name="selected"/> as the value of <paramref name="field"/>: a portable expression
     /// is cast to the type the field declares (<see cref="ComputedValues"/>), a boolean is a bit. A platform expression is
     /// the author's, as written.
