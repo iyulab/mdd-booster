@@ -86,15 +86,15 @@ public static class PermissionsRenderer
             foreach (var verb in Verbs)
             {
                 var member = set + NameOf(verb);
-                sb.Append("    public const string ").Append(member).Append(" = \"")
-                  .Append(PermissionKeyTemplate.Expand(template, set, verb)).AppendLine("\";");
+                sb.Append("    public const string ").Append(member).Append(" = ")
+                  .Append(SourceLiteral.CSharpString(PermissionKeyTemplate.Expand(template, set, verb))).AppendLine(";");
             }
         }
 
         foreach (var (_, set) in viewSets)
         {
-            sb.Append("    public const string ").Append(set).Append(NameOf(Verbs[0])).Append(" = \"")
-              .Append(PermissionKeyTemplate.Expand(template, set, Verbs[0])).AppendLine("\";");
+            sb.Append("    public const string ").Append(set).Append(NameOf(Verbs[0])).Append(" = ")
+              .Append(SourceLiteral.CSharpString(PermissionKeyTemplate.Expand(template, set, Verbs[0]))).AppendLine(";");
         }
 
         sb.AppendLine();

@@ -196,8 +196,8 @@ public static class DbContextRenderer
                 "ud" => m.Name + "UdView",
                 _ => m.Name,   // base table
             };
-            sb.Append("        modelBuilder.Entity<").Append(m.Name).Append("Ext>().ToTable((string?)null).ToView(\"")
-              .Append(viewName).AppendLine("\");");
+            sb.Append("        modelBuilder.Entity<").Append(m.Name).Append("Ext>().ToTable((string?)null).ToView(")
+              .Append(SourceLiteral.CSharpString(viewName)).AppendLine(");");
         }
 
         // 공유/명명 PK(필드명 != id): 상속된 IyuEntity.Id를 실제 PK 컬럼으로 재매핑.
@@ -210,9 +210,9 @@ public static class DbContextRenderer
             var name = NameCasing.ToPascalCase(model.Name);
             var column = NameCasing.ToPascalCase(pk.Name);
             sb.Append("        modelBuilder.Entity<").Append(name)
-              .Append(">().Property(e => e.Id).HasColumnName(\"").Append(column).AppendLine("\");");
+              .Append(">().Property(e => e.Id).HasColumnName(").Append(SourceLiteral.CSharpString(column)).AppendLine(");");
             sb.Append("        modelBuilder.Entity<").Append(name)
-              .Append("Ext>().Property(e => e.Id).HasColumnName(\"").Append(column).AppendLine("\");");
+              .Append("Ext>().Property(e => e.Id).HasColumnName(").Append(SourceLiteral.CSharpString(column)).AppendLine(");");
         }
 
         // field-level @unique/@index — SQL parity (TableRenderer). Write entity only; the Ext
@@ -246,15 +246,15 @@ public static class DbContextRenderer
             sb.Append("        modelBuilder.Entity<").Append(name).AppendLine(">(e =>");
             sb.AppendLine("        {");
             sb.AppendLine("            e.ToTable((string?)null);");
-            sb.Append("            e.ToView(\"")
-              .Append(postgres ? PostgresIdentifiers.ToSnakeCase(view.Name) : view.Name).AppendLine("\");");
+            sb.Append("            e.ToView(")
+              .Append(SourceLiteral.CSharpString(postgres ? PostgresIdentifiers.ToSnakeCase(view.Name) : view.Name)).AppendLine(");");
             sb.AppendLine("            e.HasKey(x => x.Id);");
             if (postgres)
             {
                 foreach (var column in view.Columns)
                 {
                     sb.Append("            e.Property(x => x.").Append(NameCasing.ToPascalCase(column.Name))
-                      .Append(").HasColumnName(\"").Append(column.Name).AppendLine("\");");
+                      .Append(").HasColumnName(").Append(SourceLiteral.CSharpString(column.Name)).AppendLine(");");
                 }
             }
             sb.AppendLine("        });");
@@ -389,7 +389,7 @@ public static class DbContextRenderer
             sb.AppendLine();
             sb.Append("        modelBuilder.Entity<").Append(name).AppendLine(">(e =>");
             sb.AppendLine("        {");
-            sb.Append("            e.ToTable(\"").Append(table).AppendLine("\");");
+            sb.Append("            e.ToTable(").Append(SourceLiteral.CSharpString(table)).AppendLine(");");
             AppendPostgresColumns(sb, model, pk, readsTable: true, readType: false);
             AppendIndexes(sb, model, name, table, isPostgres: true);
             AppendSectionIndexes(sb, model, name, table, isPostgres: true);
@@ -398,7 +398,7 @@ public static class DbContextRenderer
             sb.Append("        modelBuilder.Entity<").Append(name).AppendLine("Ext>(e =>");
             sb.AppendLine("        {");
             sb.AppendLine("            e.ToTable((string?)null);");
-            sb.Append("            e.ToView(\"").Append(extView).AppendLine("\");");
+            sb.Append("            e.ToView(").Append(SourceLiteral.CSharpString(extView)).AppendLine(");");
             // The read type reads the table itself only when no view backs it.
             AppendPostgresColumns(sb, model, pk, readsTable: extView == table, readType: true);
             if (backing == "full")
@@ -434,7 +434,7 @@ public static class DbContextRenderer
                 ? "xmin"
                 : field.Name;
             sb.Append("            e.Property(x => x.").Append(property)
-              .Append(").HasColumnName(\"").Append(column).Append("\")");
+              .Append(").HasColumnName(").Append(SourceLiteral.CSharpString(column)).Append(')');
             if (string.Equals(field.Type, "json", StringComparison.Ordinal))
             {
                 sb.Append(".HasColumnType(\"jsonb\")");
@@ -459,7 +459,7 @@ public static class DbContextRenderer
         {
             var property = NameCasing.ToPascalCase(field.Name);
             sb.Append("            e.Property(x => x.").Append(property)
-              .Append(").HasColumnName(\"").Append(field.Name).AppendLine("\");");
+              .Append(").HasColumnName(").Append(SourceLiteral.CSharpString(field.Name)).AppendLine(");");
         }
     }
 

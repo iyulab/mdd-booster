@@ -99,15 +99,16 @@ public static class ApiRegistrationRenderer
             {
                 sb.Append("        options.ODataModel.AddEntityPair<")
                   .Append(entityPrefix).Append(entity).Append("Ext, ")
-                  .Append(entityPrefix).Append(entity).Append(">(\"")
-                  .Append(setName).AppendLine("\");");
+                  .Append(entityPrefix).Append(entity).Append(">(")
+                  .Append(SourceLiteral.CSharpString(setName)).AppendLine(");");
             }
             if (graphql)
             {
                 sb.Append("        options.GraphQL.AddEntityPair<")
                   .Append(entityPrefix).Append(entity).Append("Ext, ")
-                  .Append(entityPrefix).Append(entity).Append(">(\"")
-                  .Append(queryName).Append("\", \"").Append(mutationPrefix).AppendLine("\");");
+                  .Append(entityPrefix).Append(entity).Append(">(")
+                  .Append(SourceLiteral.CSharpString(queryName)).Append(", ")
+                  .Append(SourceLiteral.CSharpString(mutationPrefix)).AppendLine(");");
             }
         }
 
@@ -119,14 +120,14 @@ public static class ApiRegistrationRenderer
             if (odata)
             {
                 sb.Append("        options.ODataModel.AddReadOnlySet<")
-                  .Append(entityPrefix).Append(entity).Append(">(\"")
-                  .Append(Pluralizer.Pluralize(entity)).AppendLine("\");");
+                  .Append(entityPrefix).Append(entity).Append(">(")
+                  .Append(SourceLiteral.CSharpString(Pluralizer.Pluralize(entity))).AppendLine(");");
             }
             if (graphql)
             {
                 sb.Append("        options.GraphQL.AddReadOnlySet<")
-                  .Append(entityPrefix).Append(entity).Append(">(\"")
-                  .Append(Pluralizer.Pluralize(NameCasing.ToCamelCase(entity))).AppendLine("\");");
+                  .Append(entityPrefix).Append(entity).Append(">(")
+                  .Append(SourceLiteral.CSharpString(Pluralizer.Pluralize(NameCasing.ToCamelCase(entity)))).AppendLine(");");
             }
         }
 
@@ -179,9 +180,9 @@ public static class ApiRegistrationRenderer
                   .AppendLine("' is registered by another generated registration; call that one first.");
             }
 
-            sb.Append("        options.ODataModel.DeclareSharedKey(\"")
-              .Append(Pluralizer.Pluralize(NameCasing.ToPascalCase(model.Name))).Append("\", \"")
-              .Append(Pluralizer.Pluralize(NameCasing.ToPascalCase(aspectOf.Model))).AppendLine("\");");
+            sb.Append("        options.ODataModel.DeclareSharedKey(")
+              .Append(SourceLiteral.CSharpString(Pluralizer.Pluralize(NameCasing.ToPascalCase(model.Name)))).Append(", ")
+              .Append(SourceLiteral.CSharpString(Pluralizer.Pluralize(NameCasing.ToPascalCase(aspectOf.Model)))).AppendLine(");");
         }
 
         sb.AppendLine("    }");

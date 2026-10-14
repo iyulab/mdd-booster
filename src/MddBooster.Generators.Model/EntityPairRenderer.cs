@@ -226,7 +226,7 @@ public static class EntityPairRenderer
         sb.Append("namespace ").Append(ns).AppendLine(";");
         sb.AppendLine();
         XmlDocComment.AppendSummary(sb, source.Description, indent: "");
-        sb.Append("[Table(\"").Append(tableName).AppendLine("\")]");
+        sb.Append("[Table(").Append(SourceLiteral.CSharpString(tableName)).AppendLine(")]");
         sb.Append("public partial class ").Append(className)
           .Append(" : ").Append(baseClass).Append(", I").Append(entityName);
         foreach (var iface in extraInterfaces)
@@ -410,16 +410,14 @@ public static class EntityPairRenderer
         var referenceTarget = GetAttributeFirstParam(f, "reference");
         if (!string.IsNullOrEmpty(referenceTarget))
         {
-            sb.Append("    [Reference(\"")
-              .Append(referenceTarget).AppendLine("\")]");
+            sb.Append("    [Reference(").Append(SourceLiteral.CSharpString(referenceTarget)).AppendLine(")]");
         }
 
         // [Binding("Entity", "Column")] — # Entity.Column 바인딩
         if (f.Binding is not null)
         {
-            sb.Append("    [Binding(\"")
-              .Append(f.Binding.Entity).Append("\", \"")
-              .Append(f.Binding.Column).AppendLine("\")]");
+            sb.Append("    [Binding(").Append(SourceLiteral.CSharpString(f.Binding.Entity)).Append(", ")
+              .Append(SourceLiteral.CSharpString(f.Binding.Column)).AppendLine(")]");
         }
 
         // Derived-field markers: [Lookup], [Rollup], [Computed].

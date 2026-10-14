@@ -43,6 +43,18 @@ public class PermissionsRendererTests
         Assert.Contains("public const string OrdersWrite = \"orders.write\";", result);
     }
 
+    /// <summary>
+    /// The key template is configuration text: what it expands to is written as a C# string literal, escaped — a
+    /// backslash written as is would turn <c>orders\read</c> into a carriage return, a quote would end the literal.
+    /// </summary>
+    [Fact]
+    public void A_key_is_a_string_literal_whatever_the_template_holds()
+    {
+        var result = PermissionsRenderer.Render(LoadInline(Model), "T.Server", "{entitySetLower}\\\"{verb}");
+
+        Assert.Contains("public const string OrdersRead = \"orders\\\\\\\"read\";", result);
+    }
+
     [Fact]
     public void Emits_the_read_type_to_read_write_default_map()
     {
