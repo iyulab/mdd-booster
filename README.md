@@ -523,6 +523,8 @@ MDD_DEBUG=1 mdd build ./mdd
 
 ## M3L 기능 지원 (현재)
 
+명세의 절마다 이 생성기가 어디서 멈추는지는 [`docs/m3l-support.md`](docs/m3l-support.md) — 고정한 `M3L.Native` 판의 명세 절 번호로 적었다. 노트가 없는 절은 적힌 대로 구현돼 있다.
+
 | 기능 | 지원 |
 |---|---|
 | Primitive 타입 18종 (identifier/string/decimal/phone/email/...) | ✅ |

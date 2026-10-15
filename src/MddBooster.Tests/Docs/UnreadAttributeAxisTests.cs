@@ -4,7 +4,7 @@ namespace MddBooster.Tests.Docs;
 
 /// <summary>
 /// The bundled specification copy names five attributes that no target reads
-/// (<c>docs/M3L.md</c>, "Attributes no target reads"). This drives the generator with a model
+/// (<c>docs/m3l-support.md</c>, "Attributes no target reads"). This drives the generator with a model
 /// declaring all five and asserts the claim: none of them reaches any output.
 /// </summary>
 /// <remarks>
@@ -95,7 +95,7 @@ public class UnreadAttributeAxisTests
                 Assert.True(
                     carriers.Count == 0,
                     $"'@{attribute}' reached the output ({string.Join(", ", carriers)}). If that is " +
-                    "deliberate, the bundled copy's \"Attributes no target reads\" table no longer " +
+                    "deliberate, the support notes' \"Attributes no target reads\" table no longer " +
                     "tells the truth — update it in the same commit.");
             }
         }

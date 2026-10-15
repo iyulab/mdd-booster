@@ -3,12 +3,12 @@ using MddBooster.Cli.Commands;
 namespace MddBooster.Tests.Docs;
 
 /// <summary>
-/// Three more places where the bundled copy claims a construct reaches no output — and unlike
+/// Three more places where the support notes claim a construct reaches no output — and unlike
 /// the sections around them, these produce no build report either.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Every note in <c>docs/M3L.md</c> says what this generator implements, but they do not all make
+/// Every note in <c>docs/m3l-support.md</c> says what this generator implements, but they do not all make
 /// the same kind of claim, and only one kind can be checked by behaviour. A note saying a
 /// construct is read <em>in part</em> ("the attribute form only", "<c>object</c> sub-fields and
 /// <c>map</c> are read") describes a boundary; asserting an absence against it would be asserting
@@ -111,7 +111,7 @@ public class UnreportedAttributeClaimsTests
                 Assert.True(
                     carriers.Count == 0,
                     $"the argument of {construct} reached the output ({string.Join(", ", carriers)}). " +
-                    "If a target started reading it, the bundled copy's note for that section is " +
+                    "If a target started reading it, the support notes' entry for that section is " +
                     "now false — update it in the same commit.");
             }
         }

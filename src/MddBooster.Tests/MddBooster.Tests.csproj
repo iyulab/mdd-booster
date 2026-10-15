@@ -63,11 +63,15 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <!--
-      Same ratchet shape again: BundledSpecCopyDriftTests guards the bundled specification
-      copy's character — that it still says where this generator stops, and that it still
-      renders — so it must read the shipped document, not a copy of it kept in test code.
+      Same ratchet shape again: SupportNotesDriftTests guards the M3L support notes' character —
+      that they still say where this generator stops, against the specification version it pins,
+      and that they still render — so it must read the shipped document and the project file
+      that carries the pin, not copies of them kept in test code.
     -->
-    <None Include="..\..\docs\M3L.md" Link="contract\M3L.md">
+    <None Include="..\..\docs\m3l-support.md" Link="contract\m3l-support.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\MddBooster.Core\MddBooster.Core.csproj" Link="contract\MddBooster.Core.csproj">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

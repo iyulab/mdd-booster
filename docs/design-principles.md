@@ -99,6 +99,6 @@ mdd-booster는 M3L을 안다(정확히는 게시된 NuGet `M3L.Native` 를 안�
 ## 이 문서가 아닌 것
 
 명세가 아니다. M3L 문법 자체는 [m3l 의 스펙](https://github.com/iyulab/m3l/blob/main/docs/specification.md)
-이 정본이고, `docs/M3L.md` 는 그 사본(참조용, 정본 아님)이다. 이 문서는 오직 *mdd-booster 가
+이 정본이고, [`docs/m3l-support.md`](m3l-support.md) 는 이 생성기가 그 명세의 어디서 멈추는지만 적은 노트다(고정한 판의 절 번호로). 이 문서는 오직 *mdd-booster 가
 왜 지금의 경계를 긋는가* 에만 답한다. 구현 질문이 생겼는데 위 다섯 앵커가 답을 안 주면, 그것은
 진짜 자유로운 선택이다 — 정하고, 결과가 크면 기록하고, 넘어간다.
