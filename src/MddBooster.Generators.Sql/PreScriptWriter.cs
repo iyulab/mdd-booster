@@ -117,20 +117,27 @@ public sealed class PreScriptWriter(SqlDialect dialect, string schema, Func<stri
     {
         var sb = new StringBuilder();
         string table;
+        string renamedTable; // the table as it is named before the rename — what a schema-bound view references
         if (step.Kind == RenameSteps.Kind.Table)
         {
-            var from = $"[{schema}].[{step.From}]";
+            renamedTable = $"[{schema}].[{step.From}]";
             table = $"[{schema}].[{step.To}]";
-            sb.Append($"IF OBJECT_ID(N'{Escape(from)}', N'U') IS NOT NULL AND OBJECT_ID(N'{Escape(table)}', N'U') IS NULL\n")
-              .Append($"    EXEC sp_rename N'{Escape(from)}', N'{Escape(step.To)}';\n");
+            sb.Append($"IF OBJECT_ID(N'{Escape(renamedTable)}', N'U') IS NOT NULL AND OBJECT_ID(N'{Escape(table)}', N'U') IS NULL\n")
+              .Append("BEGIN\n");
+            AppendDropSchemaBoundViews(sb, renamedTable);
+            sb.Append($"    EXEC sp_rename N'{Escape(renamedTable)}', N'{Escape(step.To)}';\n")
+              .Append("END\n");
         }
         else
         {
-            table = $"[{schema}].[{step.Model}]";
+            table = renamedTable = $"[{schema}].[{step.Model}]";
             var oldColumn = Core.Naming.NameCasing.ToPascalCase(step.From);
             var newColumn = Core.Naming.NameCasing.ToPascalCase(step.To);
             sb.Append($"IF COL_LENGTH(N'{Escape(table)}', N'{Escape(oldColumn)}') IS NOT NULL AND COL_LENGTH(N'{Escape(table)}', N'{Escape(newColumn)}') IS NULL\n")
-              .Append($"    EXEC sp_rename N'{Escape($"{table}.[{oldColumn}]")}', N'{Escape(newColumn)}', N'COLUMN';\n");
+              .Append("BEGIN\n");
+            AppendDropSchemaBoundViews(sb, table);
+            sb.Append($"    EXEC sp_rename N'{Escape($"{table}.[{oldColumn}]")}', N'{Escape(newColumn)}', N'COLUMN';\n")
+              .Append("END\n");
         }
         // The names this generator gave the table's constraints and indexes carry the table's and the column's names.
         // A constraint (a unique or check constraint) is renamed as an object, an index (a filtered unique one too)
@@ -143,6 +150,22 @@ public sealed class PreScriptWriter(SqlDialect dialect, string schema, Func<stri
               .Append($"    EXEC sp_rename N'{Escape($"{table}.[{oldName}]")}', N'{Escape(newName)}', N'INDEX';\n");
         }
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// SQL Server refuses to rename a table or a column a schema-bound view depends on (Msg 15336) — and this generator
+    /// writes one for a model with an <c>@indexed</c> rollup. The views that bind to the table are dropped first, inside
+    /// the rename's guard: a view holds no data, and the declarative stage that follows creates it again from the
+    /// desired state (with the index it declares there). A view that a second schema-bound view binds to in turn is
+    /// not unwound; its drop fails and the script stops with SQL Server's own message.
+    /// </summary>
+    private static void AppendDropSchemaBoundViews(StringBuilder sb, string table)
+    {
+        sb.Append("    DECLARE @bound nvarchar(max) = (SELECT STRING_AGG(N'DROP VIEW ' + QUOTENAME(OBJECT_SCHEMA_NAME(v.referencing_id)) ")
+          .Append("+ N'.' + QUOTENAME(OBJECT_NAME(v.referencing_id)) + N';', N' ') FROM (SELECT DISTINCT d.referencing_id ")
+          .Append("FROM sys.sql_expression_dependencies d JOIN sys.views w ON w.object_id = d.referencing_id ")
+          .Append($"WHERE d.referenced_id = OBJECT_ID(N'{Escape(table)}') AND d.is_schema_bound_reference = 1) v);\n")
+          .Append("    IF @bound IS NOT NULL EXEC sys.sp_executesql @bound;\n");
     }
 
     private string RenderPostgres(RenameSteps.Step step)

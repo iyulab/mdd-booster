@@ -124,6 +124,27 @@ public sealed class PreScriptWriterTests : IDisposable
         Assert.Contains("EXEC sp_rename N'[dbo].[UK_CustomerOrder_Code]', N'UK_CustomerOrder_OrderCode', N'OBJECT';", ts.Render(steps[1]));
     }
 
+    /// <summary>
+    /// SQL Server refuses to rename what a schema-bound view depends on (Msg 15336) — and an <c>@indexed</c> rollup
+    /// makes this generator write one. The T-SQL rename drops the views bound to the table first, inside the rename's
+    /// guard; the declarative stage creates them again. PostgreSQL views follow a rename on their own.
+    /// </summary>
+    [Fact]
+    public void A_sql_server_rename_first_drops_the_views_schema_bound_to_the_table()
+    {
+        var steps = RenameSteps.Of(Load(Model));
+        var ts = new PreScriptWriter(SqlDialect.SqlServer, "dbo", n => n);
+        foreach (var (step, table) in new[] { (steps[0], "[dbo].[SalesOrder]"), (steps[2], "[dbo].[CustomerOrder]") })
+        {
+            var script = ts.Render(step);
+            Assert.Contains($"WHERE d.referenced_id = OBJECT_ID(N'{table}') AND d.is_schema_bound_reference = 1", script);
+            Assert.True(script.IndexOf("IF @bound IS NOT NULL EXEC sys.sp_executesql @bound;", StringComparison.Ordinal)
+                        < script.IndexOf("EXEC sp_rename", StringComparison.Ordinal), script);
+        }
+        var pg = new PreScriptWriter(SqlDialect.PostgreSql, "public", n => PostgresIdentifiers.ToSnakeCase(n));
+        Assert.DoesNotContain("DROP VIEW", pg.Render(steps[0]));
+    }
+
     [Fact]
     public void A_model_without_renames_has_no_steps()
         => Assert.Empty(RenameSteps.Of(Load("## Plain\n- id: identifier @pk\n- name: string(10)\n")));
