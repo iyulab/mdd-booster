@@ -15,10 +15,13 @@ public enum ReferentialAction
 /// The <c>ON DELETE</c> action a foreign key declares — one answer for every target that emits
 /// the key.
 /// <para>
-/// Two sources: the key <c>::aspect</c> synthesizes cascades (the aspect row exists only with its
-/// base row), and a <c>@reference</c> may carry a symbol after its argument list (M3L §8.4.1):
-/// <c>!</c> NO ACTION, <c>?</c> SET NULL, <c>!!</c> RESTRICT. A reference without a symbol
-/// declares nothing and gets the database default.
+/// Three sources: the key <c>::aspect</c> synthesizes cascades (the aspect row exists only with its
+/// base row); a <c>@reference</c> may carry a symbol after its argument list (M3L §8.4.1):
+/// <c>!</c> NO ACTION, <c>?</c> SET NULL, <c>!!</c> RESTRICT; and a key may name its action —
+/// <c>- on_delete: cascade</c> in the extended field format, or <c>@on_delete(cascade)</c> (M3L §3.2,
+/// §10.8: <c>cascade</c>, <c>set_null</c>, <c>restrict</c>, <c>no_action</c>). A key that declares
+/// nothing gets the database default. A symbol and an <c>on_delete</c> that disagree, or an action the
+/// language does not define, is <see cref="Problem"/> — the analyzer refuses the build (<c>MDD046</c>).
 /// </para>
 /// </summary>
 public static class OnDeleteRule
@@ -32,12 +35,50 @@ public static class OnDeleteRule
         if (owner.AspectBase is { } aspectBase && field.Name == AspectNaming.KeyFieldName(aspectBase))
             return ReferentialAction.Cascade;
 
-        return Ast.FieldAttributes.Find(field, "reference")?.Cascade switch
-        {
-            "!" => ReferentialAction.NoAction,
-            "?" => ReferentialAction.SetNull,
-            "!!" => ReferentialAction.Restrict,
-            _ => null,
-        };
+        return BySymbol(field) ?? ByName(field);
     }
+
+    /// <summary>
+    /// What is wrong with the key's declaration — an <c>on_delete</c> action the language does not define, or one
+    /// that disagrees with the symbol after <c>@reference</c> — or <see langword="null"/>.
+    /// </summary>
+    public static string? Problem(FieldNode field)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        if (OnDeleteName(field) is not { } name) return null;
+        if (Parse(name) is not { } named)
+            return $"on_delete \"{name}\" 은(는) 정의된 삭제 동작이 아니다 — cascade · set_null · restrict · no_action 중 하나.";
+        if (BySymbol(field) is { } symbol && symbol != named)
+            return $"@reference 의 기호는 {Spell(symbol)} 인데 on_delete 는 {Spell(named)} 다 — 하나만 쓰거나 둘을 맞춘다.";
+        return null;
+    }
+
+    private static ReferentialAction? BySymbol(FieldNode field) => Ast.FieldAttributes.Find(field, "reference")?.Cascade switch
+    {
+        "!" => ReferentialAction.NoAction,
+        "?" => ReferentialAction.SetNull,
+        "!!" => ReferentialAction.Restrict,
+        _ => null,
+    };
+
+    private static ReferentialAction? ByName(FieldNode field) => OnDeleteName(field) is { } name ? Parse(name) : null;
+
+    private static string? OnDeleteName(FieldNode field) => Ast.FieldAttributes.FirstArg(field, "on_delete");
+
+    private static ReferentialAction? Parse(string name) => name.Trim().ToLowerInvariant() switch
+    {
+        "cascade" => ReferentialAction.Cascade,
+        "set_null" => ReferentialAction.SetNull,
+        "restrict" => ReferentialAction.Restrict,
+        "no_action" => ReferentialAction.NoAction,
+        _ => null,
+    };
+
+    private static string Spell(ReferentialAction action) => action switch
+    {
+        ReferentialAction.Cascade => "CASCADE",
+        ReferentialAction.SetNull => "SET NULL",
+        ReferentialAction.Restrict => "RESTRICT",
+        _ => "NO ACTION",
+    };
 }

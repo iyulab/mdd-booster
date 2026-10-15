@@ -766,9 +766,12 @@ Relationships can have additional attributes:
   - order_by: created_at desc
 ```
 
-**What this generator implements**: the `@reference(Target)` attribute, and only that. Foreign keys,
-navigation properties and lookup redirects are all built from it. Nothing else on this page is read
-by any target — not the `### Relations` section, not the `@relation(...)` entries inside it, and not
+**What this generator implements**: the `@reference(Target)` attribute and the delete action a key
+declares — the symbol after it (`!` `?` `!!`) or `on_delete` (`- on_delete: cascade` in the extended
+format, or `@on_delete(cascade)`; `cascade` · `set_null` · `restrict` · `no_action`). Foreign keys,
+navigation properties and lookup redirects are all built from the reference; a symbol and an
+`on_delete` that disagree stop the build (`MDD046`). `on_update` is not read. Nothing else on this
+page is read by any target — not the `### Relations` section, not the `@relation(...)` entries inside it, and not
 the field-level relationship notation of the next subsection (`- >category`, `- <posts: one-to-many`,
 `- <>tags: many-to-many`).
 

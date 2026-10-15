@@ -18,6 +18,15 @@
 
 ## Unreleased
 
+### 🔇 `on_delete` 로 선언한 삭제 동작이 산출물에 실린다 — `MDD046` 새 오류
+
+키의 삭제 동작을 이름으로 선언하는 명세의 두 형태 — 확장 형식의 `- on_delete: cascade`, 속성 `@on_delete(cascade)`(`cascade` ·
+`set_null` · `restrict` · `no_action`) — 를 생성기가 이름만 알고 읽지 않았다: 선언이 말없이 버려져, `cascade` 로 선언한 키가 연쇄 삭제하지
+않았다. 이제 `@reference` 뒤 기호(`!` `?` `!!`)와 같은 자리로 두 SQL 방언과 EF 모델에 실린다(선언한 CASCADE 는 EF 에도 명시 — 선택
+키에서 EF 관례는 추적 행만 비운다). 기호와 `on_delete` 가 서로 다르거나 정의되지 않은 동작이면 `MDD046`(오류), 필수 키의 `set_null`
+은 기호와 같이 `MDD023`. 🔇 `on_delete` 를 이미 써 둔 모델은 그 동작이 이제 데이터베이스에 생긴다. 기호도 `on_delete` 도 없는 키는
+종전대로 절이 없다(데이터베이스 기본값).
+
 ### 🔇 `@unique` 참조가 쓰기 엔티티에서도 1:1 이다
 
 `@reference(X) @unique` 는 데이터베이스(유일 제약)와 읽기 타입(양 끝 navigation)에서 1:1 인데, 생성 `DbContext` 는 쓰기 엔티티의

@@ -529,10 +529,16 @@ public sealed class SemanticAnalyzer
     /// </summary>
     private static void CheckSetNullOnRequiredKey(ResolvedModel model, FieldNode field, List<SemanticDiagnostic> diagnostics)
     {
-        if (field.Nullable || Ast.FieldAttributes.Find(field, "reference")?.Cascade != "?") return;
+        // MDD046 — an on_delete the rule cannot read, or one that contradicts the symbol.
+        if (OnDeleteRule.Problem(field) is { } problem)
+        {
+            diagnostics.Add(new SemanticDiagnostic("MDD046", $"'{model.Name}.{field.Name}': {problem}", field.Loc));
+            return;
+        }
+        if (field.Nullable || OnDeleteRule.For(model, field) != ReferentialAction.SetNull) return;
         diagnostics.Add(new SemanticDiagnostic(
             "MDD023",
-            $"'{model.Name}.{field.Name}' 의 @reference(…)? 는 삭제 시 NULL 로 두라는 뜻인데 이 키는 NULL 을 허용하지 않습니다. " +
+            $"'{model.Name}.{field.Name}' 의 SET NULL(@reference(…)? 또는 on_delete: set_null)은 삭제 시 NULL 로 두라는 뜻인데 이 키는 NULL 을 허용하지 않습니다. " +
             "필드를 nullable(`identifier?`)로 하거나 다른 동작(`!` NO ACTION · `!!` RESTRICT)을 쓰십시오.",
             field.Loc));
     }

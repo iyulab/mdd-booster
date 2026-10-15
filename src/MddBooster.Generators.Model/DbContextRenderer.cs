@@ -164,6 +164,7 @@ public static class DbContextRenderer
                 if (!EntityPairRenderer.HasWriteNavigation(field)) continue;
                 var behavior = OnDeleteRule.For(model, field) switch
                 {
+                    ReferentialAction.Cascade => "Cascade",
                     ReferentialAction.NoAction => "NoAction",
                     ReferentialAction.Restrict => "Restrict",
                     ReferentialAction.SetNull => "SetNull",
