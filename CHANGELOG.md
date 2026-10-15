@@ -24,8 +24,14 @@
 `V{n}__rename_table_{옛}_to_{새}.sql` · `V{n}__rename_column_{모델}_{옛}_to_{새}.sql`(T-SQL `sp_rename` · PostgreSQL
 `ALTER TABLE … RENAME`, 둘 다 «옛 이름이 있고 새 이름이 없을 때»만). 이력은 오래된 것부터, 테이블이 열보다 먼저. 이미 있는
 파일은 다시 쓰지 않고 새 개명은 그 디렉터리의 가장 큰 번호 다음에 덧붙인다. 위치는 Sql 타깃의 새 키 `preScriptsPath`
-(`projectPath` 밖 — 안이면 설정 오류 4). 없으면 스크립트를 내지 않고 경고한다. 생성된 제약 · 인덱스 이름의 개명은 아직 하지
-않는다(README «개명»).
+(`projectPath` 밖 — 안이면 설정 오류 4). 없으면 스크립트를 내지 않고 🆕 `MDD051` 경고(`warningsAsErrors` 로 올릴 수 있다).
+생성된 제약 · 인덱스 이름의 개명은 아직 하지 않는다(README «개명»).
+
+### 🔴 설정 단계 경고의 승격이 빌드를 세운다 — `MDD033` · `MDD035`
+
+`treatWarningsAsErrors`/`warningsAsErrors` 로 올린 경고 중 설정을 모델에 비춰 보는 것(`MDD033` aspect 의 Base 를 등록하는 Api
+타깃 없음 · `MDD035` `@searchable` 참조의 대상 미등록)은 승격 검사 «뒤»에 보고돼, «에러(경고 승격)»으로 찍히고도 빌드가 계속됐다
+(종료 코드 0). 이제 생성 전에 다시 세어 종료 코드 3 으로 선다. 🔇 그 둘을 올려 두고 지금까지 통과하던 빌드는 실패한다 — 설정대로다.
 
 ### 핀 `M3L.Native` 0.23.0
 

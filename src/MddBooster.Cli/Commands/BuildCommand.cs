@@ -588,12 +588,37 @@ public sealed class BuildCommand
             }
         }
 
+        // 1.8d. 모델이 선언한 개명(`@renamed_from`)은 Sql 타깃이 사전 스크립트로 낸다 — 그 자리(`preScriptsPath`)가 없는 Sql
+        // 타깃은 개명을 실행하지 않는다. 그 타깃의 산출물을 반영하면 옛 이름은 제거, 새 이름은 빈 채로 생성으로 읽힌다(MDD051).
+        var renameSteps = RenameSteps.Of(allModels);
+        if (renameSteps.Count > 0)
+        {
+            foreach (var sql in cfg.Targets.Where(t => t.Type == "Sql" && t.PreScriptsPath is null))
+            {
+                var first = renameSteps[0];
+                var model = allModels.First(m => m.Name == first.Model);
+                ReportWarning("config", "MDD051", new SemanticDiagnostic("MDD051",
+                    $"Sql 타깃({TargetPathOf(sql)})에 `preScriptsPath` 가 없어 `@renamed_from` 개명 {renameSteps.Count}건을 실행하지 않는다 "
+                    + $"(첫째: {first.Model} {first.From} → {first.To}). 이 타깃의 산출물을 반영하면 옛 이름은 제거, 새 이름은 빈 채로 "
+                    + "생성으로 읽힌다 — 사전 스크립트 디렉터리(`projectPath` 밖)를 지정하라.",
+                    model.Source.Loc, SemanticSeverity.Warning).Format());
+            }
+        }
+
         if (configViolations.Count > 0)
         {
             Console.Error.WriteLine($"[config] 설정 오류 {configViolations.Count}건:");
             foreach (var v in configViolations)
                 Console.Error.WriteLine("  " + v);
             return 4;
+        }
+        // 설정을 모델에 비춰 본 경고(MDD033 · MDD035 · MDD051)는 앞의 승격 검사 «뒤»에 나온다 — 여기서 다시 센다.
+        // 이 검사가 없던 동안 그 셋은 승격돼도 «에러(경고 승격)»으로 찍히기만 하고 빌드는 계속됐다.
+        if (promotedWarnings > 0)
+        {
+            Console.Error.WriteLine(
+                $"[config] 경고 {promotedWarnings}건을 에러로 올렸습니다(treatWarningsAsErrors/warningsAsErrors) — 빌드를 중단합니다.");
+            return 3;
         }
 
         // 1.9. 「의도적으로 구현하지 않은 것」을 생성물이 스스로 말하지 않는 자리 — 안내 레벨.

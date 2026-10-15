@@ -40,14 +40,8 @@ public sealed class PreScriptWriter(SqlDialect dialect, string schema, Func<stri
     {
         ArgumentNullException.ThrowIfNull(context);
         var steps = RenameSteps.Of(context.Models);
-        if (steps.Count == 0) return;
-        if (preScriptsPath is null)
-        {
-            Console.Error.WriteLine(
-                $"[sql] 경고: `@renamed_from` 개명 {steps.Count}건을 실행하지 않는다 — Sql 타깃에 `preScriptsPath` 가 없다. " +
-                "이대로 반영하면 옛 이름은 제거, 새 이름은 빈 채로 생성으로 읽힌다. 사전 스크립트 디렉터리(`projectPath` 밖)를 지정하라.");
-            return;
-        }
+        // Without a configured place the renames are not acted on; the build reports that before any target runs (MDD051).
+        if (steps.Count == 0 || preScriptsPath is null) return;
         var directory = ResolvePlacement(context.WorkingDirectory, preScriptsPath, projectRoot)!;
         foreach (var file in new PreScriptWriter(dialect, schema, tableName).Write(directory, steps))
             Console.WriteLine($"[sql] 사전 스크립트: {file}");
