@@ -24,11 +24,19 @@ public sealed class SemanticAnalyzer
     private readonly IReadOnlyList<EnumNode> _enums;
     private readonly HashSet<string> _modelNames;
     private readonly HashSet<string> _enumNames;
+    private readonly IReadOnlyList<SqlDialect> _dialects;
 
-    public SemanticAnalyzer(IReadOnlyList<ResolvedModel> models, IReadOnlyList<EnumNode> enums)
+    /// <param name="dialects">
+    /// The SQL dialects this build writes object names in — a Sql target's, and a Model target's (it repeats index
+    /// names in <c>HasDatabaseName</c>). Name checks that depend on a dialect's spelling or limits run only for these:
+    /// a collision in output nobody produces is a false alarm. <see langword="null"/> checks both.
+    /// </param>
+    public SemanticAnalyzer(IReadOnlyList<ResolvedModel> models, IReadOnlyList<EnumNode> enums,
+        IReadOnlyCollection<SqlDialect>? dialects = null)
     {
         _models = models ?? throw new ArgumentNullException(nameof(models));
         _enums = enums ?? throw new ArgumentNullException(nameof(enums));
+        _dialects = dialects is null ? [SqlDialect.SqlServer, SqlDialect.PostgreSql] : dialects.Distinct().ToList();
         _modelNames = new HashSet<string>(models.Select(m => m.Name), StringComparer.Ordinal);
         _enumNames = new HashSet<string>(enums.Select(e => e.Name), StringComparer.Ordinal);
     }
@@ -59,6 +67,7 @@ public sealed class SemanticAnalyzer
         CheckSearchableReferences(diagnostics);
         CheckFullTextIndexes(diagnostics);
         CheckDeclaredIndexNames(diagnostics);
+        CheckGeneratedIndexNames(diagnostics);
         CheckUnreadIndexItems(diagnostics);
 
         return diagnostics;
@@ -88,11 +97,15 @@ public sealed class SemanticAnalyzer
     /// <c>MDD042</c>: a name the model gives an index — an <c>### Indexes</c> item's name, or a directive's
     /// <c>name: "…"</c> — that cannot be the database object's name: not a plain identifier (it is written into the
     /// generated SQL as it is), or the same as another declared name in the build (case-insensitively: SQL Server's
-    /// constraint names and PostgreSQL's index names are unique across the schema, not within one table).
+    /// constraint names and PostgreSQL's index names are unique across the schema, not within one table), or a name a
+    /// generator gives another index in a dialect this build writes. One longer than a built dialect holds is
+    /// <c>MDD044</c>.
     /// </summary>
     private void CheckDeclaredIndexNames(List<SemanticDiagnostic> diagnostics)
     {
-        var generated = GeneratedIndexNames();
+        var generated = _dialects.ToDictionary(d => d, d => GeneratedIndexNames(d)
+            .GroupBy(n => n.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().Owner, StringComparer.OrdinalIgnoreCase));
         var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var model in _models)
         {
@@ -108,6 +121,15 @@ public sealed class SemanticAnalyzer
                         "숫자로 시작하지 않게.",
                         model.Source.Loc));
                 }
+                else if (_dialects.Contains(SqlDialect.PostgreSql) && Naming.PostgresIdentifiers.Check(name) is { } pgViolation)
+                {
+                    // The PostgreSQL generator writes a declared name unquoted and refuses, at generation time, one it
+                    // cannot write that way. The same gate is asked here so the build says it with its diagnostics.
+                    diagnostics.Add(new SemanticDiagnostic(
+                        "MDD042",
+                        $"'{model.Name}' 인덱스 이름을 PostgreSQL 이 쓸 수 없다 — {pgViolation}.",
+                        model.Source.Loc));
+                }
                 else if (seen.TryGetValue(name, out var first))
                 {
                     diagnostics.Add(new SemanticDiagnostic(
@@ -116,7 +138,7 @@ public sealed class SemanticAnalyzer
                         "스키마 안에서 유일해야 한다.",
                         model.Source.Loc));
                 }
-                else if (generated.TryGetValue(name, out var owner))
+                else if (_dialects.Select(d => generated[d].GetValueOrDefault(name)).FirstOrDefault(o => o is not null) is { } owner)
                 {
                     diagnostics.Add(new SemanticDiagnostic(
                         "MDD042",
@@ -127,26 +149,81 @@ public sealed class SemanticAnalyzer
                 else
                 {
                     seen[name] = model.Name;
+                    // PostgreSQL's limit is part of its gate above; SQL Server's is the one left to say.
+                    if (_dialects.Contains(SqlDialect.SqlServer) && Limit(SqlDialect.SqlServer, name) is { } limit)
+                        diagnostics.Add(new SemanticDiagnostic(
+                            "MDD044",
+                            $"'{model.Name}' 인덱스 이름 \"{name}\" 은(는) {limit} — 더 짧은 이름을 준다.",
+                            model.Source.Loc));
                 }
             }
         }
     }
 
     /// <summary>
+    /// The names generated for indexes the model does not name, in each dialect this build writes:
+    /// <c>MDD045</c> when two coincide — PostgreSQL joins columns with the underscore a column name may itself contain,
+    /// so <c>(a, b)</c> and <c>a_b</c> are both <c>ix_part_a_b</c>, and index names are schema-wide — and <c>MDD044</c>
+    /// when one is longer than the dialect holds (SQL Server refuses the object; PostgreSQL would cut the name short and
+    /// the EF model's <c>HasDatabaseName</c> would name an index that does not exist). Both are fixed the same way:
+    /// name the index in <c>### Indexes</c>. Truncating or suffixing here would invent a name the model never said.
+    /// </summary>
+    private void CheckGeneratedIndexNames(List<SemanticDiagnostic> diagnostics)
+    {
+        foreach (var dialect in _dialects)
+        {
+            foreach (var group in GeneratedIndexNames(dialect).GroupBy(n => n.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                var first = group.First();
+                var at = _models.First(m => m.Name == first.Owner).Source.Loc;
+                if (group.Count() > 1)
+                {
+                    diagnostics.Add(new SemanticDiagnostic(
+                        "MDD045",
+                        $"{dialect.PlatformName()}: 이름 없는 인덱스 {group.Count()}개가 같은 이름 \"{first.Name}\" 으로 생성된다 " +
+                        $"({string.Join(", ", group.Select(n => $"'{n.Owner}' ({string.Join(", ", n.Columns)})"))}) — 인덱스 이름은 " +
+                        "스키마 안에서 유일해야 한다. `### Indexes` 에서 한쪽에 이름을 준다.",
+                        at));
+                }
+                if (Limit(dialect, first.Name) is { } limit)
+                {
+                    diagnostics.Add(new SemanticDiagnostic(
+                        "MDD044",
+                        $"'{first.Owner}' ({string.Join(", ", first.Columns)}) 의 생성 인덱스 이름 \"{first.Name}\" 은(는) {limit} — " +
+                        "`### Indexes` 에서 더 짧은 이름을 준다.",
+                        at));
+                }
+            }
+        }
+    }
+
+    private static string? Limit(SqlDialect dialect, string name) => dialect switch
+    {
+        SqlDialect.SqlServer when name.Length > 128 =>
+            $"{name.Length}자로 SQL Server 식별자 한계 128자를 넘는다",
+        SqlDialect.PostgreSql when System.Text.Encoding.UTF8.GetByteCount(name) > 63 =>
+            $"{System.Text.Encoding.UTF8.GetByteCount(name)}바이트로 PostgreSQL 식별자 한계 63바이트를 넘는다",
+        _ => null,
+    };
+
+    /// <summary>
     /// The names the generators give the indexes and unique constraints the model does not name — field-level
-    /// <c>@unique</c>/<c>@index</c> and unnamed <c>### Indexes</c> entries — in both dialects' forms, with the model each
+    /// <c>@unique</c>/<c>@index</c> and unnamed <c>### Indexes</c> entries — in <paramref name="dialect"/>'s form, one per index, with the model each
     /// belongs to. A declared name is checked against these: a name the model gives one index that a generator gives
     /// another collides at deployment. Primary-key, foreign-key and check constraints are left out — whether a
     /// generator writes them depends on the target's options and the model's relations, which this pass does not see;
     /// a declared name of that shape is rare and the deployment reports it.
     /// </summary>
-    private Dictionary<string, string> GeneratedIndexNames()
+    private List<(string Name, string Owner, IReadOnlyList<string> Columns)> GeneratedIndexNames(SqlDialect dialect)
     {
-        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var postgres = dialect == SqlDialect.PostgreSql;
+        var names = new List<(string Name, string Owner, IReadOnlyList<string> Columns)>();
         void Add(ResolvedModel model, Naming.GeneratedObjectNames.Kind kind, IReadOnlyList<string> fields)
         {
-            names.TryAdd(Naming.GeneratedObjectNames.For(false, kind, model.Name, fields.Select(Naming.NameCasing.ToPascalCase)), model.Name);
-            names.TryAdd(Naming.GeneratedObjectNames.For(true, kind, Naming.PostgresIdentifiers.ToSnakeCase(model.Name), fields), model.Name);
+            var name = postgres
+                ? Naming.GeneratedObjectNames.For(true, kind, Naming.PostgresIdentifiers.ToSnakeCase(model.Name), fields)
+                : Naming.GeneratedObjectNames.For(false, kind, model.Name, fields.Select(Naming.NameCasing.ToPascalCase));
+            names.Add((name, model.Name, fields));
         }
 
         foreach (var model in _models)

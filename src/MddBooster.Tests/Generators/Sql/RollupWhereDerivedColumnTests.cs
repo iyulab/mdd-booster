@@ -32,6 +32,42 @@ public class RollupWhereDerivedColumnTests
             WhereRaw = [new PlatformExpression { Expression = whereRaw, Platform = "sqlserver" }],
         };
 
+    /// <summary>
+    /// A filter declared per platform is judged in the dialect being generated. Read in SQL Server's terms, a
+    /// PostgreSQL-only filter is no filter at all, so the PostgreSQL rollup stayed on the base table and named a
+    /// column that exists only on the FullView — a clean build and a view that fails to deploy.
+    /// </summary>
+    [Fact]
+    public void A_postgres_only_filter_naming_a_derived_column_reads_the_FullView_in_postgres()
+    {
+        var def = new RollupDef
+        {
+            Target = "OrderItem", Fk = "order_id", Aggregate = "count",
+            WhereRaw = [new PlatformExpression { Expression = "effective_channel = 'partner'", Platform = "postgresql" }],
+        };
+
+        Assert.True(FullViewRenderer.RollupReadsDerivedColumn(def, OrderItemDerived, SqlDialect.PostgreSql));
+        Assert.False(FullViewRenderer.RollupReadsDerivedColumn(def, OrderItemDerived, SqlDialect.SqlServer));
+    }
+
+    /// <summary>Each platform's filter decides for its own dialect — the SQL Server one names only a base column.</summary>
+    [Fact]
+    public void Per_platform_filters_are_judged_each_in_its_own_dialect()
+    {
+        var def = new RollupDef
+        {
+            Target = "OrderItem", Fk = "order_id", Aggregate = "count",
+            WhereRaw =
+            [
+                new PlatformExpression { Expression = "[Channel] = N'partner'", Platform = "sqlserver" },
+                new PlatformExpression { Expression = "effective_channel = 'partner'", Platform = "postgresql" },
+            ],
+        };
+
+        Assert.False(FullViewRenderer.RollupReadsDerivedColumn(def, OrderItemDerived, SqlDialect.SqlServer));
+        Assert.True(FullViewRenderer.RollupReadsDerivedColumn(def, OrderItemDerived, SqlDialect.PostgreSql));
+    }
+
     [Fact]
     public void A_where_naming_a_derived_column_of_the_target_reads_its_FullView()
     {
@@ -140,7 +176,7 @@ public class RollupWhereDerivedColumnTests
         var orderSql = FullViewRenderer.Render(plans.Single(p => p.Model.Name == "Order"), "dbo", derived, models);
 
         Assert.Contains("FROM [dbo].[OrderItemFullView] WHERE [OrderId] = b.[Id] AND ([EffectiveChannel] = N'partner')", orderSql);
-        Assert.Null(FullViewCycleDetector.Detect(plans, derived));
+        Assert.Null(FullViewCycleDetector.Detect(plans, derived, SqlDialect.SqlServer));
     }
 
     /// <summary>
@@ -167,7 +203,7 @@ public class RollupWhereDerivedColumnTests
         var derived = DerivedFieldsByModel(models, planner);
         var plans = models.Select(planner.Plan).ToList();
 
-        var cycle = FullViewCycleDetector.Detect(plans, derived);
+        var cycle = FullViewCycleDetector.Detect(plans, derived, SqlDialect.SqlServer);
 
         Assert.NotNull(cycle);
         Assert.Contains(cycle!, step => step.Via == "Order.PartnerCount rollup");

@@ -180,7 +180,7 @@ public static class PgFullViewRenderer
 
         var targetTable = tableNameMap[target];
         // 삭제 행 제외 규칙은 T-SQL 쪽과 같다 — FullView 는 UdView 를 읽어 이미 거르고, 기본 테이블은 여기서 거른다.
-        var readsFullView = FullViewRenderer.RollupReadsDerivedColumn(def, derivedFieldsByModel);
+        var readsFullView = FullViewRenderer.RollupReadsDerivedColumn(def, derivedFieldsByModel, SqlDialect.PostgreSql);
         var fromRelation = readsFullView ? viewNameMap[target] : targetTable;
 
         var innerExpr = aggregate switch

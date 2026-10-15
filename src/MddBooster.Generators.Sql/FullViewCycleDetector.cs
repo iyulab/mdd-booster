@@ -31,13 +31,15 @@ public static class FullViewCycleDetector
     /// Returns the cycle path (e.g. <c>Order -> OrderItem (via Order.SupplyTotal rollup) ->
     /// Order (via OrderItem.CustomerName lookup)</c>) if any model's FullView transitively
     /// references its own FullView through Lookup/Rollup redirection; <see langword="null"/>
-    /// when the dependency graph is acyclic.
+    /// when the dependency graph is acyclic. The edges are the ones the <paramref name="dialect"/> being
+    /// generated draws — a rollup filter declared per platform can read a FullView in one and not the other.
     /// </summary>
     public static IReadOnlyList<FullViewCycleStep>? Detect(
         IReadOnlyList<ViewPlan> plans,
-        IReadOnlyDictionary<string, IReadOnlySet<string>> derivedFieldsByModel)
+        IReadOnlyDictionary<string, IReadOnlySet<string>> derivedFieldsByModel,
+        SqlDialect dialect)
     {
-        var (edges, via) = BuildEdges(plans, derivedFieldsByModel);
+        var (edges, via) = BuildEdges(plans, derivedFieldsByModel, dialect);
 
         var visiting = new HashSet<string>(StringComparer.Ordinal);
         var visited = new HashSet<string>(StringComparer.Ordinal);
@@ -116,7 +118,8 @@ public static class FullViewCycleDetector
     /// </summary>
     private static (Dictionary<string, List<string>> Edges, Dictionary<string, Dictionary<string, string>> Via) BuildEdges(
         IReadOnlyList<ViewPlan> plans,
-        IReadOnlyDictionary<string, IReadOnlySet<string>> derivedFieldsByModel)
+        IReadOnlyDictionary<string, IReadOnlySet<string>> derivedFieldsByModel,
+        SqlDialect dialect)
     {
         var edges = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var via = new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal);
@@ -144,7 +147,7 @@ public static class FullViewCycleDetector
             {
                 var def = rollup.Rollup;
                 if (def is not null
-                    && FullViewRenderer.RollupReadsDerivedColumn(def, derivedFieldsByModel)
+                    && FullViewRenderer.RollupReadsDerivedColumn(def, derivedFieldsByModel, dialect)
                     && !targets.Contains(def.Target))
                 {
                     targets.Add(def.Target);

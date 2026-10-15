@@ -102,7 +102,7 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
         var allPlans = context.Models.Select(planner.Plan).ToList();
         var derivedFieldsByModel = StandaloneViewSources.DerivedFieldsByModel(allPlans);
 
-        var cycle = FullViewCycleDetector.Detect(allPlans, derivedFieldsByModel);
+        var cycle = FullViewCycleDetector.Detect(allPlans, derivedFieldsByModel, SqlDialect.PostgreSql);
         if (cycle != null)
         {
             var path = string.Join(" -> ", cycle.Select(step =>
@@ -259,7 +259,7 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
                 foreach (var rollup in plan.Rollups.Where(f => !EntitySurface.IsFieldInternal(f)))
                 {
                     var def = rollup.Rollup;
-                    if (def is not null && FullViewRenderer.RollupReadsDerivedColumn(def, derivedFieldsByModel))
+                    if (def is not null && FullViewRenderer.RollupReadsDerivedColumn(def, derivedFieldsByModel, SqlDialect.PostgreSql))
                         targets.Add(def.Target);
                 }
                 hardTargets[plan.Model.Name] = targets;

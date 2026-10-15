@@ -239,7 +239,7 @@ public static class FullViewRenderer
         // Only source from the target's FullView when the rollup reads one of the target's
         // derived columns — the aggregated field or a column its `where:` names. Otherwise it
         // reads straight from the base table, same as before the target had any FullView.
-        var readsFullView = RollupReadsDerivedColumn(def, derivedFieldsByModel);
+        var readsFullView = RollupReadsDerivedColumn(def, derivedFieldsByModel, SqlDialect.SqlServer);
         var fromTarget = readsFullView ? target + "FullView" : target;
 
         var innerExpr = aggregate switch
@@ -300,16 +300,18 @@ public static class FullViewRenderer
     /// True when a rollup reads any of its target's derived (Lookup/Rollup/Computed) columns —
     /// the aggregated field, or a column its <c>where:</c> names — so its subquery must read the
     /// target's FullView: those columns do not exist on the base table. The one question every
-    /// rollup renderer and every FullView cycle detector asks, so they cannot disagree.
+    /// rollup renderer and every FullView cycle detector asks, so they cannot disagree. Asked per
+    /// <paramref name="dialect"/>: a filter declared per platform names different columns in each.
     /// </summary>
     internal static bool RollupReadsDerivedColumn(
         RollupDef def,
-        IReadOnlyDictionary<string, IReadOnlySet<string>>? derivedFieldsByModel)
+        IReadOnlyDictionary<string, IReadOnlySet<string>>? derivedFieldsByModel,
+        SqlDialect dialect)
     {
         if (!string.IsNullOrEmpty(def.Field)
             && IsDerivedColumn(derivedFieldsByModel, def.Target, NameCasing.ToPascalCase(def.Field)))
             return true;
-        return ExpressionSelection.Select(def.Where, def.WhereRaw, SqlDialect.SqlServer) is { } filter
+        return ExpressionSelection.Select(def.Where, def.WhereRaw, dialect) is { } filter
             && RollupWhereColumns(WithoutTargetQualifier(filter.Text, def.Target))
                 .Any(c => IsDerivedColumn(derivedFieldsByModel, def.Target, c));
     }

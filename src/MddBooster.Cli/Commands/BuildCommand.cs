@@ -180,7 +180,13 @@ public sealed class BuildCommand
         // 1.5. 의미 분석 — Warning은 표면화만 하고 진행, Error는 빌드 중단.
         // standalone ::view 의 해석도 같은 층이다 — 모델을 가리키는 참조가 맞는지는 생성 전에 판정한다.
         var viewResolution = ViewResolver.Resolve(mergedAst.Views, allModels);
-        var diagnostics = new SemanticAnalyzer(allModels, allEnums).Analyze()
+        // 이름 검사는 이 빌드가 실제로 이름을 쓰는 방언에서만 — Sql 타깃(스키마)과 Model 타깃(HasDatabaseName).
+        var builtDialects = cfg.Targets
+            .Where(t => t.Type is "Sql" or "Model")
+            .Select(t => IsPostgresDialect(t) ? SqlDialect.PostgreSql : SqlDialect.SqlServer)
+            .Distinct()
+            .ToList();
+        var diagnostics = new SemanticAnalyzer(allModels, allEnums, builtDialects).Analyze()
             .Concat(viewResolution.Diagnostics)
             .ToList();
         var warnings = diagnostics.Where(d => d.Severity == SemanticSeverity.Warning).ToList();

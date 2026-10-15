@@ -66,7 +66,7 @@ public class FullViewCycleDetectorTests
             var derivedFieldsByModel = DerivedFieldsByModel(models, planner);
             var plans = models.Select(planner.Plan).ToList();
 
-            var cycle = FullViewCycleDetector.Detect(plans, derivedFieldsByModel);
+            var cycle = FullViewCycleDetector.Detect(plans, derivedFieldsByModel, SqlDialect.SqlServer);
 
             Assert.NotNull(cycle);
             Assert.Contains(cycle!, step => step.Model == "Order");
@@ -112,7 +112,7 @@ public class FullViewCycleDetectorTests
             var derivedFieldsByModel = DerivedFieldsByModel(models, planner);
             var plans = models.Select(planner.Plan).ToList();
 
-            var cycle = FullViewCycleDetector.Detect(plans, derivedFieldsByModel);
+            var cycle = FullViewCycleDetector.Detect(plans, derivedFieldsByModel, SqlDialect.SqlServer);
 
             Assert.Null(cycle);
         }
@@ -144,7 +144,7 @@ public class FullViewCycleDetectorTests
             var derivedFieldsByModel = DerivedFieldsByModel(models, planner);
             var plans = models.Select(planner.Plan).ToList();
 
-            var cycle = FullViewCycleDetector.Detect(plans, derivedFieldsByModel);
+            var cycle = FullViewCycleDetector.Detect(plans, derivedFieldsByModel, SqlDialect.SqlServer);
 
             Assert.Null(cycle);
         }

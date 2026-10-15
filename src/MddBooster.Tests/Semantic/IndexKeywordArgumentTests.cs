@@ -178,7 +178,8 @@ public class DeclaredIndexNameTests
     {
         var twice = Model + "\n## Order\n- id: identifier @pk @generated\n- sku: string(20)\n- @index(sku, name: \"PRODUCT_SEARCH\")\n";
 
-        var diagnostic = Assert.Single(Analyze(twice), d => d.Code == "MDD042");
+        // SQL Server only: in PostgreSQL the upper-case spelling is a second, separate MDD042.
+        var diagnostic = Assert.Single(Analyze(twice, SqlDialect.SqlServer), d => d.Code == "MDD042");
 
         Assert.Contains("'Product'", diagnostic.Message);
     }
@@ -213,10 +214,11 @@ public class DeclaredIndexNameTests
         var model = Model.Replace("- sku: string(20) @not_null", "- sku: string(20) @not_null @index", StringComparison.Ordinal)
                     + $"\n- {declared}: @index(name)\n";
 
-        var diagnostic = Assert.Single(Analyze(model), d => d.Code == "MDD042");
+        // Each spelling in the dialect that writes it (PostgreSQL would refuse the upper-case one before comparing it).
+        var built = declared == declared.ToLowerInvariant() ? SqlDialect.PostgreSql : SqlDialect.SqlServer;
+        var diagnostic = Assert.Single(Analyze(model, built), d => d.Code == "MDD042" && d.Message.Contains("생성"));
 
         Assert.Contains(declared, diagnostic.Message);
-        Assert.Contains("생성", diagnostic.Message);
     }
 
     [Fact]
@@ -226,7 +228,131 @@ public class DeclaredIndexNameTests
         // else is generated under it.
         var model = Model.Replace("- by_name: @index(name)", "- IX_Product_Name: @index(name)", StringComparison.Ordinal);
 
-        Assert.DoesNotContain(Analyze(model), d => d.Code == "MDD042");
+        Assert.DoesNotContain(Analyze(model, SqlDialect.SqlServer), d => d.Code == "MDD042");
+    }
+
+    private static IReadOnlyList<SemanticDiagnostic> Analyze(string m3l, params SqlDialect[] dialects)
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), $"mdd-index-name-{Guid.NewGuid():N}.m3l.md");
+        File.WriteAllText(tmp, m3l);
+        try
+        {
+            var ast = new M3lLoader().LoadFile(tmp);
+            var models = new InterfaceResolver(ast).ResolveAll().ToList();
+            return new SemanticAnalyzer(models, ast.Enums, dialects).Analyze();
+        }
+        finally { File.Delete(tmp); }
+    }
+
+    /// <summary>
+    /// A generated name collides only in the dialect that generates it. Checked against both, a name SQL Server would
+    /// give another index stopped a build that only writes PostgreSQL — a false alarm about output nobody produces.
+    /// The two spellings must differ beyond case to be told apart: both dialects compare names case-insensitively
+    /// (PostgreSQL folds an unquoted name), so <c>IX_Product_Sku</c> is <c>ix_product_sku</c> in either.
+    /// </summary>
+    [Theory]
+    [InlineData("IX_Product_BatchCode", SqlDialect.SqlServer, true)]
+    [InlineData("IX_Product_BatchCode", SqlDialect.PostgreSql, false)]
+    [InlineData("ix_product_batch_code", SqlDialect.PostgreSql, true)]
+    [InlineData("ix_product_batch_code", SqlDialect.SqlServer, false)]
+    public void A_declared_name_collides_only_in_a_dialect_that_is_built(string declared, SqlDialect built, bool collides)
+    {
+        var model = WithBatchCode + $"\n- {declared}: @index(name)\n";
+
+        Assert.Equal(collides, Analyze(model, built).Any(d => d.Code == "MDD042" && d.Message.Contains("생성")));
+    }
+
+    private static string WithBatchCode =>
+        Model.Replace("- sku: string(20) @not_null", "- sku: string(20) @not_null\n- batch_code: string(20) @index", StringComparison.Ordinal);
+
+    [Fact]
+    public void A_build_that_writes_only_sql_server_accepts_a_name_postgres_would_generate()
+    {
+        var output = Build(WithBatchCode + "\n- ix_product_batch_code: @index(name)\n", Targets("tsql"));
+
+        Assert.Contains("[ix_product_batch_code]", output);
+    }
+
+    /// <summary>
+    /// PostgreSQL writes a declared name unquoted, so it must already be the folded form. The generator refused other
+    /// spellings with an exception at generation time; in a build that writes PostgreSQL the analyzer says so first,
+    /// with the rest of the model's diagnostics. A SQL Server build takes the same name as it is.
+    /// </summary>
+    [Theory]
+    [InlineData(SqlDialect.PostgreSql, true)]
+    [InlineData(SqlDialect.SqlServer, false)]
+    public void A_name_postgres_cannot_write_unquoted_is_MDD042_only_where_postgres_is_built(SqlDialect built, bool refused)
+    {
+        var model = Model.Replace("- by_name: @index(name)", "- ByName: @index(name)", StringComparison.Ordinal);
+
+        Assert.Equal(refused, Analyze(model, built).Any(d => d.Code == "MDD042" && d.Message.Contains("ByName")));
+    }
+
+    private const string Joined = """
+# Namespace: x
+
+## Part
+- id: identifier @pk @generated
+- a: string(10)
+- b: string(10)
+- a_b: string(20) @index
+- @index(a, b)
+""";
+
+    /// <summary>
+    /// Two indexes the model does not name can be given the same name: PostgreSQL joins the columns with the same
+    /// underscore a column name may contain, so an index on <c>(a, b)</c> and one on <c>a_b</c> are both
+    /// <c>ix_part_a_b</c>. Index names are schema-wide; the second <c>CREATE INDEX</c> fails at deployment.
+    /// </summary>
+    [Fact]
+    public void Two_generated_names_that_coincide_are_MDD045_in_that_dialect()
+    {
+        var diagnostic = Assert.Single(Analyze(Joined, SqlDialect.PostgreSql), d => d.Code == "MDD045");
+
+        Assert.Equal(SemanticSeverity.Error, diagnostic.Severity);
+        Assert.Contains("ix_part_a_b", diagnostic.Message);
+    }
+
+    [Fact]
+    public void Names_that_coincide_only_in_another_dialect_are_not_MDD045()
+    {
+        // SQL Server writes the columns PascalCased (`IX_Part_A_B` and `IX_Part_AB`) — no collision there.
+        Assert.DoesNotContain(Analyze(Joined, SqlDialect.SqlServer), d => d.Code == "MDD045");
+    }
+
+    private static string Wide(int columns) =>
+        "# Namespace: x\n\n## MaintenanceScheduleRevisionHistoryEntry\n- id: identifier @pk @generated\n"
+        + string.Concat(Enumerable.Range(1, columns).Select(i => $"- recorded_measurement_value_{i}: string(10)\n"))
+        + $"- @index({string.Join(", ", Enumerable.Range(1, columns).Select(i => $"recorded_measurement_value_{i}"))})\n";
+
+    /// <summary>
+    /// A generated name the dialect cannot hold: SQL Server refuses an identifier over 128 characters at deployment,
+    /// PostgreSQL over 63 bytes. Reported before anything is written, naming the limit — the fix is to name the index.
+    /// </summary>
+    [Theory]
+    [InlineData(SqlDialect.SqlServer, 6, "128")]
+    [InlineData(SqlDialect.PostgreSql, 2, "63")]
+    public void A_generated_name_over_the_dialects_limit_is_MDD044(SqlDialect dialect, int columns, string limit)
+    {
+        var diagnostic = Assert.Single(Analyze(Wide(columns), dialect), d => d.Code == "MDD044");
+
+        Assert.Equal(SemanticSeverity.Error, diagnostic.Severity);
+        Assert.Contains(limit, diagnostic.Message);
+    }
+
+    [Fact]
+    public void A_name_within_sql_servers_limit_is_not_MDD044_there()
+    {
+        // ~75 characters: over PostgreSQL's 63 bytes, well inside SQL Server's 128.
+        Assert.DoesNotContain(Analyze(Wide(2), SqlDialect.SqlServer), d => d.Code == "MDD044");
+    }
+
+    [Fact]
+    public void A_declared_name_over_the_limit_is_MDD044()
+    {
+        var model = Model + "\n- " + new string('n', 130) + ": @index(name)\n";
+
+        Assert.Contains(Analyze(model, SqlDialect.SqlServer), d => d.Code == "MDD044");
     }
 
     [Fact]
