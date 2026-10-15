@@ -91,4 +91,19 @@ public static class M3lPrimitives
     /// </summary>
     public static int? ImplicitMaxLengthOf(string? typeName) =>
         typeName is not null && ImplicitMaxLength.TryGetValue(typeName, out var n) ? n : null;
+
+    /// <summary>
+    /// The digits a <c>decimal</c> field keeps: <c>decimal(p,s)</c> as written, <c>decimal(p)</c> as <c>(p, 0)</c>, a bare
+    /// <c>decimal</c> as <c>(18, 2)</c>. One rule every target reads — the SQL column, the C# validation guarding writes to
+    /// it, the form's step — so a column and the rule in front of it cannot disagree.
+    /// </summary>
+    /// <param name="parameters">The type's parameters as written (<c>FieldAttributes.TypeParams</c>), or null.</param>
+    public static (int Precision, int Scale) DecimalDigitsOf(IReadOnlyList<string>? parameters)
+    {
+        const int DefaultPrecision = 18, DefaultScale = 2;
+        static int? Int(string s) => int.TryParse(s, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : null;
+        if (parameters is not { Count: > 0 } || Int(parameters[0]) is not { } precision) return (DefaultPrecision, DefaultScale);
+        return (precision, parameters.Count > 1 && Int(parameters[1]) is { } scale ? scale : 0);
+    }
 }

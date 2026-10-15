@@ -495,6 +495,17 @@ public static class EntityPairRenderer
             if (RangeBounds(f) is { } range)
                 sb.Append("    [Range(").Append(range.Min).Append(", ").Append(range.Max).AppendLine(")]");
 
+            // [DecimalDigits(p, s)] — a decimal's digits, the way [StringLength] carries a string's bound: the column
+            // keeps exactly these, and without the rule in front of it a value with more decimal places was stored
+            // rounded (the caller reads back a number it never sent) and one with more integer digits failed the write.
+            // The same digits the SQL column is declared with, bare decimal included.
+            if (f.Type == "decimal")
+            {
+                var (precision, scale) = MddBooster.Core.Types.M3lPrimitives.DecimalDigitsOf(
+                    MddBooster.Core.Ast.FieldAttributes.TypeParams(f));
+                sb.Append("    [DecimalDigits(").Append(precision).Append(", ").Append(scale).AppendLine(")]");
+            }
+
             // [Editable] — who may supply the value, as metadata. @system: nobody outside the
             // application's own code, at creation or after. @immutable: a caller supplies it once, at
             // creation, which is what AllowInitialValue says — without it the two declarations would

@@ -23,6 +23,13 @@ public static class SqlTypeMapper
         return Map(m3lType, parameters);
     }
 
+    /// <summary>The column for a decimal's digits (<see cref="MddBooster.Core.Types.M3lPrimitives.DecimalDigitsOf"/>).</summary>
+    private static string DecimalType(IReadOnlyList<string>? parameters)
+    {
+        var (precision, scale) = MddBooster.Core.Types.M3lPrimitives.DecimalDigitsOf(parameters);
+        return $"DECIMAL({precision},{scale})";
+    }
+
     public static string Map(string m3lType, IReadOnlyList<string>? parameters)
     {
         if (string.IsNullOrWhiteSpace(m3lType))
@@ -41,7 +48,6 @@ public static class SqlTypeMapper
         }
 
         var p0 = parameters is { Count: > 0 } ? parameters[0] : null;
-        var p1 = parameters is { Count: > 1 } ? parameters[1] : null;
 
         return m3lType switch
         {
@@ -53,9 +59,7 @@ public static class SqlTypeMapper
             "byte" => "TINYINT",
             "float" => "REAL",
             "double" => "FLOAT",
-            "decimal" when p0 is not null && p1 is not null => $"DECIMAL({p0},{p1})",
-            "decimal" when p0 is not null => $"DECIMAL({p0},0)",
-            "decimal" => "DECIMAL(18,2)",
+            "decimal" => DecimalType(parameters),
             "string" when p0 is not null => $"NVARCHAR({p0})",
             "string" => "NVARCHAR(MAX)",
             "text" => "NVARCHAR(MAX)",

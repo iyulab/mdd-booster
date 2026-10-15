@@ -563,6 +563,7 @@ UdView 위에 있어 이미 거르고, 기본 테이블을 읽는 서브쿼리�
 |---|---|---|
 | 널 허용하지 않는 참조형 필드 | `[Required]` | `string`/`text`/`json`/`phone`/`email`/`url`/`binary`. 값형(숫자·시간·`Guid`·enum)은 CLR이 이미 널을 허용하지 않으므로 제외 |
 | `string(n)` | `[StringLength(n)]` | **널 허용 여부와 무관** — `string(50)?` 도 상한 50을 갖는다 |
+| `decimal(p,s)` · `decimal(p)` · `decimal` | `[DecimalDigits(p, s)]` | SQL 컬럼과 같은 자리수(`decimal(p)` 는 `(p, 0)`, 맨 `decimal` 은 `(18, 2)` — 세 타깃이 한 규칙을 읽는다). 넘는 소수부·정수부는 데이터 API 에서 `400` — 종전엔 데이터베이스가 소수부를 조용히 반올림했다. 런타임 `Iyu.*` 0.39.0 이상이 그 특성을 정의한다(런타임 패키지의 README) |
 | `phone`·`email`·`url` | `[StringLength(n)]` | 상한이 **선언이 아니라 타입**에서 온다(명세 §10.4.2 — 30/320/2048). 컬럼·엔티티·필드 스키마·생성 폼이 같은 `n` 을 쓴다 |
 | `= <value>` | 속성 초기화자 | `= true;` · `= 3;` · `= "NEW";` · `= 0.5m;` · `= Status.Draft;` |
 | `rowversion` | `[Timestamp]` | 쓰기·읽기 두 클래스 모두. 쓰기 쪽은 EF 가 엔진이 생성하는 동시성 토큰으로 읽어 낡은 버전의 갱신이 아무 행도 바꾸지 않게 하고, 읽기 쪽은 OData 모델 빌더가 ETag 원천으로 읽는다. CLR 타입은 방언을 따른다 — SQL Server `byte[]`, PostgreSQL `uint`(`xmin`). `[Required]` 는 붙지 않는다(호출자가 주는 값이 아니다) |

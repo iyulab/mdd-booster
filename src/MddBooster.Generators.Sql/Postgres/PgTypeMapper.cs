@@ -26,6 +26,13 @@ public static class PgTypeMapper
         return Map(m3lType, parameters);
     }
 
+    /// <summary>The column for a decimal's digits (<see cref="MddBooster.Core.Types.M3lPrimitives.DecimalDigitsOf"/>).</summary>
+    private static string DecimalType(IReadOnlyList<string>? parameters)
+    {
+        var (precision, scale) = MddBooster.Core.Types.M3lPrimitives.DecimalDigitsOf(parameters);
+        return $"numeric({precision},{scale})";
+    }
+
     public static string Map(string m3lType, IReadOnlyList<string>? parameters)
     {
         if (string.IsNullOrWhiteSpace(m3lType))
@@ -42,7 +49,6 @@ public static class PgTypeMapper
         }
 
         var p0 = parameters is { Count: > 0 } ? parameters[0] : null;
-        var p1 = parameters is { Count: > 1 } ? parameters[1] : null;
 
         return m3lType switch
         {
@@ -55,9 +61,7 @@ public static class PgTypeMapper
             "byte" => "smallint",
             "float" => "real",
             "double" => "double precision",
-            "decimal" when p0 is not null && p1 is not null => $"numeric({p0},{p1})",
-            "decimal" when p0 is not null => $"numeric({p0},0)",
-            "decimal" => "numeric(18,2)",
+            "decimal" => DecimalType(parameters),
             "string" when p0 is not null => $"varchar({p0})",
             "string" => "text",
             "text" => "text",

@@ -70,6 +70,10 @@ public class GeneratedCodeCompilesWithoutRuntimeReferencesTests
         [System.AttributeUsage(System.AttributeTargets.Property)]
         public sealed class SearchableAttribute : System.Attribute { }
 
+        [System.AttributeUsage(System.AttributeTargets.Property)]
+        public sealed class DecimalDigitsAttribute : System.Attribute
+        { public DecimalDigitsAttribute(int precision, int scale) { _ = precision; _ = scale; } }
+
         """;
 
     /// <summary>

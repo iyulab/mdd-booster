@@ -165,6 +165,13 @@ public class EntityPairRendererTests
         // subtotal: decimal(12,2) stored → [Column(TypeName = "decimal(12,2)")]
         Assert.Contains("[Column(TypeName = \"decimal(12,2)\")]", pair.Write);
 
+        // ...and its digits are the input contract, on both types like [StringLength]: a value beyond them is refused,
+        // not rounded by the database. Derived decimals (tax_amount, grand_total) are the view's, never supplied.
+        Assert.Contains("[DecimalDigits(12, 2)]", pair.Write);
+        Assert.Contains("[DecimalDigits(12, 2)]", pair.Read);
+        var stored = order.Fields.Count(f => f.Type == "decimal" && f.Kind == M3L.Native.FieldKind.Stored);
+        Assert.Equal(stored, System.Text.RegularExpressions.Regex.Matches(pair.Write, @"\[DecimalDigits\(").Count);
+
         // Generated code must be valid C#
         var tree = CSharpSyntaxTree.ParseText(pair.Write);
         Assert.DoesNotContain(tree.GetDiagnostics(),

@@ -402,24 +402,11 @@ public static class TsFormRenderer
     private static bool IsNumberType(string? t) => t != null && NumericTypes.Contains(t);
 
     /// <summary>
-    /// 파라미터 없는 <c>decimal</c>의 소수 자릿수. <c>SqlTypeMapper</c>가 이 경우를
-    /// <c>DECIMAL(18,2)</c>로 정하므로 같은 값을 쓴다 — 폼과 컬럼이 서로 다른 약속을 하면
-    /// 컬럼이 받는 값을 폼이 거부하거나 그 반대가 된다.
-    /// </summary>
-    private const int BareDecimalScale = 2;
-
-    /// <summary>
-    /// <c>decimal(p,s)</c>의 <c>s</c>. 파라미터가 없으면 <see cref="BareDecimalScale"/>,
-    /// <c>decimal(p)</c>는 SQL이 <c>DECIMAL(p,0)</c>이므로 0.
+    /// <c>decimal(p,s)</c>의 <c>s</c> — 컬럼이 읽는 같은 규칙(<c>M3lPrimitives.DecimalDigitsOf</c>)에서. 폼과 컬럼이 서로 다른
+    /// 약속을 하면 컬럼이 받는 값을 폼이 거부하거나 그 반대가 된다.
     /// </summary>
     private static int DecimalScale(FieldNode field)
-    {
-        var ps = MddBooster.Core.Ast.FieldAttributes.TypeParams(field);
-        if (ps is null || ps.Count == 0) return BareDecimalScale;
-        if (ps.Count == 1) return 0;
-        return int.TryParse(ps[1], System.Globalization.NumberStyles.Integer,
-            System.Globalization.CultureInfo.InvariantCulture, out var s) ? s : BareDecimalScale;
-    }
+        => MddBooster.Core.Types.M3lPrimitives.DecimalDigitsOf(MddBooster.Core.Ast.FieldAttributes.TypeParams(field)).Scale;
 
     /// <summary>
     /// <c>type="number"</c> 입력의 증분 — 방출할 것이 없으면 null.
