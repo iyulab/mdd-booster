@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using MddBooster.Core.Generation;
+using MddBooster.Core.Naming;
 
 namespace MddBooster.Generators.Sql;
 
@@ -114,39 +115,108 @@ public sealed class PreScriptWriter(SqlDialect dialect, string schema, Func<stri
 
     private string RenderSqlServer(RenameSteps.Step step)
     {
+        var sb = new StringBuilder();
+        string table;
         if (step.Kind == RenameSteps.Kind.Table)
         {
             var from = $"[{schema}].[{step.From}]";
-            var to = $"[{schema}].[{step.To}]";
-            return $"IF OBJECT_ID(N'{Escape(from)}', N'U') IS NOT NULL AND OBJECT_ID(N'{Escape(to)}', N'U') IS NULL\n" +
-                   $"    EXEC sp_rename N'{Escape(from)}', N'{Escape(step.To)}';\n";
+            table = $"[{schema}].[{step.To}]";
+            sb.Append($"IF OBJECT_ID(N'{Escape(from)}', N'U') IS NOT NULL AND OBJECT_ID(N'{Escape(table)}', N'U') IS NULL\n")
+              .Append($"    EXEC sp_rename N'{Escape(from)}', N'{Escape(step.To)}';\n");
         }
-        var table = $"[{schema}].[{step.Model}]";
-        var oldColumn = Core.Naming.NameCasing.ToPascalCase(step.From);
-        var newColumn = Core.Naming.NameCasing.ToPascalCase(step.To);
-        return $"IF COL_LENGTH(N'{Escape(table)}', N'{Escape(oldColumn)}') IS NOT NULL AND COL_LENGTH(N'{Escape(table)}', N'{Escape(newColumn)}') IS NULL\n" +
-               $"    EXEC sp_rename N'{Escape($"{table}.[{oldColumn}]")}', N'{Escape(newColumn)}', N'COLUMN';\n";
+        else
+        {
+            table = $"[{schema}].[{step.Model}]";
+            var oldColumn = Core.Naming.NameCasing.ToPascalCase(step.From);
+            var newColumn = Core.Naming.NameCasing.ToPascalCase(step.To);
+            sb.Append($"IF COL_LENGTH(N'{Escape(table)}', N'{Escape(oldColumn)}') IS NOT NULL AND COL_LENGTH(N'{Escape(table)}', N'{Escape(newColumn)}') IS NULL\n")
+              .Append($"    EXEC sp_rename N'{Escape($"{table}.[{oldColumn}]")}', N'{Escape(newColumn)}', N'COLUMN';\n");
+        }
+        // The names this generator gave the table's constraints and indexes carry the table's and the column's names.
+        // A constraint (a unique or check constraint) is renamed as an object, an index (a filtered unique one too)
+        // as an index of the table.
+        foreach (var (oldName, newName) in GeneratedNameRenames(step, postgres: false))
+        {
+            sb.Append($"IF EXISTS (SELECT 1 FROM sys.objects WHERE name = N'{Escape(oldName)}' AND parent_object_id = OBJECT_ID(N'{Escape(table)}'))\n")
+              .Append($"    EXEC sp_rename N'{Escape($"[{schema}].[{oldName}]")}', N'{Escape(newName)}', N'OBJECT';\n")
+              .Append($"ELSE IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'{Escape(oldName)}' AND object_id = OBJECT_ID(N'{Escape(table)}'))\n")
+              .Append($"    EXEC sp_rename N'{Escape($"{table}.[{oldName}]")}', N'{Escape(newName)}', N'INDEX';\n");
+        }
+        return sb.ToString();
     }
 
     private string RenderPostgres(RenameSteps.Step step)
     {
+        var sb = new StringBuilder("DO $$\nBEGIN\n");
+        string table;
         if (step.Kind == RenameSteps.Kind.Table)
         {
             var from = Core.Naming.PostgresIdentifiers.ToSnakeCase(step.From);
-            var to = tableName(step.To);
-            return "DO $$\nBEGIN\n" +
-                   $"    IF to_regclass('{schema}.{from}') IS NOT NULL AND to_regclass('{schema}.{to}') IS NULL THEN\n" +
-                   $"        ALTER TABLE {schema}.{from} RENAME TO {to};\n" +
-                   "    END IF;\nEND $$;\n";
+            table = tableName(step.To);
+            sb.Append($"    IF to_regclass('{schema}.{from}') IS NOT NULL AND to_regclass('{schema}.{table}') IS NULL THEN\n")
+              .Append($"        ALTER TABLE {schema}.{from} RENAME TO {table};\n")
+              .Append("    END IF;\n");
         }
-        var table = tableName(step.Model);
-        return "DO $$\nBEGIN\n" +
-               "    IF EXISTS (SELECT 1 FROM information_schema.columns " +
-               $"WHERE table_schema = '{schema}' AND table_name = '{table}' AND column_name = '{step.From}')\n" +
-               "       AND NOT EXISTS (SELECT 1 FROM information_schema.columns " +
-               $"WHERE table_schema = '{schema}' AND table_name = '{table}' AND column_name = '{step.To}') THEN\n" +
-               $"        ALTER TABLE {schema}.{table} RENAME COLUMN {step.From} TO {step.To};\n" +
-               "    END IF;\nEND $$;\n";
+        else
+        {
+            table = tableName(step.Model);
+            sb.Append("    IF EXISTS (SELECT 1 FROM information_schema.columns ")
+              .Append($"WHERE table_schema = '{schema}' AND table_name = '{table}' AND column_name = '{step.From}')\n")
+              .Append("       AND NOT EXISTS (SELECT 1 FROM information_schema.columns ")
+              .Append($"WHERE table_schema = '{schema}' AND table_name = '{table}' AND column_name = '{step.To}') THEN\n")
+              .Append($"        ALTER TABLE {schema}.{table} RENAME COLUMN {step.From} TO {step.To};\n")
+              .Append("    END IF;\n");
+        }
+        // The names this generator gave the table's constraints and indexes carry the table's and the column's names.
+        foreach (var (oldName, newName) in GeneratedNameRenames(step, postgres: true))
+        {
+            sb.Append("    IF EXISTS (SELECT 1 FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid ")
+              .Append("JOIN pg_namespace n ON n.oid = t.relnamespace ")
+              .Append($"WHERE n.nspname = '{schema}' AND t.relname = '{table}' AND c.conname = '{oldName}') THEN\n")
+              .Append($"        ALTER TABLE {schema}.{table} RENAME CONSTRAINT {oldName} TO {newName};\n")
+              .Append($"    ELSIF to_regclass('{schema}.{oldName}') IS NOT NULL THEN\n")
+              .Append($"        ALTER INDEX {schema}.{oldName} RENAME TO {newName};\n")
+              .Append("    END IF;\n");
+        }
+        return sb.Append("END $$;\n").ToString();
+    }
+
+    /// <summary>
+    /// The generated constraint and index names the step changes, old and new (<see cref="GeneratedObjectNames"/>) —
+    /// a table step changes the owner token of every single-column name (and PostgreSQL's primary key); a column step
+    /// changes the column token. Each is renamed only if it exists, so naming a kind the table does not have is
+    /// harmless. Names the model gives (an <c>### Indexes</c> item's) and multi-column names are not derived here.
+    /// </summary>
+    private IEnumerable<(string Old, string New)> GeneratedNameRenames(RenameSteps.Step step, bool postgres)
+    {
+        var kinds = postgres
+            ? new[] { GeneratedObjectNames.Kind.ForeignKey, GeneratedObjectNames.Kind.Unique, GeneratedObjectNames.Kind.Index, GeneratedObjectNames.Kind.Check }
+            : new[] { GeneratedObjectNames.Kind.Unique, GeneratedObjectNames.Kind.Index, GeneratedObjectNames.Kind.Check };
+        string Column(string field) => postgres ? field : Core.Naming.NameCasing.ToPascalCase(field);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        if (step.Kind == RenameSteps.Kind.Table)
+        {
+            var oldOwner = postgres ? Core.Naming.PostgresIdentifiers.ToSnakeCase(step.From) : step.From;
+            var newOwner = postgres ? tableName(step.To) : step.To;
+            if (postgres)
+                yield return (GeneratedObjectNames.For(true, GeneratedObjectNames.Kind.PrimaryKey, oldOwner),
+                              GeneratedObjectNames.For(true, GeneratedObjectNames.Kind.PrimaryKey, newOwner));
+            foreach (var column in step.ColumnNames.Select(Column))
+                foreach (var kind in kinds)
+                {
+                    var old = GeneratedObjectNames.For(postgres, kind, oldOwner, column);
+                    if (seen.Add(old)) yield return (old, GeneratedObjectNames.For(postgres, kind, newOwner, column));
+                }
+            yield break;
+        }
+
+        var owner = postgres ? tableName(step.Model) : step.Model;
+        foreach (var kind in kinds)
+        {
+            var old = GeneratedObjectNames.For(postgres, kind, owner, Column(step.From));
+            if (seen.Add(old)) yield return (old, GeneratedObjectNames.For(postgres, kind, owner, Column(step.To)));
+        }
     }
 
     private static string Escape(string text) => text.Replace("'", "''", StringComparison.Ordinal);

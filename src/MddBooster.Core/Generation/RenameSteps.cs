@@ -26,7 +26,12 @@ public static class RenameSteps
     /// <param name="Model">The model the step belongs to, by its current name.</param>
     /// <param name="From">The name storage is at before the step (a model name, or a field name as written).</param>
     /// <param name="To">The name it is at after.</param>
-    public sealed record Step(Kind Kind, string Model, string From, string To);
+    /// <param name="ColumnNames">
+    /// For a table step, every name each stored field of the model has had or has — the column tokens the names
+    /// generated for the table's constraints and indexes can carry when the step runs (a column renamed in the same
+    /// change is still at an older name then). Empty for a column step.
+    /// </param>
+    public sealed record Step(Kind Kind, string Model, string From, string To, IReadOnlyList<string> ColumnNames);
 
     /// <summary>Every step <paramref name="models"/> declares, models in their given order.</summary>
     public static IReadOnlyList<Step> Of(IReadOnlyList<ResolvedModel> models)
@@ -35,11 +40,16 @@ public static class RenameSteps
         var steps = new List<Step>();
         foreach (var model in models)
         {
+            var stored = model.Fields.Where(IsStored).ToList();
+            var columnNames = stored
+                .SelectMany(f => (f.RenamedFrom ?? []).Append(f.Name))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
             foreach (var (from, to) in History(model.Source.RenamedFrom, model.Name))
-                steps.Add(new Step(Kind.Table, model.Name, from, to));
-            foreach (var field in model.Fields.Where(IsStored))
+                steps.Add(new Step(Kind.Table, model.Name, from, to, columnNames));
+            foreach (var field in stored)
                 foreach (var (from, to) in History(field.RenamedFrom, field.Name))
-                    steps.Add(new Step(Kind.Column, model.Name, from, to));
+                    steps.Add(new Step(Kind.Column, model.Name, from, to, []));
         }
         return steps;
     }

@@ -51,10 +51,11 @@ file per rename step, oldest first, table steps before column steps, each statem
 only while the former name exists — written to the target's `preScriptsPath`, outside `projectPath`.
 A file already there is never rewritten; a new step is appended after the highest number in the
 directory. Without `preScriptsPath` no script is written and the build says the declared renames are
-not acted on. Not renamed yet: the names this generator derives from table and column names for
-constraints and indexes (`UK_…`, `ix_…`, …) — a schema comparison that finds them under the old name
-recreates them; the data stays. The entity and API targets need nothing from the declaration: they
-describe the model as it is now.
+not acted on (`MDD051`). The single-column constraint and index names this generator derives from
+table and column names (`UK_…`, `ix_…`, …) are renamed in the same scripts; multi-column names and
+names the model gives an index are not — a schema comparison that finds them under the old name
+recreates them, and the data stays. The entity and API targets need nothing from the declaration:
+they describe the model as it is now.
 
 ## §2.3.1.1 Shortened Type Notations
 

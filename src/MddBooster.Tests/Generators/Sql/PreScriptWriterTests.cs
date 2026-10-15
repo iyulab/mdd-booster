@@ -96,6 +96,34 @@ public sealed class PreScriptWriterTests : IDisposable
         Assert.Contains("ALTER TABLE public.customer_order RENAME COLUMN tier TO tier_code;", writer.Render(steps[2]));
     }
 
+    /// <summary>
+    /// The names this generator gave the table's constraints and indexes follow the table and the column — a table step
+    /// renames the owner token under every name a column has had or has (a column renamed in the same change is still
+    /// at its old name when the table step runs), and the column step then renames the column token.
+    /// </summary>
+    [Fact]
+    public void Generated_constraint_and_index_names_follow_the_table_and_the_column()
+    {
+        const string model = "## CustomerOrder @renamed_from(SalesOrder)\n- id: identifier @pk @generated\n" +
+                             "- order_code: string(20) @not_null @unique @renamed_from(code)\n";
+        var steps = RenameSteps.Of(Load(model));
+
+        var pg = new PreScriptWriter(SqlDialect.PostgreSql, "public", n => PostgresIdentifiers.ToSnakeCase(n));
+        var pgTable = pg.Render(steps[0]);
+        Assert.Contains("ALTER TABLE public.customer_order RENAME CONSTRAINT pk_sales_order TO pk_customer_order;", pgTable);
+        Assert.Contains("ALTER TABLE public.customer_order RENAME CONSTRAINT uq_sales_order_code TO uq_customer_order_code;", pgTable);
+        Assert.Contains("ALTER INDEX public.ix_sales_order_code RENAME TO ix_customer_order_code;", pgTable);
+        Assert.Contains("ALTER TABLE public.customer_order RENAME CONSTRAINT uq_customer_order_code TO uq_customer_order_order_code;",
+            pg.Render(steps[1]));
+
+        var ts = new PreScriptWriter(SqlDialect.SqlServer, "dbo", n => n);
+        var tsTable = ts.Render(steps[0]);
+        Assert.Contains("EXEC sp_rename N'[dbo].[UK_SalesOrder_Code]', N'UK_CustomerOrder_Code', N'OBJECT';", tsTable);
+        Assert.Contains("EXEC sp_rename N'[dbo].[CustomerOrder].[IX_SalesOrder_Code]', N'IX_CustomerOrder_Code', N'INDEX';", tsTable);
+        Assert.DoesNotContain("PK_", tsTable); // T-SQL writes its primary and foreign keys unnamed
+        Assert.Contains("EXEC sp_rename N'[dbo].[UK_CustomerOrder_Code]', N'UK_CustomerOrder_OrderCode', N'OBJECT';", ts.Render(steps[1]));
+    }
+
     [Fact]
     public void A_model_without_renames_has_no_steps()
         => Assert.Empty(RenameSteps.Of(Load("## Plain\n- id: identifier @pk\n- name: string(10)\n")));
