@@ -146,17 +146,17 @@ public class RelationDeclarationsTests
             "- editor_id: identifier? @reference(Person)\n\n" +
             "### Relations\n- >writer\n  - target: Person\n  - from: author_id\n");
         var code = DbContext(models);
-        Assert.Contains("modelBuilder.Entity<Post>().HasOne(e => e.Writer).WithMany().HasForeignKey(e => e.AuthorId);", code);
-        Assert.Contains("modelBuilder.Entity<PostExt>().HasOne(e => e.Writer).WithMany().HasForeignKey(e => e.AuthorId);", code);
-        // A conventionally named key is still left to convention on the write entity.
-        Assert.DoesNotContain("modelBuilder.Entity<Post>().HasOne(e => e.Editor)", code);
+        Assert.Contains("modelBuilder.Entity<Post>().HasOne(e => e.Writer).WithMany().HasForeignKey(e => e.AuthorId).OnDelete(DeleteBehavior.NoAction);", code);
+        Assert.Contains("modelBuilder.Entity<PostExt>().HasOne(e => e.Writer).WithMany().HasForeignKey(e => e.AuthorId).OnDelete(DeleteBehavior.NoAction);", code);
+        // A conventionally named key is configured too — with the delete action the schema has.
+        Assert.Contains("modelBuilder.Entity<Post>().HasOne(e => e.Editor).WithMany().HasForeignKey(e => e.EditorId).OnDelete(DeleteBehavior.NoAction);", code);
     }
 
     [Fact]
     public void A_self_referencing_one_to_one_is_configured_with_its_key_and_both_ends()
     {
         var (models, _) = Load(SelfOneToOne + "\n### Relations\n- <previous\n  - target: Step.next_id\n");
-        Assert.Contains("modelBuilder.Entity<StepExt>().HasOne(e => e.Next).WithOne(e => e.Previous).HasForeignKey<StepExt>(e => e.NextId);",
+        Assert.Contains("modelBuilder.Entity<StepExt>().HasOne(e => e.Next).WithOne(e => e.Previous).HasForeignKey<StepExt>(e => e.NextId).OnDelete(DeleteBehavior.NoAction);",
             DbContext(models));
     }
 

@@ -69,16 +69,6 @@ public static class ManyToOneNavigations
     }
 
     /// <summary>
-    /// Whether the key's navigation is named the way EF Core's convention pairs a navigation with its foreign key —
-    /// <c>Owner</c> for <c>OwnerId</c>. A name <c>### Relations</c> declared otherwise (<c>Writer</c> for <c>author_id</c>)
-    /// is not: left to convention, EF would invent a shadow <c>WriterId</c> and leave the declared key unmapped, so the
-    /// relationship has to be configured with its key.
-    /// </summary>
-    public static bool FollowsConvention(ModelNode owner, FieldNode field)
-        => field.Name.EndsWith("_id", StringComparison.OrdinalIgnoreCase)
-           && NavigationName(owner, field) == NameCasing.ToPascalCase(field.Name[..^3]);
-
-    /// <summary>
     /// The name of a reference key's forward navigation — the one <c>### Relations</c> declares for it
     /// (<see cref="RelationDeclarations.ForwardName"/>), else the key's name with <c>_id</c> removed
     /// (<c>owner_id</c> → <c>Owner</c>), else <see langword="null"/>: a key named otherwise (<c>owner</c>) has nothing

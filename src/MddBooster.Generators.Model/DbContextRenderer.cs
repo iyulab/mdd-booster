@@ -109,20 +109,16 @@ public static class DbContextRenderer
             if (!aspectBases.TryGetValue(r.DependentModel, out var baseName)
                 || !string.Equals(baseName, r.TargetModel, StringComparison.Ordinal))
             {
-                // An ordinary one-to-one is left to convention — unless ### Relations named either end
-                // otherwise than convention would, or both ends sit on one type (a self-reference): then
-                // convention cannot be relied on to pick the declared key and the declared pair.
+                // An ordinary one-to-one is configured with its key, both ends and its delete action: the
+                // EF model then says what the schema says, whichever names ### Relations gave the ends.
                 if (!byName.TryGetValue(r.DependentModel, out var dep)) continue;
                 var key = dep.Fields.First(f => f.Name == r.ForeignKeyField);
-                var conventional = ManyToOneNavigations.FollowsConvention(dep.Source, key)
-                    && r.DependentModel != r.TargetModel
-                    && r.ReverseName == OneToOneRelationships.ReverseNameFor(r.DependentModel, r.TargetModel, AspectNaming.PascalPrefix(dep));
-                if (conventional) continue;
                 var ext = NameCasing.ToPascalCase(r.DependentModel) + "Ext";
                 sb.Append("        modelBuilder.Entity<").Append(ext).Append(">()")
                   .Append(".HasOne(e => e.").Append(r.ForwardName).Append(')')
                   .Append(".WithOne(e => e.").Append(r.ReverseName).Append(')')
-                  .Append(".HasForeignKey<").Append(ext).Append(">(e => e.").Append(NameCasing.ToPascalCase(r.ForeignKeyField)).AppendLine(");");
+                  .Append(".HasForeignKey<").Append(ext).Append(">(e => e.").Append(NameCasing.ToPascalCase(r.ForeignKeyField)).Append(')')
+                  .Append(".OnDelete(DeleteBehavior.").Append(DeleteBehaviorFor(dep, key)).AppendLine(");");
                 continue;
             }
 
@@ -142,10 +138,14 @@ public static class DbContextRenderer
         foreach (var n in manyToOne ?? [])
         {
             if (n.CollidesWith is not null) continue;
+            var behavior = byName.TryGetValue(n.DependentModel, out var owner)
+                ? DeleteBehaviorFor(owner, owner.Fields.First(f => f.Name == n.ForeignKeyField))
+                : "NoAction";
             sb.Append("        modelBuilder.Entity<").Append(NameCasing.ToPascalCase(n.DependentModel)).Append("Ext>()")
               .Append(".HasOne(e => e.").Append(n.Name).Append(')')
               .Append(".WithMany()")
-              .Append(".HasForeignKey(e => e.").Append(NameCasing.ToPascalCase(n.ForeignKeyField)).AppendLine(");");
+              .Append(".HasForeignKey(e => e.").Append(NameCasing.ToPascalCase(n.ForeignKeyField)).Append(')')
+              .Append(".OnDelete(DeleteBehavior.").Append(behavior).AppendLine(");");
         }
 
         // The write entity carries the same key relationship, without navigations — the write types
@@ -163,15 +163,13 @@ public static class DbContextRenderer
               .AppendLine(".OnDelete(DeleteBehavior.Cascade);");
         }
 
-        // A declared delete action (`@reference(X)!`/`?`/`!!`) is configured on the write entity's
-        // navigation too. Without it EF applies its own convention to tracked rows — a required key
-        // cascades, an optional one is cleared client-side — and deletes children the database
-        // itself was told to refuse. A reference with no symbol keeps the convention, as it keeps
-        // the database default. The ::aspect key is configured above.
-        //
-        // A `@unique` reference is configured whether or not it declares an action: it is a one-to-one,
-        // and convention reads a reference navigation without an inverse as many-to-one — the EF model
-        // would call the key repeatable while the unique constraint and the read type say it is not.
+        // Every reference the write entity navigates is configured with its delete action — the declared one,
+        // or NoAction where none is declared, which is what the generated DDL says (no ON DELETE clause).
+        // Left to convention EF acts on tracked rows itself — a required key cascades, an optional one is
+        // cleared client-side — and deletes or detaches the children the database was told to keep: a
+        // refusal the schema makes would turn into a silent delete whenever the children happen to be
+        // tracked. The ::aspect key is configured above. A `@unique` reference is configured as a
+        // one-to-one: convention reads a reference navigation without an inverse as many-to-one.
         foreach (var model in ordered)
         {
             var entity = NameCasing.ToPascalCase(model.Name);
@@ -180,18 +178,8 @@ public static class DbContextRenderer
             {
                 if (field.Kind != FieldKind.Stored || field.Name == aspectKey) continue;
                 if (!EntityPairRenderer.HasWriteNavigation(model.Source, field)) continue;
-                var behavior = OnDeleteRule.For(model, field) switch
-                {
-                    ReferentialAction.Cascade => "Cascade",
-                    ReferentialAction.NoAction => "NoAction",
-                    ReferentialAction.Restrict => "Restrict",
-                    ReferentialAction.SetNull => "SetNull",
-                    _ => null,
-                };
+                var behavior = DeleteBehaviorFor(model, field);
                 var uniqueKey = FieldAttributes.Has(field, "unique");
-                // A navigation named in ### Relations rather than after its key is configured too: convention
-                // would pair it with a shadow key of its own name, not with the declared one.
-                if (behavior is null && !uniqueKey && ManyToOneNavigations.FollowsConvention(model.Source, field)) continue;
                 sb.Append("        modelBuilder.Entity<").Append(entity).Append(">()")
                   .Append(".HasOne(e => e.").Append(ManyToOneNavigations.NavigationName(model.Source, field)).Append(')');
                 if (uniqueKey)
@@ -200,8 +188,7 @@ public static class DbContextRenderer
                 else
                     sb.Append(".WithMany()")
                       .Append(".HasForeignKey(e => e.").Append(NameCasing.ToPascalCase(field.Name)).Append(')');
-                if (behavior is not null)
-                    sb.Append(".OnDelete(DeleteBehavior.").Append(behavior).Append(')');
+                sb.Append(".OnDelete(DeleteBehavior.").Append(behavior).Append(')');
                 sb.AppendLine(";");
             }
         }
@@ -507,4 +494,18 @@ public static class DbContextRenderer
         return "none";
     }
 
+    /// <summary>
+    /// The delete behaviour the EF model gives a reference key — the one the schema has. A declared action
+    /// (<see cref="OnDeleteRule"/>) maps one to one; a key that declares none has no <c>ON DELETE</c> clause in the
+    /// generated DDL, which is the database's <c>NO ACTION</c>, so it is <c>NoAction</c> here too. Left to
+    /// convention, EF would make a required key <c>Cascade</c> (and an optional one <c>ClientSetNull</c>) and act on
+    /// tracked dependents itself — deleting, or clearing the key of, the very rows the database was told to keep.
+    /// </summary>
+    private static string DeleteBehaviorFor(ResolvedModel model, FieldNode field) => OnDeleteRule.For(model, field) switch
+    {
+        ReferentialAction.Cascade => "Cascade",
+        ReferentialAction.Restrict => "Restrict",
+        ReferentialAction.SetNull => "SetNull",
+        _ => "NoAction",
+    };
 }

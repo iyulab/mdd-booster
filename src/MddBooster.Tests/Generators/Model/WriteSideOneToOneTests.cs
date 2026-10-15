@@ -51,7 +51,7 @@ public class WriteSideOneToOneTests
     {
         var code = RenderContext(postgresNaming);
 
-        Assert.Contains("modelBuilder.Entity<Warranty>().HasOne(e => e.Asset).WithOne().HasForeignKey<Warranty>(e => e.AssetId);", code);
+        Assert.Contains("modelBuilder.Entity<Warranty>().HasOne(e => e.Asset).WithOne().HasForeignKey<Warranty>(e => e.AssetId).OnDelete(DeleteBehavior.NoAction);", code);
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public class WriteSideOneToOneTests
     {
         var code = RenderContext();
 
-        Assert.Contains("modelBuilder.Entity<Node>().HasOne(e => e.Successor).WithOne().HasForeignKey<Node>(e => e.SuccessorId);", code);
+        Assert.Contains("modelBuilder.Entity<Node>().HasOne(e => e.Successor).WithOne().HasForeignKey<Node>(e => e.SuccessorId).OnDelete(DeleteBehavior.NoAction);", code);
     }
 
     [Fact]

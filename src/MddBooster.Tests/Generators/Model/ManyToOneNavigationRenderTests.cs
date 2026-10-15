@@ -118,13 +118,13 @@ public class ManyToOneNavigationRenderTests
                 oneToOne: oneToOne, manyToOne: manyToOne);
 
             Assert.Contains(
-                "modelBuilder.Entity<AssetExt>().HasOne(e => e.LifecycleState).WithMany().HasForeignKey(e => e.LifecycleStateId);",
+                "modelBuilder.Entity<AssetExt>().HasOne(e => e.LifecycleState).WithMany().HasForeignKey(e => e.LifecycleStateId).OnDelete(DeleteBehavior.NoAction);",
                 context, StringComparison.Ordinal);
             Assert.Contains(
-                "modelBuilder.Entity<AssetMaintenanceProfileExt>().HasOne(e => e.ReplacedAsset).WithMany().HasForeignKey(e => e.ReplacedAssetId);",
+                "modelBuilder.Entity<AssetMaintenanceProfileExt>().HasOne(e => e.ReplacedAsset).WithMany().HasForeignKey(e => e.ReplacedAssetId).OnDelete(DeleteBehavior.NoAction);",
                 context, StringComparison.Ordinal);
-            Assert.DoesNotContain("e => e.Vendor)", context, StringComparison.Ordinal);
-            Assert.DoesNotContain("e => e.Operator)", context, StringComparison.Ordinal);
+            Assert.DoesNotContain("Ext>().HasOne(e => e.Vendor)", context, StringComparison.Ordinal);
+            Assert.DoesNotContain("Ext>().HasOne(e => e.Operator)", context, StringComparison.Ordinal);
         }
     }
 }

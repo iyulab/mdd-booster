@@ -26,18 +26,12 @@ namespace MddBooster.Core.Generation;
 /// further would be inventing one.
 /// </para>
 /// <para>
-/// <b>Who configures the relationship, and why the answer differs.</b> For an ordinary one-to-one
-/// — a foreign-key property plus a reciprocal pair of reference navigations — EF Core discovers
-/// the relationship by convention, so this generator emits no <c>HasOne</c>/<c>WithOne</c>: the
-/// foreign-key property and the navigation are both produced here from the same field name, so the
-/// pair convention looks for cannot be mismatched. Where the dependent's key <em>is</em> its
-/// foreign key, EF states the opposite: such a relationship is not discovered, and the principal
-/// and dependent ends have to be indicated with <c>HasForeignKey</c>. The two dispositions are the
-/// same rule applied to two shapes, not an exception — and the second one is why a shared-key pair
-/// does get explicit configuration. <i>(EF Core docs, "One-to-one relationships": bidirectional
-/// reference navigations are discovered by convention; "Any one-to-one relationship where the
-/// foreign key is not discovered by convention must be configured to indicate the principal and
-/// dependent ends.")</i>
+/// <b>Every relationship is configured, not discovered.</b> EF Core would discover an ordinary one-to-one by
+/// convention — a foreign-key property and a reciprocal pair of reference navigations — but the convention also
+/// picks the delete behaviour (a required key cascades), and the schema this generator writes says otherwise (no
+/// <c>ON DELETE</c> clause: the database's NO ACTION). So the Model target configures the key, both ends and the
+/// delete action itself; a shared-key pair (<c>::aspect</c>) is configured with <c>HasForeignKey</c> on its key,
+/// which convention would not discover at all.
 /// </para>
 /// <para>
 /// <b>Ambiguity is reported, never guessed.</b> Two references from the same model to the same target

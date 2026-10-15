@@ -52,12 +52,18 @@ public class DeclaredDeleteBehaviorTests
         Assert.Contains("modelBuilder.Entity<Invoice>().HasOne(e => e.Guarded).WithMany().HasForeignKey(e => e.GuardedId).OnDelete(DeleteBehavior.Restrict);", code);
     }
 
-    /// <summary>A reference without a symbol keeps EF's convention, as it keeps the database default.</summary>
-    [Fact]
-    public void A_bare_reference_is_left_to_the_convention()
+    /// <summary>
+    /// A reference without a symbol gets NoAction — what its DDL says (no ON DELETE clause). Left to EF's convention a
+    /// required key would cascade and EF would delete tracked children the database refuses to lose.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_bare_reference_gets_the_schema_default_not_the_convention(bool postgresNaming)
     {
-        var code = RenderContext(postgresNaming: false);
+        var code = RenderContext(postgresNaming);
 
-        Assert.DoesNotContain("e => e.Plain)", code);
+        Assert.Contains("modelBuilder.Entity<Invoice>().HasOne(e => e.Plain).WithMany().HasForeignKey(e => e.PlainId).OnDelete(DeleteBehavior.NoAction);", code);
+        Assert.DoesNotContain("DeleteBehavior.Cascade", code);
     }
 }
