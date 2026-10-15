@@ -16,7 +16,7 @@
 
 ---
 
-## [Unreleased]
+## 0.41.0
 
 ### 🔴 `decimal(p,s)` 의 자리수가 입력 계약이 된다 — 생성 엔티티에 `[DecimalDigits(p, s)]`
 
