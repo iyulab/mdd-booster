@@ -328,17 +328,15 @@ public sealed class SemanticAnalyzer
     }
 
     /// <summary>
-    /// <c>MDD050</c>: a <c>### Relations</c> entry (or <c>@relation</c>) that does not describe a relationship the model's
-    /// <c>@reference</c> keys define — a key that is not one, a target the key does not point at, a reverse entry naming
-    /// a key that does not point here. The specification makes each an error (§3.2.6); generating from one would name a
-    /// navigation for a relationship that is not there.
+    /// <c>MDD050</c>: a <c>### Relations</c> entry (or <c>@relation</c>) this generator cannot name a navigation from —
+    /// a reverse entry without its key, or a declared name that is already a member. An entry that contradicts the
+    /// model's <c>@reference</c> keys is the parser's error (<c>M3L-E010</c>) and stops the build before this runs.
     /// </summary>
     private void CheckRelationDeclarations(List<SemanticDiagnostic> diagnostics)
     {
-        var byName = _models.GroupBy(m => m.Name, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
         foreach (var model in _models)
         {
-            foreach (var (entry, problem) in RelationDeclarations.Problems(model, byName))
+            foreach (var (entry, problem) in RelationDeclarations.Problems(model))
                 diagnostics.Add(new SemanticDiagnostic(
                     "MDD050",
                     $"'{model.Name}' ### Relations '{entry.Raw}': {problem}.",

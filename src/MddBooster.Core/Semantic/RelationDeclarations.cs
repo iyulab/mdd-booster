@@ -83,39 +83,21 @@ public static class RelationDeclarations
             .FirstOrDefault(v => v is not null);
 
     /// <summary>
-    /// An entry that does not describe a relationship the model's keys define — the specification calls each of these
-    /// an error (§3.2.6). Generating from one would name a navigation for a key that is not there, or for a different
-    /// target than the key's.
+    /// A named reverse entry that does not say which key it is the reverse of. The language accepts it; this generator
+    /// does not guess one — a target with two keys pointing here has two candidates, and a name attached to the wrong
+    /// one compiles.
     /// </summary>
-    public static IEnumerable<(Entry Entry, string Problem)> Problems(
-        ResolvedModel model, IReadOnlyDictionary<string, ResolvedModel> models)
+    /// <remarks>
+    /// An entry that contradicts the keys — a <c>from:</c> that is not a <c>@reference</c> key, a target the key does
+    /// not point at, a reverse key that does not point here — is the parser's to report (<c>M3L-E010</c>, §3.2.6), and
+    /// the build stops on it before this analysis runs.
+    /// </remarks>
+    public static IEnumerable<(Entry Entry, string Problem)> Problems(ResolvedModel model)
     {
+        ArgumentNullException.ThrowIfNull(model);
         foreach (var e in Of(model.Source))
-        {
-            if (e.Direction == "to")
-            {
-                if (e.Key is null) continue; // names no key: metadata only (reported as unread)
-                var key = model.Fields.FirstOrDefault(f => f.Name == e.Key);
-                var referenced = key is null ? null : FieldAttributes.FirstArg(key, "reference");
-                if (referenced is null)
-                    yield return (e, $"`from: {e.Key}` 은(는) 이 모델의 `@reference` 키가 아니다");
-                else if (e.Target is not null && e.Target != referenced)
-                    yield return (e, $"대상이 '{e.Target}' 인데 `{e.Key}` 의 `@reference` 는 '{referenced}' 를 가리킨다");
-            }
-            else if (e.Direction == "from" && e.Name is not null)
-            {
-                if (e.Target is null || e.Key is null)
-                {
-                    yield return (e, "역방향 항목은 키를 가진 모델과 그 키를 함께 적는다 — `target: Model.key_field`");
-                    continue;
-                }
-                var key = models.TryGetValue(e.Target, out var dependent)
-                    ? dependent.Fields.FirstOrDefault(f => f.Name == e.Key)
-                    : null;
-                if (key is null || FieldAttributes.FirstArg(key, "reference") != model.Name)
-                    yield return (e, $"'{e.Target}.{e.Key}' 은(는) 이 모델('{model.Name}')을 가리키는 `@reference` 키가 아니다");
-            }
-        }
+            if (e.Direction == "from" && e.Name is not null && (e.Target is null || e.Key is null))
+                yield return (e, "역방향 항목은 키를 가진 모델과 그 키를 함께 적는다 — `target: Model.key_field`");
     }
 
     /// <summary>
@@ -161,56 +143,29 @@ public static class RelationDeclarations
 
     /// <summary>The keys an entry carries that are its structure, not something it says about the relationship.</summary>
     private static readonly HashSet<string> Structural =
-        new(StringComparer.Ordinal) { "direction", "name", "target", "from", "raw", "loc", "declaredIn", "type", "args", "cardinality" };
+        new(StringComparer.Ordinal) { "direction", "name", "target", "from", "raw", "loc", "declaredIn", "cardinality" };
 
+    // Every spelling — `- >author` with `from:`, `- <comments` with `target: Comment.post_id`, `<- Comment via post_id`,
+    // and the `@relation(…)` directive — arrives in one parsed form (specification §3.2.4 «One parsed form for every
+    // spelling»): `direction`, `name`, `target` (a model) and `from` (the key).
     private static Entry? Read(JsonElement element)
     {
         if (element.ValueKind != JsonValueKind.Object) return null;
-        var raw = Str(element, "raw") ?? element.ToString();
-        var loc = element.TryGetProperty("loc", out var l) ? ReadLoc(l) : null;
-
-        // The directive spelling, `- @relation(name, <- Model.key)` / `- @relation(name, -> Target, from: key)`, arrives
-        // with its arguments as written.
-        if (Str(element, "type") == "directive")
-        {
-            if (!element.TryGetProperty("args", out var args) || args.ValueKind != JsonValueKind.Array) return null;
-            var parts = args.EnumerateArray().Select(a => a.ValueKind == JsonValueKind.String ? a.GetString()! : a.ToString()).ToList();
-            if (parts.Count < 2) return null;
-            var arrow = parts[1].Trim();
-            var from = parts.Skip(2).Select(p => p.Trim())
-                .FirstOrDefault(p => p.StartsWith("from:", StringComparison.Ordinal))?["from:".Length..].Trim();
-            if (arrow.StartsWith("<-", StringComparison.Ordinal))
-            {
-                var (t, k) = SplitQualified(arrow[2..].Trim());
-                return new Entry("from", parts[0].Trim(), t, k ?? from, Empty, raw, loc);
-            }
-            if (arrow.StartsWith("->", StringComparison.Ordinal))
-                return new Entry("to", parts[0].Trim(), arrow[2..].Trim(), from, Empty, raw, loc);
-            return null;
-        }
-
-        var direction = Str(element, "direction");
-        if (direction is null) return null;
+        if (Str(element, "direction") is not { } direction) return null;
         var keys = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var p in element.EnumerateObject())
             if (!Structural.Contains(p.Name))
                 keys[p.Name.ToLowerInvariant()] = p.Value.ValueKind == JsonValueKind.String ? p.Value.GetString()! : p.Value.ToString();
 
-        var target = Str(element, "target");
-        var key = Str(element, "from");
-        var inFields = Str(element, "declaredIn") == "fields";
-        // `- <comments` with `target: Comment.post_id` names the key inside the target.
-        if (direction == "from" && target is not null && key is null)
-            (target, key) = SplitQualified(target);
-        return new Entry(direction, Str(element, "name"), target, key, keys, raw, loc, inFields);
-    }
-
-    private static readonly IReadOnlyDictionary<string, string> Empty = new Dictionary<string, string>();
-
-    private static (string Model, string? Key) SplitQualified(string text)
-    {
-        var dot = text.IndexOf('.');
-        return dot < 0 ? (text, null) : (text[..dot], text[(dot + 1)..]);
+        return new Entry(
+            direction,
+            Str(element, "name"),
+            Str(element, "target"),
+            Str(element, "from"),
+            keys,
+            Str(element, "raw") ?? element.ToString(),
+            element.TryGetProperty("loc", out var l) ? ReadLoc(l) : null,
+            Str(element, "declaredIn") == "fields");
     }
 
     private static string? Str(JsonElement e, string name)

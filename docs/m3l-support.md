@@ -1,8 +1,8 @@
 # M3L support in mdd-booster
 
 > **Specification:** the M3L language is defined upstream, in the `m3l` project. This generator pins
-> **`M3L.Native` 0.21.0**; the specification at that version is
-> [`docs/specification.md` @ 0.21.0](https://github.com/iyulab/m3l/blob/457ce211f8fca1a84cfeb32ecbdca8feafcf12c8/docs/specification.md).
+> **`M3L.Native` 0.22.0**; the specification at that version is
+> [`docs/specification.md` @ 0.22.0](https://github.com/iyulab/m3l/blob/fbd5f38643d44b1058f7e3c4f415100da4160676/docs/specification.md).
 > Section numbers below are that document's.
 
 This page answers the question a reader of the specification brings here: **where this generator
@@ -92,11 +92,10 @@ stored value is the member's name, so reordering never changes what a row holds.
 **What this generator implements**: the three symbols, on both SQL dialects — `!` writes
 `ON DELETE NO ACTION`, `?` writes `ON DELETE SET NULL` (on a key that cannot hold NULL the build
 stops with MDD023), and `!!` writes `ON DELETE RESTRICT` on PostgreSQL and `ON DELETE NO ACTION` on
-SQL Server, which has no RESTRICT and checks NO ACTION immediately. The automatic decision the section
-describes is **not** applied: a reference without a symbol writes no `ON DELETE` clause, so the
-database default (NO ACTION) holds. Applied as written, it would make common models undeployable on
-SQL Server — a self-reference, or two keys to the same model, cannot both cascade or set null there
-(error 1785). The same limit applies to the symbols as written, so the SQL Server dialect stops the
+SQL Server, which has no RESTRICT and checks NO ACTION immediately. A reference without a symbol
+writes no `ON DELETE` clause — the section's default, no action. SQL Server limits what may cascade or
+set null — a self-reference, or two keys to the same model, cannot both do either there (error 1785) —
+so the SQL Server dialect stops the
 build on a set of `?` keys (with the cascading key an `::aspect` makes) that SQL Server would refuse —
 a `?` self-reference, two `?` keys from one model to another, or a delete that would reach one table
 twice or come back to its own. A SET NULL ends at the rows it updates, so `?` keys of different
@@ -126,8 +125,11 @@ the target naming a one-to-one's key (`- <profile` with `- target: Profile.owner
 `@relation(profile, <- Profile.owner_id)`) names its reverse navigation; an entry's `on_delete` is
 read with the key's. Without a declared name a key's navigation is named after it
 (`owner_id` → `Owner`); a key with no `_id` to strip, and a self-referencing one-to-one's reverse
-side, get no navigation until one is declared (`MDD049`). An entry that names no key of the model,
-or a different target than the key's, stops the build (`MDD050`).
+side, get no navigation until one is declared (`MDD049`). An entry that contradicts the keys — a
+key the model does not have, a different target than the key's, a reverse key that does not point
+back — is the parser's error (`M3L-E010`) and stops the build; a named reverse entry that does not
+say its key (`- <posts` with `- target: Post` alone), and a declared name that is already a member's,
+stop it too (`MDD050`).
 
 Not generated, and listed as unconsumed: the many side of a many-to-one (`- <comments` naming an
 ordinary key — a collection), many-to-many (`- <>tags`), and the hints `load`, `order_by`,

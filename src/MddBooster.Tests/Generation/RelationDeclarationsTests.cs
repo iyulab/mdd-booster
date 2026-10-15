@@ -113,15 +113,37 @@ public class RelationDeclarationsTests
         Assert.Equal("Profile", relationship.ReverseName); // not the derived MaintenanceProfile
     }
 
+    private const string PostWithAuthor =
+        "## Post\n- id: identifier @pk @generated\n- author_id: identifier @reference(Person)\n- name: string(20)\n\n";
+
+    /// <summary>
+    /// An entry that contradicts the keys is the parser's error (<c>M3L-E010</c>) — the build stops on it before the
+    /// generator's own analysis runs, so the generator does not report it a second time under its own code.
+    /// </summary>
     [Theory]
     [InlineData("### Relations\n- >ghost\n  - target: Person\n  - from: nope_id\n", "nope_id")]
-    [InlineData("### Relations\n- >author\n  - target: Post\n  - from: author_id\n", "'Person'")]
+    [InlineData("### Relations\n- >author\n  - target: Post\n  - from: author_id\n", "\"Person\"")]
     [InlineData("### Relations\n- @relation(comments, <- Person.id)\n", "Person.id")]
-    [InlineData("### Relations\n- >name\n  - target: Person\n  - from: author_id\n", "'name'")]
-    public void An_entry_that_does_not_match_the_keys_stops_the_build(string section, string named)
+    public void An_entry_that_contradicts_the_keys_is_the_parsers_error(string section, string named)
     {
-        var (models, ast) = Load(Person +
-            "## Post\n- id: identifier @pk @generated\n- author_id: identifier @reference(Person)\n- name: string(20)\n\n" + section);
+        var tmp = Path.Combine(Path.GetTempPath(), $"mdd-rel-{Guid.NewGuid():N}.m3l.md");
+        File.WriteAllText(tmp, "# Namespace: test\n\n" + Person + PostWithAuthor + section);
+        try
+        {
+            var error = Assert.Single(new M3lLoader().ValidateFiles([tmp]).Errors, e => e.Code == "M3L-E010");
+            Assert.Contains(named, error.Message);
+            var (models, ast) = Load(Person + PostWithAuthor + section);
+            Assert.DoesNotContain(Analyze(models, ast), d => d.Code == "MDD050");
+        }
+        finally { File.Delete(tmp); }
+    }
+
+    [Theory]
+    [InlineData("### Relations\n- >name\n  - target: Person\n  - from: author_id\n", "'name'")]
+    [InlineData("### Relations\n- <posts\n  - target: Person\n", "target: Model.key_field")]
+    public void An_entry_the_generator_cannot_name_a_navigation_from_stops_the_build(string section, string named)
+    {
+        var (models, ast) = Load(Person + PostWithAuthor + section);
         var error = Assert.Single(Analyze(models, ast), d => d.Code == "MDD050");
         Assert.Equal(SemanticSeverity.Error, error.Severity);
         Assert.Contains(named, error.Message);
