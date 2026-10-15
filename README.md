@@ -44,7 +44,8 @@ Sql 타깃 선택 노브(모두 생략 가능): `emitSqlProj`(기본 true — SS
 `emitRefreshScript`(기본 true — post-deployment `sp_refreshview` 스크립트),
 `emitEnumCheckConstraints`(기본 false — enum 컬럼 table-level `CK_{Table}_{Column}` CHECK.
 SSDT dacpac은 CHECK diff가 불안정하므로 선언형 스키마 관리 도구 소비자용 opt-in),
-`emitForeignKeyIndexes`(기본 true, 0.13.0부터 — 아래).
+`emitForeignKeyIndexes`(기본 true, 0.13.0부터 — 아래),
+`preScriptsPath`(기본 없음 — 아래 «개명»).
 
 **`projectPath`/`outputPath`/`formsOutputPath`/`sqlProjectPath`는 상대경로면 `mdd.json`이 있는
 디렉터리 기준, 절대경로면 그대로 쓴다.** 절대경로를 쓰면서 같은 저장소를 여러 물리적
@@ -86,6 +87,34 @@ SSDT dacpac은 CHECK diff가 불안정하므로 선언형 스키마 관리 도�
 > `formsOutputPath` 에서 **계산**된다. 두 경로를 어떻게 두든 폼은 생성된 타입을 찾는다.
 > 상대경로가 성립하지 않는 조합(서로 다른 드라이브·루트)이면 **생성이 실패**하며, 컴파일되지
 > 않는 파일을 써 놓고 성공을 보고하지 않는다.
+
+#### 개명 (`@renamed_from` → `preScriptsPath`)
+
+모델이 테이블이나 필드의 옛 이름을 선언하면(`## CustomerOrder @renamed_from(SalesOrder)`,
+`- total: … @renamed_from(amount)`), Sql 타깃은 그 개명을 **선언형 비교 «앞»에 한 번씩 도는 스크립트**로 낸다 —
+스키마 도구가 그 단계를 지원해야 한다(예: 선언형 비교 전에 `V{n}__*.sql` 을 한 번씩 돌리고 원장에 남기는 단계).
+그것이 없으면 두 판의 모델 차이는 «옛 테이블 제거 + 빈 새 테이블 생성»으로 읽힌다.
+
+```json
+{ "type": "Sql", "dialect": "postgres", "projectPath": "../db", "preScriptsPath": "../pre" }
+```
+
+- **위치**: `projectPath` **밖**(형제). 선언형 스키마로 읽히는 디렉터리 안이면 생성이 거절된다(설정 오류 4).
+- **파일**: 개명 한 단계에 한 파일, `V{번호}__rename_table_{옛}_to_{새}.sql` · `V{번호}__rename_column_{모델}_{옛}_to_{새}.sql`.
+  이력(`@renamed_from(level, tier)`)은 오래된 것부터 한 단계씩, 한 빌드 안에서는 테이블이 열보다 먼저.
+- **추가만 한다**: 이미 있는 파일은 다시 쓰지 않는다(한 번 돈 스크립트의 내용이 바뀌면 도구가 거절한다). 새 개명은
+  그 디렉터리의 가장 큰 번호 다음을 받는다(손으로 둔 스크립트 포함). 이 디렉터리는 소스로 커밋한다.
+- **가드**: 각 문장은 «옛 이름이 있고 새 이름이 없을 때»만 실행된다 — 새 DB, 이미 옮겨진 DB 에서는 아무것도 하지 않는다.
+  선언은 모델에 남아 있어도 된다.
+- **SQL Server 의 스키마 바인딩 뷰**: SQL Server 는 스키마 바인딩 뷰가 의존하는 테이블 · 열의 개명을 거절한다(Msg 15336) —
+  이 생성기는 `@indexed` rollup 이 있는 모델의 FullView 를 그렇게 쓴다. 그래서 T-SQL 개명 스크립트는 그 테이블에 바인딩된 뷰를
+  먼저 내린다(개명이 실제로 일어날 때만). 뷰는 데이터가 없고, 뒤따르는 선언형 단계가 원하는 상태에서 다시 만든다(그 뷰의 인덱스도
+  원하는 상태에 있으면 함께). 뷰에 다시 바인딩된 뷰까지는 풀지 않는다 — 그 경우 SQL Server 의 메시지로 멈춘다. PostgreSQL 의 뷰는
+  개명을 스스로 따라간다.
+- **딸린 이름도 따라간다**: 이 생성기가 테이블 · 열 이름으로 지은 제약 · 인덱스 이름(T-SQL `UK_` · `IX_` · `CK_`, PostgreSQL `pk_` ·
+  `fk_` · `uq_` · `ix_` · `ck_`)을 같은 스크립트에서 개명한다(있을 때만). 다중 열 이름과 모델이 이름을 준 인덱스(`### Indexes` 항목
+  이름)는 개명하지 않는다 — 그런 이름이 어긋나면 스키마 도구의 비교가 그 제약을 다시 만든다(데이터는 그대로).
+- `preScriptsPath` 가 없으면 스크립트를 내지 않고, 선언된 개명을 실행하지 않는다고 경고한다.
 
 #### 외래 키 인덱스 (`emitForeignKeyIndexes`)
 
@@ -1211,6 +1240,7 @@ consumer-repo/
 | MDD047(경고) | 필드가 표시 라벨을 이 생성기의 옛 속성 `@label(…)` 로 적었다 — 명세의 `- name(Label): type` 으로 옮긴다. 이 판은 아직 읽고(괄호 라벨이 함께 있으면 그것이 이긴다) 다음 마이너 판부터 읽지 않는다 |
 | MDD049(경고) | `@reference` 키의 navigation 에 이름이 없어 생성하지 않는다 — 키 이름이 `_id` 로 끝나지 않거나(제 이름이 키 속성의 이름이다), 자기참조 1:1 의 역방향이다. `$expand` 로 따라갈 수 없고 EF 는 부모 · 자식을 함께 저장할 때 순서를 추론하지 못한다. `### Relations` 에 이름을 준다(`- >이름` + `- from: 키` · 역방향은 `- <이름` + `- target: 모델.키`) |
 | MDD050 | `### Relations` 의 이름 있는 역방향 항목이 자기 키를 말하지 않는다(`- <posts` + `- target: Post` 만 — 생성기는 키를 추측하지 않는다). 또는 선언한 navigation 이름이 다른 필드의 속성 이름과 같다. 항목이 키와 어긋나는 경우(키가 아님 · 다른 대상 · 이 모델을 가리키지 않는 역방향 키)는 파서 오류 `M3L-E010` 으로 빌드가 선다 |
+| MDD051(경고) | 모델이 `@renamed_from` 으로 개명을 선언했는데 Sql 타깃에 `preScriptsPath` 가 없다 — 그 타깃은 개명을 실행하지 않고, 산출물을 반영하면 옛 이름은 제거 · 새 이름은 빈 채로 생성으로 읽힌다(«개명») |
 | MDD048 | 필드가 명세는 정의하지만 이 생성기가 생성하지 않는 모양이다 — 배열 `T[]` · 인라인 `enum`(필드 안에 값) · `map<K, V>` · 하위 필드를 갖는 `object`. 어느 타깃도 그 모양을 낼 수 없다(배열은 전에 경고 없이 원소 형 하나로 생성됐다). 별도 모델 + `@reference` · 최상위 `::enum` · 직렬화한 `text` 칸으로 나눈다 |
 | MDD024(경고) | `mdd.json` 에 이 생성기가 정의하지 않은 키가 있다(루트 또는 `targets[n]`) — 무시되며, 가까운 알려진 키가 있으면 제안한다. 분석이 아니라 설정 단계에서 나오고, 다른 경고처럼 `treatWarningsAsErrors`·`warningsAsErrors` 로 빌드를 세울 수 있다 — 편집기 밖(CI)에서 오타를 잡는 길. `_` 로 시작하는 설명 키와 `$schema` 는 보고하지 않는다. `sources` 가 비어 있으면 설정 오류(종료 코드 4) |
 | MDD025(경고) | `rowversion` 행 버전에 `@internal` — 읽기 타입에서 빠져 그 셋이 ETag 를 내지 않는다(`If-Match` 조건부 쓰기가 사라진다) |

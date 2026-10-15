@@ -46,4 +46,13 @@ public sealed class SqlGeneratorOptions
     /// 컬럼)은 <see cref="ForeignKeyIndexPlanner"/>가 걸러낸다.
     /// </summary>
     public bool EmitForeignKeyIndexes { get; init; }
+
+    /// <summary>
+    /// Where the renames a model declares (<c>@renamed_from</c>) are written as run-once scripts for a schema tool's
+    /// pre-comparison stage (<see cref="PreScriptWriter"/>). Relative paths resolve against
+    /// <c>GeneratorContext.WorkingDirectory</c>. It must lie outside <see cref="ProjectPath"/> — a tool reading the
+    /// project as desired state would read the scripts as schema. <see langword="null"/>: no scripts, and a declared
+    /// rename is reported as not acted on.
+    /// </summary>
+    public string? PreScriptsPath { get; init; }
 }

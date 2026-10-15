@@ -82,6 +82,14 @@ public sealed class MddJsonTarget
     public bool? EmitRefreshScript { get; set; }
 
     /// <summary>
+    /// Sql target: where declared renames (<c>@renamed_from</c>) are written as run-once scripts for a schema tool's
+    /// stage that runs before its comparison. Relative to the config directory, outside <see cref="ProjectPath"/>.
+    /// Omitted: no scripts, and a declared rename is reported as not acted on.
+    /// </summary>
+    [JsonPropertyName("preScriptsPath")]
+    public string? PreScriptsPath { get; set; }
+
+    /// <summary>
     /// Sql target: whether to emit table-level <c>CK_{Table}_{Column}</c> CHECK constraints
     /// for enum columns. Defaults to <c>false</c> (SSDT dacpac represents CHECK as
     /// Drop→Create on every diff). Declarative-tool consumers can opt in

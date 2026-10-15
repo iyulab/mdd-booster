@@ -18,6 +18,28 @@
 
 ## [Unreleased]
 
+### 모델이 선언한 개명이 사전 스크립트가 된다 — `preScriptsPath`
+
+`@renamed_from`(모델 · 저장 필드의 옛 이름 — M3L 0.23.0)을 Sql 타깃이 읽어, 선언형 비교 «앞»에 한 번씩 도는 스크립트로 낸다:
+`V{n}__rename_table_{옛}_to_{새}.sql` · `V{n}__rename_column_{모델}_{옛}_to_{새}.sql`(T-SQL `sp_rename` · PostgreSQL
+`ALTER TABLE … RENAME`, 둘 다 «옛 이름이 있고 새 이름이 없을 때»만). 이력은 오래된 것부터, 테이블이 열보다 먼저. 이미 있는
+파일은 다시 쓰지 않고 새 개명은 그 디렉터리의 가장 큰 번호 다음에 덧붙인다. 위치는 Sql 타깃의 새 키 `preScriptsPath`
+(`projectPath` 밖 — 안이면 설정 오류 4). 없으면 스크립트를 내지 않고 🆕 `MDD051` 경고(`warningsAsErrors` 로 올릴 수 있다).
+이 생성기가 테이블 · 열 이름으로 지은 단일 열 제약 · 인덱스 이름(T-SQL `UK_`/`IX_`/`CK_`, PG `pk_`/`fk_`/`uq_`/`ix_`/`ck_`)도 같은
+스크립트에서 개명한다(있을 때만 — 재생성이 아니라 개명이라 큰 테이블의 유일 인덱스가 다시 지어지지 않는다). 다중 열 이름과 모델이 준
+인덱스 이름은 개명하지 않는다(README «개명»). SQL Server 는 스키마 바인딩 뷰(`@indexed` rollup 의 FullView)가 의존하는 테이블 · 열의
+개명을 거절하므로(Msg 15336), T-SQL 스크립트는 그 테이블에 바인딩된 뷰를 먼저 내린다 — 선언형 단계가 다시 만든다.
+
+### 🔴 설정 단계 경고의 승격이 빌드를 세운다 — `MDD033` · `MDD035`
+
+`treatWarningsAsErrors`/`warningsAsErrors` 로 올린 경고 중 설정을 모델에 비춰 보는 것(`MDD033` aspect 의 Base 를 등록하는 Api
+타깃 없음 · `MDD035` `@searchable` 참조의 대상 미등록)은 승격 검사 «뒤»에 보고돼, «에러(경고 승격)»으로 찍히고도 빌드가 계속됐다
+(종료 코드 0). 이제 생성 전에 다시 세어 종료 코드 3 으로 선다. 🔇 그 둘을 올려 두고 지금까지 통과하던 빌드는 실패한다 — 설정대로다.
+
+### 핀 `M3L.Native` 0.23.0
+
+`@renamed_from` 이 그 판에서 정의된다(파서가 `renamed_from` 키로 올린다).
+
 ### 선언한 역방향 컬렉션이 읽기 타입의 컬렉션이 된다
 
 `### Relations` 의 역방향 항목이 다대일 키를 가리키면(`- <comments` + `- target: Comment.post_id`, 또는

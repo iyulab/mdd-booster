@@ -91,6 +91,10 @@
           "type": "boolean",
           "default": true,
           "description": "Create an index on every @reference foreign-key column the model has not already covered by a PK/unique/composite-index leading column. Default true since 0.13.0 (was false before) — set false to keep pre-0.13 output."
+        },
+        "preScriptsPath": {
+          "type": "string",
+          "description": "Directory where renames the model declares (@renamed_from) are written as run-once scripts V{n}__rename_….sql, for a schema tool's stage that runs before its comparison. Relative to this file; must lie outside projectPath. Files already there are never rewritten. Omitted: no scripts, and a declared rename is reported as not acted on."
         }
       },
       "allOf": [
