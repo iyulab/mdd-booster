@@ -524,6 +524,26 @@ public sealed class SemanticAnalyzer
     {
         var type = field.Type;
         if (string.IsNullOrWhiteSpace(type)) return;
+
+        // MDD048 — a shape the language defines and no target generates. An array reached every target as its element
+        // type (`string[]` became one string column, one string property) with nothing said; the others were refused
+        // as types that do not exist, which misdescribes them.
+        if (field.Array)
+        {
+            diagnostics.Add(UnsupportedShape(model, field, $"배열 `{type}[]`"));
+            return;
+        }
+        if (SpecShapes.Contains(type))
+        {
+            diagnostics.Add(UnsupportedShape(model, field, type switch
+            {
+                "enum" => "필드 안에 값을 적는 인라인 `enum`",
+                "map" => "`map<K, V>`",
+                _ => "하위 필드를 갖는 `object`",
+            }));
+            return;
+        }
+
         if (M3lPrimitives.Contains(type)) return;
         if (_enumNames.Contains(type)) return;
         // Some derived fields (lookup/rollup) may carry the source model's
@@ -541,6 +561,16 @@ public sealed class SemanticAnalyzer
             $"'{model.Name}.{field.Name}' 필드의 타입 '{type}'을 해석할 수 없습니다. primitive/enum/model 중 어느 것과도 매칭되지 않습니다.",
             field.Loc));
     }
+
+    /// <summary>Field types the specification defines as shapes rather than names — the parser carries their parts.</summary>
+    private static readonly HashSet<string> SpecShapes = new(StringComparer.Ordinal) { "enum", "map", "object" };
+
+    private static SemanticDiagnostic UnsupportedShape(ResolvedModel model, FieldNode field, string shape) => new(
+        "MDD048",
+        $"'{model.Name}.{field.Name}': {shape} 은 명세가 정의하는 형이지만 이 생성기는 아직 생성하지 않는다 — " +
+        "그대로 두면 어느 타깃도 그 모양을 낼 수 없다. 별도 모델과 `@reference` 로 나누거나(`object` · 배열), " +
+        "최상위 `::enum` 으로 옮기거나(인라인 enum), 직렬화한 문자열 칸(`text`)으로 둔다.",
+        field.Loc);
 
     /// <summary>
     /// <c>MDD023</c> — <c>@reference(X)?</c> (SET NULL) on a key that cannot hold NULL. The

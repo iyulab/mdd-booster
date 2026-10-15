@@ -1207,6 +1207,7 @@ consumer-repo/
 | MDD023 | 삭제 시 SET NULL(`@reference(X)?` 또는 `on_delete: set_null`)인데 키가 NULL 을 허용하지 않는다 — 필드를 nullable 로 하거나 다른 동작을 쓰라 |
 | MDD046 | 키의 삭제 동작 선언을 읽을 수 없다 — `on_delete` 가 정의된 동작(`cascade` · `set_null` · `restrict` · `no_action`)이 아니거나, `@reference` 뒤 기호(`!` `?` `!!`)와 다르다. 하나만 쓰거나 둘을 맞춘다 |
 | MDD047(경고) | 필드가 표시 라벨을 이 생성기의 옛 속성 `@label(…)` 로 적었다 — 명세의 `- name(Label): type` 으로 옮긴다. 이 판은 아직 읽고(괄호 라벨이 함께 있으면 그것이 이긴다) 다음 마이너 판부터 읽지 않는다 |
+| MDD048 | 필드가 명세는 정의하지만 이 생성기가 생성하지 않는 모양이다 — 배열 `T[]` · 인라인 `enum`(필드 안에 값) · `map<K, V>` · 하위 필드를 갖는 `object`. 어느 타깃도 그 모양을 낼 수 없다(배열은 전에 경고 없이 원소 형 하나로 생성됐다). 별도 모델 + `@reference` · 최상위 `::enum` · 직렬화한 `text` 칸으로 나눈다 |
 | MDD024(경고) | `mdd.json` 에 이 생성기가 정의하지 않은 키가 있다(루트 또는 `targets[n]`) — 무시되며, 가까운 알려진 키가 있으면 제안한다. 분석이 아니라 설정 단계에서 나오고, 다른 경고처럼 `treatWarningsAsErrors`·`warningsAsErrors` 로 빌드를 세울 수 있다 — 편집기 밖(CI)에서 오타를 잡는 길. `_` 로 시작하는 설명 키와 `$schema` 는 보고하지 않는다. `sources` 가 비어 있으면 설정 오류(종료 코드 4) |
 | MDD025(경고) | `rowversion` 행 버전에 `@internal` — 읽기 타입에서 빠져 그 셋이 ETag 를 내지 않는다(`If-Match` 조건부 쓰기가 사라진다) |
 | MDD026 | `@lookup` 이 다른 모델의 `rowversion` 을 읽음 — 행 버전은 그 행의 것이고, PostgreSQL 에서는 조인으로 읽을 열도 없다 |

@@ -1415,10 +1415,10 @@ With specified structure:
     - description: string
 ```
 
-**What this generator implements**: `object` sub-fields and `map<K,V>` are read. Array-of-objects
-and deeply nested shapes are supported only in their basic form — beyond one level of nesting,
-neither the parser nor this generator has been exercised against them, so treat the output as
-unverified rather than guaranteed.
+**What this generator implements**: none of these shapes. A field typed `object`, `map<K,V>`, an
+inline `enum`, or an array `T[]` (§2.4.3) stops the build with `MDD048` — every target would have to
+invent a storage for it, and an array used to reach them all as its element type without a word. Model
+the parts as a separate model with a reference, a top-level `::enum`, or a serialized `text` field.
 
 ### 4.7 Validation Rules
 
