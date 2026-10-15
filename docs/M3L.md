@@ -770,15 +770,21 @@ Relationships can have additional attributes:
 declares — the symbol after it (`!` `?` `!!`) or `on_delete` (`- on_delete: cascade` in the extended
 format, or `@on_delete(cascade)`; `cascade` · `set_null` · `restrict` · `no_action`). Foreign keys,
 navigation properties and lookup redirects are all built from the reference; a symbol and an
-`on_delete` that disagree stop the build (`MDD046`). `on_update` is not read. Nothing else on this
-page is read by any target — not the `### Relations` section, not the `@relation(...)` entries inside it, and not
-the field-level relationship notation of the next subsection (`- >category`, `- <posts: one-to-many`,
-`- <>tags: many-to-many`).
+`on_delete` that disagree stop the build (`MDD046`). `on_update` is not read.
 
-Declaring a relationship any of those ways produces no output, and the build says so rather than
-failing: each unread declaration is listed as unconsumed, and the field-level form names
-`@reference(Target)` as the notation that is read. A field written in that notation is dropped
-before rendering, so it never reaches a target as a column.
+From `### Relations` and `@relation(...)` — under the section or written among the fields — it reads the
+**names**: a `to` entry naming a key (`- >author` with `- from: author_id`, or
+`@relation(author, -> Person, from: author_id)`) names that key's navigation, and a `from` entry on the target
+naming a one-to-one's key (`- <profile` with `- target: Profile.owner_id`, or
+`@relation(profile, <- Profile.owner_id)`) names its reverse navigation; an entry's `on_delete` is read with the
+key's. Without a declared name a key's navigation is named after it (`owner_id` → `Owner`); a key with no
+`_id` to strip, and a self-referencing one-to-one's reverse side, get no navigation until one is declared
+(`MDD049`). An entry that names no key of the model, or a different target than the key's, stops the build
+(`MDD050`).
+
+Not generated, and listed as unconsumed: the many side of a many-to-one (`- <comments` naming an ordinary
+key — a collection), many-to-many (`- <>tags`), and the hints `load`, `order_by`, `on_update`. A field written in
+relationship notation is dropped before rendering, so it never reaches a target as a column.
 
 ### 3.3 Index Definition
 

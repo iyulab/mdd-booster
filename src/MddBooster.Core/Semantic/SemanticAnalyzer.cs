@@ -1,5 +1,6 @@
 using M3L.Native;
 using MddBooster.Core.Types;
+using MddBooster.Core.Naming;
 
 namespace MddBooster.Core.Semantic;
 
@@ -65,6 +66,8 @@ public sealed class SemanticAnalyzer
         ExtensionRules.Check(_models, diagnostics);
         AspectRules.Check(_models, diagnostics);
         CheckManyToOneNavigationNames(diagnostics);
+        CheckRelationDeclarations(diagnostics);
+        CheckUnnamedNavigations(diagnostics);
         CheckSearchableReferences(diagnostics);
         CheckFullTextIndexes(diagnostics);
         CheckDeclaredIndexNames(diagnostics);
@@ -311,15 +314,85 @@ public sealed class SemanticAnalyzer
                 var target = Ast.FieldAttributes.FirstArg(field, "reference")!;
                 if (!known.Contains(target) || navigated.Contains(field.Name)) continue;
 
-                var why = Generation.ManyToOneNavigations.IsNavigableKey(field)
+                var why = Generation.ManyToOneNavigations.IsNavigableKey(model.Source, field)
                     ? "navigation 이 이름 충돌로 생성되지 않았다(MDD027)"
-                    : "키 이름이 '_id' 로 끝나지 않아 navigation 이 없다";
+                    : "navigation 이름이 없다(MDD049)";
                 diagnostics.Add(new SemanticDiagnostic(
                     "MDD034",
                     $"'{model.Name}.{field.Name}' @searchable @reference({target}): 읽기 타입에 이 키의 navigation 이 없다({why}) — " +
                     "$search 가 참조 대상의 텍스트를 따라가지 못한다. 선언은 키에 남지만 키는 텍스트가 아니라 어떤 낱말에도 매칭하지 않는다.",
                     field.Loc,
                     SemanticSeverity.Warning));
+            }
+        }
+    }
+
+    /// <summary>
+    /// <c>MDD050</c>: a <c>### Relations</c> entry (or <c>@relation</c>) that does not describe a relationship the model's
+    /// <c>@reference</c> keys define — a key that is not one, a target the key does not point at, a reverse entry naming
+    /// a key that does not point here. The specification makes each an error (§3.2.6); generating from one would name a
+    /// navigation for a relationship that is not there.
+    /// </summary>
+    private void CheckRelationDeclarations(List<SemanticDiagnostic> diagnostics)
+    {
+        var byName = _models.GroupBy(m => m.Name, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        foreach (var model in _models)
+        {
+            foreach (var (entry, problem) in RelationDeclarations.Problems(model, byName))
+                diagnostics.Add(new SemanticDiagnostic(
+                    "MDD050",
+                    $"'{model.Name}' ### Relations '{entry.Raw}': {problem}.",
+                    entry.Loc ?? model.Source.Loc));
+
+            // A declared forward name that is a member already: the generated class would not compile.
+            foreach (var field in model.Fields.Where(f => f.Kind == FieldKind.Stored))
+            {
+                if (RelationDeclarations.ForwardName(model.Source, field) is not { } name) continue;
+                if (model.Fields.FirstOrDefault(f => NameCasing.ToPascalCase(f.Name) == name) is not { } clash) continue;
+                diagnostics.Add(new SemanticDiagnostic(
+                    "MDD050",
+                    $"'{model.Name}.{field.Name}': ### Relations 가 navigation 이름으로 '{name}' 을 주었는데 필드 '{clash.Name}' 의 속성 이름과 같다 — 다른 이름을 준다.",
+                    field.Loc));
+            }
+        }
+    }
+
+    /// <summary>
+    /// <c>MDD049</c> (warning): a reference key whose navigation has no name, so none is generated — a key not named
+    /// <c>xxx_id</c> (its own name is the key property's) and a self-referencing one-to-one (its reverse side would land
+    /// on the type it starts from, with nothing to derive a name from). The generator does not invent a name; without
+    /// the navigation, <c>$expand</c> cannot follow the key and EF cannot order the inserts of a parent and child saved
+    /// together. <c>### Relations</c> supplies the name.
+    /// </summary>
+    private void CheckUnnamedNavigations(List<SemanticDiagnostic> diagnostics)
+    {
+        var known = _models.Select(m => m.Name).ToHashSet(StringComparer.Ordinal);
+        foreach (var model in _models)
+        {
+            var aspectKey = model.AspectBase is { } b ? AspectNaming.KeyFieldName(b) : null;
+            foreach (var field in model.Fields.Where(f => f.Kind == FieldKind.Stored && f.Name != aspectKey))
+            {
+                if (Ast.FieldAttributes.FirstArg(field, "reference") is not { } target || !known.Contains(target)) continue;
+                if (Generation.ManyToOneNavigations.NavigationName(model.Source, field) is null)
+                {
+                    diagnostics.Add(new SemanticDiagnostic(
+                        "MDD049",
+                        $"'{model.Name}.{field.Name}' @reference({target}): 키 이름이 '_id' 로 끝나지 않아 navigation 이름이 없다 — " +
+                        "navigation 을 생성하지 않는다($expand 불가, EF 는 부모 · 자식을 함께 저장할 때 순서를 추론하지 못한다). " +
+                        $"`### Relations` 에 `- >이름` 과 `- from: {field.Name}` 으로 이름을 준다.",
+                        field.Loc,
+                        SemanticSeverity.Warning));
+                    continue;
+                }
+                var oneToOne = Ast.FieldAttributes.Has(field, "unique") || Ast.FieldAttributes.Has(field, "pk");
+                if (oneToOne && target == model.Name
+                    && RelationDeclarations.ReverseName(model.Source, model.Name, field.Name) is null)
+                    diagnostics.Add(new SemanticDiagnostic(
+                        "MDD049",
+                        $"'{model.Name}.{field.Name}' @reference({target}) @unique: 자기참조 1:1 의 역방향에 이름이 없다 — 이 관계의 navigation 을 " +
+                        "생성하지 않는다. `### Relations` 에 `- <이름` 과 `- target: " + model.Name + "." + field.Name + "` 으로 역방향 이름을 준다.",
+                        field.Loc,
+                        SemanticSeverity.Warning));
             }
         }
     }
@@ -580,7 +653,7 @@ public sealed class SemanticAnalyzer
     private static void CheckSetNullOnRequiredKey(ResolvedModel model, FieldNode field, List<SemanticDiagnostic> diagnostics)
     {
         // MDD046 — an on_delete the rule cannot read, or one that contradicts the symbol.
-        if (OnDeleteRule.Problem(field) is { } problem)
+        if (OnDeleteRule.Problem(model, field) is { } problem)
         {
             diagnostics.Add(new SemanticDiagnostic("MDD046", $"'{model.Name}.{field.Name}': {problem}", field.Loc));
             return;

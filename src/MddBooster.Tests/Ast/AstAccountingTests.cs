@@ -107,16 +107,23 @@ public class AstAccountingTests
         }
     }
 
+    /// <summary>
+    /// A <c>### Relations</c> entry that names a key's navigation is read (RelationDeclarations) — what it says
+    /// beyond the name, such as <c>load</c>, no target generates and is named on its own.
+    /// </summary>
     [Fact]
-    public void A_relations_section_is_reported_unconsumed() =>
-        AssertSectionIsReportedUnconsumed(
-            """
-### Relations
-- >author
-  - target: B
-  - from: b_id
-""",
-            "A: ### Relations");
+    public void A_relations_entry_naming_a_navigation_is_read_and_only_its_unread_keys_are_reported()
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), $"mdd-acct-{Guid.NewGuid():N}.m3l.md");
+        File.WriteAllText(tmp, "# Namespace: x\n\n## B\n- id: identifier @pk @generated\n\n## A\n- id: identifier @pk @generated\n" +
+            "- b_id: identifier @reference(B) @not_null\n\n### Relations\n- >author\n  - target: B\n  - from: b_id\n  - load: eager\n");
+        try
+        {
+            var unconsumed = AstAccounting.ListUnconsumed(new M3lLoader().LoadFile(tmp));
+            Assert.Equal(["A: ### Relations '>author' 의 load"], unconsumed);
+        }
+        finally { File.Delete(tmp); }
+    }
 
     [Fact]
     public void A_behaviors_section_is_reported_unconsumed() =>
@@ -146,19 +153,16 @@ public class AstAccountingTests
     }
 
     /// <summary>
-    /// 2026-09-09 — M3L.Native 0.8.0부터 파서 자신이 관계 표기(<c>- &gt;x</c> ·
-    /// <c>- &lt;&gt;x: many-to-many</c>, 명세 §3.2.2·§3.2.4)를 필드 목록이 아니라
-    /// <c>sections.relations</c>로 구조화해 내고(<c>declaredIn: "fields"</c>로 표시),
-    /// <c>M3L-W009</c>로도 경고한다. 그 구조화 덕에 이 회계는 더 이상 필드 이름을 직접
-    /// 판별할 필요가 없다 — 어떤 표기였는지는 파서가 낸 <c>raw</c>에서 그대로 읽는다.
-    /// 문구는 종전과 같다: 무엇을 썼는지, 그리고 관계는 <c>@reference</c>로만 읽는다는 것.
+    /// Relationship notation written among the fields (§3.2.4 — the parser lifts it out with <c>declaredIn: "fields"</c> and
+    /// warns <c>M3L-W009</c>) is the same relationship as under <c>### Relations</c>. None of these name a key's navigation, so
+    /// each is reported by its own text with the reason it is not read.
     /// </summary>
     [Theory]
-    [InlineData("- <>tags: many-to-many")]   // §3.2.4 many-to-many
-    [InlineData("- >category: one-to-one")]  // §3.2.4 to-relationship
-    [InlineData("- <posts: one-to-many")]    // §3.2.4 from-relationship
-    [InlineData("- >author")]                // §3.2.2 model-level single line
-    public void Field_level_relation_notation_is_reported_unconsumed_and_names_the_read_form(string line)
+    [InlineData("- <>tags: many-to-many", "다대다")]
+    [InlineData("- >category: one-to-one", "from: 키")]
+    [InlineData("- <posts: one-to-many", "target: Model.key_field")]
+    [InlineData("- >author", "from: 키")]
+    public void Field_level_relation_notation_is_reported_by_its_text_with_the_reason(string line, string reason)
     {
         var tmp = Path.Combine(Path.GetTempPath(), $"mdd-acct-rel-{Guid.NewGuid():N}.m3l.md");
         File.WriteAllText(tmp, $"""
@@ -171,26 +175,16 @@ public class AstAccountingTests
             """);
         try
         {
-            var ast = new M3lLoader().LoadFile(tmp);
-            var unconsumed = AstAccounting.ListUnconsumed(ast);
-
-            var entry = Assert.Single(unconsumed);
-
-            // 「무엇이」 — 사용자가 쓴 줄을 그대로 되돌려 준다.
-            Assert.Contains("관계 표기", entry, StringComparison.Ordinal);
-
-            // 「무엇을 쓰면 되는지」.
-            Assert.Contains(AstAccounting.RelationReadForm, entry, StringComparison.Ordinal);
+            var entry = Assert.Single(AstAccounting.ListUnconsumed(new M3lLoader().LoadFile(tmp)));
+            Assert.StartsWith("Post: 관계 표기 '", entry, StringComparison.Ordinal);
+            Assert.Contains(reason, entry, StringComparison.Ordinal);
         }
         finally { File.Delete(tmp); }
     }
 
-    /// <summary>
-    /// <c>### Relations</c> 섹션 자체(필드 축이 아니라)는 여전히 이 일반 문구로만 보고된다 —
-    /// 그 섹션은 어떤 개별 항목을 이름 대지 않아도 될 만큼 이미 자기 위치를 말하고 있다.
-    /// </summary>
+    /// <summary>A <c>### Relations</c> entry that names no key is reported under the section's name, with the reason.</summary>
     [Fact]
-    public void Relations_section_itself_is_still_reported_generically()
+    public void A_relations_entry_that_names_no_key_is_reported_with_the_reason()
     {
         var tmp = Path.Combine(Path.GetTempPath(), $"mdd-acct-relsec-{Guid.NewGuid():N}.m3l.md");
         File.WriteAllText(tmp, """
@@ -205,11 +199,9 @@ public class AstAccountingTests
             """);
         try
         {
-            var ast = new M3lLoader().LoadFile(tmp);
-            var unconsumed = AstAccounting.ListUnconsumed(ast);
-
-            var entry = Assert.Single(unconsumed);
-            Assert.Equal("Post: ### Relations", entry);
+            var entry = Assert.Single(AstAccounting.ListUnconsumed(new M3lLoader().LoadFile(tmp)));
+            Assert.StartsWith("Post: ### Relations '", entry, StringComparison.Ordinal);
+            Assert.Contains("from: 키", entry, StringComparison.Ordinal);
         }
         finally { File.Delete(tmp); }
     }

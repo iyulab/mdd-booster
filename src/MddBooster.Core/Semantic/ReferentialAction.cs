@@ -35,17 +35,18 @@ public static class OnDeleteRule
         if (owner.AspectBase is { } aspectBase && field.Name == AspectNaming.KeyFieldName(aspectBase))
             return ReferentialAction.Cascade;
 
-        return BySymbol(field) ?? ByName(field);
+        return BySymbol(field) ?? ByName(owner, field);
     }
 
     /// <summary>
     /// What is wrong with the key's declaration — an <c>on_delete</c> action the language does not define, or one
     /// that disagrees with the symbol after <c>@reference</c> — or <see langword="null"/>.
     /// </summary>
-    public static string? Problem(FieldNode field)
+    public static string? Problem(ResolvedModel owner, FieldNode field)
     {
+        ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(field);
-        if (OnDeleteName(field) is not { } name) return null;
+        if (OnDeleteName(owner, field) is not { } name) return null;
         if (Parse(name) is not { } named)
             return $"on_delete \"{name}\" 은(는) 정의된 삭제 동작이 아니다 — cascade · set_null · restrict · no_action 중 하나.";
         if (BySymbol(field) is { } symbol && symbol != named)
@@ -61,9 +62,13 @@ public static class OnDeleteRule
         _ => null,
     };
 
-    private static ReferentialAction? ByName(FieldNode field) => OnDeleteName(field) is { } name ? Parse(name) : null;
+    private static ReferentialAction? ByName(ResolvedModel owner, FieldNode field)
+        => OnDeleteName(owner, field) is { } name ? Parse(name) : null;
 
-    private static string? OnDeleteName(FieldNode field) => Ast.FieldAttributes.FirstArg(field, "on_delete");
+    // The key's own declaration (the extended form or @on_delete), else the ### Relations entry that names the key
+    // (§3.2.5 — `- on_delete: restrict` under `- >author` / `- from: author_id`).
+    private static string? OnDeleteName(ResolvedModel owner, FieldNode field)
+        => Ast.FieldAttributes.FirstArg(field, "on_delete") ?? RelationDeclarations.OnDelete(owner.Source, field);
 
     private static ReferentialAction? Parse(string name) => name.Trim().ToLowerInvariant() switch
     {

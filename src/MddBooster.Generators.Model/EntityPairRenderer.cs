@@ -238,7 +238,7 @@ public static class EntityPairRenderer
         // type only those whose navigation is emitted.
         var navigatedKeys = isExt
             ? SearchableReferences.ReadNavigatedKeys(modelName, oneToOne, manyToOne)
-            : storedFields.Where(HasWriteNavigation).Select(f => f.Name).ToHashSet(StringComparer.Ordinal);
+            : storedFields.Where(f => HasWriteNavigation(source, f)).Select(f => f.Name).ToHashSet(StringComparer.Ordinal);
         var searchableKeys = storedFields
             .Where(SearchableReferences.IsSearchableReference)
             .Select(f => f.Name)
@@ -246,13 +246,13 @@ public static class EntityPairRenderer
             .ToHashSet(StringComparer.Ordinal);
         foreach (var f in storedFields)
         {
-            RenderProperty(sb, f, knownEnumNames, nullableLookups, isExt, postgres, searchableKeys);
+            RenderProperty(sb, source, f, knownEnumNames, nullableLookups, isExt, postgres, searchableKeys);
         }
         if (derivedFields is { Count: > 0 })
         {
             foreach (var f in derivedFields)
             {
-                RenderProperty(sb, f, knownEnumNames, nullableLookups, isExt, postgres, searchableKeys);
+                RenderProperty(sb, source, f, knownEnumNames, nullableLookups, isExt, postgres, searchableKeys);
             }
         }
         if (isExt) RenderOneToOneNavigation(sb, modelName, oneToOne, searchableKeys);
@@ -353,6 +353,7 @@ public static class EntityPairRenderer
 
     private static void RenderProperty(
         StringBuilder sb,
+        ModelNode owner,
         FieldNode f,
         IReadOnlySet<string>? knownEnumNames,
         IReadOnlySet<string>? nullableLookups,
@@ -557,12 +558,12 @@ public static class EntityPairRenderer
           .Append(prop).Append(" { get; set; }").AppendLine(initializer);
 
         // Write entity only: emit EF Core navigation property for [Reference] FK fields
-        // that follow the standard xxx_id naming convention.
+        // whose navigation has a name — declared in ### Relations, or the key's xxx_id stem.
         // EF Core uses nav properties to infer INSERT order; without them, bulk
         // SaveChanges calls with parent+child in the same batch produce FK violations.
-        if (!isExt && HasWriteNavigation(f))
+        if (!isExt && HasWriteNavigation(owner, f))
         {
-            var navName = NavPropertyName(f.Name);
+            var navName = ManyToOneNavigations.NavigationName(owner, f)!;
             if (searchableKeys.Contains(f.Name))
                 sb.AppendLine("    [Searchable]");
             if (effectiveNullable)
@@ -575,25 +576,11 @@ public static class EntityPairRenderer
     }
 
     /// <summary>
-    /// Whether the write entity carries a reference navigation for this field — a <c>@reference</c>
-    /// key named by the <c>xxx_id</c> convention. <see cref="DbContextRenderer"/> configures the
-    /// relationship through that navigation, so both read the same rule.
+    /// Whether the write entity carries a reference navigation for this field — a <c>@reference</c> key whose
+    /// navigation has a name (<see cref="ManyToOneNavigations.NavigationName"/>). <see cref="DbContextRenderer"/>
+    /// configures the relationship through that navigation, so both read the same rule.
     /// </summary>
-    internal static bool HasWriteNavigation(FieldNode f) => ManyToOneNavigations.IsNavigableKey(f);
-
-    /// <summary>
-    /// Derives the EF Core navigation property name from a FK field name ending in <c>_id</c>.
-    /// Strips the <c>_id</c> suffix and converts the remainder to PascalCase.
-    /// For example <c>customer_id</c> → <c>Customer</c>,
-    /// <c>channel_partner_id</c> → <c>ChannelPartner</c>.
-    /// </summary>
-    internal static string NavPropertyName(string fkFieldName)
-    {
-        var name = fkFieldName.EndsWith("_id", StringComparison.OrdinalIgnoreCase)
-            ? fkFieldName[..^3]
-            : fkFieldName;
-        return NameCasing.ToPascalCase(name);
-    }
+    internal static bool HasWriteNavigation(ModelNode owner, FieldNode f) => ManyToOneNavigations.IsNavigableKey(owner, f);
 
     /// <summary>
     /// Turns a declared default (<c>= value</c>, or the <c>@default(value)</c>

@@ -85,7 +85,7 @@ public static class OneToOneRelationships
     {
         ArgumentNullException.ThrowIfNull(models);
 
-        var known = new HashSet<string>(models.Select(m => m.Name), StringComparer.Ordinal);
+        var byName = models.GroupBy(m => m.Name, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
         var found = new List<Relationship>();
 
         foreach (var model in models.OrderBy(m => m.Name, StringComparer.Ordinal))
@@ -99,38 +99,32 @@ public static class OneToOneRelationships
                 if (!FieldAttributes.Has(field, "unique") && !FieldAttributes.Has(field, "pk")) continue;
 
                 var target = FieldAttributes.FirstArg(field, "reference");
-                if (string.IsNullOrEmpty(target) || !known.Contains(target)) continue;
+                if (string.IsNullOrEmpty(target) || !byName.TryGetValue(target, out var targetModel)) continue;
 
-                // A self-reference would need a reverse name on the same type it starts from, and
-                // the design does not say what that should be. Left out rather than named badly.
-                if (string.Equals(target, model.Name, StringComparison.Ordinal)) continue;
+                // No forward name: a key not named `xxx_id` and not named in ### Relations. Left out rather
+                // than given the key property's own name (the analyzer says so — MDD049).
+                if (ManyToOneNavigations.NavigationName(model.Source, field) is not { } forward) continue;
+
+                // The reverse name the target's ### Relations declares, else derived. A self-reference has none
+                // to derive — the reverse would land on the type it starts from, and stripping the target's name
+                // from the dependent's leaves nothing — so it is generated only when declared (else MDD049).
+                var declaredReverse = RelationDeclarations.ReverseName(targetModel.Source, model.Name, field.Name);
+                var selfReference = string.Equals(target, model.Name, StringComparison.Ordinal);
+                if (selfReference && declaredReverse is null) continue;
 
                 found.Add(new Relationship(
                     DependentModel: model.Name,
                     TargetModel: target,
                     ForeignKeyField: field.Name,
-                    ForwardName: ForwardNameFrom(field.Name),
-                    ReverseName: ReverseNameFor(model.Name, target, AspectNaming.PascalPrefix(model)),
+                    ForwardName: forward,
+                    ReverseName: declaredReverse ?? ReverseNameFor(model.Name, target, AspectNaming.PascalPrefix(model)),
                     IsOptional: field.Nullable,
-                    ReverseNameConflict: null));
+                    // On a self-reference both ends are members of one type — the same name twice is a collision too.
+                    ReverseNameConflict: selfReference && declaredReverse == forward ? field.Name : null));
             }
         }
 
         return MarkReverseNameConflicts(found);
-    }
-
-    /// <summary>
-    /// <c>owner_id</c> → <c>Owner</c>, matching how the write entity already names the navigation it
-    /// emits for a foreign key, so the two sides of the same relationship do not end up spelled
-    /// differently.
-    /// </summary>
-    public static string ForwardNameFrom(string foreignKeyField)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(foreignKeyField);
-        var name = foreignKeyField.EndsWith("_id", StringComparison.OrdinalIgnoreCase)
-            ? foreignKeyField[..^3]
-            : foreignKeyField;
-        return NameCasing.ToPascalCase(name);
     }
 
     /// <summary>

@@ -86,9 +86,9 @@ public class OneToOneRelationshipsTests
     [Theory]
     [InlineData("owner_id", "Owner")]
     [InlineData("channel_partner_id", "ChannelPartner")]
-    [InlineData("owner", "Owner")]   // no _id suffix — the field name is the name
-    public void The_forward_name_comes_from_the_foreign_key_field(string field, string expected)
-        => Assert.Equal(expected, OneToOneRelationships.ForwardNameFrom(field));
+    [InlineData("owner", null)]   // no _id suffix — its own name is the key property's, so there is none (MDD049)
+    public void The_forward_name_comes_from_the_foreign_key_field(string field, string? expected)
+        => Assert.Equal(expected, ManyToOneNavigations.NavigationName(new M3L.Native.ModelNode(), new M3L.Native.FieldNode { Name = field }));
 
     [Theory]
     [InlineData("AssetMaintenanceProfile", "Asset", "MaintenanceProfile")]

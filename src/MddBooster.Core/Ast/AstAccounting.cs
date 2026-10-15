@@ -23,9 +23,6 @@ public static class AstAccounting
         !string.IsNullOrWhiteSpace(attr.Raw) ? attr.Raw.Trim()
         : $"[{attr.Content}]";
 
-    /// <summary>이 생성기가 관계를 읽는 유일한 형태.</summary>
-    public const string RelationReadForm = "@reference(Target)";
-
     /// <summary>생성 파이프라인이 소비하지 않는 요소들의 표시명 목록.</summary>
     public static IReadOnlyList<string> ListUnconsumed(M3lAst ast)
     {
@@ -51,33 +48,20 @@ public static class AstAccounting
         // same silence the standalone view used to get. The sections the language
         // does define are left out of this: whether a target *should* consume one
         // is a feature question, not a name nobody can act on.
+        var modelsByName = ast.Models.GroupBy(m => m.Name, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
         foreach (var model in ast.Models)
         {
             var sections = model.Sections;
             if (sections is null) continue;
 
-            // `sections.relations` mixes two origins: a `### Relations` section
-            // (§3.2.3) and relationship notation the parser lifted out of the
-            // field list (§3.2.2/§3.2.4, e.g. `- <>tags: many-to-many`) — the
-            // latter carries `declaredIn: "fields"`, the former does not. Report
-            // the field-position kind by its own text, the way a misplaced field
-            // used to be named, so the reader still learns what to change and
-            // not just that something in the model went unread.
-            var relations = sections.Relations ?? [];
-            var fieldNotations = relations
-                .Where(r => r.TryGetProperty("declaredIn", out var d) && d.GetString() == "fields")
-                .ToList();
-            foreach (var r in fieldNotations)
-            {
-                var raw = r.TryGetProperty("raw", out var rw) ? rw.GetString() : r.ToString();
-                unconsumed.Add($"{model.Name}: 관계 표기 '{raw}' (관계는 {RelationReadForm} 로만 읽는다)");
-            }
-
-            // Indexes is the one section a target reads. The other three the
-            // language defines are read by nothing — the same model generated with
-            // and without all three produces byte-identical output across every
+            // `### Indexes` is read in full. `### Behaviors` and `### Metadata` are read by nothing — the
+            // same model generated with and without them produces byte-identical output across every
             // target (Sql in both dialects, Model, Api, TypeScript; measured).
-            if (relations.Count > fieldNotations.Count) unconsumed.Add($"{model.Name}: ### Relations");
+            // A `### Relations` entry — under the section or written among the fields (§3.2.4) — is read for the navigation names it declares and its on_delete
+            // (RelationDeclarations); what it says beyond that — a reverse collection, a many-to-many, load,
+            // order_by — no target generates, and each is named.
+            unconsumed.AddRange(Semantic.RelationDeclarations.Unread(model, modelsByName));
             if (sections.Behaviors?.Count > 0) unconsumed.Add($"{model.Name}: ### Behaviors");
             if (sections.Metadata?.Count > 0) unconsumed.Add($"{model.Name}: ### Metadata");
 

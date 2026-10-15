@@ -29,7 +29,8 @@ namespace MddBooster.Core.Generation;
 /// </para>
 /// <para>
 /// <b>Names are derived, so they can collide, and a collision is reported rather than resolved.</b>
-/// The name comes from the key the way the write side derives it (<c>owner_id</c> → <c>Owner</c>), and
+/// The name is the one <c>### Relations</c> declares for the key, or derived from it the way the write side does
+/// (<c>owner_id</c> → <c>Owner</c>) — <see cref="NavigationName"/> — and
 /// the read type may already have a member by that name — a lookup field declared as <c>owner</c>, or
 /// a one-to-one navigation. The declared member wins: it was written by the model's author, the
 /// navigation was not. The navigation is left out and <see cref="Navigation.CollidesWith"/> says with
@@ -56,15 +57,42 @@ public static class ManyToOneNavigations
         string? CollidesWith);
 
     /// <summary>
-    /// Whether a field is a reference key that carries a navigation: a <c>@reference</c> named by the
-    /// <c>xxx_id</c> convention. The write entity's navigation follows the same rule — this is its one
+    /// Whether a field is a reference key that carries a navigation: a <c>@reference</c> whose navigation has a
+    /// name (<see cref="NavigationName"/>). The write entity's navigation follows the same rule — this is its one
     /// home, so the two sides cannot disagree about which keys are navigable.
     /// </summary>
-    public static bool IsNavigableKey(FieldNode field)
+    public static bool IsNavigableKey(ModelNode owner, FieldNode field)
     {
         ArgumentNullException.ThrowIfNull(field);
         return !string.IsNullOrEmpty(FieldAttributes.FirstArg(field, "reference"))
-            && field.Name.EndsWith("_id", StringComparison.OrdinalIgnoreCase);
+            && NavigationName(owner, field) is not null;
+    }
+
+    /// <summary>
+    /// Whether the key's navigation is named the way EF Core's convention pairs a navigation with its foreign key —
+    /// <c>Owner</c> for <c>OwnerId</c>. A name <c>### Relations</c> declared otherwise (<c>Writer</c> for <c>author_id</c>)
+    /// is not: left to convention, EF would invent a shadow <c>WriterId</c> and leave the declared key unmapped, so the
+    /// relationship has to be configured with its key.
+    /// </summary>
+    public static bool FollowsConvention(ModelNode owner, FieldNode field)
+        => field.Name.EndsWith("_id", StringComparison.OrdinalIgnoreCase)
+           && NavigationName(owner, field) == NameCasing.ToPascalCase(field.Name[..^3]);
+
+    /// <summary>
+    /// The name of a reference key's forward navigation — the one <c>### Relations</c> declares for it
+    /// (<see cref="RelationDeclarations.ForwardName"/>), else the key's name with <c>_id</c> removed
+    /// (<c>owner_id</c> → <c>Owner</c>), else <see langword="null"/>: a key named otherwise (<c>owner</c>) has nothing
+    /// to strip, and its own name is the key property's — the navigation is not emitted and the analyzer says
+    /// why (<c>MDD049</c>). One rule for the write entity, the read type and the EF configuration.
+    /// </summary>
+    public static string? NavigationName(ModelNode owner, FieldNode field)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(field);
+        if (RelationDeclarations.ForwardName(owner, field) is { } declared) return declared;
+        return field.Name.EndsWith("_id", StringComparison.OrdinalIgnoreCase)
+            ? NameCasing.ToPascalCase(field.Name[..^3])
+            : null;
     }
 
     /// <summary>
@@ -102,14 +130,14 @@ public static class ManyToOneNavigations
 
             foreach (var field in model.Fields)
             {
-                if (field.Kind != FieldKind.Stored || !IsNavigableKey(field)) continue;
+                if (field.Kind != FieldKind.Stored || !IsNavigableKey(model.Source, field)) continue;
                 if (FieldAttributes.Has(field, "unique") || FieldAttributes.Has(field, "pk")) continue;
                 if (EntitySurface.IsFieldInternal(field)) continue;
 
                 var target = FieldAttributes.FirstArg(field, "reference")!;
                 if (!known.Contains(target)) continue;
 
-                var name = OneToOneRelationships.ForwardNameFrom(field.Name);
+                var name = NavigationName(model.Source, field)!;
                 members.TryGetValue(name, out var clash);
                 if (clash is null) members.Add(name, $"{field.Name} 의 navigation");
 

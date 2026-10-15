@@ -26,6 +26,19 @@ C# `[Display(Name)]` · TS 필드 스키마 `label` · 생성 폼 `label` · TS 
 라벨을 적지 않은 필드 · 값은 종전처럼 설명이 표시 이름이다 — **괄호 라벨을 이미 적은 모델만** 표시 이름이 바뀐다(🔇 컴파일러가
 잡지 않는다: `[Display(Name)]` 를 읽는 화면 · 보고서의 글자가 바뀐다).
 
+### `### Relations` 가 navigation 이름을 준다 — `MDD049` 새 경고 · `MDD050` 새 오류
+
+`### Relations` 와 `@relation(…)`(섹션 아래든 필드 사이든)을 이제 읽는다 — **이름**을: `- >author` + `- from: author_id`
+(또는 `@relation(author, -> Person, from: author_id)`)는 그 키의 navigation 이름, 대상 모델의 `- <profile` + `- target: Profile.owner_id`
+(또는 `@relation(profile, <- Profile.owner_id)`)는 1:1 의 역방향 이름이다. 항목의 `on_delete` 도 키의 것과 함께 읽는다.
+선언 이름이 키 이름의 어간과 다르면 EF 구성이 그 키를 명시한다(관례에 맡기면 EF 가 이름을 딴 그림자 키를 만든다).
+
+- 🔴 **`_id` 로 끝나지 않는 `@reference` 키**(`owner`)는 전에도 navigation 이 없었는데 **아무 말도 없었다** — 이제 `MDD049` 경고가
+  이름을 주라고 말한다. 자기참조 1:1 도 같다(역방향 이름을 선언하면 양쪽 navigation 이 생긴다).
+- 🔴 **`MDD050`**: 모델의 키와 맞지 않는 항목(없는 키 · 다른 대상 · 이 모델을 가리키지 않는 역방향 키 · 필드와 겹치는 이름)은 빌드가 선다.
+- 🔇 미소비 보고가 항목 단위가 됐다 — 종전 `A: ### Relations` 한 줄 대신, 생성하지 않는 것(다대일의 역방향 컬렉션 · 다대다 ·
+  `load` · `order_by` · `on_update`)을 항목의 원문과 이유로. 필드 사이의 관계 표기도 같은 이유 문구로 보고된다.
+
 ### 🔴 `MDD048` 새 오류 — 배열 필드가 원소 형 하나로 생성되던 결함
 
 `- tags: string(20)[]` 같은 배열 필드(명세 §2.4.3)가 모든 타깃에 **원소 형 하나**로 나갔다 — `NVARCHAR(20)` 한 칸,

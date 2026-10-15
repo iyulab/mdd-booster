@@ -102,11 +102,29 @@ public static class DbContextRenderer
             .Where(m => m.AspectBase is not null)
             .ToDictionary(m => m.Name, m => m.AspectBase!, StringComparer.Ordinal);
 
+        var byName = ordered.ToDictionary(m => m.Name, StringComparer.Ordinal);
         foreach (var r in oneToOne ?? [])
         {
             if (r.ReverseNameConflict is not null) continue;
-            if (!aspectBases.TryGetValue(r.DependentModel, out var baseName)) continue;
-            if (!string.Equals(baseName, r.TargetModel, StringComparison.Ordinal)) continue;
+            if (!aspectBases.TryGetValue(r.DependentModel, out var baseName)
+                || !string.Equals(baseName, r.TargetModel, StringComparison.Ordinal))
+            {
+                // An ordinary one-to-one is left to convention — unless ### Relations named either end
+                // otherwise than convention would, or both ends sit on one type (a self-reference): then
+                // convention cannot be relied on to pick the declared key and the declared pair.
+                if (!byName.TryGetValue(r.DependentModel, out var dep)) continue;
+                var key = dep.Fields.First(f => f.Name == r.ForeignKeyField);
+                var conventional = ManyToOneNavigations.FollowsConvention(dep.Source, key)
+                    && r.DependentModel != r.TargetModel
+                    && r.ReverseName == OneToOneRelationships.ReverseNameFor(r.DependentModel, r.TargetModel, AspectNaming.PascalPrefix(dep));
+                if (conventional) continue;
+                var ext = NameCasing.ToPascalCase(r.DependentModel) + "Ext";
+                sb.Append("        modelBuilder.Entity<").Append(ext).Append(">()")
+                  .Append(".HasOne(e => e.").Append(r.ForwardName).Append(')')
+                  .Append(".WithOne(e => e.").Append(r.ReverseName).Append(')')
+                  .Append(".HasForeignKey<").Append(ext).Append(">(e => e.").Append(NameCasing.ToPascalCase(r.ForeignKeyField)).AppendLine(");");
+                continue;
+            }
 
             var dependent = NameCasing.ToPascalCase(r.DependentModel) + "Ext";
             sb.Append("        modelBuilder.Entity<").Append(dependent).Append(">()")
@@ -161,7 +179,7 @@ public static class DbContextRenderer
             foreach (var field in model.Fields)
             {
                 if (field.Kind != FieldKind.Stored || field.Name == aspectKey) continue;
-                if (!EntityPairRenderer.HasWriteNavigation(field)) continue;
+                if (!EntityPairRenderer.HasWriteNavigation(model.Source, field)) continue;
                 var behavior = OnDeleteRule.For(model, field) switch
                 {
                     ReferentialAction.Cascade => "Cascade",
@@ -171,9 +189,11 @@ public static class DbContextRenderer
                     _ => null,
                 };
                 var uniqueKey = FieldAttributes.Has(field, "unique");
-                if (behavior is null && !uniqueKey) continue;
+                // A navigation named in ### Relations rather than after its key is configured too: convention
+                // would pair it with a shadow key of its own name, not with the declared one.
+                if (behavior is null && !uniqueKey && ManyToOneNavigations.FollowsConvention(model.Source, field)) continue;
                 sb.Append("        modelBuilder.Entity<").Append(entity).Append(">()")
-                  .Append(".HasOne(e => e.").Append(EntityPairRenderer.NavPropertyName(field.Name)).Append(')');
+                  .Append(".HasOne(e => e.").Append(ManyToOneNavigations.NavigationName(model.Source, field)).Append(')');
                 if (uniqueKey)
                     sb.Append(".WithOne()")
                       .Append(".HasForeignKey<").Append(entity).Append(">(e => e.").Append(NameCasing.ToPascalCase(field.Name)).Append(')');
