@@ -125,18 +125,19 @@ public class AspectRelationshipTests
     }
 
     /// <summary>
-    /// negative control — 보통 1:1 은 구성 코드를 내지 <b>않는다</b>. 관례가 추론하기 때문이고,
-    /// 그 결정은 그대로다. 이 단언이 없으면 위 하나만으로는 「이 생성기가 모든 1:1 에 구성을
-    /// 낸다」로도 통과한다.
+    /// negative control — 보통 1:1 의 «읽기 타입» 쌍은 구성 코드를 내지 <b>않는다</b>. 양 끝에
+    /// navigation 이 있어 관례가 추론하기 때문이고, 그 결정은 그대로다. 이 단언이 없으면 위 하나만으로는
+    /// 「이 생성기가 모든 1:1 에 구성을 낸다」로도 통과한다. 쓰기 엔티티는 역방향 navigation 이 없어
+    /// 관례가 다대일로 읽으므로 명시 구성을 받는다 — <see cref="WriteSideOneToOneTests"/>.
     /// </summary>
     [Fact]
-    public void An_ordinary_one_to_one_is_left_to_convention()
+    public void An_ordinary_one_to_one_is_left_to_convention_on_the_read_types()
     {
         var models = Load("one-to-one-unique.m3l.md");
 
         var code = DbContextRenderer.Render(models, "AppDbContext", "Test.Entities", oneToOne:
             OneToOneRelationships.Describe(models));
 
-        Assert.DoesNotContain(".HasOne(", code);
+        Assert.DoesNotContain("Ext>().HasOne(", code);
     }
 }

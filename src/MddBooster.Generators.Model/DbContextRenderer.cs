@@ -150,6 +150,10 @@ public static class DbContextRenderer
         // cascades, an optional one is cleared client-side — and deletes children the database
         // itself was told to refuse. A reference with no symbol keeps the convention, as it keeps
         // the database default. The ::aspect key is configured above.
+        //
+        // A `@unique` reference is configured whether or not it declares an action: it is a one-to-one,
+        // and convention reads a reference navigation without an inverse as many-to-one — the EF model
+        // would call the key repeatable while the unique constraint and the read type say it is not.
         foreach (var model in ordered)
         {
             var entity = NameCasing.ToPascalCase(model.Name);
@@ -165,12 +169,19 @@ public static class DbContextRenderer
                     ReferentialAction.SetNull => "SetNull",
                     _ => null,
                 };
-                if (behavior is null) continue;
+                var uniqueKey = FieldAttributes.Has(field, "unique");
+                if (behavior is null && !uniqueKey) continue;
                 sb.Append("        modelBuilder.Entity<").Append(entity).Append(">()")
-                  .Append(".HasOne(e => e.").Append(EntityPairRenderer.NavPropertyName(field.Name)).Append(')')
-                  .Append(".WithMany()")
-                  .Append(".HasForeignKey(e => e.").Append(NameCasing.ToPascalCase(field.Name)).Append(')')
-                  .Append(".OnDelete(DeleteBehavior.").Append(behavior).AppendLine(");");
+                  .Append(".HasOne(e => e.").Append(EntityPairRenderer.NavPropertyName(field.Name)).Append(')');
+                if (uniqueKey)
+                    sb.Append(".WithOne()")
+                      .Append(".HasForeignKey<").Append(entity).Append(">(e => e.").Append(NameCasing.ToPascalCase(field.Name)).Append(')');
+                else
+                    sb.Append(".WithMany()")
+                      .Append(".HasForeignKey(e => e.").Append(NameCasing.ToPascalCase(field.Name)).Append(')');
+                if (behavior is not null)
+                    sb.Append(".OnDelete(DeleteBehavior.").Append(behavior).Append(')');
+                sb.AppendLine(";");
             }
         }
 

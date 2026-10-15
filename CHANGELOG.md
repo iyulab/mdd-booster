@@ -16,6 +16,16 @@
 
 ---
 
+## Unreleased
+
+### 🔇 `@unique` 참조가 쓰기 엔티티에서도 1:1 이다
+
+`@reference(X) @unique` 는 데이터베이스(유일 제약)와 읽기 타입(양 끝 navigation)에서 1:1 인데, 생성 `DbContext` 는 쓰기 엔티티의
+그 navigation 을 구성하지 않거나(기호 없음 — 관례) 다대일(`WithMany()`, 기호 있음)로 구성했다. 역방향 navigation 이 없는 참조를
+EF 관례는 다대일로 읽으므로, EF 모델은 그 키가 «반복될 수 있다»고 말했다 — EF 모델로 만든 스키마(`EnsureCreated` · 마이그레이션)와
+EF 의 추적 동작이 그 판단을 따랐다. 이제 `HasOne(…).WithOne().HasForeignKey<T>(…)` 로 구성한다(선언한 삭제 기호는 그대로 얹힌다 ·
+자기참조 포함). SQL 타깃 산출물은 바뀌지 않는다.
+
 ## 0.41.0
 
 ### 🔴 `decimal(p,s)` 의 자리수가 입력 계약이 된다 — 생성 엔티티에 `[DecimalDigits(p, s)]`
