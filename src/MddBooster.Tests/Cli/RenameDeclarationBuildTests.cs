@@ -19,12 +19,24 @@ public class RenameDeclarationBuildTests
 - total: decimal(12,2) @renamed_from(amount)
 """;
 
-    private (int Exit, string Stderr, string[] PreFiles) Build(string sqlTarget, string extraRoot = "")
+    /// <summary>The same model with the field in the extended format — another spelling of the same declaration.</summary>
+    private const string ExtendedModel = """
+# Namespace: test.rename
+
+## CustomerOrder @renamed_from(SalesOrder)
+
+- id: identifier @pk @generated
+- total
+  - type: decimal(12,2)
+  - renamed_from: amount
+""";
+
+    private (int Exit, string Stderr, string[] PreFiles) Build(string sqlTarget, string extraRoot = "", string model = Model)
     {
         var root = Path.Combine(Path.GetTempPath(), $"mdd-rename-{Guid.NewGuid():N}");
         var mddDir = Path.Combine(root, "mdd");
         Directory.CreateDirectory(mddDir);
-        File.WriteAllText(Path.Combine(mddDir, "tables.m3l.md"), Model);
+        File.WriteAllText(Path.Combine(mddDir, "tables.m3l.md"), model);
         File.WriteAllText(Path.Combine(mddDir, "mdd.json"),
             "{\n  \"sources\": [\"./tables.m3l.md\"],\n" + extraRoot + "  \"targets\": [" + sqlTarget + "]\n}");
         try
@@ -33,7 +45,7 @@ public class RenameDeclarationBuildTests
             var exit = new BuildCommand().Run(mddDir);
             var pre = Path.Combine(root, "pre");
             return (exit, err.Text, Directory.Exists(pre)
-                ? Directory.GetFiles(pre).Select(Path.GetFileName).OrderBy(n => n, StringComparer.Ordinal).ToArray()!
+                ? Directory.GetFiles(pre).Select(f => Path.GetFileName(f)).OrderBy(n => n, StringComparer.Ordinal).ToArray()
                 : []);
         }
         finally { try { Directory.Delete(root, recursive: true); } catch { } }
@@ -49,6 +61,18 @@ public class RenameDeclarationBuildTests
             ["V0001__rename_table_SalesOrder_to_CustomerOrder.sql", "V0002__rename_column_CustomerOrder_amount_to_total.sql"],
             files);
         Assert.DoesNotContain("MDD051", stderr);
+    }
+
+    [Fact]
+    public void A_rename_written_in_the_extended_field_format_is_written_too()
+    {
+        var (exit, stderr, files) = Build(
+            """{ "type": "Sql", "dialect": "postgres", "projectPath": "../db", "preScriptsPath": "../pre" }""",
+            model: ExtendedModel);
+        Assert.True(exit == 0, stderr);
+        Assert.Equal(
+            ["V0001__rename_table_SalesOrder_to_CustomerOrder.sql", "V0002__rename_column_CustomerOrder_amount_to_total.sql"],
+            files);
     }
 
     [Fact]
