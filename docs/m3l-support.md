@@ -131,8 +131,14 @@ back — is the parser's error (`M3L-E010`) and stops the build; a named reverse
 say its key (`- <posts` with `- target: Post` alone), and a declared name that is already a member's,
 stop it too (`MDD050`).
 
-Not generated, and listed as unconsumed: the many side of a many-to-one (`- <comments` naming an
-ordinary key — a collection), many-to-many (`- <>tags`), and the hints `load`, `order_by`,
+A `from` entry naming an ordinary key (`- <comments` with `- target: Comment.post_id`, or
+`@relation(comments, <- Comment.post_id)`) gives the target's read type a collection of the
+dependents' read types, the inverse of the key's navigation — `$expand` follows it. The write entity
+gains nothing from it. A collection is generated only where an
+entry declares it: a key alone does not imply one. A name a member of the read type already has
+leaves it out (`MDD027`); a key kept off the read surface (`@internal`) makes none.
+
+Not generated, and listed as unconsumed: many-to-many (`- <>tags`), and the hints `load`, `order_by`,
 `on_update`. A field written in relationship notation is dropped before rendering, so it never
 reaches a target as a column.
 

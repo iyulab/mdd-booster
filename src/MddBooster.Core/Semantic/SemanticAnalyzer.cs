@@ -417,6 +417,22 @@ public sealed class SemanticAnalyzer
                 field.Loc,
                 SemanticSeverity.Warning));
         }
+
+        // The same rule for a declared reverse collection, on the side that declares it.
+        var manyToOne = Generation.ManyToOneNavigations.Describe(_models, oneToOne);
+        foreach (var c in Generation.ReverseCollections.Describe(_models, oneToOne, manyToOne))
+        {
+            if (c.CollidesWith is null) continue;
+            var principal = _models.First(m => m.Name == c.PrincipalModel);
+            var entry = RelationDeclarations.Of(principal.Source)
+                .First(e => e is { Direction: "from" } && e.Target == c.DependentModel && e.Key == c.ForeignKeyField);
+            diagnostics.Add(new SemanticDiagnostic(
+                "MDD027",
+                $"'{c.PrincipalModel}' ### Relations '{entry.Raw}': 읽기 타입 컬렉션 '{c.Name}' 이 이미 있는 멤버({c.CollidesWith})와 " +
+                "이름이 같아 생성하지 않는다 — 이 관계로는 $expand 할 수 없다. 항목의 이름을 바꾸면 컬렉션이 생긴다.",
+                entry.Loc ?? principal.Source.Loc,
+                SemanticSeverity.Warning));
+        }
     }
 
     private void CheckLookupPath(ResolvedModel model, FieldNode field, List<SemanticDiagnostic> diagnostics)

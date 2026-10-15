@@ -30,7 +30,8 @@ public static class DbContextRenderer
         bool postgresNaming = false,
         IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne = null,
         IReadOnlyList<ManyToOneNavigations.Navigation>? manyToOne = null,
-        IReadOnlyList<ResolvedView>? readViews = null)
+        IReadOnlyList<ResolvedView>? readViews = null,
+        IReadOnlyList<ReverseCollections.Collection>? collections = null)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentException.ThrowIfNullOrWhiteSpace(contextName);
@@ -135,16 +136,33 @@ public static class DbContextRenderer
         // refuses to choose when it finds more — a read type with a one-to-one to a target and an
         // ordinary reference to the same target is exactly that. Naming each of these as a
         // many-to-one with no inverse leaves convention only the one-to-one pairs it already finds.
+        // A declared reverse collection is the inverse of that many-to-one — named in the same configuration, so EF
+        // sees one relationship with two ends rather than two relationships on one key.
+        var emittedCollections = (collections ?? []).Where(c => c.CollidesWith is null).ToList();
         foreach (var n in manyToOne ?? [])
         {
             if (n.CollidesWith is not null) continue;
             var behavior = byName.TryGetValue(n.DependentModel, out var owner)
                 ? DeleteBehaviorFor(owner, owner.Fields.First(f => f.Name == n.ForeignKeyField))
                 : "NoAction";
+            var inverse = emittedCollections.FirstOrDefault(c => c.DependentModel == n.DependentModel && c.ForeignKeyField == n.ForeignKeyField);
             sb.Append("        modelBuilder.Entity<").Append(NameCasing.ToPascalCase(n.DependentModel)).Append("Ext>()")
               .Append(".HasOne(e => e.").Append(n.Name).Append(')')
-              .Append(".WithMany()")
+              .Append(inverse is null ? ".WithMany()" : $".WithMany(e => e.{inverse.Name})")
               .Append(".HasForeignKey(e => e.").Append(NameCasing.ToPascalCase(n.ForeignKeyField)).Append(')')
+              .Append(".OnDelete(DeleteBehavior.").Append(behavior).AppendLine(");");
+        }
+        // A collection whose key has no forward navigation on the read type (its name was taken) is configured from
+        // its own end.
+        foreach (var c in emittedCollections.Where(c => c.ForwardName is null))
+        {
+            var behavior = byName.TryGetValue(c.DependentModel, out var owner)
+                ? DeleteBehaviorFor(owner, owner.Fields.First(f => f.Name == c.ForeignKeyField))
+                : "NoAction";
+            sb.Append("        modelBuilder.Entity<").Append(NameCasing.ToPascalCase(c.PrincipalModel)).Append("Ext>()")
+              .Append(".HasMany(e => e.").Append(c.Name).Append(')')
+              .Append(".WithOne()")
+              .Append(".HasForeignKey(e => e.").Append(NameCasing.ToPascalCase(c.ForeignKeyField)).Append(')')
               .Append(".OnDelete(DeleteBehavior.").Append(behavior).AppendLine(");");
         }
 

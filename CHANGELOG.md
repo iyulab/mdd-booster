@@ -18,6 +18,18 @@
 
 ## [Unreleased]
 
+### 선언한 역방향 컬렉션이 읽기 타입의 컬렉션이 된다
+
+`### Relations` 의 역방향 항목이 다대일 키를 가리키면(`- <comments` + `- target: Comment.post_id`, 또는
+`@relation(comments, <- Comment.post_id)`) 그 대상의 읽기 타입에 `ICollection<CommentExt> Comments` 가 생기고, DbContext 는 키의
+navigation 과 한 관계로 묶는다(`HasOne(e => e.Post).WithMany(e => e.Comments)`). `$expand=Comments` 가 그 행들을 펼친다.
+쓰기 엔티티에는 생기지 않는다. 종전에는 이 항목이 «다대일의 역방향 컬렉션은 생성하지 않는다»로 미소비
+보고됐다. 키만으로는 컬렉션이 생기지 않는다 — 항목이 선언한 곳에만.
+
+- 읽기 타입의 다른 멤버와 이름이 같으면 만들지 않고 `MDD027` 경고(정방향 navigation 과 같은 규칙).
+- 키가 `@internal` 이면 만들지 않고 미소비로 보고한다.
+- 컬렉션이 있는 읽기 타입 파일에만 `using System.Collections.Generic;` 이 더해진다 — 다른 산출물은 바이트 그대로.
+
 ### 핀 `M3L.Native` 0.22.0
 
 이 판의 파서는 관계 항목을 어떻게 적었든 한 모양(`direction` · `name` · `target` · `from`)으로 내고, 항목이 키와 어긋나는 경우를

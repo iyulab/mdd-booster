@@ -54,6 +54,10 @@ public static class EntityPairRenderer
     /// for the set like <paramref name="oneToOne"/>, because which names they may take depends on the
     /// one-to-one navigations around them. Omitted, the read type carries none.
     /// </param>
+    /// <param name="collections">
+    /// The set's declared reverse collections (<see cref="ReverseCollections.Describe"/>). Omitted, the read type
+    /// carries none.
+    /// </param>
     public static RenderedPair Render(
         ResolvedModel model,
         string ns,
@@ -62,7 +66,8 @@ public static class EntityPairRenderer
         IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne = null,
         IReadOnlyList<ResolvedModel>? allModels = null,
         bool postgres = false,
-        IReadOnlyList<ManyToOneNavigations.Navigation>? manyToOne = null)
+        IReadOnlyList<ManyToOneNavigations.Navigation>? manyToOne = null,
+        IReadOnlyList<ReverseCollections.Collection>? collections = null)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentException.ThrowIfNullOrWhiteSpace(ns);
@@ -126,7 +131,7 @@ public static class EntityPairRenderer
         return new RenderedPair(
             Interface: RenderInterface(entityName, readOnlyStoredFields, ns, knownEnumNames, postgres, model.Source.Description),
             Write: RenderClass(entityName, storedFields, derivedFields: null, ns, isExt: false, knownEnumNames, extBacking, model.Source, model.Name, oneToOne, manyToOne, nullableLookups, postgres),
-            Read: RenderClass(entityName, readOnlyStoredFields, readOnlyDerivedFields, ns, isExt: true, knownEnumNames, extBacking, model.Source, model.Name, oneToOne, manyToOne, nullableLookups, postgres, externalContracts: readTypeKeepsContracts));
+            Read: RenderClass(entityName, readOnlyStoredFields, readOnlyDerivedFields, ns, isExt: true, knownEnumNames, extBacking, model.Source, model.Name, oneToOne, manyToOne, nullableLookups, postgres, externalContracts: readTypeKeepsContracts, collections: collections));
     }
 
     private static string RenderInterface(string entityName, IReadOnlyList<FieldNode> fields, string ns, IReadOnlySet<string>? knownEnumNames, bool postgres, string? description)
@@ -174,7 +179,8 @@ public static class EntityPairRenderer
         IReadOnlyList<ManyToOneNavigations.Navigation>? manyToOne,
         IReadOnlySet<string> nullableLookups,
         bool postgres,
-        bool externalContracts = true)
+        bool externalContracts = true,
+        IReadOnlyList<ReverseCollections.Collection>? collections = null)
     {
         var className = isExt ? entityName + "Ext" : entityName;
         // Ext classes route to the SQL layer that actually exposes their
@@ -220,6 +226,11 @@ public static class EntityPairRenderer
         // See RenderInterface: mapped field types (Guid/DateTimeOffset/DateOnly/
         // TimeOnly) and DefaultInitializer's Array.Empty<byte>() are BCL names.
         sb.AppendLine("using System;");
+        // A reverse collection is an ICollection<T>; the directive is written only where one is, so a model without
+        // one renders as it did before collections existed.
+        if (isExt && (collections ?? []).Any(c => c.CollidesWith is null
+                && string.Equals(c.PrincipalModel, modelName, StringComparison.Ordinal)))
+            sb.AppendLine("using System.Collections.Generic;");
         sb.AppendLine("using System.ComponentModel.DataAnnotations;");
         sb.AppendLine("using System.ComponentModel.DataAnnotations.Schema;");
         sb.AppendLine();
@@ -257,8 +268,26 @@ public static class EntityPairRenderer
         }
         if (isExt) RenderOneToOneNavigation(sb, modelName, oneToOne, searchableKeys);
         if (isExt) RenderManyToOneNavigation(sb, modelName, manyToOne, searchableKeys);
+        if (isExt) RenderCollections(sb, modelName, collections);
         sb.AppendLine("}");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// The declared reverse collections on a read type (<see cref="ReverseCollections.Describe"/>): the dependents'
+    /// read types whose key points at this row. A collection marked as colliding is not emitted.
+    /// </summary>
+    private static void RenderCollections(
+        StringBuilder sb, string modelName, IReadOnlyList<ReverseCollections.Collection>? collections)
+    {
+        foreach (var c in collections ?? [])
+        {
+            if (c.CollidesWith is not null) continue;
+            if (!string.Equals(c.PrincipalModel, modelName, StringComparison.Ordinal)) continue;
+            sb.AppendLine();
+            sb.Append("    public ICollection<").Append(NameCasing.ToPascalCase(c.DependentModel)).Append("Ext> ")
+              .Append(c.Name).AppendLine(" { get; set; } = [];");
+        }
     }
 
     /// <summary>

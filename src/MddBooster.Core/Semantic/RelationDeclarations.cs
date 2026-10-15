@@ -15,14 +15,15 @@ namespace MddBooster.Core.Semantic;
 /// takes from it is the <b>names</b>: a <c>to</c> entry (<c>- &gt;author</c> with <c>from: author_id</c>, or
 /// <c>@relation(author, -&gt; Person, from: author_id)</c>) names the key's forward navigation, and a <c>from</c> entry on
 /// the target (<c>- &lt;profile</c> with <c>target: Profile.owner_id</c>, or <c>@relation(profile, &lt;- Profile.owner_id)</c>)
-/// names the reverse navigation of a one-to-one. A name is what the derivation from the key cannot always supply:
+/// names the reverse navigation of a one-to-one — or, when the key is an ordinary many-to-one key, a collection
+/// (<see cref="Generation.ReverseCollections"/>). A name is what the derivation from the key cannot always supply:
 /// <c>owner</c> has no <c>_id</c> to strip — the derived name would be the key property's own — and a self-referencing
 /// one-to-one has no reverse name to derive at all. The generator does not invent one; it reads the declared one.
 /// </para>
 /// <para>
 /// An entry also carries an <c>on_delete</c> (§3.2.5), read with the key's own declarations by
-/// <see cref="OnDeleteRule"/>. Everything else it can say — <c>load</c>, <c>order_by</c>, <c>on_update</c>, a reverse
-/// collection, a many-to-many — no target generates, and <see cref="Unread"/> names it.
+/// <see cref="OnDeleteRule"/>. Everything else it can say — <c>load</c>, <c>order_by</c>, <c>on_update</c>, a
+/// many-to-many — no target generates, and <see cref="Unread"/> names it.
 /// </para>
 /// </remarks>
 public static class RelationDeclarations
@@ -102,8 +103,8 @@ public static class RelationDeclarations
 
     /// <summary>
     /// What no target generates from the section — every entry's unread part, as a line for the unconsumed-elements
-    /// report. A <c>from</c> entry naming a one-to-one's reverse side is read; one naming the many side of a
-    /// many-to-one (a collection) is not.
+    /// report. A <c>from</c> entry is read when its key is exposed on the read surface — the reverse side of a
+    /// one-to-one, or the collection of a many-to-one (<see cref="Generation.ReverseCollections"/>).
     /// </summary>
     public static IEnumerable<string> Unread(ModelNode model, IReadOnlyDictionary<string, ModelNode> models)
     {
@@ -112,10 +113,12 @@ public static class RelationDeclarations
             var reads = e.Direction switch
             {
                 "to" => e.Name is not null && e.Key is not null,
+                // The reverse side of a one-to-one (a single navigation), or of a many-to-one (a collection).
                 "from" => e.Name is not null && e.Target is not null && e.Key is not null
                           && models.TryGetValue(e.Target, out var dep)
                           && dep.Fields.FirstOrDefault(f => f.Name == e.Key) is { } k
-                          && (FieldAttributes.Has(k, "unique") || FieldAttributes.Has(k, "pk")),
+                          && (FieldAttributes.Has(k, "unique") || FieldAttributes.Has(k, "pk")
+                              || Generation.ReverseCollections.IsCollectionKey(k, model.Name)),
                 _ => false,
             };
             var where = e.InFields ? "관계 표기" : "### Relations";
@@ -128,7 +131,7 @@ public static class RelationDeclarations
                     { Direction: "to", Key: null } => "어느 키의 navigation 인지 `from: 키` 로 말하지 않는다",
                     { Direction: "from", Target: null } or { Direction: "from", Key: null }
                         => "키를 가진 모델과 그 키를 말하지 않는다 — `target: Model.key_field`",
-                    { Direction: "from" } => "다대일의 역방향 컬렉션은 생성하지 않는다",
+                    { Direction: "from" } => "그 키가 읽기 표면에 없다(`@internal`) — 컬렉션을 만들지 않는다",
                     _ => "읽는 타깃이 없다",
                 };
                 yield return $"{model.Name}: {where} '{e.Raw}' ({why})";
