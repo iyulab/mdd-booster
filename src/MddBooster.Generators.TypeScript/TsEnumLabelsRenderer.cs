@@ -1,5 +1,6 @@
 using System.Text;
 using M3L.Native;
+using MddBooster.Core.Ast;
 using MddBooster.Core.Generation;
 using MddBooster.Core.Naming;
 
@@ -27,7 +28,8 @@ public static class TsEnumLabelsRenderer
 
     /// <summary>
     /// Renders all enums into a single <c>enum_labels_gen.ts</c> file content.
-    /// Every enum value gets a label entry — the M3L description if present, otherwise the PascalCase key.
+    /// Every enum value gets a label entry — its declared label (<c>name(Label)</c>), else its description, otherwise
+    /// the PascalCase key.
     /// </summary>
     /// <param name="shared">Enums whose label exports this file re-exports from <paramref name="sharedTypesImport"/>.</param>
     /// <param name="sharedTypesImport">The module the shared enums' labels are declared in.</param>
@@ -89,9 +91,7 @@ public static class TsEnumLabelsRenderer
             foreach (var v in enumNode.Values)
             {
                 var key = v.Name ?? string.Empty;
-                var label = !string.IsNullOrWhiteSpace(v.Description)
-                    ? v.Description
-                    : NameCasing.ToPascalCase(key);
+                var label = EnumValueLabels.Display(v) ?? NameCasing.ToPascalCase(key);
                 sb.Append("  ").Append(key).Append(": ").Append(SourceLiteral.TypeScriptString(label)).AppendLine(",");
             }
 
@@ -135,7 +135,7 @@ public static class TsEnumLabelsRenderer
         foreach (var v in enumNode.Values.Where(v => !EnumValueVisibility.IsExcludedFromChoices(v)))
         {
             var key = v.Name ?? string.Empty;
-            var label = !string.IsNullOrWhiteSpace(v.Description) ? v.Description : NameCasing.ToPascalCase(key);
+            var label = EnumValueLabels.Display(v) ?? NameCasing.ToPascalCase(key);
             sb.Append("  ").Append(key).Append(": ").Append(SourceLiteral.TypeScriptString(label)).AppendLine(",");
         }
 

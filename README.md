@@ -527,7 +527,8 @@ MDD_DEBUG=1 mdd build ./mdd
 |---|---|
 | Primitive 타입 18종 (identifier/string/decimal/phone/email/...) | ✅ |
 | Enum (C# enum + `[EnumMember]`; SQL CHECK는 `emitEnumCheckConstraints` opt-in) | ✅ |
-| enum 멤버의 표시명(`- planned: "계획됨"`) → C# `[Display(Name)]` · TS `enum_labels_gen.ts` · XML 주석 | ✅ — 어트리뷰트라 **런타임에 읽힌다**(`GetField(v.ToString())?.GetCustomAttribute<DisplayAttribute>()?.Name`). 서버가 문서를 그리는 경로(보고서·내보내기·메일 본문)가 화면과 같은 표시명을 쓴다. 표시명을 선언하지 않은 멤버에는 붙지 않는다 — 멤버 이름의 재진술이 아니라 「사람이 써 넣은 텍스트」라는 표시다 |
+| 표시 라벨 `name(Label)` — 필드(`- name(이름): string "…"`) → C# `[Display(Name)]` · TS 필드 스키마 `label` · 생성 폼 `label` | ✅ — 명세의 라벨이 표시 이름이고, 따옴표 설명·들여쓴 블록인용은 설명으로 남는다(블록인용이 인라인 설명을 덮어도 라벨은 그대로). 라벨을 적지 않은 필드는 설명이 표시 이름이다. 이 생성기의 옛 `@label(…)` 은 아직 읽지만 `MDD047` 경고 — `name(Label)` 로 옮긴다. 모델·enum **머리**의 라벨(`## Customer(고객)`)은 표시 이름을 쓰는 산출물이 없어 「소비되지 않는 요소」로 알린다 |
+| enum 멤버의 표시명(`- planned(계획됨): "…"`, 라벨이 없으면 설명 `- planned: "계획됨"`) → C# `[Display(Name)]` · TS `enum_labels_gen.ts` · 설명은 XML 주석 | ✅ — 어트리뷰트라 **런타임에 읽힌다**(`GetField(v.ToString())?.GetCustomAttribute<DisplayAttribute>()?.Name`). 서버가 문서를 그리는 경로(보고서·내보내기·메일 본문)가 화면과 같은 표시명을 쓴다. 표시명을 선언하지 않은 멤버에는 붙지 않는다 — 멤버 이름의 재진술이 아니라 「사람이 써 넣은 텍스트」라는 표시다 |
 | `phone`/`email`/`url` → 검증 문자열 (plain `string`, `NVARCHAR(30/320/2048)` — 상한은 언어 명세 §10.4.2가 정한다. `phone`만 명세의 20 대신 30을 쓰며 그 이탈은 코드에 기록돼 있다). **값객체 struct 매핑 아님** — `ODataConventionModelBuilder`가 값객체 struct를 EDM 복합 타입으로 등록하지 못해 직렬화가 깨지기 때문. 막힌 지점은 OData 직렬화 계층 한정이라 데이터 계층에서의 변환은 자유롭다 | ✅ |
 | `@reference(Target)` → SQL FK + C# `[Reference]` 속성 | ✅ |
 | `@unique` (단일 컬럼) | ✅ |
@@ -1205,6 +1206,7 @@ consumer-repo/
 | MDD022 | base 를 밝히지 않은 채 키가 곧 다른 모델의 FK(`@pk @reference(X)`) — `::aspect(X)` 로 선언하라 |
 | MDD023 | 삭제 시 SET NULL(`@reference(X)?` 또는 `on_delete: set_null`)인데 키가 NULL 을 허용하지 않는다 — 필드를 nullable 로 하거나 다른 동작을 쓰라 |
 | MDD046 | 키의 삭제 동작 선언을 읽을 수 없다 — `on_delete` 가 정의된 동작(`cascade` · `set_null` · `restrict` · `no_action`)이 아니거나, `@reference` 뒤 기호(`!` `?` `!!`)와 다르다. 하나만 쓰거나 둘을 맞춘다 |
+| MDD047(경고) | 필드가 표시 라벨을 이 생성기의 옛 속성 `@label(…)` 로 적었다 — 명세의 `- name(Label): type` 으로 옮긴다. 이 판은 아직 읽고(괄호 라벨이 함께 있으면 그것이 이긴다) 다음 마이너 판부터 읽지 않는다 |
 | MDD024(경고) | `mdd.json` 에 이 생성기가 정의하지 않은 키가 있다(루트 또는 `targets[n]`) — 무시되며, 가까운 알려진 키가 있으면 제안한다. 분석이 아니라 설정 단계에서 나오고, 다른 경고처럼 `treatWarningsAsErrors`·`warningsAsErrors` 로 빌드를 세울 수 있다 — 편집기 밖(CI)에서 오타를 잡는 길. `_` 로 시작하는 설명 키와 `$schema` 는 보고하지 않는다. `sources` 가 비어 있으면 설정 오류(종료 코드 4) |
 | MDD025(경고) | `rowversion` 행 버전에 `@internal` — 읽기 타입에서 빠져 그 셋이 ETag 를 내지 않는다(`If-Match` 조건부 쓰기가 사라진다) |
 | MDD026 | `@lookup` 이 다른 모델의 `rowversion` 을 읽음 — 행 버전은 그 행의 것이고, PostgreSQL 에서는 조인으로 읽을 열도 없다 |

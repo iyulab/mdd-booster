@@ -58,6 +58,7 @@ public sealed class SemanticAnalyzer
                 CheckAttributeTypos(model, field, diagnostics);
                 CheckRowVersionUse(model, field, diagnostics);
                 CheckSystemDeclaration(model, field, diagnostics);
+                CheckLegacyLabel(model, field, diagnostics);
             }
         }
 
@@ -71,6 +72,25 @@ public sealed class SemanticAnalyzer
         CheckUnreadIndexItems(diagnostics);
 
         return diagnostics;
+    }
+
+    /// <summary>
+    /// <c>MDD047</c> (warning): a field names its display label with <c>@label(…)</c>, this generator's own attribute,
+    /// where the specification has a form for it — <c>- name(Label): type</c>. Still read for now; the label in
+    /// parentheses wins when both are written.
+    /// </summary>
+    private static void CheckLegacyLabel(ResolvedModel model, FieldNode field, List<SemanticDiagnostic> diagnostics)
+    {
+        if (Ast.FieldAttributes.FirstArg(field, "label") is not { } legacy) return;
+        var conflict = !string.IsNullOrWhiteSpace(field.Label) && field.Label != legacy
+            ? $" 괄호 라벨 '{field.Label}' 이 함께 있어 그것을 쓴다 — '{legacy}' 는 쓰이지 않는다."
+            : "";
+        diagnostics.Add(new SemanticDiagnostic(
+            "MDD047",
+            $"'{model.Name}.{field.Name}' 의 `@label(…)` 은 명세에 없는 이 생성기의 옛 어휘다 — 명세의 표시 라벨 " +
+            $"`- {field.Name}({field.Label ?? legacy}): …` 로 옮기십시오. 다음 마이너 판부터 `@label` 은 읽지 않는다.{conflict}",
+            field.Loc,
+            SemanticSeverity.Warning));
     }
 
     /// <summary>

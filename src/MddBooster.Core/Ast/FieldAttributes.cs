@@ -179,17 +179,34 @@ public static class FieldAttributes
     /// TypeScript 필드 스키마의 <c>label</c>, 생성 폼의 <c>label</c> prop이 전부 이걸 읽는다.
     /// </summary>
     /// <remarks>
-    /// 우선순위: <c>@label(text)</c>(명시 오버라이드) → 필드 <c>description</c>(기존 관용,
-    /// 하위호환 유지) → <c>PascalCase(필드명)</c>(전에 없던 fallback을 새로 발명하지 않는다 —
-    /// <c>TsEnumLabelsRenderer</c>가 enum 값에 이미 쓰는 것과 같은 모양).
+    /// <see cref="DisplayLabel"/> 이 있으면 그것, 없으면 <c>PascalCase(필드명)</c>(전에 없던 fallback을
+    /// 새로 발명하지 않는다 — <c>TsEnumLabelsRenderer</c>가 enum 값에 이미 쓰는 것과 같은 모양).
     /// </remarks>
     public static string EffectiveLabel(FieldNode field)
     {
         ArgumentNullException.ThrowIfNull(field);
-        return FirstArg(field, "label")
-            ?? field.Description
-            ?? NameCasing.ToPascalCase(field.Name);
+        return DisplayLabel(field) ?? NameCasing.ToPascalCase(field.Name);
     }
+
+    /// <summary>
+    /// 저자가 적은 필드 표시 이름 — 없으면 <see langword="null"/>(이름에서 지어내지 않는다).
+    /// Model 타깃의 <c>[Display(Name)]</c>·TypeScript 필드 스키마의 <c>label</c> 은 이것을,
+    /// 생성 폼은 <see cref="EffectiveLabel"/> 을 읽는다.
+    /// </summary>
+    /// <remarks>
+    /// 우선순위: 명세의 표시 라벨 <c>- name(Label): type</c>(<see cref="FieldNode.Label"/>) →
+    /// <c>@label(text)</c>(명세에 없는 이 생성기의 옛 어휘 — 이행 기간, <c>MDD047</c> 이 옮기라고 알린다) →
+    /// 필드 <c>description</c>. 라벨과 설명은 명세에서 따로다 — 블록인용이 인라인 설명을 덮어도(§4.2.6)
+    /// 라벨은 그대로 남는다. 설명으로의 대체는 라벨을 적지 않은 모델의 기존 관용이다.
+    /// </remarks>
+    public static string? DisplayLabel(FieldNode field)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        // TODO: stop reading @label in the minor release after the one that introduced MDD047.
+        return NonBlank(field.Label) ?? FirstArg(field, "label") ?? field.Description;
+    }
+
+    private static string? NonBlank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text;
 
     /// <summary>
     /// 필드가 표시될 그룹 — <c>@group("…")</c>가 명시돼 있으면 그 첫 문자열 인자, 없으면

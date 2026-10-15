@@ -1,5 +1,6 @@
 using System.Text;
 using M3L.Native;
+using MddBooster.Core.Ast;
 using MddBooster.Core.Generation;
 using MddBooster.Core.Naming;
 
@@ -72,8 +73,8 @@ public static class EnumRenderer
             // name. A reader falls back to the member name itself, the way
             // DisplayAttribute consumers already do. The TypeScript label map takes the
             // opposite default, and has to — a Record<T, string> must be total.
-            if (!string.IsNullOrWhiteSpace(v.Description))
-                sb.Append("    [Display(Name = ").Append(SourceLiteral.CSharpString(v.Description!)).AppendLine(")]");
+            if (EnumValueLabels.Display(v) is { } label)
+                sb.Append("    [Display(Name = ").Append(SourceLiteral.CSharpString(label)).AppendLine(")]");
 
             sb.Append("    [EnumMember(Value = ").Append(SourceLiteral.CSharpString(v.Name ?? string.Empty)).AppendLine(")]");
             sb.Append("    ").Append(memberName);

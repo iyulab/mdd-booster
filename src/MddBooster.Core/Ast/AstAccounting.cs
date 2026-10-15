@@ -35,6 +35,17 @@ public static class AstAccounting
         unconsumed.AddRange(ast.Flows.Select(f => $"::flow {f.Name}"));
         unconsumed.AddRange(ast.Extensions.Keys.Select(k => $"extension {k}"));
 
+        // A header's display label — `## Customer(고객)` — names the model, interface, view or enum itself.
+        // Field and enum-value labels reach every target that names them to a person; a header's has no
+        // counterpart in any generated artifact (no target writes a display name for a type), so it is
+        // said here rather than dropped without a word.
+        unconsumed.AddRange(ast.Models.Concat(ast.Interfaces).Concat(ast.Views)
+            .Where(m => !string.IsNullOrWhiteSpace(m.Label))
+            .Select(m => $"{m.Name}: 머리 라벨 ({m.Label})"));
+        unconsumed.AddRange(ast.Enums
+            .Where(e => !string.IsNullOrWhiteSpace(e.Label))
+            .Select(e => $"{e.Name} ::enum: 머리 라벨 ({e.Label})"));
+
         // A `### Name` the language does not define lands in Sections.Custom as
         // unstructured entries, and no target can read it — the reader gets the
         // same silence the standalone view used to get. The sections the language

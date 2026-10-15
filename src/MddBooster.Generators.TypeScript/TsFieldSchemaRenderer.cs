@@ -134,10 +134,10 @@ public static class TsFieldSchemaRenderer
         // Shared with the Model target's [Range] — see FieldAttributes.Number.
         double? min = isDerived || engineSet ? null : MddBooster.Core.Ast.FieldAttributes.Number(field, "min");
         double? max = isDerived || engineSet ? null : MddBooster.Core.Ast.FieldAttributes.Number(field, "max");
-        // @label(text) overrides the description; unlike FieldAttributes.EffectiveLabel this
+        // The authored label (FieldAttributes.DisplayLabel); unlike FieldAttributes.EffectiveLabel this
         // does NOT fall back to the PascalCase field name — presence of a label here signals
         // authored, meaningful text, and every field mechanically has a PascalCase name.
-        string? label = MddBooster.Core.Ast.FieldAttributes.FirstArg(field, "label") ?? field.Description;
+        string? label = MddBooster.Core.Ast.FieldAttributes.DisplayLabel(field);
 
         // A lookup with no label of its own borrows the one on the field it reads: the target
         // already names this value, and making the author repeat that string is how the two drift.
@@ -149,7 +149,7 @@ public static class TsFieldSchemaRenderer
         {
             var target = LookupTarget.Resolve(owner, field, allModels);
             if (target is not null)
-                label = MddBooster.Core.Ast.FieldAttributes.FirstArg(target, "label") ?? target.Description;
+                label = MddBooster.Core.Ast.FieldAttributes.DisplayLabel(target);
         }
         string? group = MddBooster.Core.Ast.FieldAttributes.EffectiveGroup(field);
 

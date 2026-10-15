@@ -63,14 +63,17 @@ public class ModelTargetEnumAxisCoverageTests
             ["Name"] = (Disposition.Carried,
                 "the PascalCase member name, plus [EnumMember(Value)] carrying the declared snake_case form. " +
                 "Every target reads it — the SQL CHECK literal and the TypeScript union member are the same text"),
+            ["Label"] = (Disposition.Carried,
+                "`- open(Opened): \"…\"` — [Display(Name)] and the TypeScript label maps, through " +
+                "EnumValueLabels.Display. The label a person is shown; the quoted text stays the description"),
             ["Description"] = (Disposition.Carried,
-                "[Display(Name)] and the member's XML doc comment. The attribute is the run-time half: a doc " +
-                "comment is compiled away, so a host rendering a document server-side had no way back to the " +
+                "the member's XML doc comment, and [Display(Name)] when the member declares no Label (the " +
+                "specification's fallback for a consumer that needs a name). The attribute is the run-time half: a " +
+                "doc comment is compiled away, so a host rendering a document server-side had no way back to the " +
                 "declared text while the TypeScript label map had carried it all along. Omitted when the member " +
-                "declares no label, matching the field path's [Display] rule. Only the inline quoted text " +
+                "declares neither, matching the field path's [Display] rule. Only the inline quoted text " +
                 "reaches this property: an indented blockquote under a member does not attach to it the way " +
-                "one under a field does (measured), so the attribute never carries a paragraph — and the " +
-                "question of how the two forms combine, open for fields, does not arise here"),
+                "one under a field does (measured), so the attribute never carries a paragraph"),
             ["Attributes"] = (Disposition.AsymmetricGap,
                 "@system and @deprecated reach the TypeScript target, which drops those values from a generated " +
                 "form's choices (EnumValueVisibility). The C# enum emits nothing for either. That decision is " +
@@ -109,7 +112,8 @@ public class ModelTargetEnumAxisCoverageTests
                 "inherited members; the test below pins the members being present"),
             ["Label"] = (Disposition.UnimplementedEverywhere,
                 "a display name for the enum type itself. No target reads it; the type's own label has no " +
-                "counterpart in any generated artifact, unlike a member's"),
+                "counterpart in any generated artifact, unlike a member's — so the build says so (AstAccounting " +
+                "lists it among the elements no target consumes)"),
             ["Namespace"] = (Disposition.NotApplicable,
                 "the source file's `# Namespace:`. The generated namespace comes from the target's own " +
                 "configuration, not from the model"),
