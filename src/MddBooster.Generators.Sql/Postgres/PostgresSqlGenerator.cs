@@ -20,6 +20,12 @@ public sealed class PostgresSqlGeneratorOptions
     /// 판정은 <see cref="ForeignKeyIndexPlanner"/>가 방언과 무관하게 내린다.
     /// </summary>
     public bool EmitForeignKeyIndexes { get; init; }
+
+    /// <summary>
+    /// Where declared renames (<c>@renamed_from</c>) are written as run-once pre-comparison scripts — see
+    /// <see cref="SqlGeneratorOptions.PreScriptsPath"/>. Relative to the working directory; outside <see cref="ProjectPath"/>.
+    /// </summary>
+    public string? PreScriptsPath { get; init; }
 }
 
 /// <summary>
@@ -55,6 +61,7 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
         {
             throw new GeneratorRefusalException(GeneratorRefusalKind.Model, string.Join(Environment.NewLine, violations));
         }
+        PreScriptWriter.ResolvePlacement(context.WorkingDirectory, _options.PreScriptsPath, ResolveProjectRoot(context.WorkingDirectory));
     }
 
     public void Generate(GeneratorContext context)
@@ -215,6 +222,10 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
                 view, _options.Schema, tableNames, fullViewNames, standaloneViewNames, derivedFieldsByModel);
             File.WriteAllText(Path.Combine(viewsGenDir, standaloneViewNames[view.Name] + ".sql"), sql);
         }
+
+        // Declared renames, as run-once scripts for the stage before the schema comparison.
+        PreScriptWriter.Emit(context, _options.PreScriptsPath, projectRoot, SqlDialect.PostgreSql, _options.Schema,
+            model => tableNames[model]);
     }
 
     /// <summary>

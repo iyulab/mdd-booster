@@ -31,6 +31,7 @@ public sealed class SqlGenerator : IArtifactGenerator
         ExpressionRefusals.Refuse(context, SqlDialect.SqlServer);
         if (_options.EmitSqlProj)
             FindSqlProj(ResolveProjectRoot(context.WorkingDirectory));
+        PreScriptWriter.ResolvePlacement(context.WorkingDirectory, _options.PreScriptsPath, ResolveProjectRoot(context.WorkingDirectory));
     }
 
     private static void RefuseCascadePaths(GeneratorContext context)
@@ -180,6 +181,9 @@ public sealed class SqlGenerator : IArtifactGenerator
                     itemType: "None");
             }
         }
+
+        // 5. Declared renames, as run-once scripts for the stage before the schema comparison.
+        PreScriptWriter.Emit(context, _options.PreScriptsPath, projectRoot, SqlDialect.SqlServer, _options.Schema, name => name);
     }
 
     private static void CleanSqlDir(string dir)

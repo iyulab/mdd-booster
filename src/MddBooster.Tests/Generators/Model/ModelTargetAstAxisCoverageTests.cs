@@ -74,6 +74,9 @@ public class ModelTargetAstAxisCoverageTests
             ["EnumValues"] = (Disposition.Refused, "an inline `enum` field's values — refused (MDD048); declare a top-level ::enum"),
             ["Fields"] = (Disposition.Refused, "an `object` field's sub-fields — refused (MDD048); a separate model with a reference"),
             ["Origin"] = (Disposition.Carried, "the ::extend block that brought the field in — the owner group and the extension rules"),
+            ["RenamedFrom"] = (Disposition.Carried,
+                "`@renamed_from(…)` — the Sql targets' column rename scripts (RenameSteps, PreScriptWriter); not acted on, " +
+                "and said so, when no preScriptsPath is configured"),
             ["Loc"] = (Disposition.NotApplicable, "source bookkeeping — used by diagnostics"),
         };
 
@@ -92,6 +95,9 @@ public class ModelTargetAstAxisCoverageTests
                 "`::aspect(Base)` — a table whose key is the base's key. `::subtype` is refused (MDD016): its storage " +
                 "strategy is not decided"),
             ["ExtendedBy"] = (Disposition.Carried, "the ::extend blocks — the extension coverage the build prints"),
+            ["RenamedFrom"] = (Disposition.Carried,
+                "`## Name @renamed_from(…)` — the Sql targets' table rename scripts (RenameSteps, PreScriptWriter); not acted " +
+                "on, and said so, when no preScriptsPath is configured"),
             ["Line"] = (Disposition.NotApplicable, "source bookkeeping — used by diagnostics"),
             ["Inherits"] = (Disposition.Carried, "the interfaces a model inherits — flattened into its fields (InterfaceResolver)"),
             ["Description"] = (Disposition.Carried, "the XML doc comment of the generated types and the TypeScript interface"),

@@ -1,8 +1,8 @@
 # M3L support in mdd-booster
 
 > **Specification:** the M3L language is defined upstream, in the `m3l` project. This generator pins
-> **`M3L.Native` 0.22.0**; the specification at that version is
-> [`docs/specification.md` @ 0.22.0](https://github.com/iyulab/m3l/blob/fbd5f38643d44b1058f7e3c4f415100da4160676/docs/specification.md).
+> **`M3L.Native` 0.23.0-local.20261015.1**; the specification at that version is
+> [`docs/specification.md` @ 0.23.0-local.20261015.1](https://github.com/iyulab/m3l/blob/e064fd5ed5b54e9c2c69d956f8f745ba2e21bf5f/docs/specification.md).
 > Section numbers below are that document's.
 
 This page answers the question a reader of the specification brings here: **where this generator
@@ -42,6 +42,19 @@ would give the same fact two homes that can disagree.
 The list is measured, not remembered: a model declaring all five produces SQL, entity and API output
 in which none of the five appears anywhere, and a test asserts exactly that. If one of them starts
 being implemented, that test fails and this table is what it points at.
+
+## §2.2.6 Former Names (`@renamed_from`)
+
+**What this generator implements**: the SQL targets turn a model's and a stored field's former names
+into run-once scripts for a schema tool's stage that runs before its declarative comparison — one
+file per rename step, oldest first, table steps before column steps, each statement guarded to run
+only while the former name exists — written to the target's `preScriptsPath`, outside `projectPath`.
+A file already there is never rewritten; a new step is appended after the highest number in the
+directory. Without `preScriptsPath` no script is written and the build says the declared renames are
+not acted on. Not renamed yet: the names this generator derives from table and column names for
+constraints and indexes (`UK_…`, `ix_…`, …) — a schema comparison that finds them under the old name
+recreates them; the data stays. The entity and API targets need nothing from the declaration: they
+describe the model as it is now.
 
 ## §2.3.1.1 Shortened Type Notations
 

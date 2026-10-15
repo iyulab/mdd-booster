@@ -18,6 +18,19 @@
 
 ## [Unreleased]
 
+### 모델이 선언한 개명이 사전 스크립트가 된다 — `preScriptsPath`
+
+`@renamed_from`(모델 · 저장 필드의 옛 이름 — M3L 0.23.0)을 Sql 타깃이 읽어, 선언형 비교 «앞»에 한 번씩 도는 스크립트로 낸다:
+`V{n}__rename_table_{옛}_to_{새}.sql` · `V{n}__rename_column_{모델}_{옛}_to_{새}.sql`(T-SQL `sp_rename` · PostgreSQL
+`ALTER TABLE … RENAME`, 둘 다 «옛 이름이 있고 새 이름이 없을 때»만). 이력은 오래된 것부터, 테이블이 열보다 먼저. 이미 있는
+파일은 다시 쓰지 않고 새 개명은 그 디렉터리의 가장 큰 번호 다음에 덧붙인다. 위치는 Sql 타깃의 새 키 `preScriptsPath`
+(`projectPath` 밖 — 안이면 설정 오류 4). 없으면 스크립트를 내지 않고 경고한다. 생성된 제약 · 인덱스 이름의 개명은 아직 하지
+않는다(README «개명»).
+
+### 핀 `M3L.Native` 0.23.0
+
+`@renamed_from` 이 그 판에서 정의된다(파서가 `renamed_from` 키로 올린다).
+
 ### 선언한 역방향 컬렉션이 읽기 타입의 컬렉션이 된다
 
 `### Relations` 의 역방향 항목이 다대일 키를 가리키면(`- <comments` + `- target: Comment.post_id`, 또는

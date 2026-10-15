@@ -44,7 +44,8 @@ Sql 타깃 선택 노브(모두 생략 가능): `emitSqlProj`(기본 true — SS
 `emitRefreshScript`(기본 true — post-deployment `sp_refreshview` 스크립트),
 `emitEnumCheckConstraints`(기본 false — enum 컬럼 table-level `CK_{Table}_{Column}` CHECK.
 SSDT dacpac은 CHECK diff가 불안정하므로 선언형 스키마 관리 도구 소비자용 opt-in),
-`emitForeignKeyIndexes`(기본 true, 0.13.0부터 — 아래).
+`emitForeignKeyIndexes`(기본 true, 0.13.0부터 — 아래),
+`preScriptsPath`(기본 없음 — 아래 «개명»).
 
 **`projectPath`/`outputPath`/`formsOutputPath`/`sqlProjectPath`는 상대경로면 `mdd.json`이 있는
 디렉터리 기준, 절대경로면 그대로 쓴다.** 절대경로를 쓰면서 같은 저장소를 여러 물리적
@@ -86,6 +87,28 @@ SSDT dacpac은 CHECK diff가 불안정하므로 선언형 스키마 관리 도�
 > `formsOutputPath` 에서 **계산**된다. 두 경로를 어떻게 두든 폼은 생성된 타입을 찾는다.
 > 상대경로가 성립하지 않는 조합(서로 다른 드라이브·루트)이면 **생성이 실패**하며, 컴파일되지
 > 않는 파일을 써 놓고 성공을 보고하지 않는다.
+
+#### 개명 (`@renamed_from` → `preScriptsPath`)
+
+모델이 테이블이나 필드의 옛 이름을 선언하면(`## CustomerOrder @renamed_from(SalesOrder)`,
+`- total: … @renamed_from(amount)`), Sql 타깃은 그 개명을 **선언형 비교 «앞»에 한 번씩 도는 스크립트**로 낸다 —
+스키마 도구가 그 단계를 지원해야 한다(예: 선언형 비교 전에 `V{n}__*.sql` 을 한 번씩 돌리고 원장에 남기는 단계).
+그것이 없으면 두 판의 모델 차이는 «옛 테이블 제거 + 빈 새 테이블 생성»으로 읽힌다.
+
+```json
+{ "type": "Sql", "dialect": "postgres", "projectPath": "../db", "preScriptsPath": "../pre" }
+```
+
+- **위치**: `projectPath` **밖**(형제). 선언형 스키마로 읽히는 디렉터리 안이면 생성이 거절된다(설정 오류 4).
+- **파일**: 개명 한 단계에 한 파일, `V{번호}__rename_table_{옛}_to_{새}.sql` · `V{번호}__rename_column_{모델}_{옛}_to_{새}.sql`.
+  이력(`@renamed_from(level, tier)`)은 오래된 것부터 한 단계씩, 한 빌드 안에서는 테이블이 열보다 먼저.
+- **추가만 한다**: 이미 있는 파일은 다시 쓰지 않는다(한 번 돈 스크립트의 내용이 바뀌면 도구가 거절한다). 새 개명은
+  그 디렉터리의 가장 큰 번호 다음을 받는다(손으로 둔 스크립트 포함). 이 디렉터리는 소스로 커밋한다.
+- **가드**: 각 문장은 «옛 이름이 있고 새 이름이 없을 때»만 실행된다 — 새 DB, 이미 옮겨진 DB 에서는 아무것도 하지 않는다.
+  선언은 모델에 남아 있어도 된다.
+- **아직 하지 않는 것**: 생성된 제약 · 인덱스 이름(`UK_…` · `ix_…` 등 테이블 · 열 이름을 담은 것)의 개명. 이름이 어긋나면 스키마
+  도구의 비교가 그 제약을 다시 만든다(데이터는 그대로).
+- `preScriptsPath` 가 없으면 스크립트를 내지 않고, 선언된 개명을 실행하지 않는다고 경고한다.
 
 #### 외래 키 인덱스 (`emitForeignKeyIndexes`)
 

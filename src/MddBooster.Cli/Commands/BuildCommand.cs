@@ -754,6 +754,7 @@ public sealed class BuildCommand
                     EmitRefreshScript = target.EmitRefreshScript ?? true,
                     EmitEnumCheckConstraints = target.EmitEnumCheckConstraints ?? false,
                     EmitForeignKeyIndexes = target.EmitForeignKeyIndexes ?? true,
+                    PreScriptsPath = target.PreScriptsPath,
                 });
 
             case "postgres" or "postgresql" or "pg":
@@ -774,6 +775,7 @@ public sealed class BuildCommand
                         Schema = target.Schema ?? "public",
                         EmitEnumCheckConstraints = target.EmitEnumCheckConstraints ?? false,
                         EmitForeignKeyIndexes = target.EmitForeignKeyIndexes ?? true,
+                        PreScriptsPath = target.PreScriptsPath,
                     });
 
             default:
