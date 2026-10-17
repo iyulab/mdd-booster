@@ -67,7 +67,7 @@ public static class TableRenderer
         }
 
         // field-level @index (스펙 §10.8.1 — DB 인덱스). PK/unique는 이미 인덱스를 가지므로 제외.
-        // (rollup 필드의 @indexed는 별개 확장 — WITH SCHEMABINDING 트리거, FullViewRenderer 소관.)
+        // (rollup 필드의 @indexed는 별개 — 테이블 인덱스가 아니며 생성하지 않는다, MDD052.)
         foreach (var field in storedFields)
         {
             if (!HasAttribute(field, "index")) continue;

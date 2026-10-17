@@ -107,7 +107,8 @@ SSDT dacpac은 CHECK diff가 불안정하므로 선언형 스키마 관리 도�
 - **가드**: 각 문장은 «옛 이름이 있고 새 이름이 없을 때»만 실행된다 — 새 DB, 이미 옮겨진 DB 에서는 아무것도 하지 않는다.
   선언은 모델에 남아 있어도 된다.
 - **SQL Server 의 스키마 바인딩 뷰**: SQL Server 는 스키마 바인딩 뷰가 의존하는 테이블 · 열의 개명을 거절한다(Msg 15336) —
-  이 생성기는 `@indexed` rollup 이 있는 모델의 FullView 를 그렇게 쓴다. 그래서 T-SQL 개명 스크립트는 그 테이블에 바인딩된 뷰를
+  이 생성기는 그런 뷰를 쓰지 않지만(종전 판의 `@indexed` FullView 가 그랬다) 손으로 둔 색인 뷰나 옛 판이 배포한 뷰가 데이터베이스에
+  남아 있을 수 있다. 그래서 T-SQL 개명 스크립트는 그 테이블에 바인딩된 뷰를
   먼저 내린다(개명이 실제로 일어날 때만). 뷰는 데이터가 없고, 뒤따르는 선언형 단계가 원하는 상태에서 다시 만든다(그 뷰의 인덱스도
   원하는 상태에 있으면 함께). 뷰에 다시 바인딩된 뷰까지는 풀지 않는다 — 그 경우 SQL Server 의 메시지로 멈춘다. PostgreSQL 의 뷰는
   개명을 스스로 따라간다.
@@ -471,10 +472,8 @@ DDL과 EF 매핑이 서로 다른 네이밍을 전제하게 된다).
   63바이트 게이트를 통과해야 한다 — 다중 컬럼 인덱스명이 제약명보다 쉽게 넘긴다.
 - **뷰**: Lookup/Rollup 파생 필드가 있는 모델은 `{projectPath}/views_gen/{table}_full_view.sql`,
   soft-delete(`deleted_at`)가 있는 모델은 `{table}_ud_view.sql`을 함께 방출한다(T-SQL의
-  `{Model}FullView`/`{Model}UdView`와 같은 파생 체인, 식별자만 비인용 snake_case). **Computed
-  파생 필드 또는 `@indexed` Rollup이 있는 모델, 그리고 그런 모델을 체이닝으로 딛는 모델은 아직
-  방출하지 않는다** — 무음 탈락 대신 **stderr 경고**로 표면화한다(Computed는 방언별 표현식
-  문법 차이로 안전한 자동 변환이 불가, `@indexed`는 구체화 뷰 갱신 전략이 별도 결정 필요).
+  `{Model}FullView`/`{Model}UdView`와 같은 파생 체인, 식별자만 비인용 snake_case). Computed 는
+  M3L 의 이식 가능한 식을 이 방언으로 번역해 낸다. `@indexed` Rollup 은 보통 Rollup 으로 — 읽을 때 계산된다(`MDD052`, 아래).
 - 널 허용 `@unique`는 PG가 NULL을 distinct로 취급하므로 filtered index 없이 UNIQUE 제약 하나로
   정확하다 (T-SQL 경로는 filtered unique index가 필요하다).
 - `emitSqlProj`/`emitRefreshScript`는 SSDT 개념 — postgres와 함께 명시하면 오류.
@@ -491,9 +490,7 @@ DDL과 EF 매핑이 서로 다른 네이밍을 전제하게 된다).
 — 명시 열 이름이 Npgsql 의 `xmin` 관례를 덮으므로 이름을 적는다.
 Ext 읽기 모델은 뷰 backing이 없으면 같은 테이블을 읽고, 뷰 backing이 있으면 Sql 타깃이
 실제로 방출하는 이름(`{table}_full_view`/`{table}_ud_view`)을 그대로 가리키며 비-internal
-Lookup/Rollup 파생 컬럼도 `HasColumnName`으로 명시한다. Computed 파생 필드 또는 `@indexed`
-Rollup이 있는 모델(및 그런 모델을 체이닝으로 딛는 모델)은 여전히 **경고** — 그 뷰는 Sql
-타깃도 아직 방출하지 않으므로 해당 뷰를 직접 만들기 전까지 Ext 질의는 실패한다.
+Lookup/Rollup 파생 컬럼도 `HasColumnName`으로 명시한다.
 
 ### 빌드 실행
 
@@ -566,7 +563,7 @@ MDD_DEBUG=1 mdd build ./mdd
 | `@lookup(fk.col)` → `_full` 뷰 LEFT JOIN + `[Lookup]` 속성 | ✅ — 다단 경로(`@lookup(order_id.customer_id.name)`, 언어 명세 §4.5.1)도 hop 마다 LEFT JOIN 을 잇는다. 마지막 hop 앞의 hop 은 대상의 **테이블**을 JOIN 하므로(다음 키만 읽는다) 다른 뷰에 의존하지 않는다 — 파생 칼럼을 거치는 1단 lookup 이 뷰 순환을 만드는 자리에서 같은 값을 저장 키로 따라 읽는 길이다. 경로의 어느 키든 널 허용이면 생성 속성도 널 허용이다(§4.5.4) |
 | `@rollup(Target.fk, aggregate)` → `_ext` 뷰 서브쿼리 + `[Rollup]` | ✅ |
 | `@computed("expr")` → `_ext` 뷰 표현식 컬럼 + `[Computed]` | ✅ |
-| `@indexed` + rollup → `WITH SCHEMABINDING` | ✅ |
+| `@indexed` + rollup (미리 저장하는 집계 — SQL Server 색인 뷰 · PostgreSQL 구체화 뷰) | ❌ — 생성하지 않는다. 롤업은 읽을 때 계산되고 빌드가 `MDD052` 로 알린다. SQL Server 의 색인 뷰는 FullView 의 모양(롤업의 상관 하위 쿼리 · lookup 의 외부 조인 · 다른 뷰 읽기)을 담을 수 없다 — 종전 판은 FullView 에 `WITH SCHEMABINDING` 만 붙였는데 거기엔 색인을 만들 수 없었고, 다른 FullView 를 읽는 모델에서는 배포가 Msg 4513 으로 실패했다 |
 | `@unique(col1, col2)` 복합 | ✅ — 널 허용 컬럼이 섞이면 filtered unique index (`WHERE … IS NOT NULL`)로 방출한다. 그러지 않으면 두 번째 전체-NULL 행이 거부된다. `nulls: "not_distinct"`를 붙이면 그 필터를 만들지 않고 SQL:2023 `UNIQUE NULLS NOT DISTINCT` 의미(NULL도 그 자체로 유일성 경쟁에 참여)로 방출한다 — SQL Server는 필터 없는 inline `CONSTRAINT UNIQUE`(plain `UNIQUE`가 이미 이 의미), PostgreSQL 15+는 `UNIQUE NULLS NOT DISTINCT` 문법을 그대로 쓴다 |
 | `### Indexes` 섹션 (`- @unique(...)` / `- @index(...)` · `- name: @index(...)` · `- name` + `fields:`/`unique:`) | ✅ — 항목의 이름(`- ux_scope: …`, `- customer_orders`)이 그 인덱스·제약의 데이터베이스 이름이다(SQL 두 방언 · EF `HasDatabaseName`, M3L 명세 §3.3.3). 괄호 안은 설명이다. 이름이 없는 지시자(`- @index(...)`)는 `name:` 을, 그것도 없으면 모델과 열에서 짓는다(`IX_{Model}_{Cols}` · `ix_{table}_{cols}`) |
 | `@inherits(FQN)` → C# 베이스클래스 오버라이드 (도메인 중립, verbatim) | ✅ |
@@ -1241,13 +1238,14 @@ consumer-repo/
 | MDD049(경고) | `@reference` 키의 navigation 에 이름이 없어 생성하지 않는다 — 키 이름이 `_id` 로 끝나지 않거나(제 이름이 키 속성의 이름이다), 자기참조 1:1 의 역방향이다. `$expand` 로 따라갈 수 없고 EF 는 부모 · 자식을 함께 저장할 때 순서를 추론하지 못한다. `### Relations` 에 이름을 준다(`- >이름` + `- from: 키` · 역방향은 `- <이름` + `- target: 모델.키`) |
 | MDD050 | `### Relations` 의 이름 있는 역방향 항목이 자기 키를 말하지 않는다(`- <posts` + `- target: Post` 만 — 생성기는 키를 추측하지 않는다). 또는 선언한 navigation 이름이 다른 필드의 속성 이름과 같다. 항목이 키와 어긋나는 경우(키가 아님 · 다른 대상 · 이 모델을 가리키지 않는 역방향 키)는 파서 오류 `M3L-E010` 으로 빌드가 선다 |
 | MDD051(경고) | 모델이 `@renamed_from` 으로 개명을 선언했는데 Sql 타깃에 `preScriptsPath` 가 없다 — 그 타깃은 개명을 실행하지 않고, 산출물을 반영하면 옛 이름은 제거 · 새 이름은 빈 채로 생성으로 읽힌다(«개명») |
+| MDD052(경고) | rollup 의 `@indexed`(미리 저장하는 집계)는 생성하지 않는다 — 그 롤업은 뷰를 읽을 때 계산된다(두 방언 같음) |
 | MDD048 | 필드가 명세는 정의하지만 이 생성기가 생성하지 않는 모양이다 — 배열 `T[]` · 인라인 `enum`(필드 안에 값) · `map<K, V>` · 하위 필드를 갖는 `object`. 어느 타깃도 그 모양을 낼 수 없다(배열은 전에 경고 없이 원소 형 하나로 생성됐다). 별도 모델 + `@reference` · 최상위 `::enum` · 직렬화한 `text` 칸으로 나눈다 |
 | MDD024(경고) | `mdd.json` 에 이 생성기가 정의하지 않은 키가 있다(루트 또는 `targets[n]`) — 무시되며, 가까운 알려진 키가 있으면 제안한다. 분석이 아니라 설정 단계에서 나오고, 다른 경고처럼 `treatWarningsAsErrors`·`warningsAsErrors` 로 빌드를 세울 수 있다 — 편집기 밖(CI)에서 오타를 잡는 길. `_` 로 시작하는 설명 키와 `$schema` 는 보고하지 않는다. `sources` 가 비어 있으면 설정 오류(종료 코드 4) |
 | MDD025(경고) | `rowversion` 행 버전에 `@internal` — 읽기 타입에서 빠져 그 셋이 ETag 를 내지 않는다(`If-Match` 조건부 쓰기가 사라진다) |
 | MDD026 | `@lookup` 이 다른 모델의 `rowversion` 을 읽음 — 행 버전은 그 행의 것이고, PostgreSQL 에서는 조인으로 읽을 열도 없다 |
 | MDD027(경고) | 참조 키의 읽기 타입 navigation 이름이 그 읽기 타입의 기존 멤버(lookup 필드·1:1 navigation)와 같다 — 선언된 멤버가 이름을 갖고 navigation 은 생성하지 않는다(그 키로는 `$expand` 불가) |
 | MDD028(경고) | standalone `::view` 의 `### Source` 가 SQL 코드 블록이다 — 모델 이름을 방언 이름으로 바꾸려면 SQL 을 해석해야 해서 그 뷰는 생성하지 않는다. from/join/where 항목으로 쓰면 생성된다 |
-| MDD029(경고) | standalone `::view` 를 PostgreSQL 방언에서 생성하지 않는다 — 그 방언이 생성하지 않는 모델 뷰(`@indexed` rollup)를 읽는다, 또는 그런 뷰를 읽는다. (식이 있다는 것은 더 이상 사유가 아니다 — 번역된다) |
+| ~~MDD029~~ | 은퇴 — PostgreSQL 방언이 모든 모델 뷰를 생성하므로 그 위의 standalone `::view` 도 건너뛰지 않는다(종전 사유는 `@indexed` rollup 하나였다) |
 | MDD030 | standalone `::view` 가 해석되지 않는다 — 정의되지 않은 관계(from/join), 뷰의 from/join 이 아닌 관계나 없는 열을 가리키는 `@from`·join 조건·`group_by`, `Model.field = Model.field` 항을 `AND` 로 이은 것이 아닌 join 조건, 조인 대상을 쓰지 않는 조건, 값의 원천(`@from`·`@rollup`·`@computed`)이 없는 열, 서로를 읽는 뷰 |
 | MDD031(경고) | standalone `::view` 를 생성하지 않는 모양 — `@materialized`, `@lookup` 열(뷰는 소스에서 투영한다 — `@from`), 출력 열을 가리키는 `group_by`, 뷰 소스 위의 `@rollup`, 생성하지 않는 뷰를 읽는 뷰 |
 | MDD032(경고) | 뷰를 2단보다 깊게 겹쳐 읽는다 — 명세가 2단까지를 권장한다(생성은 한다) |

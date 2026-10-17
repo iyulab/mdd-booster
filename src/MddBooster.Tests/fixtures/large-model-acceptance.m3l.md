@@ -241,7 +241,7 @@
 
 - floor_level: integer @lookup(floor_id.level) "층 번호"
 - open_work_orders: integer @rollup(WorkOrder.asset_id, count) "작업지시 건수"
-- total_labor_hours: decimal(12,2) @rollup(WorkOrder.asset_id, sum(labor_hours)) @indexed "총 작업시간"
+- total_labor_hours: decimal(12,2) @rollup(WorkOrder.asset_id, sum(labor_hours)) "총 작업시간"
 - annual_depreciation: decimal(14,2) @computed(`purchase_cost / 10`) "연 감가상각"
 
 - @index(floor_id, status)

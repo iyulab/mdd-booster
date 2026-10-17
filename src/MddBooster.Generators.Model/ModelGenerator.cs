@@ -71,27 +71,6 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
             File.WriteAllText(Path.Combine(entityDir, $"{baseName}Ext.cs"), rendered.Read);
         }
 
-        if (_options.PostgresNaming)
-        {
-            // PG 방언 Sql 타깃(PostgresSqlGenerator)은 Lookup/Rollup/Computed 파생 필드와 soft-delete는
-            // 방출하지만 @indexed Rollup(구체화 뷰 갱신 전략은 별도 결정)은 아직 방출하지 않는다 — 그
-            // 경우만 여기서도 경고한다. 체이닝된 Lookup/Rollup이 *다른* 모델의 미지원 파생
-            // 컬럼을 거치는 전이 케이스는 이 판정(모델 자신의 필드만 봄)으로는 잡히지 않지만,
-            // PostgresSqlGenerator 쪽이 그 경로에서 이미 경고한다.
-            foreach (var model in context.Models)
-            {
-                var unsupported = model.Fields
-                    .Where(f => !EntitySurface.IsFieldInternal(f))
-                    .Any(f => f.Kind == FieldKind.Rollup && FieldAttributes.Has(f, "indexed"));
-                if (unsupported)
-                {
-                    Console.Error.WriteLine(
-                        $"[model] 경고: 모델 '{model.Name}'의 Ext 읽기 모델은 @indexed Rollup을 갖는데 " +
-                        "PG 방언은 아직 이를 방출하지 않는다 — 해당 뷰를 직접 만들기 전까지 Ext 질의는 실패한다");
-                }
-            }
-        }
-
         // A standalone view served as a read model: one read entity beside the pairs.
         var viewEnumNames = context.Enums.Select(e => e.Name).ToHashSet(StringComparer.Ordinal);
         foreach (var view in context.ReadViews)

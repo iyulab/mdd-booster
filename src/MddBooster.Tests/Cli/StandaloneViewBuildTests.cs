@@ -4,8 +4,8 @@ namespace MddBooster.Tests.Cli;
 
 /// <summary>
 /// A standalone <c>::view</c> becomes a <c>CREATE VIEW</c> in both SQL dialects — the shapes the M3L
-/// specification shows (§4.7.2–4.7.6) on SQL Server, and every expression-free shape on PostgreSQL,
-/// which leaves a view with an expression out with <c>MDD029</c>.
+/// specification shows (§4.7.2–4.7.6) — on both dialects (PostgreSQL once left views out with <c>MDD029</c>;
+/// that code is retired).
 /// </summary>
 [Collection(ConsoleCaptureCollection.Name)]
 public class StandaloneViewBuildTests

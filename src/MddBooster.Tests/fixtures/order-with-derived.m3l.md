@@ -26,7 +26,7 @@
 - customer_name: string @lookup(customer_id.name) "고객명"
 - customer_email: string @lookup(customer_id.email)
 - item_count: integer @rollup(OrderItem.order_id, count)
-- total_sum: decimal(12,2) @rollup(OrderItem.order_id, sum(line_total)) @indexed
+- total_sum: decimal(12,2) @rollup(OrderItem.order_id, sum(line_total))
 - tax_amount: decimal(12,2) @computed(`subtotal * 0.1`)
 - grand_total: decimal(12,2) @computed(`subtotal + tax_amount`)
 

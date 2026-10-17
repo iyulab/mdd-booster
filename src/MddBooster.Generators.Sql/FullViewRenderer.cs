@@ -32,9 +32,11 @@ namespace MddBooster.Generators.Sql;
 /// forbids SELECT-list alias references within the same SELECT level).
 /// </para>
 /// <para>
-/// <b>Indexed view opt-in</b>: if any rollup field carries <c>@indexed</c>,
-/// the rendered view includes <c>WITH SCHEMABINDING</c>. The DBA can then hand-
-/// author <c>CREATE UNIQUE CLUSTERED INDEX</c> in the <c>dbo/Views/</c> folder.
+/// <b><c>@indexed</c> is not rendered</b>: a rollup is computed when the view is read, with or without it. An
+/// indexed view cannot hold what a FullView is made of — a correlated subquery (every rollup), an outer join
+/// (every lookup), a CTE, a read of another view — so binding the view to its schema bought no index, only a view
+/// that blocks renames and that SQL Server refuses outright when it reads another FullView (Msg 4513). The build
+/// reports the attribute (<c>MDD052</c>).
 /// </para>
 /// </remarks>
 /// </summary>
@@ -93,8 +95,6 @@ public static class FullViewRenderer
         var rollups = plan.Rollups.Where(f => !EntitySurface.IsFieldInternal(f)).ToList();
         var computeds = plan.Computeds.Where(f => !EntitySurface.IsFieldInternal(f)).ToList();
 
-        var hasIndexed = rollups.Any(r => MddBooster.Core.Ast.FieldAttributes.Has(r, "indexed"));
-
         // --- Build JOIN list (one per lookup path prefix; see LookupJoinPlanner) ---
         Func<string, ResolvedModel?> findModel =
             name => allModels?.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.Ordinal));
@@ -138,7 +138,6 @@ public static class FullViewRenderer
         var sb = new StringBuilder();
         sb.AppendLine(Header);
         sb.Append("CREATE VIEW [").Append(schema).Append("].[").Append(viewName).Append(']');
-        if (hasIndexed) sb.Append(" WITH SCHEMABINDING");
         sb.AppendLine();
         sb.AppendLine("AS");
 

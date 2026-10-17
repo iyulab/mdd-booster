@@ -19,10 +19,9 @@ namespace MddBooster.Generators.Sql.Postgres;
 /// Ext 매핑이 같은 이름을 가리킨다.
 /// </para>
 /// <para>
-/// <b>인덱싱된 Rollup(<c>@indexed</c>)도 범위 밖이다.</b> T-SQL의 <c>WITH SCHEMABINDING</c> +
-/// 인덱스 뷰에 대응하는 PG 개념은 구체화 뷰(<c>MATERIALIZED VIEW</c>)인데, 이는 갱신 시점·트리거
-/// 설계가 필요한 별개의 아키텍처 결정이라 이 렌더러가 임의로 선택하지 않는다 — 마찬가지로
-/// 호출자가 걸러 경고로 표면화한다.
+/// <b><c>@indexed</c> Rollup 은 보통 Rollup 으로 낸다</b> — 읽을 때 계산된다. 그 속성이 바라는 구체화
+/// (<c>MATERIALIZED VIEW</c>)는 갱신 시점 · 트리거 설계가 필요한 별개의 결정이라 이 렌더러가 고르지 않고,
+/// 빌드가 <c>MDD052</c> 로 알린다(T-SQL 방언과 같다). 종전에는 그 모델의 뷰를 통째로 건너뛰어 Ext 질의가 실패했다.
 /// </para>
 /// </summary>
 public static class PgFullViewRenderer

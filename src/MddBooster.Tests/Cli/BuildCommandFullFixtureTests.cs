@@ -82,7 +82,6 @@ public class BuildCommandFullFixtureTests
             Assert.Contains("[Lookup", orderExt);
             Assert.Contains("[Rollup", orderExt);
             Assert.Contains("[Computed", orderExt);
-            Assert.Contains("Indexed = true", orderExt);
 
             // ApiRegistration emits a line for every entity
             var apiSrc = File.ReadAllText(Path.Combine(apiDir, "Api_gen", "ApiRegistration_gen.cs"));

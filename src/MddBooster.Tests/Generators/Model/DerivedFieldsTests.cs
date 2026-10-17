@@ -78,7 +78,7 @@ public class DerivedFieldsTests
     }
 
     [Fact]
-    public void Rollup_fields_carry_Rollup_attribute_and_indexed_flag()
+    public void Rollup_fields_carry_Rollup_attribute()
     {
         var (_, order, enumNames) = LoadOrder();
         var pair = EntityPairRenderer.Render(order, "Test.Orders", enumNames);
@@ -86,9 +86,7 @@ public class DerivedFieldsTests
         Assert.Contains("[Rollup(", pair.Read);
         Assert.Contains("public int ItemCount", pair.Read);
         Assert.Contains("public decimal TotalSum", pair.Read);
-
-        // @indexed → Indexed = true on the attribute
-        Assert.Contains("Indexed = true", pair.Read);
+        // @indexed → Indexed = true: IndexedRollupBuildTests (the fixture is clean, and @indexed now warns).
 
         // Write class does not carry rollup fields
         Assert.DoesNotContain("ItemCount", pair.Write);

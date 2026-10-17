@@ -60,6 +60,7 @@ public sealed class SemanticAnalyzer
                 CheckRowVersionUse(model, field, diagnostics);
                 CheckSystemDeclaration(model, field, diagnostics);
                 CheckLegacyLabel(model, field, diagnostics);
+                CheckIndexedRollup(model, field, diagnostics);
             }
         }
 
@@ -75,6 +76,23 @@ public sealed class SemanticAnalyzer
         CheckUnreadIndexItems(diagnostics);
 
         return diagnostics;
+    }
+
+    /// <summary>
+    /// <c>MDD052</c> (warning): a rollup asks to be stored ahead of reads (<c>@indexed</c> — an indexed view on SQL
+    /// Server, a materialized view on PostgreSQL), and this generator does not produce one: the rollup is computed when
+    /// the view is read. An indexed view cannot hold the correlated subquery a rollup is, so binding the read view to its
+    /// schema was never a step toward one — and nothing else would say the attribute does nothing.
+    /// </summary>
+    private static void CheckIndexedRollup(ResolvedModel model, FieldNode field, List<SemanticDiagnostic> diagnostics)
+    {
+        if (field.Kind != FieldKind.Rollup || !Ast.FieldAttributes.Has(field, "indexed")) return;
+        diagnostics.Add(new SemanticDiagnostic(
+            "MDD052",
+            $"'{model.Name}.{field.Name}' 의 `@indexed` 는 생성하지 않는다 — 이 롤업은 뷰를 읽을 때 계산된다(SQL Server 색인 뷰 · " +
+            "PostgreSQL 구체화 뷰 없음). 색인 뷰는 롤업의 상관 하위 쿼리를 담을 수 없다.",
+            field.Loc,
+            SemanticSeverity.Warning));
     }
 
     /// <summary>

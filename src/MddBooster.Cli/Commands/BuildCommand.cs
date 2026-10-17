@@ -196,8 +196,6 @@ public sealed class BuildCommand
 
         // standalone ::view 의 CREATE VIEW 는 Sql 타깃이 생성한다. 그 타깃이 없으면 뷰 자체는 이 빌드가 만들지 않는다 —
         // 로더 회계와 같은 자리에서 알린다(읽기 모델은 그래도 나오고, 그 이름의 뷰가 데이터베이스에 있다고 전제한다).
-        // PostgreSQL 방언이 건너뛰는 뷰는 이유와 함께 경고하고, 읽기 모델로도 내지 않는다 — 가리킬 뷰가 없다.
-        var viewsNoSqlTargetCreates = new HashSet<string>(StringComparer.Ordinal);
         if (viewResolution.Views.Count > 0)
         {
             var sqlTargets = cfg.Targets.Where(t => t.Type == "Sql").ToList();
@@ -206,17 +204,6 @@ public sealed class BuildCommand
                 Console.Error.WriteLine(
                     $"[m3l] 경고: standalone 뷰 {viewResolution.Views.Count}개의 CREATE VIEW 를 생성하는 타깃이 없습니다(Sql 타깃이 생성한다): "
                     + string.Join(", ", viewResolution.Views.Select(v => v.Name)));
-            }
-            else if (sqlTargets.Any(IsPostgresDialect))
-            {
-                foreach (var (name, reason) in MddBooster.Generators.Sql.StandaloneViewSources.PostgresSkipped(viewResolution.Views, allModels))
-                {
-                    var view = viewResolution.Views.Single(v => v.Name == name);
-                    viewsNoSqlTargetCreates.Add(name);
-                    ReportWarning("semantic", "MDD029", new SemanticDiagnostic("MDD029",
-                        $"뷰 '{name}' 을(를) PostgreSQL 방언에서 생성하지 않는다 — {reason}.",
-                        view.Source.Loc, SemanticSeverity.Warning).Format());
-                }
             }
             foreach (var view in viewResolution.Views.Where(v => !string.IsNullOrWhiteSpace(v.Source.SourceDef?.OrderBy)))
                 Console.WriteLine($"[m3l] 정보: 뷰 '{view.Name}' 의 order_by 는 방출하지 않는다 — 뷰에는 순서가 없다(조회하는 쪽이 정렬한다).");
@@ -233,7 +220,7 @@ public sealed class BuildCommand
             }
         }
         var readViews = viewResolution.Views
-            .Where(v => ViewReadModels.IsReadModel(v) && !viewsNoSqlTargetCreates.Contains(v.Name))
+            .Where(ViewReadModels.IsReadModel)
             .ToList();
         // 읽기 모델이 내는 클래스·셋 이름이 모델이 내는 이름과 같으면 생성물이 한 이름을 두 번 선언한다 — 고르지 않고
         // 멈춘다(MDD038). 그 이름을 내는 타깃이 있을 때만 문제다.

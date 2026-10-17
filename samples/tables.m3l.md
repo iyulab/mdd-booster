@@ -20,7 +20,7 @@
 - name: string(80) @not_null "프로젝트명"
 
 - task_count: integer @rollup(Task.project_id, count) "작업 수"
-- total_estimated_hours: decimal(12,2) @rollup(Task.project_id, sum(estimated_hours)) @indexed "예상 총 시간"
+- total_estimated_hours: decimal(12,2) @rollup(Task.project_id, sum(estimated_hours)) "예상 총 시간"
 
 ## Task : Timestampable
 

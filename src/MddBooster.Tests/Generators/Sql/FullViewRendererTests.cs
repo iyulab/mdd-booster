@@ -319,7 +319,7 @@ public class FullViewRendererTests
     }
 
     [Fact]
-    public void Rollup_sum_emits_ISNULL_wrapped_subquery_and_indexed_triggers_schemabinding()
+    public void Rollup_sum_emits_ISNULL_wrapped_subquery_in_a_view_that_is_not_schema_bound()
     {
         var ast = new M3lLoader().LoadFile(FixturePath("order-with-derived.m3l.md"));
         var models = new InterfaceResolver(ast).ResolveAll();
@@ -330,7 +330,7 @@ public class FullViewRendererTests
         Assert.Contains(
             "(SELECT ISNULL(SUM([LineTotal]), 0) FROM [dbo].[OrderItem] WHERE [OrderId] = b.[Id]) AS [TotalSum]",
             sql);
-        Assert.Contains("WITH SCHEMABINDING", sql);
+        Assert.DoesNotContain("SCHEMABINDING", sql);
     }
 
     // `RollupDef` is constructed directly here rather than through `M3lLoader` — the
