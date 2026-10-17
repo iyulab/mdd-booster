@@ -43,6 +43,11 @@
 열 아래로 강제되지 않고(JSON 텍스트), `decimal(p,s)` 원소의 자릿수는 어느 타깃에서도 검증되지 않는다(PostgreSQL 열은 그 자릿수로
 반올림한다). 배열이 없는 모델의 산출물은 그대로다.
 
+배열을 «읽는» 쪽도 같은 규칙을 따른다: 배열 칸을 가리키는 lookup 과 배열 칸을 집계하는 rollup(`sum(tags)` 는 원소의 합이 아니다 —
+`count` 는 된다)은 `MDD048`. standalone `::view` 의 `@from` 열은 원천의 모양을 따른다 — 원천이 배열이면 읽기 모델이 `List<T>`(SQL
+Server 는 `HasColumnType("nvarchar(max)")`), 원천과 다른 모양(배열 ↔ 값 하나, 원소 nullable 이 다름)으로 선언하면 `MDD030`. 종전에는
+뷰의 배열 열이 원소 형 속성으로 생성됐다. 목록을 내는 rollup · 계산 뷰 열은 그 뷰를 생성하지 않는다(`MDD031`).
+
 ### 🔴 정정 — 0.41.0 의 `@computed` 캐스팅은 «선언보다 큰 값»에서 조회를 실패시킨다
 
 0.41.0 은 FullView 의 `@computed` 값을 필드가 선언한 형으로 캐스팅하기 시작했다(`CAST(… AS DECIMAL(5,1))` · `CAST(… AS INT)`). 그 절은

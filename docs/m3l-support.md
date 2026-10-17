@@ -98,8 +98,11 @@ Still refused, with `MDD048` naming the combination: an element with a length bo
 `email[]`, `phone[]`, `url[]` — the length would bound the list, not the element, and SQL Server
 could not enforce it), an enum element, `binary`, `json`, `rowversion`, `byte`, `time` and `datetime`
 elements, and an array that is derived (lookup, rollup, computed), declares a default, or carries
-`@reference`, `@pk`, `@unique`, `@index`, `@searchable`, `@min`/`@max` or a `### Indexes` entry. A
-standalone `::view` column declared as an array is not checked and is generated as its element type.
+`@reference`, `@pk`, `@unique`, `@index`, `@searchable`, `@min`/`@max` or a `### Indexes` entry. So is
+a lookup whose column is an array and a rollup that aggregates one (`sum(tags)` is not the sum of the
+elements). A standalone `::view` column projected with `@from` takes its source's shape — declaring an
+array over a single value, or the reverse, is an error (`MDD030`); a list-valued rollup or computed view
+column leaves the view out (`MDD031`).
 
 ## §2.5.6 Custom Framework Attributes
 

@@ -313,6 +313,15 @@ public static class DbContextRenderer
                       .Append(").HasColumnName(").Append(SourceLiteral.CSharpString(column.Name)).AppendLine(");");
                 }
             }
+            else
+            {
+                // A projected list column is the base table's JSON text — named for the reason the entities' are.
+                foreach (var column in view.Columns.Where(c => c.Field.Array))
+                {
+                    sb.Append("            e.Property(x => x.").Append(NameCasing.ToPascalCase(column.Name))
+                      .AppendLine(").HasColumnType(\"nvarchar(max)\");");
+                }
+            }
             sb.AppendLine("        });");
         }
     }

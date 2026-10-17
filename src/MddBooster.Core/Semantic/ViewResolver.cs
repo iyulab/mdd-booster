@@ -311,7 +311,27 @@ public static class ViewResolver
             if (FieldAttributes.FirstArg(field, "from") is { } fromArg)
             {
                 var reference = ColumnRef(fromArg, view, relations, $"열 '{field.Name}' 의 @from", ref ok);
-                return reference is null ? null : new ViewFromColumn(field, reference);
+                if (reference is null) return null;
+                // The column carries its source's value, so it has its source's shape: a list declared over a single
+                // value (or the reverse) would type the read model against a column the view does not produce.
+                var source = reference.Relation.Kind == ViewRelationKind.Model
+                    ? reference.Relation.Model!.Fields.First(f => f.Name == reference.Column)
+                    : reference.Relation.View!.Columns.First(c => c.Name == reference.Column).Field;
+                if (source.Array != field.Array || (field.Array && source.ArrayItemNullable != field.ArrayItemNullable))
+                {
+                    diagnostics.Add(Error(view,
+                        $"뷰 '{view.Name}' 의 열 '{field.Name}' 은(는) {Shape(field)} 로 선언됐지만 원천 '{fromArg}' 은(는) {Shape(source)} 다 — " +
+                        "투영한 열은 원천의 모양을 따른다."));
+                    ok = false;
+                    return null;
+                }
+                return new ViewFromColumn(field, reference);
+            }
+            if (field.Array)
+            {
+                diagnostics.Add(Unsupported(view, $"열 '{field.Name}' 은(는) 배열로 선언된 {(field.Kind == FieldKind.Rollup ? "@rollup" : "계산")} 열이다 — 목록을 내는 집계 · 식은 생성하지 않는다"));
+                ok = false;
+                return null;
             }
             switch (field.Kind)
             {
@@ -361,6 +381,10 @@ public static class ViewResolver
 
     private static SemanticDiagnostic Error(ModelNode view, string message) =>
         new("MDD030", message, view.Loc, SemanticSeverity.Error);
+
+    private static string Shape(FieldNode field) => field.Array
+        ? $"배열 `{field.Type}{(field.ArrayItemNullable ? "?" : "")}[]`"
+        : $"값 하나 `{field.Type}`";
 
     private static bool IsQualified(string side)
     {

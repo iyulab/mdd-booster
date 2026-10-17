@@ -337,4 +337,75 @@ CREATE TABLE public.array_holder
         foreach (var array in new[] { "Tags", "Notes", "Scores", "Prices", "RelatedIds", "Stamps" })
             Assert.DoesNotContain(array, form);
     }
+
+    // ---- what reads an array: a lookup, a rollup, a standalone view ----
+
+    private const string Box = "## Box\n- id: identifier @pk @generated\n- labels: string[]\n- weights: integer[]\n- doc_id: identifier @reference(Doc)\n\n";
+
+    /// <summary>A lookup reads one value; over a list column it would put a list under a single-valued field.</summary>
+    [Fact]
+    public void A_lookup_whose_column_is_an_array_is_refused()
+    {
+        var diagnostics = Analyze("- box_id: identifier? @reference(Box)\n- first_label: string? @lookup(box_id.labels)\n", Box);
+        var refusal = Assert.Single(diagnostics, d => d.Code == "MDD048");
+        Assert.Contains("'Box.labels' 은 배열", refusal.Message);
+    }
+
+    [Fact]
+    public void A_rollup_that_aggregates_an_array_is_refused_and_counting_is_not()
+    {
+        var sum = Assert.Single(Analyze("- total: integer @rollup(Box.doc_id, sum(weights))\n", Box), d => d.Code == "MDD048");
+        Assert.Contains("'Box.weights' 은 배열", sum.Message);
+        Assert.DoesNotContain(Analyze("- boxes: integer @rollup(Box.doc_id, count)\n", Box), d => d.Code == "MDD048");
+    }
+
+    private static ViewResolution ResolveViews(string views)
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), $"mdd-array-views-{Guid.NewGuid():N}.m3l.md");
+        File.WriteAllText(tmp, "# Namespace: test\n\n## Doc\n- id: identifier @pk @generated\n\n" + Box + views);
+        try
+        {
+            var ast = new M3lLoader().LoadFile(tmp);
+            return ViewResolver.Resolve(ast.Views, new InterfaceResolver(ast).ResolveAll());
+        }
+        finally { File.Delete(tmp); }
+    }
+
+    /// <summary>A projected column has its source's shape — and the read model types it as the list it is.</summary>
+    [Fact]
+    public void A_view_column_projecting_an_array_is_a_list_on_the_read_model()
+    {
+        var result = ResolveViews(
+            "## Labels ::view\n### Source\n- from: Box\n\n- id: identifier @from(Box.id)\n- labels: string[] @from(Box.labels)\n");
+        Assert.Empty(result.Diagnostics);
+
+        var view = Assert.Single(result.Views);
+        var entity = ViewEntityRenderer.Render(view, "Test", knownEnumNames: null);
+        Assert.Contains("using System.Collections.Generic;", entity);
+        Assert.Contains("public List<string> Labels { get; set; } = [];", entity);
+        var context = Normalize(DbContextRenderer.Render([], "Test", "TestDb", readViews: [view]));
+        Assert.Contains("e.Property(x => x.Labels).HasColumnType(\"nvarchar(max)\");", context);
+    }
+
+    [Theory]
+    [InlineData("- labels: string @from(Box.labels)\n", "값 하나 `string`", "배열 `string[]`")]
+    [InlineData("- labels: string?[] @from(Box.labels)\n", "배열 `string?[]`", "배열 `string[]`")]
+    [InlineData("- tag: string[] @from(Box.id)\n", "배열 `string[]`", "값 하나 `identifier`")]
+    public void A_view_column_declared_in_another_shape_than_its_source_is_an_error(string column, string declared, string source)
+    {
+        var result = ResolveViews($"## Labels ::view\n### Source\n- from: Box\n\n- id: identifier @from(Box.id)\n{column}");
+        var error = Assert.Single(result.Diagnostics, d => d.Code == "MDD030");
+        Assert.Contains(declared, error.Message);
+        Assert.Contains(source, error.Message);
+        Assert.Empty(result.Views);
+    }
+
+    [Fact]
+    public void A_list_valued_rollup_column_leaves_the_view_out()
+    {
+        var result = ResolveViews(
+            "## PerDoc ::view\n### Source\n- from: Doc\n\n- id: identifier @from(Doc.id)\n- all: integer[] @rollup(Box.doc_id, count)\n");
+        Assert.Single(result.Diagnostics, d => d.Code == "MDD031");
+        Assert.Empty(result.Views);
+    }
 }

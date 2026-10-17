@@ -494,6 +494,18 @@ public sealed class SemanticAnalyzer
                 break;
             // UnknownTarget: the reference itself is reported where references are checked.
         }
+
+        // MDD048 — a lookup whose column is a list. The FullView would join the list column in under a field declared
+        // as one value: on PostgreSQL a scalar property over an array column, on SQL Server JSON text read as the
+        // element type. A list-valued lookup is not generated either (derived arrays are refused), so the pair is.
+        if (walk.Failure == LookupPathFailure.None && walk.Column is { Array: true } column)
+        {
+            diagnostics.Add(new SemanticDiagnostic(
+                "MDD048",
+                $"'{model.Name}.{field.Name}' @lookup({path}): 대상 칸 '{walk.Target?.Name}.{column.Name}' 은 배열이다 — " +
+                "lookup 은 값 하나를 읽고, 배열을 읽는 lookup 은 이 생성기가 아직 내지 않는다. 그 모델을 직접 읽거나(`$expand`) 값 하나인 칸을 가리키세요.",
+                field.Loc));
+        }
     }
 
     /// <summary>
@@ -594,6 +606,19 @@ public sealed class SemanticAnalyzer
                     $"'{model.Name}.{field.Name}' @rollup({target}.{fk}): 대상 엔티티에 FK 필드 '{fk}'가 존재하지 않습니다.",
                     field.Loc));
             }
+        }
+
+        // MDD048 — an aggregate over a list column (`sum(tags)`): SUM/MIN/MAX/AVG over JSON text or an array is
+        // not the aggregate of its elements, and neither engine reads it as one. Counting rows needs no column.
+        var aggregated = field.Rollup.Field;
+        if (!string.IsNullOrEmpty(aggregated)
+            && _models.FirstOrDefault(m => m.Name == target)?.Fields.FirstOrDefault(f => f.Name == aggregated) is { Array: true })
+        {
+            diagnostics.Add(new SemanticDiagnostic(
+                "MDD048",
+                $"'{model.Name}.{field.Name}' @rollup({target}.{fk}, {field.Rollup.Aggregate}({aggregated})): '{target}.{aggregated}' 은 배열이다 — " +
+                "배열 칸의 집계는 원소의 집계가 아니라서 이 생성기가 내지 않는다. 행을 세거나(`count`) 원소를 별도 모델로 나누세요.",
+                field.Loc));
         }
     }
 

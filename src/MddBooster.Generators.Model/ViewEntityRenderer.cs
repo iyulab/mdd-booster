@@ -23,6 +23,7 @@ public static class ViewEntityRenderer
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
         sb.AppendLine("using System;");
+        if (view.Columns.Any(c => c.Field.Array)) sb.AppendLine("using System.Collections.Generic;");
         sb.AppendLine();
         sb.Append("namespace ").Append(ns).AppendLine(";");
         sb.AppendLine();
@@ -34,9 +35,11 @@ public static class ViewEntityRenderer
         foreach (var column in view.Columns)
         {
             var field = column.Field;
-            var type = CSharpTypeMapper.MapFieldType(field.Type!, knownEnumNames, postgres);
+            var type = CSharpTypeMapper.PropertyType(field, knownEnumNames, postgres);
             var nullable = field.Nullable ? "?" : string.Empty;
-            var initializer = field.Nullable ? string.Empty : CSharpTypeMapper.DefaultInitializer(field.Type!, postgres);
+            var initializer = field.Nullable ? string.Empty
+                : field.Array ? CSharpTypeMapper.ArrayInitializer
+                : CSharpTypeMapper.DefaultInitializer(field.Type!, postgres);
             sb.Append("    public ").Append(type).Append(nullable).Append(' ')
               .Append(NameCasing.ToPascalCase(field.Name)).Append(" { get; set; }").AppendLine(initializer);
         }
