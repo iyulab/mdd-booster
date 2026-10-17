@@ -252,6 +252,25 @@ public static class DbContextRenderer
               .Append("Ext>().Property(e => e.Id).HasColumnName(").Append(SourceLiteral.CSharpString(column)).AppendLine(");");
         }
 
+        // An array field's column is NVARCHAR(MAX) holding JSON (the Sql target's DDL). EF Core picks that type for a
+        // primitive collection by convention — but only below compatibility level 170: from there (or with
+        // UseAzureSql) it picks the json type, and would query a column the schema does not have. Naming the type
+        // keeps the EF model on the schema whatever level a host sets. Both types read the column — the Ext type
+        // through its view — except where the field is @internal, which the read type does not carry.
+        foreach (var model in ordered)
+        {
+            var name = NameCasing.ToPascalCase(model.Name);
+            foreach (var field in BaseColumnsOf(model).Where(f => f.Array))
+            {
+                var property = NameCasing.ToPascalCase(field.Name);
+                sb.Append("        modelBuilder.Entity<").Append(name)
+                  .Append(">().Property(e => e.").Append(property).AppendLine(").HasColumnType(\"nvarchar(max)\");");
+                if (EntitySurface.IsFieldInternal(field)) continue;
+                sb.Append("        modelBuilder.Entity<").Append(name)
+                  .Append("Ext>().Property(e => e.").Append(property).AppendLine(").HasColumnType(\"nvarchar(max)\");");
+            }
+        }
+
         // field-level @unique/@index — SQL parity (TableRenderer). Write entity only; the Ext
         // class maps to a view, which has no index of its own. Nullable-unique's filtered-index
         // behavior (WHERE ... IS NOT NULL) needs no code here — the SQL Server provider's own

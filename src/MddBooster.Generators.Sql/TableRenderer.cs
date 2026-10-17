@@ -112,6 +112,17 @@ public static class TableRenderer
             }
         }
 
+        // An array column holds JSON text, so the one thing the database can hold it to is that the text is JSON.
+        // Always emitted, unlike the enum CHECK: without it a write that bypasses EF stores text no reader can parse,
+        // and the failure surfaces on some later read rather than at the write. ISJSON(x) runs on every supported
+        // version; the form that also tests for an array, ISJSON(x, ARRAY), needs SQL Server 2022. A NULL passes.
+        foreach (var field in storedFields.Where(f => f.Array))
+        {
+            var column = NameCasing.ToPascalCase(field.Name);
+            inlineConstraints.Add(
+                $"CONSTRAINT [{GeneratedObjectNames.For(false, GeneratedObjectNames.Kind.Check, model.Name, column)}] CHECK (ISJSON([{column}]) = 1)");
+        }
+
         var bodyLines = new List<string>(columnLines.Count + inlineConstraints.Count);
         bodyLines.AddRange(columnLines);
         bodyLines.AddRange(inlineConstraints);

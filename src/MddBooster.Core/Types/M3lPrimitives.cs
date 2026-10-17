@@ -42,6 +42,35 @@ public static class M3lPrimitives
         typeName is not null && All.Contains(typeName);
 
     /// <summary>
+    /// The element types an array field (<c>T[]</c>, specification §2.4.3) is generated for. <c>string</c> only without a
+    /// length and <c>decimal</c> with its digits — the analyzer checks the parameters, this set names the types.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The set is the elements both dialects can store with the same meaning: SQL Server keeps the list as JSON text, where
+    /// nothing below the column can be constrained, and PostgreSQL keeps a native array of the element's own type. An
+    /// element whose value carries a bound — a length (<c>string(n)</c>, <c>email</c>), an enum's members — would be
+    /// enforced by one dialect and not the other, and a length attribute on the property would bound the list's count, not
+    /// its elements. Those stay refused until the element's validation has a home.
+    /// </para>
+    /// <para>
+    /// <c>byte</c>, <c>time</c> and <c>datetime</c> are left out on purpose rather than by omission: each maps to a
+    /// different type per dialect or per target (<c>byte</c> is widened on PostgreSQL), and a list of them has not been
+    /// measured end to end. The analyzer refuses every other element (<c>MDD048</c>), so the generators map an array's
+    /// element with the ordinary type mappers and never meet one outside this set.
+    /// </para>
+    /// </remarks>
+    public static readonly IReadOnlySet<string> ArrayElementTypes = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "string", "text",
+        "integer", "long", "short",
+        "boolean",
+        "decimal", "float", "double",
+        "identifier",
+        "date", "timestamp",
+    };
+
+    /// <summary>
     /// The length ceiling a semantic type carries without one being written down.
     /// <c>email</c> is bounded even though no <c>(n)</c> appears in the
     /// declaration, because the language defines it as a bounded string.

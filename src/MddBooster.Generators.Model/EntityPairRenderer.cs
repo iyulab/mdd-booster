@@ -145,6 +145,10 @@ public static class EntityPairRenderer
         // ImplicitUsings. Declaring the dependency here makes the emitted file
         // self-contained instead of silently inheriting the consumer's setting.
         sb.AppendLine("using System;");
+        // An array field is a List<T>; the directive is written only where one is, so a model without one renders as
+        // it did before arrays were generated.
+        if (fields.Any(f => f.Array))
+            sb.AppendLine("using System.Collections.Generic;");
         sb.AppendLine();
         sb.Append("namespace ").Append(ns).AppendLine(";");
         sb.AppendLine();
@@ -156,7 +160,7 @@ public static class EntityPairRenderer
         sb.AppendLine("    global::System.Guid Id { get; }");
         foreach (var f in fields)
         {
-            var cs = CSharpTypeMapper.MapFieldType(f.Type!, knownEnumNames, postgres);
+            var cs = CSharpTypeMapper.PropertyType(f, knownEnumNames, postgres);
             var nullable = f.Nullable ? "?" : string.Empty;
             sb.Append("    ").Append(cs).Append(nullable).Append(' ')
               .Append(NameCasing.ToPascalCase(f.Name)).AppendLine(" { get; }");
@@ -228,8 +232,10 @@ public static class EntityPairRenderer
         sb.AppendLine("using System;");
         // A reverse collection is an ICollection<T>; the directive is written only where one is, so a model without
         // one renders as it did before collections existed.
-        if (isExt && (collections ?? []).Any(c => c.CollidesWith is null
+        // An array field is a List<T>, under the same rule.
+        if ((isExt && (collections ?? []).Any(c => c.CollidesWith is null
                 && string.Equals(c.PrincipalModel, modelName, StringComparison.Ordinal)))
+            || storedFields.Any(f => f.Array))
             sb.AppendLine("using System.Collections.Generic;");
         sb.AppendLine("using System.ComponentModel.DataAnnotations;");
         sb.AppendLine("using System.ComponentModel.DataAnnotations.Schema;");
@@ -390,7 +396,7 @@ public static class EntityPairRenderer
         bool postgres,
         IReadOnlySet<string> searchableKeys)
     {
-        var cs = CSharpTypeMapper.MapFieldType(f.Type!, knownEnumNames, postgres);
+        var cs = CSharpTypeMapper.PropertyType(f, knownEnumNames, postgres);
 
         // A lookup read through an optional key at any hop yields NULL whenever that key is NULL
         // (each hop is a LEFT JOIN) — LookupPath.ResultNullable decided which, for the whole path.
@@ -416,15 +422,20 @@ public static class EntityPairRenderer
         // initializer needed. Non-nullable types: non-null reference types get an
         // explicit default (for nullable-reference analysis); value types
         // (including enums) auto-default to 0/false.
-        var initializer = declaredInitializer
-            ?? (effectiveNullable || isEnumField
-                ? string.Empty
-                : CSharpTypeMapper.DefaultInitializer(f.Type!, postgres));
+        // An array declares no default (MDD048 refuses one); a non-nullable one starts as an empty list.
+        var initializer = f.Array
+            ? (effectiveNullable ? string.Empty : CSharpTypeMapper.ArrayInitializer)
+            : declaredInitializer
+                ?? (effectiveNullable || isEnumField
+                    ? string.Empty
+                    : CSharpTypeMapper.DefaultInitializer(f.Type!, postgres));
 
         // [Column(TypeName = "decimal(p,s)")] for decimal fields with explicit precision.
         // Suppresses EF Core's "No store type specified" warning and aligns the CLR
-        // mapping with the SQL DECIMAL(p,s) column the SQL generator emits.
-        if (f.Type == "decimal")
+        // mapping with the SQL DECIMAL(p,s) column the SQL generator emits. Not on an
+        // array of decimals: its column is the list's (JSON text or a native array),
+        // not one decimal's, and the digits describe each element.
+        if (f.Type == "decimal" && !f.Array)
         {
             var decParams = MddBooster.Core.Ast.FieldAttributes.TypeParams(f);
             if (decParams is { Count: >= 1 })
@@ -500,7 +511,8 @@ public static class EntityPairRenderer
             // from the parsed flag, not from the `@not_null` attribute: a plain
             // `- name: string(50)` is already non-nullable, and the SQL column's
             // NOT NULL is derived the same way.
-            if (!f.Nullable && CSharpTypeMapper.IsReferenceType(f.Type!))
+            // An array's property is a List<T> — a reference type whatever its element is.
+            if (!f.Nullable && (f.Array || CSharpTypeMapper.IsReferenceType(f.Type!)))
                 sb.AppendLine("    [Required]");
 
             // [StringLength(n)] — the bound the field actually carries, which is
@@ -528,8 +540,9 @@ public static class EntityPairRenderer
             // [DecimalDigits(p, s)] — a decimal's digits, the way [StringLength] carries a string's bound: the column
             // keeps exactly these, and without the rule in front of it a value with more decimal places was stored
             // rounded (the caller reads back a number it never sent) and one with more integer digits failed the write.
-            // The same digits the SQL column is declared with, bare decimal included.
-            if (f.Type == "decimal")
+            // The same digits the SQL column is declared with, bare decimal included. Not on an array of decimals: the
+            // attribute validates one decimal value, and a list is not one.
+            if (f.Type == "decimal" && !f.Array)
             {
                 var (precision, scale) = MddBooster.Core.Types.M3lPrimitives.DecimalDigitsOf(
                     MddBooster.Core.Ast.FieldAttributes.TypeParams(f));

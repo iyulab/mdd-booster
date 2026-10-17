@@ -25,6 +25,19 @@ public static class TypeScriptTypeMapper
         return Map(m3lType);
     }
 
+    /// <summary>
+    /// The member type of a field without its own <c>| null</c> — the mapped type, or for an array field (<c>T[]</c>)
+    /// <c>T[]</c>, <c>(T | null)[]</c> when the elements are nullable (<c>T?[]</c>). The caller appends the field's own
+    /// <c> | null</c> (<c>T[]?</c> → <c>T[] | null</c>) as it does for any type.
+    /// </summary>
+    public static string PropertyType(M3L.Native.FieldNode field, IReadOnlySet<string>? knownEnumNames)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        var mapped = MapFieldType(field.Type!, knownEnumNames);
+        if (!field.Array) return mapped;
+        return field.ArrayItemNullable ? $"({mapped} | null)[]" : $"{mapped}[]";
+    }
+
     public static string Map(string m3lType)
     {
         if (string.IsNullOrWhiteSpace(m3lType))

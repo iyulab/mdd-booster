@@ -18,6 +18,31 @@
 
 ## [Unreleased]
 
+### 배열 필드 `T[]` 가 생성된다 — 길이 없는 원시형 원소
+
+명세 §2.4.3 의 배열(`- tags: string[]` · 원소 nullable `string?[]` · 배열 nullable `string[]?`)을 네 타깃이 낸다. 종전에는 모든 배열이
+`MDD048` 로 빌드를 세웠다.
+
+- **SQL Server** — `NVARCHAR(MAX)` 에 JSON 배열, 표 수준 CHECK `CK_<Model>_<Column>` 이 `ISJSON([열]) = 1` 을 지킨다(SQL Server 2016+).
+- **PostgreSQL** — 원소 형의 네이티브 배열(`text[]` · `integer[]` · `bigint[]` · `smallint[]` · `boolean[]` · `numeric(p,s)[]` · `real[]` ·
+  `double precision[]` · `uuid[]` · `date[]` · `timestamptz[]`). 원소를 nullable 로 선언하지 않았으면(`string[]`) CHECK
+  `ck_<table>_<column>` 이 NULL 원소를 막는다 — PostgreSQL 배열은 원소 NULL 을 늘 받기 때문이다.
+- **Model** — `List<T>`(원소 nullable 이면 `List<T?>`, 배열 nullable 이면 `List<T>?`). nullable 이 아닌 목록은 `[]` 로 초기화되고
+  `[Required]` 가 붙는다(원소 형과 무관하게 목록은 참조 형이다). 길이 · 자릿수 어트리뷰트(`[StringLength]` · `[DecimalDigits]` ·
+  `[Column(TypeName)]`)는 붙지 않는다 — 목록이 아니라 원소 하나를 재는 규칙이다. SQL Server 방언의 DbContext 는 목록 속성에
+  `HasColumnType("nvarchar(max)")` 를 명시한다 — EF Core 는 호환 수준 170 이상(또는 `UseAzureSql`)에서 원시 컬렉션에 `json` 형을
+  고르므로, 명시하지 않으면 호스트 설정에 따라 스키마에 없는 형으로 질의한다. 쓰기 · 읽기 타입과 인터페이스가 같은 속성을 갖는다.
+- **TypeScript** — `T[]`(`(T | null)[]` · `T[] | null`). 생성 폼은 배열 필드에 컨트롤을 그리지 않는다 — 폼 컴포넌트 · 오버라이드 키
+  · `empty…`/`…FromEntity` 에서 함께 빠진다(목록을 고치는 호출부는 폼 상태에 직접 넣는다).
+
+원소는 `string`(길이 없음) · `text` · `integer` · `long` · `short` · `boolean` · `decimal(p,s)` · `float` · `double` · `identifier` ·
+`date` · `timestamp` 만이다. 계속 `MDD048` 인 것 — 이제 메시지가 그 조합과 고칠 길을 말한다: 길이 있는 원소(`string(n)[]` ·
+`email[]` · `phone[]` · `url[]` — SQL Server 의 JSON 칸에서는 원소 길이를 데이터베이스가 지킬 수 없고, 속성의 길이 검증은 목록의
+개수를 잰다) · enum 원소 · `binary`/`json`/`rowversion`/`byte`/`time`/`datetime` 원소 · 파생 필드(lookup · rollup · computed) ·
+기본값 · `@reference` · `@pk`/`@unique`/`@index` · `### Indexes` 항목 · `@searchable` · `@min`/`@max`. SQL Server 에서는 원소 형이
+열 아래로 강제되지 않고(JSON 텍스트), `decimal(p,s)` 원소의 자릿수는 어느 타깃에서도 검증되지 않는다(PostgreSQL 열은 그 자릿수로
+반올림한다). 배열이 없는 모델의 산출물은 그대로다.
+
 ### 🔴 정정 — 0.41.0 의 `@computed` 캐스팅은 «선언보다 큰 값»에서 조회를 실패시킨다
 
 0.41.0 은 FullView 의 `@computed` 값을 필드가 선언한 형으로 캐스팅하기 시작했다(`CAST(… AS DECIMAL(5,1))` · `CAST(… AS INT)`). 그 절은

@@ -75,6 +75,32 @@ are deliberate:
 No format validation is emitted for any of these types — the bound is the length axis
 only. A 321-character value is refused; `not-an-email` is not.
 
+## §2.4.3 Array Types
+
+**What this generator implements** is arrays of unbounded primitives — `string` (without a length),
+`text`, `integer`, `long`, `short`, `boolean`, `decimal(p,s)`, `float`, `double`, `identifier`,
+`date` and `timestamp` — with all three nullabilities (`T[]`, `T?[]`, `T[]?`):
+
+| Target | `tags: string[]` becomes |
+|---|---|
+| SQL Server | `NVARCHAR(MAX)` holding a JSON array, with a `CK_<Model>_<Column>` CHECK `ISJSON(...) = 1` |
+| PostgreSQL | the element's native array (`text[]`, `numeric(10,2)[]`, `uuid[]` …); unless the elements are declared nullable (`T?[]`), a `ck_<table>_<column>` CHECK keeps NULL elements out |
+| Model | `List<string>` (`List<string?>` for `T?[]`, `List<string>?` for `T[]?`), a required list initialized to `[]`; on SQL Server the context names the column type (`HasColumnType("nvarchar(max)")`) |
+| TypeScript | `string[]` (`(string \| null)[]`, `string[] \| null`) |
+
+The array's own nullability is the column's `NULL` / `NOT NULL`. On SQL Server the element type is not
+enforced below the column — JSON text has no element type — so it holds only as far as the entity's
+`List<T>` does. A `decimal(p,s)` element's digits are not validated on any target (PostgreSQL's column
+rounds to them). The generated form draws no control for an array field: it is left out of the form
+component, its override keys and its form-state helpers.
+
+Still refused, with `MDD048` naming the combination: an element with a length bound (`string(n)[]`,
+`email[]`, `phone[]`, `url[]` — the length would bound the list, not the element, and SQL Server
+could not enforce it), an enum element, `binary`, `json`, `rowversion`, `byte`, `time` and `datetime`
+elements, and an array that is derived (lookup, rollup, computed), declares a default, or carries
+`@reference`, `@pk`, `@unique`, `@index`, `@searchable`, `@min`/`@max` or a `### Indexes` entry. A
+standalone `::view` column declared as an array is not checked and is generated as its element type.
+
 ## §2.5.6 Custom Framework Attributes
 
 **What this generator implements** — none of them. A custom attribute parses and reaches the model,
@@ -257,11 +283,11 @@ silently.
 
 ## §4.9.3 Map Types
 
-**What this generator implements**: none of these shapes. A field typed `object`, `map<K,V>`, an
-inline `enum`, or an array `T[]` (§2.4.3) stops the build with `MDD048` — every target would have to
-invent a storage for it, and an array used to reach them all as its element type without a word.
+**What this generator implements**: none of these shapes. A field typed `object`, `map<K,V>` or an
+inline `enum` stops the build with `MDD048` — every target would have to invent a storage for it.
 Model the parts as a separate model with a reference, a top-level `::enum`, or a serialized `text`
-field.
+field. Arrays are generated for unbounded primitive elements; see §2.4.3 for which arrays are still
+refused.
 
 ## §4.10.3 Cross-Field Validation
 

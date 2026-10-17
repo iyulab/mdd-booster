@@ -7,6 +7,12 @@ namespace MddBooster.Generators.Sql;
 
 public static class ColumnRenderer
 {
+    /// <summary>
+    /// The column an array field is stored in. The Model target names the same type in <c>HasColumnType</c>, so EF keeps
+    /// querying this column as text even where a host's compatibility level would make it choose the <c>json</c> type.
+    /// </summary>
+    private const string ArrayColumnType = "NVARCHAR(MAX)";
+
     /// <param name="onDelete">
     /// 이 필드의 FK 가 선언한 삭제 동작(<see cref="OnDeleteRule"/>) — <see langword="null"/> 이면 절을 쓰지
     /// 않는다(DB 기본값). SQL Server 에는 <c>RESTRICT</c> 가 없다: 그 <c>NO ACTION</c> 은 제약을 즉시
@@ -29,7 +35,12 @@ public static class ColumnRenderer
         var m3lType = field.Type ?? throw new InvalidOperationException(
             $"필드 '{field.Name}'에 타입이 없습니다.");
         var parameters = ExtractStringParams(field.Params);
-        var sqlType = SqlTypeMapper.MapFieldType(m3lType, parameters, enumLookup);
+        // An array is a JSON array in an unbounded text column — the storage EF Core gives a primitive collection on
+        // SQL Server. Its element type reaches the column only through the CHECK TableRenderer adds (ISJSON); the
+        // array's own nullability is the column's.
+        var sqlType = field.Array
+            ? ArrayColumnType
+            : SqlTypeMapper.MapFieldType(m3lType, parameters, enumLookup);
 
         var nullability = field.Nullable ? "NULL" : "NOT NULL";
 

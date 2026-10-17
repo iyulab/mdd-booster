@@ -51,6 +51,26 @@ public static class CSharpTypeMapper
         return Map(m3lType, postgres);
     }
 
+    /// <summary>
+    /// The property type of a field without its own nullability marker — the mapped type, or for an array field
+    /// (<c>T[]</c>) a <c>List&lt;T&gt;</c> of it, <c>List&lt;T?&gt;</c> when the elements are nullable (<c>T?[]</c>).
+    /// </summary>
+    /// <remarks>
+    /// <c>List&lt;T&gt;</c>: the type EF Core maps as a primitive collection by convention on both providers — JSON text on
+    /// SQL Server, a native array on PostgreSQL, the two storages the Sql target emits. The caller appends the field's own
+    /// <c>?</c> (<c>T[]?</c> → <c>List&lt;T&gt;?</c>) as it does for any type.
+    /// </remarks>
+    public static string PropertyType(M3L.Native.FieldNode field, IReadOnlySet<string>? knownEnumNames, bool postgres = false)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        var mapped = MapFieldType(field.Type!, knownEnumNames, postgres);
+        return field.Array ? $"List<{mapped}{(field.ArrayItemNullable ? "?" : "")}>" : mapped;
+    }
+
+    /// <summary>The initializer of a non-nullable array property: an empty list, so a write body that leaves it out stores
+    /// an empty list rather than failing the column's NOT NULL.</summary>
+    public const string ArrayInitializer = " = [];";
+
     /// <remarks>
     /// <c>rowversion</c> is the one type whose CLR shape depends on the database: SQL Server keeps
     /// the row version in a <c>rowversion</c> column EF reads as <c>byte[]</c>, while PostgreSQL has

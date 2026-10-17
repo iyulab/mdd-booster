@@ -55,10 +55,12 @@ public class ModelTargetAstAxisCoverageTests
             ["Params"] = (Disposition.Carried, "`string(n)`, `decimal(p,s)` — the column's size and the input rules"),
             ["GenericParams"] = (Disposition.Refused, "`map<K, V>`'s key and value types — a map field is refused (MDD048)"),
             ["Nullable"] = (Disposition.Carried, "NULL / NOT NULL, the C# and TypeScript nullability, required-ness"),
-            ["Array"] = (Disposition.Refused,
-                "`T[]` — refused (MDD048). It used to reach every target as T, silently; a list needs a storage decision " +
-                "per dialect (a JSON column or a native array) that the generator has not made"),
-            ["ArrayItemNullable"] = (Disposition.Refused, "`T?[]` — only meaningful on an array, which is refused"),
+            ["Array"] = (Disposition.Carried,
+                "`T[]` — a JSON text column held by ISJSON on SQL Server, a native array on PostgreSQL, List<T> on the " +
+                "entity, T[] in TypeScript. Only unbounded primitive elements; a bounded or enum element and the " +
+                "combinations whose meaning on a list is not decided are refused (MDD048)"),
+            ["ArrayItemNullable"] = (Disposition.Carried,
+                "`T?[]` — List<T?> and (T | null)[]; without it, PostgreSQL holds the elements non-null with a CHECK"),
             ["Kind"] = (Disposition.Carried, "stored or derived (lookup, rollup, computed) — decides where the value is read from"),
             ["DefaultValue"] = (Disposition.Carried, "`= value` — the column default and the C# initializer (FieldAttributes.EffectiveDefault)"),
             ["DefaultValueType"] = (Disposition.UnimplementedEverywhere,
@@ -150,7 +152,6 @@ public class ModelTargetAstAxisCoverageTests
     /// <summary>The <c>Refused</c> claims, pinned by behaviour: each shape stops the build with MDD048.</summary>
     [Theory]
     [InlineData("- tags: string(20)[]\n", "배열")]
-    [InlineData("- scores: integer[]?\n", "배열")]
     [InlineData("- status: enum = \"draft\"\n  - draft: \"Draft\"\n", "인라인 `enum`")]
     [InlineData("- meta: map<string, integer>?\n", "`map<K, V>`")]
     [InlineData("- address: object\n  - city: string(50)\n", "`object`")]

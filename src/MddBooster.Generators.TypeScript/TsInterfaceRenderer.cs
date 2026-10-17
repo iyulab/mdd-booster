@@ -167,7 +167,7 @@ public static class TsInterfaceRenderer
         // Stored (required) fields
         foreach (var f in storedFields)
         {
-            var tsType = TypeScriptTypeMapper.MapFieldType(f.Type!, knownEnumNames);
+            var tsType = TypeScriptTypeMapper.PropertyType(f, knownEnumNames);
             var nullable = f.Nullable ? " | null" : string.Empty;
             var prop = NameCasing.ToPascalCase(f.Name);
             sb.Append("  ").Append(prop).Append(": ").Append(tsType).AppendLine(nullable);

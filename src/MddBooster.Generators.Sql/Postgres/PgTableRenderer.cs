@@ -146,6 +146,17 @@ public static class PgTableRenderer
             }
         }
 
+        // An array column is a native array of its element type, so the element type is the database's to keep. What a
+        // PostgreSQL array does not keep is the element's nullability — every array admits NULL elements — so an
+        // array declared with non-null elements (`string[]`, not `string?[]`) says so in a CHECK. array_position finds
+        // a NULL element (it compares IS NOT DISTINCT FROM); a NULL column passes, its nullability is the column's.
+        foreach (var field in storedFields.Where(f => f.Array && !f.ArrayItemNullable))
+        {
+            constraints.Add((
+                GeneratedObjectNames.For(true, GeneratedObjectNames.Kind.Check, tableName, field.Name),
+                $"CHECK (array_position({field.Name}, NULL) IS NULL)"));
+        }
+
         // 제약명 게이트 — 테이블명·컬럼명이 각각 통과해도 조합(fk_{t}_{c})은 63바이트를
         // 넘을 수 있고, PG는 NOTICE만 내고 조용히 절단한다. 절단 대신 오류.
         // 인덱스명도 같은 네임스페이스를 쓰므로 같은 게이트를 통과해야 한다 — 다중 컬럼
@@ -206,6 +217,8 @@ public static class PgTableRenderer
         var m3lType = field.Type ?? throw new InvalidOperationException(
             $"필드 '{field.Name}'에 타입이 없습니다.");
         var pgType = PgTypeMapper.MapFieldType(m3lType, ExtractStringParams(field.Params), enumLookup);
+        // An array is the element type's native array — what Npgsql maps a List<T> property to by convention.
+        if (field.Array) pgType += "[]";
 
         var sb = new StringBuilder();
         sb.Append(field.Name).Append(' ').Append(pgType);

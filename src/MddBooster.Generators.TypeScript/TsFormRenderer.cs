@@ -172,6 +172,11 @@ public static class TsFormRenderer
             // engine sets the row version on every write. A control for either would collect a value the
             // write then drops.
             .Where(f => !FieldAuthorship.IsSystemWritten(f))
+            // An array has no control in the consumer contract (every control edits one value), and inventing one here
+            // would commit consumers to it. Left out of the component, the override keys and the form-state helpers
+            // together, so nothing types it as a scalar; a create without it stores an empty list (the entity's
+            // initializer; null for a nullable one), and a caller who edits the list sets it on the form state itself.
+            .Where(f => !f.Array)
             .ToList();
 
         if (storedFields.Count == 0) return null;

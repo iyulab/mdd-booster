@@ -29,7 +29,7 @@ public class SupportNotesDriftTests
     /// Current number of implementation notes. A ratchet: adding or removing a note is a legitimate change, and
     /// updating this number in the same commit is how that change is made deliberate rather than accidental.
     /// </summary>
-    private const int ExpectedImplementationNoteCount = 26;
+    private const int ExpectedImplementationNoteCount = 27;
 
     private static readonly string NotesPath = Path.Combine(AppContext.BaseDirectory, "contract", "m3l-support.md");
     private static readonly string CoreProjectPath = Path.Combine(AppContext.BaseDirectory, "contract", "MddBooster.Core.csproj");

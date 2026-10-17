@@ -288,6 +288,31 @@ public class GeneratedCodeCompilesWithoutRuntimeReferencesTests
         finally { try { Directory.Delete(root, recursive: true); } catch { } }
     }
     /// <summary>
+    /// 배열 필드의 <c>List&lt;T&gt;</c> 가 BCL 이름만으로 해석되는지 — 방출 파일이 <c>using System.Collections.Generic;</c> 을
+    /// 스스로 선언하는지. 소비자의 <c>ImplicitUsings</c> 에 기대면 이 게이트가 막으려는 <c>CS0246</c> 이 그대로 난다.
+    /// </summary>
+    [Fact]
+    public void Array_fields_compile_against_names_alone()
+    {
+        var (modelDir, apiDir, root) = Generate("array-fields.m3l.md");
+        try
+        {
+            var covered = AllGenerated(modelDir, apiDir).Where(IsCovered).ToList();
+            Assert.NotEmpty(covered);
+
+            var errors = Compile(covered, extraGlobalUsings: string.Empty);
+            Assert.True(errors.Count == 0,
+                "배열 필드 생성물이 런타임 참조 없이 컴파일되어야 한다. 실패:\n" +
+                string.Join("\n", errors.Select(d =>
+                    $"  {Path.GetFileName(d.Location.SourceTree?.FilePath ?? "?")}: {d.Id} {d.GetMessage()}")));
+
+            // 계측기 생존 — 목록 속성이 실제로 방출됐는지. 없으면 위 초록은 공허하다.
+            Assert.Contains("List<string?> Notes", string.Join("\n", covered.Select(File.ReadAllText)));
+        }
+        finally { try { Directory.Delete(root, recursive: true); } catch { } }
+    }
+
+    /// <summary>
     /// <c>::aspect</c> 가 만든 navigation 쌍이 «컴파일되는 이름»인지, 그리고 <c>DbContext</c> 가
     /// 그 이름들을 그대로 쓰는지.
     /// </summary>

@@ -630,12 +630,13 @@ public sealed class SemanticAnalyzer
         var type = field.Type;
         if (string.IsNullOrWhiteSpace(type)) return;
 
-        // MDD048 — a shape the language defines and no target generates. An array reached every target as its element
-        // type (`string[]` became one string column, one string property) with nothing said; the others were refused
-        // as types that do not exist, which misdescribes them.
+        // MDD048 — a shape the language defines and no target generates. An array is generated for the elements
+        // M3lPrimitives.ArrayElementTypes names; every other array is refused here, by the exact combination, because
+        // before arrays were generated at all one reached every target as its element type with nothing said.
         if (field.Array)
         {
-            diagnostics.Add(UnsupportedShape(model, field, $"배열 `{type}[]`"));
+            if (UnsupportedArrayParts(model, field) is { Count: > 0 } parts)
+                diagnostics.Add(UnsupportedArray(model, field, parts));
             return;
         }
         if (SpecShapes.Contains(type))
@@ -673,9 +674,79 @@ public sealed class SemanticAnalyzer
     private static SemanticDiagnostic UnsupportedShape(ResolvedModel model, FieldNode field, string shape) => new(
         "MDD048",
         $"'{model.Name}.{field.Name}': {shape} 은 명세가 정의하는 형이지만 이 생성기는 아직 생성하지 않는다 — " +
-        "그대로 두면 어느 타깃도 그 모양을 낼 수 없다. 별도 모델과 `@reference` 로 나누거나(`object` · 배열), " +
+        "그대로 두면 어느 타깃도 그 모양을 낼 수 없다. 별도 모델과 `@reference` 로 나누거나(`object`), " +
         "최상위 `::enum` 으로 옮기거나(인라인 enum), 직렬화한 문자열 칸(`text`)으로 둔다.",
         field.Loc);
+
+    /// <summary>
+    /// What keeps an array field from being generated — each part names the combination and what to write instead. Empty
+    /// when the array is generated: an element from <see cref="M3lPrimitives.ArrayElementTypes"/> without a bound of its
+    /// own, on a stored field that carries none of the attributes whose meaning on a list is not decided.
+    /// </summary>
+    /// <remarks>
+    /// Every part is collected rather than the first one, so a field with two problems is fixed in one pass, and the
+    /// field still gets exactly one <c>MDD048</c>.
+    /// </remarks>
+    private List<string> UnsupportedArrayParts(ResolvedModel model, FieldNode field)
+    {
+        var type = field.Type!;
+        var parts = new List<string>();
+        var parameters = Ast.FieldAttributes.TypeParams(field);
+
+        if (_enumNames.Contains(type))
+        {
+            parts.Add($"원소가 enum `{type}` 이다 — 목록 칸에서는 원소가 그 멤버인지 데이터베이스가 지킬 수 없다. " +
+                      "`string[]` 으로 두거나 별도 모델과 `@reference` 로 나눈다");
+        }
+        else if (M3lPrimitives.ImplicitMaxLengthOf(type) is not null
+                 || (type == "string" && parameters is { Count: > 0 }))
+        {
+            parts.Add($"원소에 길이 상한이 있다(`{ElementSpelling(type, parameters)}`) — 목록 칸에서는 원소의 길이를 데이터베이스가 " +
+                      "지킬 수 없고, 속성의 길이 검증은 원소가 아니라 목록의 개수를 잰다. 길이 없는 `string[]` 으로 두거나 " +
+                      "별도 모델과 `@reference` 로 나눈다");
+        }
+        else if (!M3lPrimitives.ArrayElementTypes.Contains(type)
+                 || (type != "decimal" && parameters is { Count: > 0 }))
+        {
+            parts.Add($"원소 형 `{ElementSpelling(type, parameters)}` 은 배열 원소로 생성하지 않는다 — 받는 원소: " +
+                      "길이 없는 `string` · `text` · `integer` · `long` · `short` · `boolean` · `decimal(p,s)` · `float` · " +
+                      "`double` · `identifier` · `date` · `timestamp`");
+        }
+
+        if (field.Kind != FieldKind.Stored)
+            parts.Add("파생 필드(lookup · rollup · computed)다 — 파생 값은 목록으로 내지 않는다. 원소 형 하나로 선언한다");
+        if (Ast.FieldAttributes.Has(field, "reference"))
+            parts.Add("`@reference` 와 함께 쓴다 — 키의 목록은 외래 키가 될 수 없다. 두 모델을 잇는 연결 모델로 나눈다");
+
+        var keyed = new[] { "pk", "unique", "index" }.Where(a => Ast.FieldAttributes.Has(field, a)).ToList();
+        if (SectionIndexParser.Parse(model).Any(e => e.Columns.Contains(field.Name, StringComparer.Ordinal)))
+            keyed.Add("### Indexes");
+        if (keyed.Count > 0)
+            parts.Add($"{string.Join(" · ", keyed.Select(k => k.StartsWith('#') ? $"`{k}` 항목" : $"`@{k}`"))} 이(가) 이 칸을 키로 쓴다 — " +
+                      "목록 칸의 키·인덱스는 뜻이 정해지지 않았다(SQL Server 는 그 칸에 인덱스를 걸 수도 없다). 지운다");
+
+        if (Ast.FieldAttributes.Has(field, "searchable"))
+            parts.Add("`@searchable` 이다 — 목록의 자유 검색은 뜻이 정해지지 않았다. 지운다");
+        if (Ast.FieldAttributes.Has(field, "min") || Ast.FieldAttributes.Has(field, "max"))
+            parts.Add("`@min` · `@max` 가 있다 — 원소의 범위인지 목록의 개수인지 정해지지 않았다. 지운다");
+        if (!string.IsNullOrEmpty(Ast.FieldAttributes.EffectiveDefault(field)))
+            parts.Add("기본값이 있다 — 목록의 기본값 표기는 정해지지 않았다. 지우면 nullable 이 아닌 목록은 빈 목록으로 시작한다");
+
+        return parts;
+    }
+
+    private static string ElementSpelling(string type, IReadOnlyList<string>? parameters) =>
+        parameters is { Count: > 0 } ? $"{type}({string.Join(",", parameters)})" : type;
+
+    private static SemanticDiagnostic UnsupportedArray(ResolvedModel model, FieldNode field, IReadOnlyList<string> parts)
+    {
+        var spelled = ElementSpelling(field.Type!, Ast.FieldAttributes.TypeParams(field))
+            + (field.ArrayItemNullable ? "?" : "") + "[]" + (field.Nullable ? "?" : "");
+        return new SemanticDiagnostic(
+            "MDD048",
+            $"'{model.Name}.{field.Name}': 배열 `{spelled}` 의 이 조합은 아직 생성하지 않는다 — {string.Join("; ", parts)}.",
+            field.Loc);
+    }
 
     /// <summary>
     /// <c>MDD023</c> — <c>@reference(X)?</c> (SET NULL) on a key that cannot hold NULL. The
