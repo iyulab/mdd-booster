@@ -344,6 +344,9 @@ public sealed class BuildCommand
         foreach (var target in cfg.Targets)
         {
             var label = $"{target.Type} 타깃({TargetPathOf(target)})";
+            // Model 타깃 전용 — 엔티티 어셈블리를 나누는 것은 엔티티를 내는 타깃뿐이다. 다른 타깃에서 조용히 무시하지 않는다.
+            if (target.Modules is not null && target.Type != "Model")
+                configViolations.Add($"{label}: modules 는 Model 타깃에만 지정할 수 있습니다.");
             var hasFilter = target.IncludeEntities?.Count > 0 || target.ExcludeEntities?.Count > 0
                 || target.IncludeOwners?.Count > 0 || target.ExcludeOwners?.Count > 0;
 
@@ -870,6 +873,9 @@ public sealed class BuildCommand
                         ?? throw new InvalidOperationException("Model target requires 'dbContextName'."),
                     SqlProjectPath = target.SqlProjectPath,
                     PostgresNaming = IsPostgresDialect(target),
+                    Modules = target.Modules?
+                        .Select(m => new MddBooster.Generators.Model.ModelModule(m.Owners, m.ProjectPath, m.Namespace))
+                        .ToList(),
                 }),
             "Api" => new MddBooster.Generators.Api.ApiRegistrationGenerator(
                 new MddBooster.Generators.Api.ApiRegistrationGeneratorOptions

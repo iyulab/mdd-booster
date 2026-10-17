@@ -42,6 +42,26 @@ public sealed class MddJsonConfig
     public Dictionary<string, JsonElement>? UnknownKeys { get; set; }
 }
 
+/// <summary>One module of a Model target's <see cref="MddJsonTarget.Modules"/>.</summary>
+public sealed class MddJsonModule
+{
+    /// <summary>The owners (<c># Prefix:</c>) whose models, enums and views this module holds. The empty string means files with no prefix.</summary>
+    [JsonPropertyName("owners")]
+    public List<string> Owners { get; set; } = [];
+
+    /// <summary>The module's project directory — its <c>Entity_gen/</c> and <c>Enum_gen/</c> go here. Relative to the config directory unless absolute.</summary>
+    [JsonPropertyName("projectPath")]
+    public string ProjectPath { get; set; } = "";
+
+    /// <summary>The C# namespace of the module's types.</summary>
+    [JsonPropertyName("namespace")]
+    public string Namespace { get; set; } = "";
+
+    /// <summary>Keys a module does not define — reported like <see cref="MddJsonConfig.UnknownKeys"/>.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? UnknownKeys { get; set; }
+}
+
 public sealed class MddJsonTarget
 {
     [JsonPropertyName("type")]
@@ -121,6 +141,15 @@ public sealed class MddJsonTarget
     /// </summary>
     [JsonPropertyName("sqlProjectPath")]
     public string? SqlProjectPath { get; set; }
+
+    /// <summary>
+    /// Model target: split the entities into modules — each its own project and namespace — by owner (a file's
+    /// <c># Prefix:</c>). Listed lowest layer first: a module's models may refer to models of the modules before it,
+    /// never after (a build error). Every owner the model has belongs to exactly one module. The target's own
+    /// <see cref="ProjectPath"/>/<see cref="Namespace"/> are then where the context goes. Omitted: one project, as before.
+    /// </summary>
+    [JsonPropertyName("modules")]
+    public List<MddJsonModule>? Modules { get; set; }
 
     // TypeScript target
     [JsonPropertyName("outputPath")]

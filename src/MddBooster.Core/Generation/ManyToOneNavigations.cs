@@ -114,7 +114,7 @@ public static class ManyToOneNavigations
             {
                 if (r.DependentModel == model.Name)
                     members.TryAdd(r.ForwardName, $"1:1 {r.ForwardName} → {r.TargetModel}");
-                if (r.TargetModel == model.Name)
+                if (r.HasInverse && r.TargetModel == model.Name)
                     members.TryAdd(r.ReverseName, $"1:1 {r.ReverseName} ← {r.DependentModel}");
             }
 

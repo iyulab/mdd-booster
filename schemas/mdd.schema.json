@@ -142,6 +142,35 @@
           "enum": ["tsql", "postgres", "postgresql", "pg"],
           "default": "tsql",
           "description": "Must match the Sql target's dialect this model is paired with — a mismatch produces snake_case/PascalCase-mismatched naming between the DDL and the EF mapping (build-time warning, not an error)."
+        },
+        "modules": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Split the entities into modules, each its own project and namespace, by owner (a file's # Prefix:). Lowest layer first: a module's models may refer to models of the modules before it, never after (a build error). Every owner of the model belongs to exactly one module. The target's projectPath/namespace are then where the context goes.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "patternProperties": {
+              "^_": { "description": "A note — a key starting with \"_\" records the reason for a nearby setting and is ignored without a warning (JSON has no comment an editor accepts)." }
+            },
+            "required": ["owners", "projectPath", "namespace"],
+            "properties": {
+              "owners": {
+                "type": "array",
+                "items": { "type": "string" },
+                "minItems": 1,
+                "description": "The owners (# Prefix:) whose models, enums and views this module holds. The empty string means files with no prefix."
+              },
+              "projectPath": {
+                "type": "string",
+                "description": "The module's project directory — its Entity_gen/ and Enum_gen/ go here. Relative to this file's directory unless absolute."
+              },
+              "namespace": {
+                "type": "string",
+                "description": "C# namespace of the module's types."
+              }
+            }
+          }
         }
       }
     },

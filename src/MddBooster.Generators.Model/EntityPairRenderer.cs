@@ -343,7 +343,7 @@ public static class EntityPairRenderer
                       .AppendLine(" { get; set; } = null!;");
             }
 
-            if (string.Equals(r.TargetModel, modelName, StringComparison.Ordinal))
+            if (r.HasInverse && string.Equals(r.TargetModel, modelName, StringComparison.Ordinal))
             {
                 var dependent = NameCasing.ToPascalCase(r.DependentModel) + "Ext";
                 sb.AppendLine();

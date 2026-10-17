@@ -81,7 +81,7 @@ public static class EntityConfigurationRenderer
                 var ext = NameCasing.ToPascalCase(r.DependentModel) + "Ext";
                 body.Statement(ext)
                   .Append(".HasOne(e => e.").Append(r.ForwardName).Append(')')
-                  .Append(".WithOne(e => e.").Append(r.ReverseName).Append(')')
+                  .Append(WithOne(r))
                   .Append(".HasForeignKey<").Append(ext).Append(">(e => e.").Append(NameCasing.ToPascalCase(r.ForeignKeyField)).Append(')')
                   .Append(".OnDelete(DeleteBehavior.").Append(DeleteBehaviorFor(dep, key)).AppendLine(");");
                 continue;
@@ -90,7 +90,7 @@ public static class EntityConfigurationRenderer
             var dependent = NameCasing.ToPascalCase(r.DependentModel) + "Ext";
             body.Statement(dependent)
               .Append(".HasOne(e => e.").Append(r.ForwardName).Append(')')
-              .Append(".WithOne(e => e.").Append(r.ReverseName).Append(')')
+              .Append(WithOne(r))
               .Append(".HasForeignKey<").Append(dependent).Append(">(e => e.Id)")
               .AppendLine(".OnDelete(DeleteBehavior.Cascade);");
         }
@@ -482,6 +482,10 @@ public static class EntityConfigurationRenderer
               .Append(").HasColumnName(").Append(SourceLiteral.CSharpString(field.Name)).AppendLine(");");
         }
     }
+
+    /// <summary>A one-to-one's principal end: the target's navigation back, or none where the target does not carry it.</summary>
+    private static string WithOne(OneToOneRelationships.Relationship r)
+        => r.HasInverse ? $".WithOne(e => e.{r.ReverseName})" : ".WithOne()";
 
     private static IEnumerable<FieldNode> BaseColumnsOf(ResolvedModel model)
         => model.Fields.Where(f => f.Kind == FieldKind.Stored);

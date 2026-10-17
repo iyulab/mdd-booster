@@ -22,7 +22,16 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
     public void Validate(GeneratorContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+        ValidateAll(context);
+    }
+
+    private ModelModules? ValidateAll(GeneratorContext context)
+    {
         ModelTargetValidator.Validate(context.Models, context.ReadViews, context.Enums, _options.DbContextName);
+        if (_options.Modules is not { } modules) return null;
+        var assigned = ModelModules.Assign(modules, context.Models, context.Enums, context.ReadViews);
+        ModuleDirection.Validate(assigned, context.Models, context.Enums, context.ReadViews);
+        return assigned;
     }
 
     public void Generate(GeneratorContext context)
@@ -30,22 +39,36 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
         ArgumentNullException.ThrowIfNull(context);
 
         var projectRoot = ResolveProjectRoot(context.WorkingDirectory);
-        var entityDir = Path.Combine(projectRoot, "Entity_gen");
         var contextDir = Path.Combine(projectRoot, "DbContext_gen");
-        var enumDir = Path.Combine(projectRoot, "Enum_gen");
 
         // Before the directories are emptied: a model this target refuses must not cost the
         // consumer the entities it generated last time.
-        ModelTargetValidator.Validate(context.Models, context.ReadViews, context.Enums, _options.DbContextName);
+        var modules = ValidateAll(context);
 
-        CleanDir(entityDir);
+        // Where each declaration's files go. One project unless the target is split into modules; the target's own
+        // Entity_gen/Enum_gen are emptied either way — a target that became modular must not keep its old entities.
+        var placements = (modules?.Modules ?? []).Select((m, i) => new Placement(
+            Path.Combine(ConfiguredPathResolver.Resolve(context.WorkingDirectory, m.ProjectPath, $"modules[{i}].projectPath"), "Entity_gen"),
+            Path.Combine(ConfiguredPathResolver.Resolve(context.WorkingDirectory, m.ProjectPath, $"modules[{i}].projectPath"), "Enum_gen"),
+            m.Namespace,
+            modules!.ImportsOf(i))).ToList();
+        var single = new Placement(Path.Combine(projectRoot, "Entity_gen"), Path.Combine(projectRoot, "Enum_gen"), _options.Namespace, []);
+        Placement Of(int? module) => module is { } i ? placements[i] : single;
+
+        CleanDir(single.EntityDir);
+        CleanDir(single.EnumDir);
         CleanDir(contextDir);
-        CleanDir(enumDir);
+        foreach (var p in placements)
+        {
+            CleanDir(p.EntityDir);
+            CleanDir(p.EnumDir);
+        }
 
         foreach (var enumNode in context.Enums)
         {
+            var at = Of(modules?.IndexOf(enumNode));
             var rendered = EnumRenderer.Render(enumNode, _options.Namespace);
-            File.WriteAllText(Path.Combine(enumDir, $"{enumNode.Name}.cs"), rendered);
+            File.WriteAllText(Path.Combine(at.EnumDir, $"{enumNode.Name}.cs"), at.Place(rendered));
         }
 
         var enumNames = new HashSet<string>(context.Enums.Select(e => e.Name), StringComparer.Ordinal);
@@ -56,6 +79,7 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
         // Computed once for the whole set, not per model: the navigation a read type gains on the
         // target side comes from a declaration in some other model, so no model can derive its own.
         var oneToOne = OneToOneRelationships.Describe(context.Models);
+        if (modules is not null) oneToOne = ModuleDirection.WithoutUpwardInverses(oneToOne, modules, context.Models);
         var manyToOne = ManyToOneNavigations.Describe(context.Models, oneToOne);
         var collections = ReverseCollections.Describe(context.Models, oneToOne, manyToOne);
 
@@ -66,18 +90,20 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
                 model, _options.Namespace, enumNames, backing, oneToOne, context.Models, _options.PostgresNaming,
                 manyToOne, collections);
             var baseName = model.Name;
-            File.WriteAllText(Path.Combine(entityDir, $"I{baseName}.cs"), rendered.Interface);
-            File.WriteAllText(Path.Combine(entityDir, $"{baseName}.cs"), rendered.Write);
-            File.WriteAllText(Path.Combine(entityDir, $"{baseName}Ext.cs"), rendered.Read);
+            var at = Of(modules?.IndexOf(model));
+            File.WriteAllText(Path.Combine(at.EntityDir, $"I{baseName}.cs"), at.Place(rendered.Interface));
+            File.WriteAllText(Path.Combine(at.EntityDir, $"{baseName}.cs"), at.Place(rendered.Write));
+            File.WriteAllText(Path.Combine(at.EntityDir, $"{baseName}Ext.cs"), at.Place(rendered.Read));
         }
 
         // A standalone view served as a read model: one read entity beside the pairs.
         var viewEnumNames = context.Enums.Select(e => e.Name).ToHashSet(StringComparer.Ordinal);
         foreach (var view in context.ReadViews)
         {
+            var at = Of(modules?.IndexOf(view));
             File.WriteAllText(
-                Path.Combine(entityDir, $"{NameCasing.ToPascalCase(view.Name)}.cs"),
-                ViewEntityRenderer.Render(view, _options.Namespace, viewEnumNames, _options.PostgresNaming));
+                Path.Combine(at.EntityDir, $"{NameCasing.ToPascalCase(view.Name)}.cs"),
+                at.Place(ViewEntityRenderer.Render(view, _options.Namespace, viewEnumNames, _options.PostgresNaming)));
         }
 
         var mapping = ModelMappingRenderer.Render(
@@ -91,9 +117,30 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
             context.ReadViews,
             collections);
         // A type's configuration sits beside the type: whichever project compiles the entities compiles their mapping.
+        var moduleOfType = new Dictionary<string, int?>(StringComparer.Ordinal);
+        foreach (var model in context.Models)
+        {
+            var name = NameCasing.ToPascalCase(model.Name);
+            moduleOfType[name] = moduleOfType[name + "Ext"] = modules?.IndexOf(model);
+        }
+        foreach (var view in context.ReadViews)
+            moduleOfType[NameCasing.ToPascalCase(view.Name)] = modules?.IndexOf(view);
         foreach (var configuration in mapping.Configurations)
-            File.WriteAllText(Path.Combine(entityDir, $"{configuration.ClassName}.cs"), configuration.Source);
-        File.WriteAllText(Path.Combine(contextDir, $"{_options.DbContextName}.cs"), mapping.Context);
+        {
+            var at = Of(moduleOfType[configuration.EntityType]);
+            File.WriteAllText(Path.Combine(at.EntityDir, $"{configuration.ClassName}.cs"), at.Place(configuration.Source));
+        }
+        // The context serves every module, so it imports every module's namespace.
+        var contextImports = placements.Select(p => p.Namespace).Distinct(StringComparer.Ordinal).ToList();
+        File.WriteAllText(
+            Path.Combine(contextDir, $"{_options.DbContextName}.cs"),
+            GeneratedFilePlacement.Place(mapping.Context, _options.Namespace, contextImports));
+    }
+
+    /// <summary>Where one module's (or the single project's) files go, and the namespace they are placed in.</summary>
+    private sealed record Placement(string EntityDir, string EnumDir, string Namespace, IReadOnlyList<string> Imports)
+    {
+        public string Place(string source) => GeneratedFilePlacement.Place(source, Namespace, Imports);
     }
 
     private HashSet<string> ScanCustomExtViews(string workingDirectory)
@@ -168,4 +215,10 @@ public sealed class ModelGeneratorOptions
     /// 기본 false — 현행(T-SQL Pascal 렌더와 일치하는 무매핑) 유지.
     /// </summary>
     public bool PostgresNaming { get; init; }
+
+    /// <summary>
+    /// The modules the entities are split into, lowest layer first (<see cref="ModelModules"/>). Null: one project —
+    /// <see cref="ProjectPath"/> and <see cref="Namespace"/> hold everything. Set: those two hold the context only.
+    /// </summary>
+    public IReadOnlyList<ModelModule>? Modules { get; init; }
 }

@@ -58,6 +58,11 @@ public static class OneToOneRelationships
     /// same target. The value is that other relationship's foreign-key field, so a diagnostic can
     /// name both sides.
     /// </param>
+    /// <param name="HasInverse">
+    /// Whether the target gets <paramref name="ReverseName"/> as a navigation. True unless a caller drops that end —
+    /// a Model target split into modules does when the target is in a module below the dependent's, since the target's
+    /// module cannot name the dependent's type. The relationship itself, and its forward end, are unchanged.
+    /// </param>
     public sealed record Relationship(
         string DependentModel,
         string TargetModel,
@@ -65,7 +70,8 @@ public static class OneToOneRelationships
         string ForwardName,
         string ReverseName,
         bool IsOptional,
-        string? ReverseNameConflict);
+        string? ReverseNameConflict,
+        bool HasInverse = true);
 
     /// <summary>
     /// Every <c>@reference(Target) @unique</c> field in <paramref name="models"/>, in a stable order

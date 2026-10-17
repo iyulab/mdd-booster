@@ -18,6 +18,16 @@
 
 ## [Unreleased]
 
+### Model 타깃이 엔티티를 층(모듈)마다 어셈블리로 낸다 — `modules`
+
+`modules: [{ owners, projectPath, namespace }]`(아래층부터)를 주면 소유자(`# Prefix:`)마다 모듈에 나눠 모듈의 프로젝트 · 네임스페이스에
+`Entity_gen/` · `Enum_gen/` 를 내고, 타깃 자신의 프로젝트에는 모든 모듈의 구성을 적용하는 컨텍스트만 낸다. 한 빌드가 모델 전체를 본다.
+
+- **방향** — 모듈의 선언이 뒤 모듈을 가리키면(참조 · enum · lookup · rollup · `### Relations` 역방향 끝 · 뷰의 읽기 대상) 빌드 오류(종료 코드 3).
+- 🔇 **모듈을 쓸 때만** — 위층의 1:1(`::aspect` 포함)이 아래층 모델을 가리키면 아래층 읽기 형의 역방향 navigation 을 만들지 않는다.
+  관계는 위층 쪽 navigation 으로 구성된다. 모듈이 없는 빌드는 무변.
+- 소유자가 어느 모듈에도 없거나 · 둘에 있거나 · 모델에 없으면 구성 오류(종료 코드 4). `modules` 는 Model 타깃에만(다른 타깃이면 구성 오류).
+
 ### 🔴 Model 타깃의 EF 매핑이 엔티티 형마다 `IEntityTypeConfiguration<T>` 로 나온다
 
 종전에는 모든 매핑(관계 · 삭제 동작 · `ToView` · 열 이름 · 인덱스 · 목록 필드의 열 형)이 생성 DbContext 의 `OnModelCreating` 안에

@@ -59,7 +59,12 @@ public static class ConfigLoader
         var warnings = new List<string>();
         Collect(config.UnknownKeys, "", KnownKeys<MddJsonConfig>(), warnings);
         for (var i = 0; i < config.Targets.Count; i++)
+        {
             Collect(config.Targets[i].UnknownKeys, $"targets[{i}].", KnownKeys<MddJsonTarget>(), warnings);
+            var modules = config.Targets[i].Modules ?? [];
+            for (var j = 0; j < modules.Count; j++)
+                Collect(modules[j].UnknownKeys, $"targets[{i}].modules[{j}].", KnownKeys<MddJsonModule>(), warnings);
+        }
         return warnings;
     }
 

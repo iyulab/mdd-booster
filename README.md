@@ -213,6 +213,31 @@ export * from './enum_labels_gen'
 - 소유자 축(`includeOwners`/`excludeOwners`)이 있는 TypeScript 타깃에서만 쓸 수 있다(없으면 빌드 오류) — 무엇이
   «다른 소유자의 타입» 인지를 그 축이 정한다.
 
+#### 엔티티를 층(모듈)마다 어셈블리로 — Model 타깃의 `modules`
+
+한 DB · 한 컨텍스트 안에 층이 다른 모델 — 모든 제품이 쓰는 공통 층과 그 위의 제품 층 — 이 있을 때, 공통 층의 코드가 제품
+형을 **컴파일 수준에서** 볼 수 없게 하려면 층마다 엔티티 어셈블리가 따로 있어야 한다. Model 타깃은 소유자(`# Prefix:`)로
+모델을 모듈에 나눠, 모듈마다 자기 프로젝트 · 네임스페이스에 낸다:
+
+```json
+{ "type": "Model", "projectPath": "../Acme.Host", "namespace": "Acme.Host", "dbContextName": "AcmeDbContext",
+  "modules": [
+    { "owners": [""],      "projectPath": "../Acme.Core.Entities",  "namespace": "Acme.Core.Entities" },
+    { "owners": ["maint"], "projectPath": "../Acme.Maint.Entities", "namespace": "Acme.Maint.Entities" } ] }
+```
+
+- **순서가 층이다 — 아래층부터.** 한 모듈의 선언은 자기와 **앞** 모듈의 선언만 가리킨다: `@reference` 대상(`::aspect` 의
+  base 포함) · 필드의 enum · `@lookup` 경로 · `@rollup` 원천 · `### Relations` 의 역방향 끝 · 뷰가 읽는 모델과 뷰. 뒤 모듈을
+  가리키면 빌드 오류(종료 코드 3)다 — 아래층 프로젝트는 위층 없이 컴파일되기 때문이다. 오류는 가리키는 선언과 대상을 둘 다 적는다.
+- **위층의 1:1(`::aspect` 포함)이 아래층 모델을 가리키면**, 아래층 읽기 형에 생기던 역방향 navigation 은 만들지 않는다 — 위층
+  형이 아래층 어셈블리에 들어가기 때문이다. 관계는 위층 쪽(그것을 선언한 쪽)의 navigation 으로 구성된다. 모듈이 없으면 종전대로 생긴다.
+- 모듈마다 `Entity_gen/`(엔티티 + 구성 클래스) · `Enum_gen/` 가 그 `projectPath` 에 생긴다. 위 모듈의 파일은 아래 모듈의
+  네임스페이스를 `using` 한다. 타깃 자신의 `projectPath` · `namespace` 에는 **컨텍스트만** 생기고, 모든 모듈을 `using` 해 각 형의
+  구성을 적용한다. 프로젝트 참조(위층 → 아래층, 호스트 → 전부)는 소비자가 짠다.
+- 모델의 소유자는 정확히 한 모듈에 있어야 한다 — 어느 모듈에도 없거나, 둘에 있거나, 모델에 없는 소유자를 적으면 구성 오류(종료 코드 4).
+- 모듈 분할은 부분 집합이 아니다 — 한 빌드가 여전히 모델 전체를 보고 FK · 상속을 검증한다(Model 타깃에 `includeOwners` 를
+  걸 수 없는 이유가 그대로다).
+
 #### `field_schema_gen.ts` — 소비 계약
 
 TypeScript 타깃은 타입·폼과 함께 **필드 스키마 맵**을 낸다. 산출물 목록에는 있었지만 **무엇을
