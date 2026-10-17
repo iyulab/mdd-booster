@@ -89,10 +89,10 @@ public class DeclaredOnDeleteTests
     {
         var (models, _) = Load(Source);
 
-        var code = DbContextRenderer.Render(models, "AppDbContext", "Test.Entities");
+        var invoice = ModelMappingRenderer.Render(models, "AppDbContext", "Test.Entities")["Invoice"];
 
-        Assert.Contains("modelBuilder.Entity<Invoice>().HasOne(e => e.Owner).WithMany().HasForeignKey(e => e.OwnerId).OnDelete(DeleteBehavior.Cascade);", code);
-        Assert.Contains("modelBuilder.Entity<Invoice>().HasOne(e => e.Guard).WithMany().HasForeignKey(e => e.GuardId).OnDelete(DeleteBehavior.Restrict);", code);
+        Assert.Contains("builder.HasOne(e => e.Owner).WithMany().HasForeignKey(e => e.OwnerId).OnDelete(DeleteBehavior.Cascade);", invoice);
+        Assert.Contains("builder.HasOne(e => e.Guard).WithMany().HasForeignKey(e => e.GuardId).OnDelete(DeleteBehavior.Restrict);", invoice);
     }
 
     [Fact]

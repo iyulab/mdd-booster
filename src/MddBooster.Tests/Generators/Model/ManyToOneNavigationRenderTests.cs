@@ -113,18 +113,21 @@ public class ManyToOneNavigationRenderTests
 
         foreach (var postgres in new[] { false, true })
         {
-            var context = DbContextRenderer.Render(
+            var mapping = ModelMappingRenderer.Render(
                 models.ToList(), "AppDbContext", "Probe.Entities", postgresNaming: postgres,
                 oneToOne: oneToOne, manyToOne: manyToOne);
+            var readTypes = string.Concat(mapping.Configurations
+                .Where(c => c.EntityType.EndsWith("Ext", StringComparison.Ordinal))
+                .Select(c => c.Source));
 
             Assert.Contains(
-                "modelBuilder.Entity<AssetExt>().HasOne(e => e.LifecycleState).WithMany().HasForeignKey(e => e.LifecycleStateId).OnDelete(DeleteBehavior.NoAction);",
-                context, StringComparison.Ordinal);
+                "builder.HasOne(e => e.LifecycleState).WithMany().HasForeignKey(e => e.LifecycleStateId).OnDelete(DeleteBehavior.NoAction);",
+                mapping["AssetExt"], StringComparison.Ordinal);
             Assert.Contains(
-                "modelBuilder.Entity<AssetMaintenanceProfileExt>().HasOne(e => e.ReplacedAsset).WithMany().HasForeignKey(e => e.ReplacedAssetId).OnDelete(DeleteBehavior.NoAction);",
-                context, StringComparison.Ordinal);
-            Assert.DoesNotContain("Ext>().HasOne(e => e.Vendor)", context, StringComparison.Ordinal);
-            Assert.DoesNotContain("Ext>().HasOne(e => e.Operator)", context, StringComparison.Ordinal);
+                "builder.HasOne(e => e.ReplacedAsset).WithMany().HasForeignKey(e => e.ReplacedAssetId).OnDelete(DeleteBehavior.NoAction);",
+                mapping["AssetMaintenanceProfileExt"], StringComparison.Ordinal);
+            Assert.DoesNotContain("builder.HasOne(e => e.Vendor)", readTypes, StringComparison.Ordinal);
+            Assert.DoesNotContain("builder.HasOne(e => e.Operator)", readTypes, StringComparison.Ordinal);
         }
     }
 }

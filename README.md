@@ -12,7 +12,7 @@ M3L → SQL/C#/API 코드 생성기. 단일 `tables.m3l.md` 소스로 SSDT 스�
 | 타입 | 출력 | 소비자 |
 |---|---|---|
 | **Sql** | tsql(기본): `dbo/Tables_gen/{Entity}.sql`, `dbo/Views_gen/{Entity}_{full,ext}.sql`, `.sqlproj` ItemGroup 패치 · postgres: `tables_gen/{table}.sql` (snake_case, 아래 방언 절) | SSDT 프로젝트 · desired-state 스타일 스키마 관리 도구 |
-| **Model** | `Entity_gen/{I,}{Entity}{,Ext}.cs`, `Enum_gen/{Enum}.cs`, `DbContext_gen/{Name}.cs` (with auto-`ToView` 매핑) | C# classlib (EF Core + 소비앱의 런타임 패키지) |
+| **Model** | `Entity_gen/{I,}{Entity}{,Ext}.cs` + 형마다 EF 매핑 `Entity_gen/{Entity}{,Ext}Configuration.cs`(`IEntityTypeConfiguration<T>` — auto-`ToView` 포함), `Enum_gen/{Enum}.cs`, `DbContext_gen/{Name}.cs`(DbSet · 구성 적용) | C# classlib (EF Core + 소비앱의 런타임 패키지) |
 | **Api** | `Api_gen/ApiRegistration_gen.cs` (OData + GraphQL 엔티티 페어 등록) | ASP.NET Core 서버 (OData/GraphQL 런타임) |
 
 ## 사용법
@@ -600,7 +600,7 @@ UdView 위에 있어 이미 거르고, 기본 테이블을 읽는 서브쿼리�
 | `@searchable` | `[Searchable]` | 쓰기·읽기 두 클래스 모두. 런타임의 `$search` 는 `[Searchable]` 이 하나라도 있는 타입을 **선언된 문자열 속성만** 검색한다(없는 타입은 문자열 속성 전부). 🔴 **참조 키에 선언하면 키가 아니라 그 키의 navigation 에 붙는다** — 키는 텍스트가 아니라 어떤 낱말에도 매칭하지 않는다. 아래 «참조 키(N:1)» 절의 «검색» 행 |
 | `@immutable` | `[Editable(false, AllowInitialValue = true)]` | 저장 필드에만 붙는다. «생성 때 한 번 주고 그 뒤엔 바꾸지 않는다»는 뜻이라 초기값은 허용으로 적는다. 아래 TypeScript 타깃의 생성 폼 `disabled` prop과 같은 선언을 미러링 — 둘 다 메타데이터일 뿐, 이 리포가 생성하는 어떤 API 계층도 이를 강제하지 않는다 |
 | 필드의 `@system` | `[Editable(false)]` | «애플리케이션 자신의 코드가 쓰는 칸» — 전이 행위가 옮기는 상태, 행위를 한 사용자, 저장소가 돌려준 키. 값은 저장되고 읽힌다(테이블·읽기 타입 무변화). 메타데이터는 여기까지이고, **막는 것은 Api 타깃**이다: 생성 등록이 그 칸을 제네릭 쓰기 경로에서 뺀다(아래 「필드의 `@system` → 쓰기 제외」). TypeScript 타깃은 그 칸에 입력 컨트롤을 그리지 않는다. `@immutable`(호출자가 생성 때 한 번 준다)·`@internal`(읽기 표면에서 뺀다)과는 다른 선언이다 |
-| 필드 단위 `@unique` | `HasIndex(...).IsUnique()` | 엔티티 속성이 아니라 `DbContext.OnModelCreating`의 fluent 설정 — SQL 타깃의 `UK_{Model}_{Column}`/PG의 `uq_{table}_{field}`와 같은 이름을 `HasDatabaseName`으로 명시한다. 널 허용 컬럼도 분기 없이 같은 한 줄만 방출 — SQL Server 프로바이더가 unique index의 널 허용 컬럼에 `WHERE ... IS NOT NULL` 필터를 자동으로 붙이므로 (SQL 타깃의 filtered index와 동일 결과), PostgreSQL은 애초에 `UNIQUE`가 NULL을 distinct로 취급하므로 (둘 다 이 리포가 손으로 만드는 코드가 아니다) |
+| 필드 단위 `@unique` | `HasIndex(...).IsUnique()` | 엔티티 속성이 아니라 그 엔티티 구성 클래스(`{Entity}Configuration`)의 fluent 설정 — SQL 타깃의 `UK_{Model}_{Column}`/PG의 `uq_{table}_{field}`와 같은 이름을 `HasDatabaseName`으로 명시한다. 널 허용 컬럼도 분기 없이 같은 한 줄만 방출 — SQL Server 프로바이더가 unique index의 널 허용 컬럼에 `WHERE ... IS NOT NULL` 필터를 자동으로 붙이므로 (SQL 타깃의 filtered index와 동일 결과), PostgreSQL은 애초에 `UNIQUE`가 NULL을 distinct로 취급하므로 (둘 다 이 리포가 손으로 만드는 코드가 아니다) |
 | 필드 단위 `@index` | `HasIndex(...)` | 위와 같은 자리, `IX_{Model}_{Column}`/`ix_{table}_{field}` 이름. `@unique`와 함께 선언되면 `unique`만 방출한다(제약이 이미 인덱스를 소유 — SQL 타깃과 동일한 배제) |
 
 기준은 `@not_null` 을 적었는지가 **아니라 필드가 실제로 널을 허용하는지**다. `- name: string(50)`
@@ -782,7 +782,7 @@ PostgreSQL `views_gen/<snake_name>.sql`. 빌드가 먼저 뷰를 모델에 대�
 
 | 타깃 | 생성 |
 |---|---|
-| Model | `Entity_gen/OpenOrders.cs` — 뷰의 출력 열만 가진 클래스 하나(쓰기 타입·`…Ext` 쌍·감사 타임스탬프 없음). DbContext 에 `DbSet<OpenOrders> OpenOrders` 와 매핑: 테이블 없음 · Sql 타깃이 만드는 그 뷰(`ToView`) · 키 `Id`. PostgreSQL 방언은 열마다 선언된 이름으로 매핑한다 |
+| Model | `Entity_gen/OpenOrders.cs` — 뷰의 출력 열만 가진 클래스 하나(쓰기 타입·`…Ext` 쌍·감사 타임스탬프 없음). DbContext 에 `DbSet<OpenOrders> OpenOrders`, 매핑은 `Entity_gen/OpenOrdersConfiguration.cs`: 테이블 없음 · Sql 타깃이 만드는 그 뷰(`ToView`) · 키 `Id`. PostgreSQL 방언은 열마다 선언된 이름으로 매핑한다 |
 | Api | 읽기 전용 셋 등록(OData 셋 · GraphQL 쿼리 필드)과 읽기 전용 컨트롤러(`OpenOrdersController`). 조회·`$filter`·`$select`·`$orderby`·키 조회는 모델의 셋과 같고, 쓰기 동사는 런타임이 전부 거절한다. 권한 키는 읽기 하나(`…Read`)만 낸다 |
 | TypeScript | `entities_gen.ts` 에 뷰의 열만 가진 `interface OpenOrders`(`IyuEntity` 를 잇지 않는다 — 감사 타임스탬프가 없다, 열은 전부 필수). `entity_names_gen.ts` 에 **따로** `READ_ONLY_SET_NAMES` / `ReadOnlySetName`. 필드 스키마·폼은 없다(쓰기 축) |
 | Sql | 변화 없음 — 뷰는 위 절대로 생성된다 |
@@ -1197,7 +1197,7 @@ consumer-repo/
     │           ├── Order_full.sql
     │           └── Order_ext.sql
     ├── MyApp.Entities/
-    │   ├── Entity_gen/             ← 매번 재생성
+    │   ├── Entity_gen/             ← 매번 재생성 (엔티티 + 형마다 EF 구성 클래스)
     │   ├── Enum_gen/
     │   └── DbContext_gen/
     └── MyApp.Server/

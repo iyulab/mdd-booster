@@ -92,7 +92,7 @@ public static class EntityPairRenderer
 
         // Stored fields (pk + created_at/updated_at elided — inherited from IyuEntity).
         // 비-id PK(공유 PK 확장 테이블)도 elide 대상 — 그 필드는 IyuEntity.Id가 표현하며,
-        // DbContextRenderer가 fluent HasColumnName으로 실제 PK 컬럼에 재매핑한다.
+        // EntityConfigurationRenderer가 fluent HasColumnName으로 실제 PK 컬럼에 재매핑한다.
         // Kind.Stored is the default; anything else (Lookup/Rollup/Computed) lives
         // on the Ext read model only.
         var storedFields = model.Fields
@@ -619,7 +619,7 @@ public static class EntityPairRenderer
 
     /// <summary>
     /// Whether the write entity carries a reference navigation for this field — a <c>@reference</c> key whose
-    /// navigation has a name (<see cref="ManyToOneNavigations.NavigationName"/>). <see cref="DbContextRenderer"/>
+    /// navigation has a name (<see cref="ManyToOneNavigations.NavigationName"/>). <see cref="EntityConfigurationRenderer"/>
     /// configures the relationship through that navigation, so both read the same rule.
     /// </summary>
     internal static bool HasWriteNavigation(ModelNode owner, FieldNode f) => ManyToOneNavigations.IsNavigableKey(owner, f);

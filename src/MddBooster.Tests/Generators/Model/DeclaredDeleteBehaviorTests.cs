@@ -25,14 +25,14 @@ public class DeclaredDeleteBehaviorTests
         - guarded_id: identifier @reference(Customer)!!
         """;
 
-    private static string RenderContext(bool postgresNaming)
+    private static ModelMapping RenderMapping(bool postgresNaming)
     {
         var tmp = Path.Combine(Path.GetTempPath(), $"mdd-efdelete-{Guid.NewGuid():N}.m3l.md");
         File.WriteAllText(tmp, Source);
         try
         {
             var models = new InterfaceResolver(new M3lLoader().LoadFile(tmp)).ResolveAll();
-            return DbContextRenderer.Render(models, "AppDbContext", "Test.Entities", postgresNaming: postgresNaming);
+            return ModelMappingRenderer.Render(models, "AppDbContext", "Test.Entities", postgresNaming: postgresNaming);
         }
         finally
         {
@@ -45,11 +45,11 @@ public class DeclaredDeleteBehaviorTests
     [InlineData(true)]
     public void Each_declared_action_is_configured_on_the_write_navigation(bool postgresNaming)
     {
-        var code = RenderContext(postgresNaming);
+        var invoice = RenderMapping(postgresNaming)["Invoice"];
 
-        Assert.Contains("modelBuilder.Entity<Invoice>().HasOne(e => e.Kept).WithMany().HasForeignKey(e => e.KeptId).OnDelete(DeleteBehavior.NoAction);", code);
-        Assert.Contains("modelBuilder.Entity<Invoice>().HasOne(e => e.Cleared).WithMany().HasForeignKey(e => e.ClearedId).OnDelete(DeleteBehavior.SetNull);", code);
-        Assert.Contains("modelBuilder.Entity<Invoice>().HasOne(e => e.Guarded).WithMany().HasForeignKey(e => e.GuardedId).OnDelete(DeleteBehavior.Restrict);", code);
+        Assert.Contains("builder.HasOne(e => e.Kept).WithMany().HasForeignKey(e => e.KeptId).OnDelete(DeleteBehavior.NoAction);", invoice);
+        Assert.Contains("builder.HasOne(e => e.Cleared).WithMany().HasForeignKey(e => e.ClearedId).OnDelete(DeleteBehavior.SetNull);", invoice);
+        Assert.Contains("builder.HasOne(e => e.Guarded).WithMany().HasForeignKey(e => e.GuardedId).OnDelete(DeleteBehavior.Restrict);", invoice);
     }
 
     /// <summary>
@@ -61,9 +61,9 @@ public class DeclaredDeleteBehaviorTests
     [InlineData(true)]
     public void A_bare_reference_gets_the_schema_default_not_the_convention(bool postgresNaming)
     {
-        var code = RenderContext(postgresNaming);
+        var mapping = RenderMapping(postgresNaming);
 
-        Assert.Contains("modelBuilder.Entity<Invoice>().HasOne(e => e.Plain).WithMany().HasForeignKey(e => e.PlainId).OnDelete(DeleteBehavior.NoAction);", code);
-        Assert.DoesNotContain("DeleteBehavior.Cascade", code);
+        Assert.Contains("builder.HasOne(e => e.Plain).WithMany().HasForeignKey(e => e.PlainId).OnDelete(DeleteBehavior.NoAction);", mapping["Invoice"]);
+        Assert.DoesNotContain("DeleteBehavior.Cascade", string.Concat(mapping.Sources));
     }
 }

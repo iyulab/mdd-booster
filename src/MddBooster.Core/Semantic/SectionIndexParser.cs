@@ -36,7 +36,7 @@ public sealed record SectionIndexEntry(
 /// </summary>
 /// <remarks>
 /// Both SQL dialect renderers, the foreign-key index planner, and the Model (EF) target's
-/// <c>DbContextRenderer</c> need these entries, and each needs something different from
+/// <c>EntityConfigurationRenderer</c> need these entries, and each needs something different from
 /// them — every column or only the leading one, the source casing or a converted one. What
 /// none of them differ on is how an entry is <em>read</em>, so that part lives here: an
 /// entry shape the upstream AST changes is then one edit, not four, and the four cannot

@@ -204,9 +204,9 @@ public class ViewPipelineE2ETests
             var orderExt = File.ReadAllText(Path.Combine(modelDir, "Entity_gen", "OrderExt.cs"));
             Assert.Contains("[Table(\"OrderExtView\")]", orderExt);
 
-            // DbContext.ToView should also map to ExtView.
-            var dbContext = File.ReadAllText(Path.Combine(modelDir, "DbContext_gen", "XDbContext.cs"));
-            Assert.Contains("ToView(\"OrderExtView\")", dbContext);
+            // The read type's configuration should also map it to ExtView.
+            var configuration = File.ReadAllText(Path.Combine(modelDir, "Entity_gen", "OrderExtConfiguration.cs"));
+            Assert.Contains("ToView(\"OrderExtView\")", configuration);
         }
         finally
         {

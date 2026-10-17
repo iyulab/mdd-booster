@@ -15,13 +15,13 @@ public class DbContextViewMappingTests
         var ast = new M3lLoader().LoadFile(FixturePath("order-with-derived.m3l.md"));
         var models = new InterfaceResolver(ast).ResolveAll().ToList();
 
-        var src = DbContextRenderer.Render(models, "TestDbContext", "Test.Entities");
+        var mapping = ModelMappingRenderer.Render(models, "TestDbContext", "Test.Entities");
 
         // Order has lookup+rollup+computed → FullView (ExtView is user-maintained, not auto-detected here)
-        Assert.Contains("modelBuilder.Entity<OrderExt>().ToTable((string?)null).ToView(\"OrderFullView\")", src);
+        Assert.Contains("builder.ToTable((string?)null).ToView(\"OrderFullView\")", mapping["OrderExt"]);
         // Customer/OrderItem have no derived fields → mapped to base table as view
-        Assert.Contains("CustomerExt>().ToTable((string?)null).ToView(\"Customer\")", src);
-        Assert.Contains("OrderItemExt>().ToTable((string?)null).ToView(\"OrderItem\")", src);
+        Assert.Contains("builder.ToTable((string?)null).ToView(\"Customer\")", mapping["CustomerExt"]);
+        Assert.Contains("builder.ToTable((string?)null).ToView(\"OrderItem\")", mapping["OrderItemExt"]);
     }
 
     [Fact]
@@ -30,10 +30,10 @@ public class DbContextViewMappingTests
         var ast = new M3lLoader().LoadFile(FixturePath("bank-account.m3l.md"));
         var models = new InterfaceResolver(ast).ResolveAll().ToList();
 
-        var src = DbContextRenderer.Render(models, "T", "Test");
+        var mapping = ModelMappingRenderer.Render(models, "T", "Test");
 
         // Table-only Ext models map to base table via ToView to avoid shared-table errors
-        Assert.Contains("OnModelCreating", src);
-        Assert.Contains("BankAccountExt>().ToTable((string?)null).ToView(\"BankAccount\")", src);
+        Assert.Contains("OnModelCreating", mapping.Context);
+        Assert.Contains("builder.ToTable((string?)null).ToView(\"BankAccount\")", mapping["BankAccountExt"]);
     }
 }

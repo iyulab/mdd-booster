@@ -22,7 +22,7 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
     public void Validate(GeneratorContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        ModelTargetValidator.Validate(context.Models);
+        ModelTargetValidator.Validate(context.Models, context.ReadViews, context.Enums, _options.DbContextName);
     }
 
     public void Generate(GeneratorContext context)
@@ -36,7 +36,7 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
 
         // Before the directories are emptied: a model this target refuses must not cost the
         // consumer the entities it generated last time.
-        ModelTargetValidator.Validate(context.Models);
+        ModelTargetValidator.Validate(context.Models, context.ReadViews, context.Enums, _options.DbContextName);
 
         CleanDir(entityDir);
         CleanDir(contextDir);
@@ -80,7 +80,7 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
                 ViewEntityRenderer.Render(view, _options.Namespace, viewEnumNames, _options.PostgresNaming));
         }
 
-        var dbContext = DbContextRenderer.Render(
+        var mapping = ModelMappingRenderer.Render(
             context.Models.ToList(),
             _options.DbContextName,
             _options.Namespace,
@@ -90,7 +90,10 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
             manyToOne,
             context.ReadViews,
             collections);
-        File.WriteAllText(Path.Combine(contextDir, $"{_options.DbContextName}.cs"), dbContext);
+        // A type's configuration sits beside the type: whichever project compiles the entities compiles their mapping.
+        foreach (var configuration in mapping.Configurations)
+            File.WriteAllText(Path.Combine(entityDir, $"{configuration.ClassName}.cs"), configuration.Source);
+        File.WriteAllText(Path.Combine(contextDir, $"{_options.DbContextName}.cs"), mapping.Context);
     }
 
     private HashSet<string> ScanCustomExtViews(string workingDirectory)

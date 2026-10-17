@@ -1,5 +1,6 @@
 using MddBooster.Core.Generation;
 using M3L.Native;
+using MddBooster.Core.Naming;
 using MddBooster.Core.Semantic;
 
 namespace MddBooster.Generators.Model;
@@ -19,12 +20,64 @@ public static class ModelTargetValidator
     /// </summary>
     private static readonly string[] RequiredTimestamps = ["created_at", "updated_at"];
 
-    public static void Validate(IReadOnlyList<ResolvedModel> models)
+    public static void Validate(
+        IReadOnlyList<ResolvedModel> models,
+        IReadOnlyList<ResolvedView>? readViews = null,
+        IReadOnlyList<EnumNode>? enums = null,
+        string? contextName = null)
     {
         ArgumentNullException.ThrowIfNull(models);
         foreach (var model in models)
         {
             ValidateTimestampContract(model);
+        }
+        ValidateGeneratedTypeNames(models, readViews ?? [], enums ?? [], contextName);
+    }
+
+    /// <summary>
+    /// Every type this target writes into one namespace — per model the interface, the write and read types and their
+    /// configurations, per standalone view its type and configuration, per enum its type, and the context — must have a
+    /// name of its own. Two models <c>Order</c> and <c>OrderExt</c>, or <c>Order</c> and <c>OrderConfiguration</c>,
+    /// otherwise generate two classes of one name: one file overwrites the other, or the build stops on a duplicate
+    /// definition far from the model that caused it. Compared ignoring case, because the generated files share a folder.
+    /// </summary>
+    private static void ValidateGeneratedTypeNames(
+        IReadOnlyList<ResolvedModel> models, IReadOnlyList<ResolvedView> readViews, IReadOnlyList<EnumNode> enums, string? contextName)
+    {
+        var owners = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var clashes = new List<string>();
+        void Claim(string typeName, string owner)
+        {
+            if (owners.TryAdd(typeName, owner)) return;
+            clashes.Add($"'{typeName}' — {owners[typeName]} · {owner}");
+        }
+
+        foreach (var model in models.OrderBy(m => m.Name, StringComparer.Ordinal))
+        {
+            var name = NameCasing.ToPascalCase(model.Name);
+            var owner = $"model '{model.Name}'";
+            Claim("I" + name, owner);
+            Claim(name, owner);
+            Claim(name + "Ext", owner);
+            Claim(EntityConfiguration.ConfigurationClassName(name), owner);
+            Claim(EntityConfiguration.ConfigurationClassName(name + "Ext"), owner);
+        }
+        foreach (var view in readViews.OrderBy(v => v.Name, StringComparer.Ordinal))
+        {
+            var name = NameCasing.ToPascalCase(view.Name);
+            Claim(name, $"view '{view.Name}'");
+            Claim(EntityConfiguration.ConfigurationClassName(name), $"view '{view.Name}'");
+        }
+        foreach (var e in enums.OrderBy(e => e.Name, StringComparer.Ordinal))
+            Claim(NameCasing.ToPascalCase(e.Name), $"enum '{e.Name}'");
+        if (!string.IsNullOrWhiteSpace(contextName))
+            Claim(contextName, "dbContextName");
+
+        if (clashes.Count > 0)
+        {
+            throw new GeneratorRefusalException(GeneratorRefusalKind.Model,
+                "Model 타깃이 같은 네임스페이스에 같은 이름의 형을 둘 생성합니다 — 모델 · 뷰 · enum 이름이나 dbContextName 을 바꾸세요:\n  "
+                + string.Join("\n  ", clashes));
         }
     }
 

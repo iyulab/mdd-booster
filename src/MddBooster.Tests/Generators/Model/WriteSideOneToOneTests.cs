@@ -29,14 +29,14 @@ public class WriteSideOneToOneTests
         - plain_asset_id: identifier @reference(Asset)
         """;
 
-    private static string RenderContext(bool postgresNaming = false)
+    private static ModelMapping RenderMapping(bool postgresNaming = false)
     {
         var tmp = Path.Combine(Path.GetTempPath(), $"mdd-write11-{Guid.NewGuid():N}.m3l.md");
         File.WriteAllText(tmp, Source);
         try
         {
             var models = new InterfaceResolver(new M3lLoader().LoadFile(tmp)).ResolveAll();
-            return DbContextRenderer.Render(models, "AppDbContext", "Test.Entities", postgresNaming: postgresNaming);
+            return ModelMappingRenderer.Render(models, "AppDbContext", "Test.Entities", postgresNaming: postgresNaming);
         }
         finally
         {
@@ -49,32 +49,32 @@ public class WriteSideOneToOneTests
     [InlineData(true)]
     public void A_unique_reference_is_configured_as_one_to_one_on_the_write_entity(bool postgresNaming)
     {
-        var code = RenderContext(postgresNaming);
+        var mapping = RenderMapping(postgresNaming);
 
-        Assert.Contains("modelBuilder.Entity<Warranty>().HasOne(e => e.Asset).WithOne().HasForeignKey<Warranty>(e => e.AssetId).OnDelete(DeleteBehavior.NoAction);", code);
+        Assert.Contains("builder.HasOne(e => e.Asset).WithOne().HasForeignKey<Warranty>(e => e.AssetId).OnDelete(DeleteBehavior.NoAction);", mapping["Warranty"]);
     }
 
     [Fact]
     public void A_declared_delete_action_rides_on_the_one_to_one()
     {
-        var code = RenderContext();
+        var mapping = RenderMapping();
 
-        Assert.Contains("modelBuilder.Entity<Warranty>().HasOne(e => e.KeptAsset).WithOne().HasForeignKey<Warranty>(e => e.KeptAssetId).OnDelete(DeleteBehavior.SetNull);", code);
+        Assert.Contains("builder.HasOne(e => e.KeptAsset).WithOne().HasForeignKey<Warranty>(e => e.KeptAssetId).OnDelete(DeleteBehavior.SetNull);", mapping["Warranty"]);
     }
 
     [Fact]
     public void A_self_referencing_unique_key_is_one_to_one_too()
     {
-        var code = RenderContext();
+        var mapping = RenderMapping();
 
-        Assert.Contains("modelBuilder.Entity<Node>().HasOne(e => e.Successor).WithOne().HasForeignKey<Node>(e => e.SuccessorId).OnDelete(DeleteBehavior.NoAction);", code);
+        Assert.Contains("builder.HasOne(e => e.Successor).WithOne().HasForeignKey<Node>(e => e.SuccessorId).OnDelete(DeleteBehavior.NoAction);", mapping["Node"]);
     }
 
     [Fact]
     public void A_reference_that_is_not_unique_stays_many_to_one()
     {
-        var code = RenderContext();
+        var mapping = RenderMapping();
 
-        Assert.DoesNotContain("e => e.PlainAsset).WithOne()", code);
+        Assert.DoesNotContain("e => e.PlainAsset).WithOne()", string.Concat(mapping.Sources));
     }
 }

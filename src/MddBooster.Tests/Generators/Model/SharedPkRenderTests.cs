@@ -38,14 +38,14 @@ public class SharedPkRenderTests
     {
         var models = LoadSharedPk();
 
-        var output = DbContextRenderer.Render(models, "TestDbContext", "Test.Ns");
+        var mapping = ModelMappingRenderer.Render(models, "TestDbContext", "Test.Ns");
 
         Assert.Contains(
-            "modelBuilder.Entity<AssetMaintenanceProfile>().Property(e => e.Id).HasColumnName(\"AssetId\");",
-            output);
+            "builder.Property(e => e.Id).HasColumnName(\"AssetId\");",
+            mapping["AssetMaintenanceProfile"]);
         Assert.Contains(
-            "modelBuilder.Entity<AssetMaintenanceProfileExt>().Property(e => e.Id).HasColumnName(\"AssetId\");",
-            output);
+            "builder.Property(e => e.Id).HasColumnName(\"AssetId\");",
+            mapping["AssetMaintenanceProfileExt"]);
     }
 
     [Fact]
@@ -53,10 +53,10 @@ public class SharedPkRenderTests
     {
         var models = LoadSharedPk();
 
-        var output = DbContextRenderer.Render(models, "TestDbContext", "Test.Ns");
+        var mapping = ModelMappingRenderer.Render(models, "TestDbContext", "Test.Ns");
 
-        Assert.DoesNotContain("Entity<Asset>().Property", output);
-        Assert.DoesNotContain("Entity<AssetCriticality>().Property", output);
+        Assert.DoesNotContain("builder.Property", mapping["Asset"]);
+        Assert.DoesNotContain("builder.Property", mapping["AssetCriticality"]);
     }
 
     [Fact]
@@ -74,8 +74,8 @@ public class SharedPkRenderTests
         Assert.Equal("asset_id", pkField.Name);
 
         // Model 타깃: 같은 컬럼명으로 Id 재매핑 — 두 타깃 산출물이 모순되지 않는다.
-        var dbContext = DbContextRenderer.Render(models, "Ctx", "Ns");
-        Assert.Contains("HasColumnName(\"AssetId\")", dbContext);
+        var mapping = ModelMappingRenderer.Render(models, "Ctx", "Ns");
+        Assert.Contains("HasColumnName(\"AssetId\")", mapping["AssetMaintenanceProfile"]);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public class SharedPkRenderTests
         var sources = models
             .Select(m => EntityPairRenderer.Render(m, "Test.Entities"))
             .SelectMany(p => new[] { p.Interface, p.Write, p.Read })
-            .Append(DbContextRenderer.Render(models, "TestDbContext", "Test.Entities"));
+            .Concat(ModelMappingRenderer.Render(models, "TestDbContext", "Test.Entities").Sources);
 
         foreach (var source in sources)
         {

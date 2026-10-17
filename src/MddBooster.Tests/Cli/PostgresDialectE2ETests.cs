@@ -445,9 +445,9 @@ public class PostgresDialectE2ETests
             var exit = new BuildCommand().Run(mddDir);
             Assert.Equal(0, exit);
 
-            var ctx = File.ReadAllText(Path.Combine(entitiesDir, "DbContext_gen", "XDbContext.cs"));
-            Assert.Contains("e.ToTable(\"work_order\");", ctx);
-            Assert.Contains("e.Property(x => x.CustomerId).HasColumnName(\"customer_id\");", ctx);
+            var workOrder = File.ReadAllText(Path.Combine(entitiesDir, "Entity_gen", "WorkOrderConfiguration.cs"));
+            Assert.Contains("builder.ToTable(\"work_order\");", workOrder);
+            Assert.Contains("builder.Property(x => x.CustomerId).HasColumnName(\"customer_id\");", workOrder);
         }
         finally { Cleanup(mddDir); }
     }

@@ -219,13 +219,14 @@ public sealed class StandaloneViewReadModelBuildTests
         using var tsql = Build("tsql");
         var context = tsql.Read("entities", "DbContext_gen", "XDbContext.cs");
         Assert.Contains("public DbSet<ActiveProducts> ActiveProducts => Set<ActiveProducts>();", context);
-        Assert.Contains("e.ToView(\"ActiveProducts\");", context);
+        Assert.Contains("modelBuilder.ApplyConfiguration(new ActiveProductsConfiguration());", context);
+        Assert.Contains("builder.ToView(\"ActiveProducts\");", tsql.Read("entities", "Entity_gen", "ActiveProductsConfiguration.cs"));
         Assert.True(tsql.Exists("db", "dbo", "Views_gen", "ActiveProducts.sql"));
 
         using var pg = Build("postgres", ProductOnly);
-        var pgContext = pg.Read("entities", "DbContext_gen", "XDbContext.cs");
-        Assert.Contains("e.ToView(\"active_products\");", pgContext);
-        Assert.Contains("e.Property(x => x.Stock).HasColumnName(\"stock\");", pgContext);
+        var pgConfiguration = pg.Read("entities", "Entity_gen", "ActiveProductsConfiguration.cs");
+        Assert.Contains("builder.ToView(\"active_products\");", pgConfiguration);
+        Assert.Contains("builder.Property(x => x.Stock).HasColumnName(\"stock\");", pgConfiguration);
         Assert.True(pg.Exists("db", "views_gen", "active_products.sql"));
     }
 

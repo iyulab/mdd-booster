@@ -272,26 +272,26 @@ CREATE TABLE public.array_holder
     public void On_sql_server_the_context_names_the_array_column_type_for_both_types()
     {
         var (_, models) = LoadFixture();
-        var context = DbContextRenderer.Render(models, "ArraysDbContext", "Arrays.Entities");
+        var mapping = ModelMappingRenderer.Render(models, "ArraysDbContext", "Arrays.Entities");
 
-        Assert.Contains("modelBuilder.Entity<ArrayHolder>().Property(e => e.Tags).HasColumnType(\"nvarchar(max)\");", context);
-        Assert.Contains("modelBuilder.Entity<ArrayHolderExt>().Property(e => e.Tags).HasColumnType(\"nvarchar(max)\");", context);
-        Assert.Contains("modelBuilder.Entity<ArrayHolder>().Property(e => e.Stamps).HasColumnType(\"nvarchar(max)\");", context);
+        Assert.Contains("builder.Property(e => e.Tags).HasColumnType(\"nvarchar(max)\");", mapping["ArrayHolder"]);
+        Assert.Contains("builder.Property(e => e.Tags).HasColumnType(\"nvarchar(max)\");", mapping["ArrayHolderExt"]);
+        Assert.Contains("builder.Property(e => e.Stamps).HasColumnType(\"nvarchar(max)\");", mapping["ArrayHolder"]);
         // The read type has no @internal property to configure.
-        Assert.Contains("modelBuilder.Entity<ArrayHolder>().Property(e => e.SecretCodes)", context);
-        Assert.DoesNotContain("modelBuilder.Entity<ArrayHolderExt>().Property(e => e.SecretCodes)", context);
+        Assert.Contains("builder.Property(e => e.SecretCodes)", mapping["ArrayHolder"]);
+        Assert.DoesNotContain("builder.Property(e => e.SecretCodes)", mapping["ArrayHolderExt"]);
         // A scalar column is left to convention, as before.
-        Assert.DoesNotContain("e.Title).HasColumnType", context);
+        Assert.DoesNotContain("e.Title).HasColumnType", string.Concat(mapping.Sources));
     }
 
     [Fact]
     public void On_postgres_the_context_leaves_the_array_type_to_the_providers_convention()
     {
         var (_, models) = LoadFixture();
-        var context = DbContextRenderer.Render(models, "ArraysDbContext", "Arrays.Entities", postgresNaming: true);
+        var mapping = ModelMappingRenderer.Render(models, "ArraysDbContext", "Arrays.Entities", postgresNaming: true);
 
-        Assert.Contains("e.Property(x => x.Tags).HasColumnName(\"tags\");", context);
-        Assert.DoesNotContain("nvarchar(max)", context);
+        Assert.Contains("builder.Property(x => x.Tags).HasColumnName(\"tags\");", mapping["ArrayHolder"]);
+        Assert.DoesNotContain("nvarchar(max)", string.Concat(mapping.Sources));
     }
 
     /// <summary>A model without an array renders exactly as it did — no directive, no configuration.</summary>
@@ -303,7 +303,7 @@ CREATE TABLE public.array_holder
         var pair = EntityPairRenderer.Render(models.Single(m => m.Name == "BankAccount"), "Ns");
 
         Assert.DoesNotContain("System.Collections.Generic", pair.Interface + pair.Write + pair.Read);
-        Assert.DoesNotContain("HasColumnType", DbContextRenderer.Render(models, "Ctx", "Ns"));
+        Assert.DoesNotContain("HasColumnType", string.Concat(ModelMappingRenderer.Render(models, "Ctx", "Ns").Sources));
     }
 
     // ---- TypeScript ----
@@ -383,8 +383,8 @@ CREATE TABLE public.array_holder
         var entity = ViewEntityRenderer.Render(view, "Test", knownEnumNames: null);
         Assert.Contains("using System.Collections.Generic;", entity);
         Assert.Contains("public List<string> Labels { get; set; } = [];", entity);
-        var context = Normalize(DbContextRenderer.Render([], "Test", "TestDb", readViews: [view]));
-        Assert.Contains("e.Property(x => x.Labels).HasColumnType(\"nvarchar(max)\");", context);
+        var configuration = Normalize(ModelMappingRenderer.Render([], "Test", "TestDb", readViews: [view])["Labels"]);
+        Assert.Contains("builder.Property(x => x.Labels).HasColumnType(\"nvarchar(max)\");", configuration);
     }
 
     [Theory]

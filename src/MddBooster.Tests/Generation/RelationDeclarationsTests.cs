@@ -149,10 +149,10 @@ public class RelationDeclarationsTests
         Assert.Contains(named, error.Message);
     }
 
-    private static string DbContext(IReadOnlyList<ResolvedModel> models)
+    private static ModelMapping Mapping(IReadOnlyList<ResolvedModel> models)
     {
         var oneToOne = OneToOneRelationships.Describe(models);
-        return DbContextRenderer.Render(models, "AppDbContext", "Test.Entities",
+        return ModelMappingRenderer.Render(models, "AppDbContext", "Test.Entities",
             oneToOne: oneToOne, manyToOne: ManyToOneNavigations.Describe(models, oneToOne));
     }
 
@@ -167,19 +167,19 @@ public class RelationDeclarationsTests
             "## Post\n- id: identifier @pk @generated\n- author_id: identifier @reference(Person)\n" +
             "- editor_id: identifier? @reference(Person)\n\n" +
             "### Relations\n- >writer\n  - target: Person\n  - from: author_id\n");
-        var code = DbContext(models);
-        Assert.Contains("modelBuilder.Entity<Post>().HasOne(e => e.Writer).WithMany().HasForeignKey(e => e.AuthorId).OnDelete(DeleteBehavior.NoAction);", code);
-        Assert.Contains("modelBuilder.Entity<PostExt>().HasOne(e => e.Writer).WithMany().HasForeignKey(e => e.AuthorId).OnDelete(DeleteBehavior.NoAction);", code);
+        var mapping = Mapping(models);
+        Assert.Contains("builder.HasOne(e => e.Writer).WithMany().HasForeignKey(e => e.AuthorId).OnDelete(DeleteBehavior.NoAction);", mapping["Post"]);
+        Assert.Contains("builder.HasOne(e => e.Writer).WithMany().HasForeignKey(e => e.AuthorId).OnDelete(DeleteBehavior.NoAction);", mapping["PostExt"]);
         // A conventionally named key is configured too — with the delete action the schema has.
-        Assert.Contains("modelBuilder.Entity<Post>().HasOne(e => e.Editor).WithMany().HasForeignKey(e => e.EditorId).OnDelete(DeleteBehavior.NoAction);", code);
+        Assert.Contains("builder.HasOne(e => e.Editor).WithMany().HasForeignKey(e => e.EditorId).OnDelete(DeleteBehavior.NoAction);", mapping["Post"]);
     }
 
     [Fact]
     public void A_self_referencing_one_to_one_is_configured_with_its_key_and_both_ends()
     {
         var (models, _) = Load(SelfOneToOne + "\n### Relations\n- <previous\n  - target: Step.next_id\n");
-        Assert.Contains("modelBuilder.Entity<StepExt>().HasOne(e => e.Next).WithOne(e => e.Previous).HasForeignKey<StepExt>(e => e.NextId).OnDelete(DeleteBehavior.NoAction);",
-            DbContext(models));
+        Assert.Contains("builder.HasOne(e => e.Next).WithOne(e => e.Previous).HasForeignKey<StepExt>(e => e.NextId).OnDelete(DeleteBehavior.NoAction);",
+            Mapping(models)["StepExt"]);
     }
 
     private const string PostWithComments =
@@ -202,11 +202,11 @@ public class RelationDeclarationsTests
         return (pair.Write, pair.Read);
     }
 
-    private static string DbContextWithCollections(IReadOnlyList<ResolvedModel> models)
+    private static ModelMapping MappingWithCollections(IReadOnlyList<ResolvedModel> models)
     {
         var oneToOne = OneToOneRelationships.Describe(models);
         var manyToOne = ManyToOneNavigations.Describe(models, oneToOne);
-        return DbContextRenderer.Render(models, "AppDbContext", "Test.Entities", oneToOne: oneToOne, manyToOne: manyToOne,
+        return ModelMappingRenderer.Render(models, "AppDbContext", "Test.Entities", oneToOne: oneToOne, manyToOne: manyToOne,
             collections: ReverseCollections.Describe(models, oneToOne, manyToOne));
     }
 
@@ -224,8 +224,8 @@ public class RelationDeclarationsTests
         Assert.Contains("using System.Collections.Generic;", read);
         Assert.DoesNotContain("Comments", write);
         Assert.Contains(
-            "modelBuilder.Entity<CommentExt>().HasOne(e => e.Post).WithMany(e => e.Comments).HasForeignKey(e => e.PostId).OnDelete(DeleteBehavior.NoAction);",
-            DbContextWithCollections(models));
+            "builder.HasOne(e => e.Post).WithMany(e => e.Comments).HasForeignKey(e => e.PostId).OnDelete(DeleteBehavior.NoAction);",
+            MappingWithCollections(models)["CommentExt"]);
         Assert.DoesNotContain(Analyze(models, ast), d => d.Code is "MDD027" or "MDD049" or "MDD050");
         Assert.Empty(AstAccounting.ListUnconsumed(ast));
     }
@@ -237,7 +237,7 @@ public class RelationDeclarationsTests
         var (_, read) = RenderWithCollections(models, "Post");
         Assert.DoesNotContain("ICollection", read);
         Assert.DoesNotContain("System.Collections.Generic", read);
-        Assert.Contains(".WithMany().HasForeignKey(e => e.PostId)", DbContextWithCollections(models));
+        Assert.Contains(".WithMany().HasForeignKey(e => e.PostId)", MappingWithCollections(models)["CommentExt"]);
     }
 
     /// <summary>The entry written as a directive, or with its key as its own <c>from:</c>, is the same collection.</summary>
@@ -260,7 +260,7 @@ public class RelationDeclarationsTests
         Assert.DoesNotContain("ICollection", read);
         var warning = Assert.Single(Analyze(models, ast), d => d.Code == "MDD027");
         Assert.Contains("'Comments'", warning.Message);
-        Assert.Contains(".WithMany().HasForeignKey(e => e.PostId)", DbContextWithCollections(models));
+        Assert.Contains(".WithMany().HasForeignKey(e => e.PostId)", MappingWithCollections(models)["CommentExt"]);
     }
 
     /// <summary>
@@ -275,8 +275,8 @@ public class RelationDeclarationsTests
             .Replace("- post_id: identifier @reference(Post)", "- parent: identifier @reference(Post)"));
         Assert.Null(Assert.Single(Collections(models)).ForwardName);
         Assert.Contains(
-            "modelBuilder.Entity<PostExt>().HasMany(e => e.Comments).WithOne().HasForeignKey(e => e.Parent).OnDelete(DeleteBehavior.NoAction);",
-            DbContextWithCollections(models));
+            "builder.HasMany(e => e.Comments).WithOne().HasForeignKey(e => e.Parent).OnDelete(DeleteBehavior.NoAction);",
+            MappingWithCollections(models)["PostExt"]);
     }
 
     [Fact]

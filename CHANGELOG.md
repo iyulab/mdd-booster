@@ -18,6 +18,21 @@
 
 ## [Unreleased]
 
+### 🔴 Model 타깃의 EF 매핑이 엔티티 형마다 `IEntityTypeConfiguration<T>` 로 나온다
+
+종전에는 모든 매핑(관계 · 삭제 동작 · `ToView` · 열 이름 · 인덱스 · 목록 필드의 열 형)이 생성 DbContext 의 `OnModelCreating` 안에
+인라인으로 있었다. 이제 엔티티 형 하나에 구성 클래스 하나다 — 쓰기 형 `X`, 읽기 형 `XExt`, standalone 뷰의 읽기 형 각각.
+
+- **새 파일** — `Entity_gen/{X}Configuration.cs` · `Entity_gen/{X}ExtConfiguration.cs`(뷰는 `Entity_gen/{View}Configuration.cs`):
+  `public sealed class XConfiguration : IEntityTypeConfiguration<X>`, 엔티티와 같은 네임스페이스. 매핑이 비어 있는 형도 클래스를 받는다 —
+  어느 형에 구성이 있는지가 모델로 정해진다.
+- **생성 DbContext** — `OnModelCreating` 은 `base.OnModelCreating(modelBuilder)` 뒤에 형마다
+  `modelBuilder.ApplyConfiguration(new XConfiguration());` 한 줄씩(모델 이름 순 · 쓰기 형 다음 읽기 형 · 그다음 뷰). 어셈블리를 훑지 않는다 —
+  컨텍스트가 섬기는 형을 이름으로 적고, 없는 구성은 빌드 오류다.
+- **바뀌지 않는 것** — DB 스키마 · EF 모델. 같은 모델의 두 판 생성물이 짓는 EF 모델(`Model.ToDebugString`)이 같다.
+- **옮길 것** — 생성 출력 폴더를 컴파일하는 프로젝트는 그대로 컴파일된다(새 파일은 같은 `Entity_gen/` 에 있다). 생성 DbContext 의 텍스트를
+  읽거나 비교하던 도구가 있으면 매핑 문장은 이제 구성 클래스에 있다(`modelBuilder.Entity<X>().…` → `XConfiguration` 의 `builder.…`).
+
 ### 배열 필드 `T[]` 가 생성된다 — 길이 없는 원시형 원소
 
 명세 §2.4.3 의 배열(`- tags: string[]` · 원소 nullable `string?[]` · 배열 nullable `string[]?`)을 네 타깃이 낸다. 종전에는 모든 배열이

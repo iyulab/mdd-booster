@@ -35,8 +35,10 @@ public class ModelGeneratorE2ETests
             outputs.Add(($"{model.Name}Ext.cs", pair.Read));
         }
 
-        var dbContextSource = DbContextRenderer.Render(models, "SampleDbContext", "Sample.Entities");
-        outputs.Add(("SampleDbContext.cs", dbContextSource));
+        var mapping = ModelMappingRenderer.Render(models, "SampleDbContext", "Sample.Entities");
+        outputs.Add(("SampleDbContext.cs", mapping.Context));
+        foreach (var configuration in mapping.Configurations)
+            outputs.Add(($"{configuration.ClassName}.cs", configuration.Source));
 
         // Parse each generated file as C#. Syntactic validity is all this suite can
         // assert: generated code carries simple names, so compiling it means resolving
@@ -73,7 +75,7 @@ public class ModelGeneratorE2ETests
             sources.Add(p.Write);
             sources.Add(p.Read);
         }
-        sources.Add(DbContextRenderer.Render(allModels, "AllDbContext", "Test.All"));
+        sources.AddRange(ModelMappingRenderer.Render(allModels, "AllDbContext", "Test.All").Sources);
 
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);
         foreach (var src in sources)
