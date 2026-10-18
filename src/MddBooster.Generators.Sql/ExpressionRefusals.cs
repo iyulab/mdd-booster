@@ -45,7 +45,7 @@ internal static class ExpressionRefusals
                                $"where_raw(…, platform: \"{platform}\") 로 옮겨라.");
         }
 
-        foreach (var model in context.Models)
+        foreach (var model in context.GeneratedModels)
         {
             foreach (var field in model.Fields.Where(f => !EntitySurface.IsFieldInternal(f)))
             {
@@ -60,7 +60,7 @@ internal static class ExpressionRefusals
                             : null);
             }
         }
-        foreach (var view in context.Views)
+        foreach (var view in context.GeneratedViews)
         {
             Check(view.WhereFor(dialect), declared: view.WhereRaw.Count > 0, $"view '{view.Name}' where", view.WhereRaw,
                 ExpressionScopes.ViewWhere(view));

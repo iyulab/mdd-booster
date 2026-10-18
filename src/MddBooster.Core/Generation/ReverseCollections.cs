@@ -71,7 +71,7 @@ public static class ReverseCollections
             foreach (var r in oneToOne.Where(r => r.ReverseNameConflict is null))
             {
                 if (r.DependentModel == model.Name) members.TryAdd(r.ForwardName, $"1:1 {r.ForwardName} → {r.TargetModel}");
-                if (r.TargetModel == model.Name) members.TryAdd(r.ReverseName, $"1:1 {r.ReverseName} ← {r.DependentModel}");
+                if (r.HasInverse && r.TargetModel == model.Name) members.TryAdd(r.ReverseName, $"1:1 {r.ReverseName} ← {r.DependentModel}");
             }
             foreach (var n in manyToOne.Where(n => n.CollidesWith is null && n.DependentModel == model.Name))
                 members.TryAdd(n.Name, $"{n.ForeignKeyField} 의 navigation");

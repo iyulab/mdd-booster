@@ -71,7 +71,9 @@ public class OneToOneDialectSymmetryTests
         var tsql = GenerateInto(postgresNaming: false);
         var postgres = GenerateInto(postgresNaming: true);
 
+        // The entity configurations sit next to the entities but are the mapping, which differs per dialect by design.
         var entityFiles = tsql.Keys.Where(k => k.StartsWith("Entity_gen/", StringComparison.Ordinal))
+            .Where(k => !IsConfiguration(tsql[k]))
             .OrderBy(k => k, StringComparer.Ordinal).ToList();
 
         // The navigation this phase added has to be among what is being compared, or the comparison
@@ -88,7 +90,7 @@ public class OneToOneDialectSymmetryTests
     }
 
     /// <summary>
-    /// The negative control: the dialect flag did reach the generator, and changed the DbContext.
+    /// The negative control: the dialect flag did reach the generator, and changed the mapping.
     /// </summary>
     /// <remarks>
     /// Without this, the assertion above would pass just as happily if <c>PostgresNaming</c> were
@@ -96,17 +98,23 @@ public class OneToOneDialectSymmetryTests
     /// because the dialect was never applied" look the same from the entity files alone.
     /// </remarks>
     [Fact]
-    public void The_dialect_flag_reached_the_generator_and_changed_the_context()
+    public void The_dialect_flag_reached_the_generator_and_changed_the_mapping()
     {
         var tsql = GenerateInto(postgresNaming: false);
         var postgres = GenerateInto(postgresNaming: true);
 
-        var contextFile = tsql.Keys.Single(k => k.StartsWith("DbContext_gen/", StringComparison.Ordinal));
+        const string readConfiguration = "Entity_gen/AssetMaintenanceProfileExtConfiguration.cs";
+        var tsqlMapping = string.Concat(tsql
+            .Where(f => f.Key.StartsWith("DbContext_gen/", StringComparison.Ordinal) || IsConfiguration(f.Value))
+            .Select(f => f.Value));
 
-        Assert.NotEqual(tsql[contextFile], postgres[contextFile]);
-        Assert.Contains("e.ToView(\"asset_maintenance_profile\");", postgres[contextFile], StringComparison.Ordinal);
-        Assert.DoesNotContain("asset_maintenance_profile", tsql[contextFile], StringComparison.Ordinal);
+        Assert.NotEqual(tsql[readConfiguration], postgres[readConfiguration]);
+        Assert.Contains("builder.ToView(\"asset_maintenance_profile\");", postgres[readConfiguration], StringComparison.Ordinal);
+        Assert.DoesNotContain("asset_maintenance_profile", tsqlMapping, StringComparison.Ordinal);
     }
+
+    private static bool IsConfiguration(string source) =>
+        source.Contains(": IEntityTypeConfiguration<", StringComparison.Ordinal);
 
     /// <summary>
     /// The unique key that makes the relationship one-to-one survives the Postgres dialect, under
@@ -122,13 +130,13 @@ public class OneToOneDialectSymmetryTests
     [Fact]
     public void The_unique_key_behind_the_relationship_survives_the_postgres_dialect()
     {
-        var output = DbContextRenderer.Render(Load(), "ProbeDbContext", "Probe.Entities", postgresNaming: true);
+        var mapping = ModelMappingRenderer.Render(Load(), "ProbeDbContext", "Probe.Entities", postgresNaming: true);
 
         Assert.Contains(
-            "e.HasIndex(x => x.AssetId).IsUnique().HasDatabaseName(\"uq_asset_maintenance_profile_asset_id\");",
-            output, StringComparison.Ordinal);
+            "builder.HasIndex(x => x.AssetId).IsUnique().HasDatabaseName(\"uq_asset_maintenance_profile_asset_id\");",
+            mapping["AssetMaintenanceProfile"], StringComparison.Ordinal);
         Assert.Contains(
-            "e.HasIndex(x => x.OrganizationId).IsUnique().HasDatabaseName(\"uq_contractor_organization_id\");",
-            output, StringComparison.Ordinal);
+            "builder.HasIndex(x => x.OrganizationId).IsUnique().HasDatabaseName(\"uq_contractor_organization_id\");",
+            mapping["Contractor"], StringComparison.Ordinal);
     }
 }

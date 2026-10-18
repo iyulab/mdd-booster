@@ -40,7 +40,7 @@ public sealed class PreScriptWriter(SqlDialect dialect, string schema, Func<stri
         SqlDialect dialect, string schema, Func<string, string> tableName)
     {
         ArgumentNullException.ThrowIfNull(context);
-        var steps = RenameSteps.Of(context.Models);
+        var steps = RenameSteps.Of(context.GeneratedModels);
         // Without a configured place the renames are not acted on; the build reports that before any target runs (MDD051).
         if (steps.Count == 0 || preScriptsPath is null) return;
         var directory = ResolvePlacement(context.WorkingDirectory, preScriptsPath, projectRoot)!;

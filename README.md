@@ -12,7 +12,7 @@ M3L → SQL/C#/API 코드 생성기. 단일 `tables.m3l.md` 소스로 SSDT 스�
 | 타입 | 출력 | 소비자 |
 |---|---|---|
 | **Sql** | tsql(기본): `dbo/Tables_gen/{Entity}.sql`, `dbo/Views_gen/{Entity}_{full,ext}.sql`, `.sqlproj` ItemGroup 패치 · postgres: `tables_gen/{table}.sql` (snake_case, 아래 방언 절) | SSDT 프로젝트 · desired-state 스타일 스키마 관리 도구 |
-| **Model** | `Entity_gen/{I,}{Entity}{,Ext}.cs`, `Enum_gen/{Enum}.cs`, `DbContext_gen/{Name}.cs` (with auto-`ToView` 매핑) | C# classlib (EF Core + 소비앱의 런타임 패키지) |
+| **Model** | `Entity_gen/{I,}{Entity}{,Ext}.cs` + 형마다 EF 매핑 `Entity_gen/{Entity}{,Ext}Configuration.cs`(`IEntityTypeConfiguration<T>` — auto-`ToView` 포함), `Enum_gen/{Enum}.cs`, `DbContext_gen/{Name}.cs`(DbSet · 구성 적용) | C# classlib (EF Core + 소비앱의 런타임 패키지) |
 | **Api** | `Api_gen/ApiRegistration_gen.cs` (OData + GraphQL 엔티티 페어 등록) | ASP.NET Core 서버 (OData/GraphQL 런타임) |
 
 ## 사용법
@@ -212,6 +212,53 @@ export * from './enum_labels_gen'
   자기 소유 enum 만 선언한다. 파일 이름과 export 는 그대로라 생성 폼의 import 는 바뀌지 않는다.
 - 소유자 축(`includeOwners`/`excludeOwners`)이 있는 TypeScript 타깃에서만 쓸 수 있다(없으면 빌드 오류) — 무엇이
   «다른 소유자의 타입» 인지를 그 축이 정한다.
+
+#### 엔티티를 층(모듈)마다 어셈블리로 — Model 타깃의 `modules`
+
+한 DB · 한 컨텍스트 안에 층이 다른 모델 — 모든 제품이 쓰는 공통 층과 그 위의 제품 층 — 이 있을 때, 공통 층의 코드가 제품
+형을 **컴파일 수준에서** 볼 수 없게 하려면 층마다 엔티티 어셈블리가 따로 있어야 한다. Model 타깃은 소유자(`# Prefix:`)로
+모델을 모듈에 나눠, 모듈마다 자기 프로젝트 · 네임스페이스에 낸다:
+
+```json
+{ "type": "Model", "projectPath": "../Acme.Host", "namespace": "Acme.Host", "dbContextName": "AcmeDbContext",
+  "modules": [
+    { "owners": [""],      "projectPath": "../Acme.Core.Entities",  "namespace": "Acme.Core.Entities" },
+    { "owners": ["maint"], "projectPath": "../Acme.Maint.Entities", "namespace": "Acme.Maint.Entities" } ] }
+```
+
+- **순서가 층이다 — 아래층부터.** 한 모듈의 선언은 자기와 **앞** 모듈의 선언만 가리킨다: `@reference` 대상(`::aspect` 의
+  base 포함) · 필드의 enum · `@lookup` 경로 · `@rollup` 원천 · `### Relations` 의 역방향 끝 · 뷰가 읽는 모델과 뷰. 뒤 모듈을
+  가리키면 빌드 오류(종료 코드 3)다 — 아래층 프로젝트는 위층 없이 컴파일되기 때문이다. 오류는 가리키는 선언과 대상을 둘 다 적는다.
+- **위층의 1:1(`::aspect` 포함)이 아래층 모델을 가리키면**, 아래층 읽기 형에 생기던 역방향 navigation 은 만들지 않는다 — 위층
+  형이 아래층 어셈블리에 들어가기 때문이다. 관계는 위층 쪽(그것을 선언한 쪽)의 navigation 으로 구성된다. 모듈이 없으면 종전대로 생긴다.
+- 모듈마다 `Entity_gen/`(엔티티 + 구성 클래스) · `Enum_gen/` 가 그 `projectPath` 에 생긴다. 위 모듈의 파일은 아래 모듈의
+  네임스페이스를 `using` 한다. 타깃 자신의 `projectPath` · `namespace` 에는 **컨텍스트만** 생기고, 모든 모듈을 `using` 해 각 형의
+  구성을 적용한다. 프로젝트 참조(위층 → 아래층, 호스트 → 전부)는 소비자가 짠다.
+- 모델의 소유자는 정확히 한 모듈에 있어야 한다 — 어느 모듈에도 없거나, 둘에 있거나, 모델에 없는 소유자를 적으면 구성 오류(종료 코드 4).
+- 모듈 분할은 부분 집합이 아니다 — 한 빌드가 여전히 모델 전체를 보고 FK · 상속을 검증한다(Model 타깃에 `includeOwners` 를
+  걸 수 없는 이유가 그대로다).
+
+#### 다른 빌드의 게시 모델 위에 — `references`
+
+게시된 패키지(그 엔티티 어셈블리)의 모델 위에 자기 모델을 짓는 리포는, 그 모델의 원문을 **참조**로 읽는다 — 검증에 쓰고 생성하지 않는다:
+
+```json
+{ "sources": ["./custom.m3l.md"],
+  "references": [ { "sources": ["../packages/acme.core/model/core.m3l.md"], "namespace": "Acme.Core.Entities" } ],
+  "targets": [ ... ] }
+```
+
+- 자기 원문은 참조된 선언을 평소처럼 가리킨다(`@reference` · `@lookup` · enum · `::aspect` 의 base — M3L 명세 §2.1.3 Rule 3 대로 그 파일을 `@import`).
+  한 빌드가 둘을 함께 보므로 키 형 · 상속 · 방향을 대조한다.
+- **어느 타깃도 참조된 선언을 내지 않는다** — 엔티티 · 구성 · enum · 테이블 · 뷰 · 등록 · TS 형 모두. 그것들은 참조된 쪽 빌드가 냈고 게시했다.
+- Model 타깃의 생성 파일은 참조의 `namespace` 를 `using` 하고, 생성 컨텍스트는 참조된 형의 `DbSet` 과 구성(`{T}Configuration` — 그 어셈블리에
+  실려 있다)까지 적용해 한 컨텍스트로 둘을 서빙한다. 참조된 어셈블리를 프로젝트에 참조하는 것은 소비자 몫이다.
+- 참조는 이 빌드가 내는 모든 것의 **아래 층**이다 — 참조된 선언이 생성할 선언을 가리키면 빌드 오류(종료 코드 3). 이 빌드의 1:1 이 참조된 모델을
+  가리켜도 참조된 읽기 형에 역방향 navigation 은 생기지 않는다(그 형은 이미 게시됐다 — 모듈의 위층 aspect 와 같은 규칙). `modules` 와 함께 쓰면
+  참조는 모든 모듈 아래다.
+- 원문과 어셈블리의 **판을 맞추는 것**은 패키징으로 한다 — 패키지 하나가 `.m3l.md` 와 DLL 을 같은 판으로 실으면 둘은 어긋나지 않는다. 생성 컨텍스트가
+  참조된 구성을 이름으로 적용하므로, 어셈블리에 그 형이 없으면 빌드 오류가 된다.
+- 파일이 `sources` 와 `references` 에 함께 있거나 · 없거나 · `namespace` 가 비면 구성 오류(종료 코드 4).
 
 #### `field_schema_gen.ts` — 소비 계약
 
@@ -558,7 +605,7 @@ MDD_DEBUG=1 mdd build ./mdd
 | 표시 라벨 `name(Label)` — 필드(`- name(이름): string "…"`) → C# `[Display(Name)]` · TS 필드 스키마 `label` · 생성 폼 `label` | ✅ — 명세의 라벨이 표시 이름이고, 따옴표 설명·들여쓴 블록인용은 설명으로 남는다(블록인용이 인라인 설명을 덮어도 라벨은 그대로). 라벨을 적지 않은 필드는 설명이 표시 이름이다. 이 생성기의 옛 `@label(…)` 은 아직 읽지만 `MDD047` 경고 — `name(Label)` 로 옮긴다. 모델·enum **머리**의 라벨(`## Customer(고객)`)은 표시 이름을 쓰는 산출물이 없어 「소비되지 않는 요소」로 알린다 |
 | enum 멤버의 표시명(`- planned(계획됨): "…"`, 라벨이 없으면 설명 `- planned: "계획됨"`) → C# `[Display(Name)]` · TS `enum_labels_gen.ts` · 설명은 XML 주석 | ✅ — 어트리뷰트라 **런타임에 읽힌다**(`GetField(v.ToString())?.GetCustomAttribute<DisplayAttribute>()?.Name`). 서버가 문서를 그리는 경로(보고서·내보내기·메일 본문)가 화면과 같은 표시명을 쓴다. 표시명을 선언하지 않은 멤버에는 붙지 않는다 — 멤버 이름의 재진술이 아니라 「사람이 써 넣은 텍스트」라는 표시다 |
 | `phone`/`email`/`url` → 검증 문자열 (plain `string`, `NVARCHAR(30/320/2048)` — 상한은 언어 명세 §10.4.2가 정한다. `phone`만 명세의 20 대신 30을 쓰며 그 이탈은 코드에 기록돼 있다). **값객체 struct 매핑 아님** — `ODataConventionModelBuilder`가 값객체 struct를 EDM 복합 타입으로 등록하지 못해 직렬화가 깨지기 때문. 막힌 지점은 OData 직렬화 계층 한정이라 데이터 계층에서의 변환은 자유롭다 | ✅ |
-| 배열 `T[]` · `T?[]` · `T[]?` (명세 §2.4.3) — SQL Server `NVARCHAR(MAX)` JSON + `ISJSON` CHECK · PostgreSQL 원소 형의 네이티브 배열 · C# `List<T>` · TS `T[]` | ✅ — 원소는 길이 없는 원시형만(`string` · `text` · `integer` · `long` · `short` · `boolean` · `decimal(p,s)` · `float` · `double` · `identifier` · `date` · `timestamp`). 나머지 조합은 `MDD048`. 생성 폼은 배열 필드에 컨트롤을 그리지 않는다(폼 · 오버라이드 키 · 폼 상태 도우미에서 함께 빠진다). 상세는 [`docs/m3l-support.md`](docs/m3l-support.md) §2.4.3 |
+| 배열 `T[]` · `T?[]` · `T[]?` (명세 §2.4.3) — SQL Server `NVARCHAR(MAX)` JSON + `ISJSON` CHECK · PostgreSQL 원소 형의 네이티브 배열 · C# `List<T>` · TS `T[]` | ✅ — 원소는 원시형(`string` · `string(n)` · `text` · `integer` · `long` · `short` · `boolean` · `decimal(p,s)` · `float` · `double` · `identifier` · `date` · `timestamp`). 원소의 상한은 원소마다 — 엔티티에 `[ElementStringLength(n)]` · `[ElementDecimalDigits(p, s)]`(런타임 `Iyu.*` 의 0.43.0 다음 판이 정의한다 — 런타임 패키지의 README), PG 는 `varchar(n)[]`. 나머지 조합은 `MDD048`. 생성 폼은 배열 필드에 컨트롤을 그리지 않는다(폼 · 오버라이드 키 · 폼 상태 도우미에서 함께 빠진다). 상세는 [`docs/m3l-support.md`](docs/m3l-support.md) §2.4.3 |
 | `@reference(Target)` → SQL FK + C# `[Reference]` 속성 | ✅ |
 | `@unique` (단일 컬럼) | ✅ |
 | `@lookup(fk.col)` → `_full` 뷰 LEFT JOIN + `[Lookup]` 속성 | ✅ — 다단 경로(`@lookup(order_id.customer_id.name)`, 언어 명세 §4.5.1)도 hop 마다 LEFT JOIN 을 잇는다. 마지막 hop 앞의 hop 은 대상의 **테이블**을 JOIN 하므로(다음 키만 읽는다) 다른 뷰에 의존하지 않는다 — 파생 칼럼을 거치는 1단 lookup 이 뷰 순환을 만드는 자리에서 같은 값을 저장 키로 따라 읽는 길이다. 경로의 어느 키든 널 허용이면 생성 속성도 널 허용이다(§4.5.4) |
@@ -600,7 +647,7 @@ UdView 위에 있어 이미 거르고, 기본 테이블을 읽는 서브쿼리�
 | `@searchable` | `[Searchable]` | 쓰기·읽기 두 클래스 모두. 런타임의 `$search` 는 `[Searchable]` 이 하나라도 있는 타입을 **선언된 문자열 속성만** 검색한다(없는 타입은 문자열 속성 전부). 🔴 **참조 키에 선언하면 키가 아니라 그 키의 navigation 에 붙는다** — 키는 텍스트가 아니라 어떤 낱말에도 매칭하지 않는다. 아래 «참조 키(N:1)» 절의 «검색» 행 |
 | `@immutable` | `[Editable(false, AllowInitialValue = true)]` | 저장 필드에만 붙는다. «생성 때 한 번 주고 그 뒤엔 바꾸지 않는다»는 뜻이라 초기값은 허용으로 적는다. 아래 TypeScript 타깃의 생성 폼 `disabled` prop과 같은 선언을 미러링 — 둘 다 메타데이터일 뿐, 이 리포가 생성하는 어떤 API 계층도 이를 강제하지 않는다 |
 | 필드의 `@system` | `[Editable(false)]` | «애플리케이션 자신의 코드가 쓰는 칸» — 전이 행위가 옮기는 상태, 행위를 한 사용자, 저장소가 돌려준 키. 값은 저장되고 읽힌다(테이블·읽기 타입 무변화). 메타데이터는 여기까지이고, **막는 것은 Api 타깃**이다: 생성 등록이 그 칸을 제네릭 쓰기 경로에서 뺀다(아래 「필드의 `@system` → 쓰기 제외」). TypeScript 타깃은 그 칸에 입력 컨트롤을 그리지 않는다. `@immutable`(호출자가 생성 때 한 번 준다)·`@internal`(읽기 표면에서 뺀다)과는 다른 선언이다 |
-| 필드 단위 `@unique` | `HasIndex(...).IsUnique()` | 엔티티 속성이 아니라 `DbContext.OnModelCreating`의 fluent 설정 — SQL 타깃의 `UK_{Model}_{Column}`/PG의 `uq_{table}_{field}`와 같은 이름을 `HasDatabaseName`으로 명시한다. 널 허용 컬럼도 분기 없이 같은 한 줄만 방출 — SQL Server 프로바이더가 unique index의 널 허용 컬럼에 `WHERE ... IS NOT NULL` 필터를 자동으로 붙이므로 (SQL 타깃의 filtered index와 동일 결과), PostgreSQL은 애초에 `UNIQUE`가 NULL을 distinct로 취급하므로 (둘 다 이 리포가 손으로 만드는 코드가 아니다) |
+| 필드 단위 `@unique` | `HasIndex(...).IsUnique()` | 엔티티 속성이 아니라 그 엔티티 구성 클래스(`{Entity}Configuration`)의 fluent 설정 — SQL 타깃의 `UK_{Model}_{Column}`/PG의 `uq_{table}_{field}`와 같은 이름을 `HasDatabaseName`으로 명시한다. 널 허용 컬럼도 분기 없이 같은 한 줄만 방출 — SQL Server 프로바이더가 unique index의 널 허용 컬럼에 `WHERE ... IS NOT NULL` 필터를 자동으로 붙이므로 (SQL 타깃의 filtered index와 동일 결과), PostgreSQL은 애초에 `UNIQUE`가 NULL을 distinct로 취급하므로 (둘 다 이 리포가 손으로 만드는 코드가 아니다) |
 | 필드 단위 `@index` | `HasIndex(...)` | 위와 같은 자리, `IX_{Model}_{Column}`/`ix_{table}_{field}` 이름. `@unique`와 함께 선언되면 `unique`만 방출한다(제약이 이미 인덱스를 소유 — SQL 타깃과 동일한 배제) |
 
 기준은 `@not_null` 을 적었는지가 **아니라 필드가 실제로 널을 허용하는지**다. `- name: string(50)`
@@ -782,7 +829,7 @@ PostgreSQL `views_gen/<snake_name>.sql`. 빌드가 먼저 뷰를 모델에 대�
 
 | 타깃 | 생성 |
 |---|---|
-| Model | `Entity_gen/OpenOrders.cs` — 뷰의 출력 열만 가진 클래스 하나(쓰기 타입·`…Ext` 쌍·감사 타임스탬프 없음). DbContext 에 `DbSet<OpenOrders> OpenOrders` 와 매핑: 테이블 없음 · Sql 타깃이 만드는 그 뷰(`ToView`) · 키 `Id`. PostgreSQL 방언은 열마다 선언된 이름으로 매핑한다 |
+| Model | `Entity_gen/OpenOrders.cs` — 뷰의 출력 열만 가진 클래스 하나(쓰기 타입·`…Ext` 쌍·감사 타임스탬프 없음). DbContext 에 `DbSet<OpenOrders> OpenOrders`, 매핑은 `Entity_gen/OpenOrdersConfiguration.cs`: 테이블 없음 · Sql 타깃이 만드는 그 뷰(`ToView`) · 키 `Id`. PostgreSQL 방언은 열마다 선언된 이름으로 매핑한다 |
 | Api | 읽기 전용 셋 등록(OData 셋 · GraphQL 쿼리 필드)과 읽기 전용 컨트롤러(`OpenOrdersController`). 조회·`$filter`·`$select`·`$orderby`·키 조회는 모델의 셋과 같고, 쓰기 동사는 런타임이 전부 거절한다. 권한 키는 읽기 하나(`…Read`)만 낸다 |
 | TypeScript | `entities_gen.ts` 에 뷰의 열만 가진 `interface OpenOrders`(`IyuEntity` 를 잇지 않는다 — 감사 타임스탬프가 없다, 열은 전부 필수). `entity_names_gen.ts` 에 **따로** `READ_ONLY_SET_NAMES` / `ReadOnlySetName`. 필드 스키마·폼은 없다(쓰기 축) |
 | Sql | 변화 없음 — 뷰는 위 절대로 생성된다 |
@@ -1197,7 +1244,7 @@ consumer-repo/
     │           ├── Order_full.sql
     │           └── Order_ext.sql
     ├── MyApp.Entities/
-    │   ├── Entity_gen/             ← 매번 재생성
+    │   ├── Entity_gen/             ← 매번 재생성 (엔티티 + 형마다 EF 구성 클래스)
     │   ├── Enum_gen/
     │   └── DbContext_gen/
     └── MyApp.Server/

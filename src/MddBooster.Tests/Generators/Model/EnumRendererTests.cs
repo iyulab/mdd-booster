@@ -193,8 +193,10 @@ public class EnumRendererTests
             sources.Add(($"{m.Name}.cs", p.Write));
             sources.Add(($"{m.Name}Ext.cs", p.Read));
         }
-        sources.Add(("OrdersDbContext.cs",
-            DbContextRenderer.Render(models, "OrdersDbContext", "Test.Orders")));
+        var mapping = ModelMappingRenderer.Render(models, "OrdersDbContext", "Test.Orders");
+        sources.Add(("OrdersDbContext.cs", mapping.Context));
+        foreach (var c in mapping.Configurations)
+            sources.Add(($"{c.ClassName}.cs", c.Source));
 
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);
         foreach (var (name, src) in sources)

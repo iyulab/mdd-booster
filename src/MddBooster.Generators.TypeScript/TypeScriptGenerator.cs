@@ -41,10 +41,10 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
         var enumNames = new HashSet<string>(context.Enums.Select(e => e.Name), StringComparer.Ordinal);
 
         // 타깃별 방출 범위 — 엔티티 파생 산출물에만 적용한다.
-        var models = _options.SurfaceFilter.Apply(context.Models);
+        var models = _options.SurfaceFilter.Apply(context.GeneratedModels);
         // 읽기 모델로 서빙되는 뷰 — 같은 필터(이름 · 소유자). 읽기 타입과 읽기 전용 셋 이름만 낸다:
         // 필드 스키마와 폼은 쓰기 축이고, 뷰에는 쓰기가 없다.
-        var readViews = context.ReadViews.Where(_options.SurfaceFilter.Admits).ToList();
+        var readViews = context.GeneratedReadViews.Where(_options.SurfaceFilter.Admits).ToList();
 
         // enums_gen.ts — 엔티티 필터(이름 목록)로는 가지치지 않는다: enum 은 엔티티 파생물이 아니고, 가지치면
         // 소비자가 그 파일에서 가져오던 enum 이 사라진다. 소유자 축이 있으면 enum 도 그 축으로 가른다(PartitionEnums).

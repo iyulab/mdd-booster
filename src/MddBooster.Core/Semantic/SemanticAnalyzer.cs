@@ -723,18 +723,16 @@ public sealed class SemanticAnalyzer
             parts.Add($"원소가 enum `{type}` 이다 — 목록 칸에서는 원소가 그 멤버인지 데이터베이스가 지킬 수 없다. " +
                       "`string[]` 으로 두거나 별도 모델과 `@reference` 로 나눈다");
         }
-        else if (M3lPrimitives.ImplicitMaxLengthOf(type) is not null
-                 || (type == "string" && parameters is { Count: > 0 }))
+        else if (M3lPrimitives.ImplicitMaxLengthOf(type) is not null)
         {
-            parts.Add($"원소에 길이 상한이 있다(`{ElementSpelling(type, parameters)}`) — 목록 칸에서는 원소의 길이를 데이터베이스가 " +
-                      "지킬 수 없고, 속성의 길이 검증은 원소가 아니라 목록의 개수를 잰다. 길이 없는 `string[]` 으로 두거나 " +
+            parts.Add($"원소가 의미 형 `{type}` 이다 — 그 형의 목록은 아직 생성하지 않는다. 길이를 적은 `string(n)[]` 으로 두거나 " +
                       "별도 모델과 `@reference` 로 나눈다");
         }
         else if (!M3lPrimitives.ArrayElementTypes.Contains(type)
-                 || (type != "decimal" && parameters is { Count: > 0 }))
+                 || (type is not ("decimal" or "string") && parameters is { Count: > 0 }))
         {
             parts.Add($"원소 형 `{ElementSpelling(type, parameters)}` 은 배열 원소로 생성하지 않는다 — 받는 원소: " +
-                      "길이 없는 `string` · `text` · `integer` · `long` · `short` · `boolean` · `decimal(p,s)` · `float` · " +
+                      "`string` · `string(n)` · `text` · `integer` · `long` · `short` · `boolean` · `decimal(p,s)` · `float` · " +
                       "`double` · `identifier` · `date` · `timestamp`");
         }
 

@@ -77,9 +77,9 @@ only. A 321-character value is refused; `not-an-email` is not.
 
 ## §2.4.3 Array Types
 
-**What this generator implements** is arrays of unbounded primitives — `string` (without a length),
-`text`, `integer`, `long`, `short`, `boolean`, `decimal(p,s)`, `float`, `double`, `identifier`,
-`date` and `timestamp` — with all three nullabilities (`T[]`, `T?[]`, `T[]?`):
+**What this generator implements** is arrays of primitives — `string`, `string(n)`, `text`, `integer`,
+`long`, `short`, `boolean`, `decimal(p,s)`, `float`, `double`, `identifier`, `date` and `timestamp` —
+with all three nullabilities (`T[]`, `T?[]`, `T[]?`):
 
 | Target | `tags: string[]` becomes |
 |---|---|
@@ -90,13 +90,16 @@ only. A 321-character value is refused; `not-an-email` is not.
 
 The array's own nullability is the column's `NULL` / `NOT NULL`. On SQL Server the element type is not
 enforced below the column — JSON text has no element type — so it holds only as far as the entity's
-`List<T>` does. A `decimal(p,s)` element's digits are not validated on any target (PostgreSQL's column
-rounds to them). The generated form draws no control for an array field: it is left out of the form
+`List<T>` does. An element's bound is each element's: the entity carries the runtime's per-element rule
+— `[ElementStringLength(n)]` for `string(n)[]`, `[ElementDecimalDigits(p, s)]` for `decimal(p,s)[]` — where a
+single value carries `[StringLength]` / `[DecimalDigits]` (which on a list would count the elements);
+PostgreSQL's column is the element's own type (`varchar(n)[]` — it refuses a longer element; `numeric(p,s)[]`
+rounds), and on SQL Server the attribute is the only place the bound holds. The TypeScript field schema
+gives a list no `maxLength`. The generated form draws no control for an array field: it is left out of the form
 component, its override keys and its form-state helpers.
 
-Still refused, with `MDD048` naming the combination: an element with a length bound (`string(n)[]`,
-`email[]`, `phone[]`, `url[]` — the length would bound the list, not the element, and SQL Server
-could not enforce it), an enum element, `binary`, `json`, `rowversion`, `byte`, `time` and `datetime`
+Still refused, with `MDD048` naming the combination: a semantic element type with an implied length
+(`email[]`, `phone[]`, `url[]` — write `string(n)[]`), an enum element, `binary`, `json`, `rowversion`, `byte`, `time` and `datetime`
 elements, and an array that is derived (lookup, rollup, computed), declares a default, or carries
 `@reference`, `@pk`, `@unique`, `@index`, `@searchable`, `@min`/`@max` or a `### Indexes` entry. So is
 a lookup whose column is an array and a rollup that aggregates one (`sum(tags)` is not the sum of the
@@ -289,7 +292,7 @@ silently.
 **What this generator implements**: none of these shapes. A field typed `object`, `map<K,V>` or an
 inline `enum` stops the build with `MDD048` — every target would have to invent a storage for it.
 Model the parts as a separate model with a reference, a top-level `::enum`, or a serialized `text`
-field. Arrays are generated for unbounded primitive elements; see §2.4.3 for which arrays are still
+field. Arrays are generated for primitive elements, `string(n)` included; see §2.4.3 for which arrays are still
 refused.
 
 ## §4.10.3 Cross-Field Validation

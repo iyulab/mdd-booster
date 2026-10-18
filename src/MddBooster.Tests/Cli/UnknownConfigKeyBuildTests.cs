@@ -150,7 +150,7 @@ public class UnknownConfigKeyBuildTests
         try
         {
             var warning = Assert.Single(ConfigLoader.UnknownKeyWarnings(ConfigLoader.Load(path)));
-            Assert.Contains("sources, targets, treatWarningsAsErrors, warningsAsErrors, noWarn", warning);
+            Assert.Contains("sources, targets, references, treatWarningsAsErrors, warningsAsErrors, noWarn", warning);
         }
         finally { File.Delete(path); }
     }

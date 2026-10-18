@@ -20,6 +20,31 @@
       "items": { "type": "string", "minLength": 1 },
       "minItems": 1
     },
+    "references": {
+      "type": "array",
+      "description": "Model sources read to check against but not generated — the model of a package this build builds on, whose generated types are published elsewhere. Their declarations can be named by sources (a reference, a lookup, an aspect's base) and are checked like any; no target emits them, the Model target's files import their namespace and its context applies their configurations. A referenced declaration may name only referenced ones (a build error otherwise).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "patternProperties": {
+          "^_": { "description": "A note — a key starting with \"_\" records the reason for a nearby setting and is ignored without a warning (JSON has no comment an editor accepts)." }
+        },
+        "required": ["sources", "namespace"],
+        "properties": {
+          "sources": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "minItems": 1,
+            "description": "The model files, relative to this file's directory unless absolute. A file is either generated (sources) or referenced, not both."
+          },
+          "namespace": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The C# namespace of the types generated from these sources."
+          }
+        }
+      }
+    },
     "treatWarningsAsErrors": {
       "type": "boolean",
       "description": "Report every coded warning (MDDnnn from this generator, M3L-Wnnn from the m3l parser/validator) as an error: the build stops with exit code 3 before generating anything. Codes in noWarn are still suppressed. Named and ordered after MSBuild's TreatWarningsAsErrors."
@@ -142,6 +167,35 @@
           "enum": ["tsql", "postgres", "postgresql", "pg"],
           "default": "tsql",
           "description": "Must match the Sql target's dialect this model is paired with — a mismatch produces snake_case/PascalCase-mismatched naming between the DDL and the EF mapping (build-time warning, not an error)."
+        },
+        "modules": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Split the entities into modules, each its own project and namespace, by owner (a file's # Prefix:). Lowest layer first: a module's models may refer to models of the modules before it, never after (a build error). Every owner of the model belongs to exactly one module. The target's projectPath/namespace are then where the context goes.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "patternProperties": {
+              "^_": { "description": "A note — a key starting with \"_\" records the reason for a nearby setting and is ignored without a warning (JSON has no comment an editor accepts)." }
+            },
+            "required": ["owners", "projectPath", "namespace"],
+            "properties": {
+              "owners": {
+                "type": "array",
+                "items": { "type": "string" },
+                "minItems": 1,
+                "description": "The owners (# Prefix:) whose models, enums and views this module holds. The empty string means files with no prefix."
+              },
+              "projectPath": {
+                "type": "string",
+                "description": "The module's project directory — its Entity_gen/ and Enum_gen/ go here. Relative to this file's directory unless absolute."
+              },
+              "namespace": {
+                "type": "string",
+                "description": "C# namespace of the module's types."
+              }
+            }
+          }
         }
       }
     },

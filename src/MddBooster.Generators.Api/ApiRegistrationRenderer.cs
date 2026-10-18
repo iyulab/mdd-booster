@@ -44,7 +44,8 @@ public static class ApiRegistrationRenderer
         string methodName = "RegisterGeneratedEntities",
         ApiSurfaces surfaces = ApiSurfaces.All,
         IReadOnlySet<string>? registeredElsewhere = null,
-        IReadOnlyList<ResolvedView>? readViews = null)
+        IReadOnlyList<ResolvedView>? readViews = null,
+        IReadOnlyDictionary<string, string>? entityNamespaces = null)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentException.ThrowIfNullOrWhiteSpace(ns);
@@ -59,7 +60,7 @@ public static class ApiRegistrationRenderer
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
         // 엔티티는 using 임포트가 아니라 한정 이름으로 가리킨다 — 이유는 EntityTypeRef 참조.
-        var entityPrefix = EntityTypeRef.PrefixFor(ns, entitiesNamespace);
+        var names = new EntityNamespaces(entitiesNamespace, entityNamespaces);
         sb.Append("namespace ").Append(ns).AppendLine(";");
         sb.AppendLine();
         sb.AppendLine("public static partial class ApiRegistration");
@@ -98,15 +99,15 @@ public static class ApiRegistrationRenderer
             if (odata)
             {
                 sb.Append("        options.ODataModel.AddEntityPair<")
-                  .Append(entityPrefix).Append(entity).Append("Ext, ")
-                  .Append(entityPrefix).Append(entity).Append(">(")
+                  .Append(names.PrefixFor(ns, entity)).Append(entity).Append("Ext, ")
+                  .Append(names.PrefixFor(ns, entity)).Append(entity).Append(">(")
                   .Append(SourceLiteral.CSharpString(setName)).AppendLine(");");
             }
             if (graphql)
             {
                 sb.Append("        options.GraphQL.AddEntityPair<")
-                  .Append(entityPrefix).Append(entity).Append("Ext, ")
-                  .Append(entityPrefix).Append(entity).Append(">(")
+                  .Append(names.PrefixFor(ns, entity)).Append(entity).Append("Ext, ")
+                  .Append(names.PrefixFor(ns, entity)).Append(entity).Append(">(")
                   .Append(SourceLiteral.CSharpString(queryName)).Append(", ")
                   .Append(SourceLiteral.CSharpString(mutationPrefix)).AppendLine(");");
             }
@@ -120,13 +121,13 @@ public static class ApiRegistrationRenderer
             if (odata)
             {
                 sb.Append("        options.ODataModel.AddReadOnlySet<")
-                  .Append(entityPrefix).Append(entity).Append(">(")
+                  .Append(names.PrefixFor(ns, entity)).Append(entity).Append(">(")
                   .Append(SourceLiteral.CSharpString(Pluralizer.Pluralize(entity))).AppendLine(");");
             }
             if (graphql)
             {
                 sb.Append("        options.GraphQL.AddReadOnlySet<")
-                  .Append(entityPrefix).Append(entity).Append(">(")
+                  .Append(names.PrefixFor(ns, entity)).Append(entity).Append(">(")
                   .Append(SourceLiteral.CSharpString(Pluralizer.Pluralize(NameCasing.ToCamelCase(entity)))).AppendLine(");");
             }
         }
@@ -147,8 +148,9 @@ public static class ApiRegistrationRenderer
                     .ToList();
                 if (systemFields.Count == 0) continue;
 
+                var entity = NameCasing.ToPascalCase(model.Name);
                 sb.Append("        options.ODataModel.ExcludeFromWrite<")
-                  .Append(entityPrefix).Append(NameCasing.ToPascalCase(model.Name)).Append("Ext>(")
+                  .Append(names.PrefixFor(ns, entity)).Append(entity).Append("Ext>(")
                   .Append(string.Join(", ", systemFields)).AppendLine(");");
             }
         }

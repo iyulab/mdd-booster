@@ -97,6 +97,49 @@ public class BuildCommandE2ETests
     }
 
     [Fact]
+    public void Model_target_writes_an_entity_configuration_per_type_next_to_the_entities()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"mdd-build-cfg-{Guid.NewGuid():N}");
+        var mddDir = Path.Combine(root, "mdd");
+        var modelDir = Path.Combine(root, "src", "Test.Entities");
+        Directory.CreateDirectory(mddDir);
+        Directory.CreateDirectory(modelDir);
+
+        File.WriteAllText(Path.Combine(mddDir, "tables.m3l.md"), FixtureContent());
+        File.WriteAllText(Path.Combine(mddDir, "mdd.json"), """
+{
+  "sources": ["./tables.m3l.md"],
+  "targets": [
+    { "type": "Model", "projectPath": "../src/Test.Entities", "namespace": "Test.Entities", "dbContextName": "TestDbContext" }
+  ]
+}
+""");
+
+        try
+        {
+            Assert.Equal(0, new BuildCommand().Run(mddDir));
+
+            var write = Path.Combine(modelDir, "Entity_gen", "BankAccountConfiguration.cs");
+            var read = Path.Combine(modelDir, "Entity_gen", "BankAccountExtConfiguration.cs");
+            Assert.True(File.Exists(write));
+            Assert.True(File.Exists(read));
+            Assert.Contains("public sealed class BankAccountConfiguration : IEntityTypeConfiguration<BankAccount>", File.ReadAllText(write));
+            Assert.Contains("builder.ToTable((string?)null).ToView(\"BankAccount\");", File.ReadAllText(read));
+
+            // The context only applies them; no configuration is written beside it.
+            Assert.Equal("TestDbContext.cs",
+                Path.GetFileName(Assert.Single(Directory.GetFiles(Path.Combine(modelDir, "DbContext_gen")))));
+            var dbContext = File.ReadAllText(Path.Combine(modelDir, "DbContext_gen", "TestDbContext.cs"));
+            Assert.Contains("modelBuilder.ApplyConfiguration(new BankAccountConfiguration());", dbContext);
+            Assert.Contains("modelBuilder.ApplyConfiguration(new BankAccountExtConfiguration());", dbContext);
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    [Fact]
     public void Model_target_missing_namespace_throws_with_clear_message()
     {
         var root = Path.Combine(Path.GetTempPath(), $"mdd-build-bad-{Guid.NewGuid():N}");

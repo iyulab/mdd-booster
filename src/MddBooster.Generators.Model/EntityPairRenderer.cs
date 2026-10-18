@@ -92,7 +92,7 @@ public static class EntityPairRenderer
 
         // Stored fields (pk + created_at/updated_at elided — inherited from IyuEntity).
         // 비-id PK(공유 PK 확장 테이블)도 elide 대상 — 그 필드는 IyuEntity.Id가 표현하며,
-        // DbContextRenderer가 fluent HasColumnName으로 실제 PK 컬럼에 재매핑한다.
+        // EntityConfigurationRenderer가 fluent HasColumnName으로 실제 PK 컬럼에 재매핑한다.
         // Kind.Stored is the default; anything else (Lookup/Rollup/Computed) lives
         // on the Ext read model only.
         var storedFields = model.Fields
@@ -343,7 +343,7 @@ public static class EntityPairRenderer
                       .AppendLine(" { get; set; } = null!;");
             }
 
-            if (string.Equals(r.TargetModel, modelName, StringComparison.Ordinal))
+            if (r.HasInverse && string.Equals(r.TargetModel, modelName, StringComparison.Ordinal))
             {
                 var dependent = NameCasing.ToPascalCase(r.DependentModel) + "Ext";
                 sb.AppendLine();
@@ -521,8 +521,9 @@ public static class EntityPairRenderer
             // the written one is how a column came to be narrower than the
             // attribute guarding writes to it. Independent of nullability: an
             // optional `string(50)?` is still bounded at 50.
+            // On a list the bound is each element's: [StringLength] there would count the elements.
             if (MddBooster.Core.Ast.FieldAttributes.EffectiveMaxLength(f) is { } maxLength)
-                sb.Append("    [StringLength(").Append(maxLength).AppendLine(")]");
+                sb.Append(f.Array ? "    [ElementStringLength(" : "    [StringLength(").Append(maxLength).AppendLine(")]");
 
             // [Range(min, max)] — the numeric bounds the model declares, which until now
             // reached the generated TypeScript field schema and stopped there: the same
@@ -540,13 +541,14 @@ public static class EntityPairRenderer
             // [DecimalDigits(p, s)] — a decimal's digits, the way [StringLength] carries a string's bound: the column
             // keeps exactly these, and without the rule in front of it a value with more decimal places was stored
             // rounded (the caller reads back a number it never sent) and one with more integer digits failed the write.
-            // The same digits the SQL column is declared with, bare decimal included. Not on an array of decimals: the
-            // attribute validates one decimal value, and a list is not one.
-            if (f.Type == "decimal" && !f.Array)
+            // The same digits the SQL column is declared with, bare decimal included. On a list of decimals the runtime's
+            // per-element form: [DecimalDigits] validates one value, and a list is not one.
+            if (f.Type == "decimal")
             {
                 var (precision, scale) = MddBooster.Core.Types.M3lPrimitives.DecimalDigitsOf(
                     MddBooster.Core.Ast.FieldAttributes.TypeParams(f));
-                sb.Append("    [DecimalDigits(").Append(precision).Append(", ").Append(scale).AppendLine(")]");
+                sb.Append(f.Array ? "    [ElementDecimalDigits(" : "    [DecimalDigits(")
+                  .Append(precision).Append(", ").Append(scale).AppendLine(")]");
             }
 
             // [Editable] — who may supply the value, as metadata. @system: nobody outside the
@@ -619,7 +621,7 @@ public static class EntityPairRenderer
 
     /// <summary>
     /// Whether the write entity carries a reference navigation for this field — a <c>@reference</c> key whose
-    /// navigation has a name (<see cref="ManyToOneNavigations.NavigationName"/>). <see cref="DbContextRenderer"/>
+    /// navigation has a name (<see cref="ManyToOneNavigations.NavigationName"/>). <see cref="EntityConfigurationRenderer"/>
     /// configures the relationship through that navigation, so both read the same rule.
     /// </summary>
     internal static bool HasWriteNavigation(ModelNode owner, FieldNode f) => ManyToOneNavigations.IsNavigableKey(owner, f);

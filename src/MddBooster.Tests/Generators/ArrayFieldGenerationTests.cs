@@ -57,6 +57,8 @@ public class ArrayFieldGenerationTests
     [InlineData("- scores: integer[]?\n")]
     [InlineData("- prices: decimal(10,2)[]\n")]
     [InlineData("- amounts: decimal[]\n")]
+    [InlineData("- codes: string(20)[]\n")]
+    [InlineData("- codes: string(20)?[]?\n")]
     [InlineData("- ids: identifier?[]?\n")]
     [InlineData("- tags: string[] @system\n")]
     [InlineData("- tags: string[] @immutable\n")]
@@ -68,9 +70,8 @@ public class ArrayFieldGenerationTests
     // ---- the build: what it still refuses, and that the message names the combination ----
 
     [Theory]
-    [InlineData("- tags: string(20)[]\n", "길이 상한", "string(20)")]
-    [InlineData("- mails: email[]\n", "길이 상한", "email")]
-    [InlineData("- phones: phone?[]\n", "길이 상한", "phone")]
+    [InlineData("- mails: email[]\n", "의미 형 `email`", "string(n)[]")]
+    [InlineData("- phones: phone?[]\n", "의미 형 `phone`", "string(n)[]")]
     [InlineData("- blobs: binary[]\n", "배열 원소로 생성하지 않는다", "binary")]
     [InlineData("- docs: json[]\n", "배열 원소로 생성하지 않는다", "json")]
     [InlineData("- small: byte[]\n", "배열 원소로 생성하지 않는다", "byte")]
@@ -121,10 +122,10 @@ public class ArrayFieldGenerationTests
     [Fact]
     public void Every_problem_on_one_field_is_named_in_one_refusal()
     {
-        var refusal = Assert.Single(Analyze("- tags: string(20)[] @unique\n"), d => d.Code == "MDD048");
-        Assert.Contains("길이 상한", refusal.Message);
+        var refusal = Assert.Single(Analyze("- mails: email[] @unique\n"), d => d.Code == "MDD048");
+        Assert.Contains("의미 형 `email`", refusal.Message);
         Assert.Contains("`@unique`", refusal.Message);
-        Assert.Contains("`string(20)[]`", refusal.Message);
+        Assert.Contains("`email[]`", refusal.Message);
     }
 
     // ---- SQL Server ----
@@ -246,12 +247,13 @@ CREATE TABLE public.array_holder
             Assert.Contains("    public List<DateOnly> Dates { get; set; } = [];", cls);
             Assert.Contains("    public List<DateTimeOffset>? Stamps { get; set; }", cls);
 
-            // A length or digit rule describes one value; on a list it would describe the list. The one length rule is
-            // the scalar title's.
+            // A length or digit rule on [StringLength]/[DecimalDigits] describes one value; on a list it would describe
+            // the list. The one single-value length rule is the scalar title's; a list of decimals gets the per-element form.
             Assert.Single(System.Text.RegularExpressions.Regex.Matches(cls, @"\[StringLength\("));
             Assert.Contains("[StringLength(100)]\n    public string Title", Normalize(cls));
             Assert.DoesNotContain("MaxLength", cls);
-            Assert.DoesNotContain("DecimalDigits", cls);
+            Assert.DoesNotContain("[DecimalDigits(", cls);
+            Assert.Contains("[ElementDecimalDigits(10, 2)]\n    public List<decimal> Prices", Normalize(cls));
             Assert.DoesNotContain("Column(TypeName", cls);
         }
 
@@ -272,26 +274,26 @@ CREATE TABLE public.array_holder
     public void On_sql_server_the_context_names_the_array_column_type_for_both_types()
     {
         var (_, models) = LoadFixture();
-        var context = DbContextRenderer.Render(models, "ArraysDbContext", "Arrays.Entities");
+        var mapping = ModelMappingRenderer.Render(models, "ArraysDbContext", "Arrays.Entities");
 
-        Assert.Contains("modelBuilder.Entity<ArrayHolder>().Property(e => e.Tags).HasColumnType(\"nvarchar(max)\");", context);
-        Assert.Contains("modelBuilder.Entity<ArrayHolderExt>().Property(e => e.Tags).HasColumnType(\"nvarchar(max)\");", context);
-        Assert.Contains("modelBuilder.Entity<ArrayHolder>().Property(e => e.Stamps).HasColumnType(\"nvarchar(max)\");", context);
+        Assert.Contains("builder.Property(e => e.Tags).HasColumnType(\"nvarchar(max)\");", mapping["ArrayHolder"]);
+        Assert.Contains("builder.Property(e => e.Tags).HasColumnType(\"nvarchar(max)\");", mapping["ArrayHolderExt"]);
+        Assert.Contains("builder.Property(e => e.Stamps).HasColumnType(\"nvarchar(max)\");", mapping["ArrayHolder"]);
         // The read type has no @internal property to configure.
-        Assert.Contains("modelBuilder.Entity<ArrayHolder>().Property(e => e.SecretCodes)", context);
-        Assert.DoesNotContain("modelBuilder.Entity<ArrayHolderExt>().Property(e => e.SecretCodes)", context);
+        Assert.Contains("builder.Property(e => e.SecretCodes)", mapping["ArrayHolder"]);
+        Assert.DoesNotContain("builder.Property(e => e.SecretCodes)", mapping["ArrayHolderExt"]);
         // A scalar column is left to convention, as before.
-        Assert.DoesNotContain("e.Title).HasColumnType", context);
+        Assert.DoesNotContain("e.Title).HasColumnType", string.Concat(mapping.Sources));
     }
 
     [Fact]
     public void On_postgres_the_context_leaves_the_array_type_to_the_providers_convention()
     {
         var (_, models) = LoadFixture();
-        var context = DbContextRenderer.Render(models, "ArraysDbContext", "Arrays.Entities", postgresNaming: true);
+        var mapping = ModelMappingRenderer.Render(models, "ArraysDbContext", "Arrays.Entities", postgresNaming: true);
 
-        Assert.Contains("e.Property(x => x.Tags).HasColumnName(\"tags\");", context);
-        Assert.DoesNotContain("nvarchar(max)", context);
+        Assert.Contains("builder.Property(x => x.Tags).HasColumnName(\"tags\");", mapping["ArrayHolder"]);
+        Assert.DoesNotContain("nvarchar(max)", string.Concat(mapping.Sources));
     }
 
     /// <summary>A model without an array renders exactly as it did — no directive, no configuration.</summary>
@@ -303,7 +305,7 @@ CREATE TABLE public.array_holder
         var pair = EntityPairRenderer.Render(models.Single(m => m.Name == "BankAccount"), "Ns");
 
         Assert.DoesNotContain("System.Collections.Generic", pair.Interface + pair.Write + pair.Read);
-        Assert.DoesNotContain("HasColumnType", DbContextRenderer.Render(models, "Ctx", "Ns"));
+        Assert.DoesNotContain("HasColumnType", string.Concat(ModelMappingRenderer.Render(models, "Ctx", "Ns").Sources));
     }
 
     // ---- TypeScript ----
@@ -383,8 +385,8 @@ CREATE TABLE public.array_holder
         var entity = ViewEntityRenderer.Render(view, "Test", knownEnumNames: null);
         Assert.Contains("using System.Collections.Generic;", entity);
         Assert.Contains("public List<string> Labels { get; set; } = [];", entity);
-        var context = Normalize(DbContextRenderer.Render([], "Test", "TestDb", readViews: [view]));
-        Assert.Contains("e.Property(x => x.Labels).HasColumnType(\"nvarchar(max)\");", context);
+        var configuration = Normalize(ModelMappingRenderer.Render([], "Test", "TestDb", readViews: [view])["Labels"]);
+        Assert.Contains("builder.Property(x => x.Labels).HasColumnType(\"nvarchar(max)\");", configuration);
     }
 
     [Theory]

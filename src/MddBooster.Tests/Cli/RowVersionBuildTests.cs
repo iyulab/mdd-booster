@@ -123,22 +123,15 @@ public sealed class RowVersionBuildTests
     public void Postgres_maps_the_row_version_to_xmin_where_the_table_is_read_and_to_the_view_column_elsewhere()
     {
         using var o = Build("postgres");
-        var ctx = o.Read("entities", "DbContext_gen", "XDbContext.cs").ReplaceLineEndings("\n");
+        string Configuration(string entity) => o.Read("entities", "Entity_gen", entity + "Configuration.cs");
 
-        static string Block(string ctx, string entity)
-        {
-            var start = ctx.IndexOf($"modelBuilder.Entity<{entity}>(e =>", StringComparison.Ordinal);
-            Assert.True(start >= 0, entity);
-            return ctx[start..ctx.IndexOf("});", start, StringComparison.Ordinal)];
-        }
+        const string Xmin = "builder.Property(x => x.RowVersion).HasColumnName(\"xmin\");";
+        const string Named = "builder.Property(x => x.RowVersion).HasColumnName(\"row_version\");";
 
-        const string Xmin = "e.Property(x => x.RowVersion).HasColumnName(\"xmin\");";
-        const string Named = "e.Property(x => x.RowVersion).HasColumnName(\"row_version\");";
-
-        Assert.Contains(Xmin, Block(ctx, "Booking"));         // write type — the table
-        Assert.Contains(Named, Block(ctx, "BookingExt"));     // read type — booking_full_view
-        Assert.Contains(Xmin, Block(ctx, "Customer"));
-        Assert.Contains(Xmin, Block(ctx, "CustomerExt"));     // read type with no view — the table
+        Assert.Contains(Xmin, Configuration("Booking"));         // write type — the table
+        Assert.Contains(Named, Configuration("BookingExt"));     // read type — booking_full_view
+        Assert.Contains(Xmin, Configuration("Customer"));
+        Assert.Contains(Xmin, Configuration("CustomerExt"));     // read type with no view — the table
     }
 
     [Fact]

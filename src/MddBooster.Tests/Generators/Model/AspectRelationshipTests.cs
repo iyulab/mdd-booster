@@ -62,15 +62,15 @@ public class AspectRelationshipTests
     {
         var models = Load("aspect-shared-key.m3l.md");
 
-        var code = DbContextRenderer.Render(models, "AppDbContext", "Test.Entities", oneToOne:
+        var mapping = ModelMappingRenderer.Render(models, "AppDbContext", "Test.Entities", oneToOne:
             OneToOneRelationships.Describe(models));
 
         Assert.Contains(
-            "modelBuilder.Entity<AssetMaintenanceProfileExt>()"
+            "builder"
             + ".HasOne(e => e.Asset).WithOne(e => e.MaintenanceProfile)"
             + ".HasForeignKey<AssetMaintenanceProfileExt>(e => e.Id)"
             + ".OnDelete(DeleteBehavior.Cascade);",
-            code);
+            mapping["AssetMaintenanceProfileExt"]);
     }
 
     /// <summary>
@@ -87,18 +87,18 @@ public class AspectRelationshipTests
         var oneToOne = OneToOneRelationships.Describe(models);
 
         const string expected =
-            "modelBuilder.Entity<AssetMaintenanceProfileExt>()"
+            "builder"
             + ".HasOne(e => e.Asset).WithOne(e => e.MaintenanceProfile)"
             + ".HasForeignKey<AssetMaintenanceProfileExt>(e => e.Id)"
             + ".OnDelete(DeleteBehavior.Cascade);";
 
-        var tsql = DbContextRenderer.Render(
+        var tsql = ModelMappingRenderer.Render(
             models, "AppDbContext", "Test.Entities", postgresNaming: false, oneToOne: oneToOne);
-        var pg = DbContextRenderer.Render(
+        var pg = ModelMappingRenderer.Render(
             models, "AppDbContext", "Test.Entities", postgresNaming: true, oneToOne: oneToOne);
 
-        Assert.Contains(expected, tsql);
-        Assert.Contains(expected, pg);
+        Assert.Contains(expected, tsql["AssetMaintenanceProfileExt"]);
+        Assert.Contains(expected, pg["AssetMaintenanceProfileExt"]);
     }
 
     /// <summary>
@@ -113,15 +113,15 @@ public class AspectRelationshipTests
     {
         var models = Load("aspect-shared-key.m3l.md");
 
-        var code = DbContextRenderer.Render(models, "AppDbContext", "Test.Entities",
+        var mapping = ModelMappingRenderer.Render(models, "AppDbContext", "Test.Entities",
             postgresNaming: postgresNaming, oneToOne: OneToOneRelationships.Describe(models));
 
         Assert.Contains(
-            "modelBuilder.Entity<AssetMaintenanceProfile>()"
+            "builder"
             + ".HasOne<Asset>().WithOne()"
             + ".HasForeignKey<AssetMaintenanceProfile>(e => e.Id)"
             + ".OnDelete(DeleteBehavior.Cascade);",
-            code);
+            mapping["AssetMaintenanceProfile"]);
     }
 
     /// <summary>
@@ -133,10 +133,13 @@ public class AspectRelationshipTests
     {
         var models = Load("one-to-one-unique.m3l.md");
 
-        var code = DbContextRenderer.Render(models, "AppDbContext", "Test.Entities", oneToOne:
+        var mapping = ModelMappingRenderer.Render(models, "AppDbContext", "Test.Entities", oneToOne:
             OneToOneRelationships.Describe(models));
 
-        var readOneToOne = code.Split('\n').Where(l => l.Contains("Ext>().HasOne(", StringComparison.Ordinal) && l.Contains(".WithOne(e => e.", StringComparison.Ordinal)).ToList();
+        var readOneToOne = mapping.Configurations
+            .Where(c => c.EntityType.EndsWith("Ext", StringComparison.Ordinal))
+            .SelectMany(c => c.Source.Split('\n'))
+            .Where(l => l.Contains("builder.HasOne(", StringComparison.Ordinal) && l.Contains(".WithOne(e => e.", StringComparison.Ordinal)).ToList();
         Assert.NotEmpty(readOneToOne);
         Assert.All(readOneToOne, l => Assert.Contains(".OnDelete(DeleteBehavior.NoAction);", l));
     }

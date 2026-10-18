@@ -6,7 +6,7 @@ namespace MddBooster.Tests.Generators.Model;
 
 /// <summary>
 /// ADR-0001 §2.3: 모델 PascalCase ↔ DB snake_case 간극은 **생성 코드에 구운
-/// 명시 매핑**이 흡수한다 — 런타임 컨벤션 라이브러리 추론 금지. PG 방언에서 DbContext는
+/// 명시 매핑**이 흡수한다 — 런타임 컨벤션 라이브러리 추론 금지. PG 방언에서 엔티티 구성은
 /// 엔티티마다 `ToTable`/`HasColumnName`(+ json → `HasColumnType("jsonb")`, D24)을 방출한다.
 /// 기본(tsql) 렌더는 바이트 단위로 무변경 — 기존 소비자 무영향.
 /// </summary>
@@ -22,48 +22,49 @@ public class DbContextPostgresNamingTests
     [Fact]
     public void PostgresNaming_MapsTableAndEveryStoredColumn()
     {
-        var output = DbContextRenderer.Render(
+        var mapping = ModelMappingRenderer.Render(
             Load("bank-account.m3l.md"), "TestDbContext", "Test.Ns", postgresNaming: true);
 
-        Assert.Contains("e.ToTable(\"bank_account\");", output);
-        Assert.Contains("e.Property(x => x.Id).HasColumnName(\"id\");", output);
-        Assert.Contains("e.Property(x => x.BankName).HasColumnName(\"bank_name\");", output);
-        Assert.Contains("e.Property(x => x.AccountNumber).HasColumnName(\"account_number\");", output);
-        Assert.Contains("e.Property(x => x.CreatedAt).HasColumnName(\"created_at\");", output);
+        var write = mapping["BankAccount"];
+        Assert.Contains("builder.ToTable(\"bank_account\");", write);
+        Assert.Contains("builder.Property(x => x.Id).HasColumnName(\"id\");", write);
+        Assert.Contains("builder.Property(x => x.BankName).HasColumnName(\"bank_name\");", write);
+        Assert.Contains("builder.Property(x => x.AccountNumber).HasColumnName(\"account_number\");", write);
+        Assert.Contains("builder.Property(x => x.CreatedAt).HasColumnName(\"created_at\");", write);
     }
 
     [Fact]
     public void PostgresNaming_ExtReadsSnakeTableWhenNoViewBacking()
     {
-        var output = DbContextRenderer.Render(
+        var mapping = ModelMappingRenderer.Render(
             Load("bank-account.m3l.md"), "TestDbContext", "Test.Ns", postgresNaming: true);
 
         // Ext(뷰 없음 backing)는 스네이크 테이블명을 읽고, 컬럼 매핑도 함께 받는다
-        Assert.Contains("modelBuilder.Entity<BankAccountExt>(e =>", output);
-        Assert.Contains("e.ToView(\"bank_account\");", output);
+        Assert.Contains("builder.ToView(\"bank_account\");", mapping["BankAccountExt"]);
     }
 
     [Fact]
     public void PostgresNaming_SharedPkRemapsIdToSnakePkColumn()
     {
-        var output = DbContextRenderer.Render(
+        var mapping = ModelMappingRenderer.Render(
             Load("shared-pk-extension.m3l.md"), "TestDbContext", "Test.Ns", postgresNaming: true);
 
         // 공유 PK: 상속된 Id → 물리 PK 컬럼(snake). T-SQL 경로의 "AssetId"가 아니다.
-        Assert.Contains("e.Property(x => x.Id).HasColumnName(\"asset_id\");", output);
-        Assert.Contains("e.Property(x => x.CriticalityId).HasColumnName(\"criticality_id\");", output);
-        Assert.DoesNotContain("HasColumnName(\"AssetId\")", output);
+        var write = mapping["AssetMaintenanceProfile"];
+        Assert.Contains("builder.Property(x => x.Id).HasColumnName(\"asset_id\");", write);
+        Assert.Contains("builder.Property(x => x.CriticalityId).HasColumnName(\"criticality_id\");", write);
+        Assert.DoesNotContain("HasColumnName(\"AssetId\")", string.Concat(mapping.Sources));
     }
 
     [Fact]
     public void PostgresNaming_JsonFieldGetsJsonbColumnType()
     {
-        var output = DbContextRenderer.Render(
+        var mapping = ModelMappingRenderer.Render(
             Load("pg-json.m3l.md"), "TestDbContext", "Test.Ns", postgresNaming: true);
 
         Assert.Contains(
-            "e.Property(x => x.Payload).HasColumnName(\"payload\").HasColumnType(\"jsonb\");",
-            output);
+            "builder.Property(x => x.Payload).HasColumnName(\"payload\").HasColumnType(\"jsonb\");",
+            mapping["ApiLog"]);
     }
 
     [Fact]
@@ -86,12 +87,12 @@ public class DbContextPostgresNamingTests
         try
         {
             var models = new InterfaceResolver(new M3lLoader().LoadFile(tmp)).ResolveAll().ToList();
-            var output = DbContextRenderer.Render(models, "TestDbContext", "Test.Ns", postgresNaming: true);
+            var mapping = ModelMappingRenderer.Render(models, "TestDbContext", "Test.Ns", postgresNaming: true);
 
-            Assert.Contains("modelBuilder.Entity<UserAccountExt>(e =>", output);
-            Assert.Contains("e.ToView(\"user_account_full_view\");", output);
-            Assert.DoesNotContain("e.ToView(\"UserAccountFullView\");", output);
-            Assert.Contains("e.Property(x => x.WorkerName).HasColumnName(\"worker_name\");", output);
+            var read = mapping["UserAccountExt"];
+            Assert.Contains("builder.ToView(\"user_account_full_view\");", read);
+            Assert.DoesNotContain("builder.ToView(\"UserAccountFullView\");", string.Concat(mapping.Sources));
+            Assert.Contains("builder.Property(x => x.WorkerName).HasColumnName(\"worker_name\");", read);
         }
         finally
         {
@@ -114,10 +115,10 @@ public class DbContextPostgresNamingTests
         try
         {
             var models = new InterfaceResolver(new M3lLoader().LoadFile(tmp)).ResolveAll().ToList();
-            var output = DbContextRenderer.Render(models, "TestDbContext", "Test.Ns", postgresNaming: true);
+            var mapping = ModelMappingRenderer.Render(models, "TestDbContext", "Test.Ns", postgresNaming: true);
 
-            Assert.Contains("e.ToView(\"invoice_full_view\");", output);
-            Assert.Contains("e.Property(x => x.GrandTotal).HasColumnName(\"grand_total\");", output);
+            Assert.Contains("builder.ToView(\"invoice_full_view\");", mapping["InvoiceExt"]);
+            Assert.Contains("builder.Property(x => x.GrandTotal).HasColumnName(\"grand_total\");", mapping["InvoiceExt"]);
         }
         finally
         {
@@ -151,26 +152,18 @@ public class DbContextPostgresNamingTests
         try
         {
             var models = new InterfaceResolver(new M3lLoader().LoadFile(tmp)).ResolveAll().ToList();
-            var output = DbContextRenderer.Render(models, "TestDbContext", "Test.Ns", postgresNaming: true);
+            var mapping = ModelMappingRenderer.Render(models, "TestDbContext", "Test.Ns", postgresNaming: true);
 
-            var write = Block(output, "modelBuilder.Entity<Account>(e =>");
-            var read = Block(output, "modelBuilder.Entity<AccountExt>(e =>");
-            Assert.Contains("e.Property(x => x.Secret).HasColumnName(\"secret\");", write);
+            var write = mapping["Account"];
+            var read = mapping["AccountExt"];
+            Assert.Contains("builder.Property(x => x.Secret).HasColumnName(\"secret\");", write);
             Assert.DoesNotContain("Secret", read);
-            Assert.Contains("e.Property(x => x.Name).HasColumnName(\"name\");", read);
-            Assert.Contains(viewBacked ? "e.ToView(\"account_full_view\");" : "e.ToView(\"account\");", read);
+            Assert.Contains("builder.Property(x => x.Name).HasColumnName(\"name\");", read);
+            Assert.Contains(viewBacked ? "builder.ToView(\"account_full_view\");" : "builder.ToView(\"account\");", read);
         }
         finally
         {
             File.Delete(tmp);
-        }
-
-        static string Block(string output, string head)
-        {
-            var start = output.IndexOf(head, StringComparison.Ordinal);
-            Assert.True(start >= 0, $"missing: {head}");
-            var end = output.IndexOf("        });", start, StringComparison.Ordinal);
-            return output[start..end];
         }
     }
 
@@ -179,9 +172,9 @@ public class DbContextPostgresNamingTests
     {
         var models = Load("bank-account.m3l.md");
 
-        var legacy = DbContextRenderer.Render(models, "TestDbContext", "Test.Ns");
-        var explicitDefault = DbContextRenderer.Render(
-            models, "TestDbContext", "Test.Ns", postgresNaming: false);
+        var legacy = string.Concat(ModelMappingRenderer.Render(models, "TestDbContext", "Test.Ns").Sources);
+        var explicitDefault = string.Concat(ModelMappingRenderer.Render(
+            models, "TestDbContext", "Test.Ns", postgresNaming: false).Sources);
 
         Assert.Equal(legacy, explicitDefault);
         Assert.DoesNotContain("ToTable(\"bank_account\")", legacy);

@@ -58,8 +58,16 @@ public static class ConfigLoader
         ArgumentNullException.ThrowIfNull(config);
         var warnings = new List<string>();
         Collect(config.UnknownKeys, "", KnownKeys<MddJsonConfig>(), warnings);
+        var references = config.References ?? [];
+        for (var i = 0; i < references.Count; i++)
+            Collect(references[i].UnknownKeys, $"references[{i}].", KnownKeys<MddJsonReference>(), warnings);
         for (var i = 0; i < config.Targets.Count; i++)
+        {
             Collect(config.Targets[i].UnknownKeys, $"targets[{i}].", KnownKeys<MddJsonTarget>(), warnings);
+            var modules = config.Targets[i].Modules ?? [];
+            for (var j = 0; j < modules.Count; j++)
+                Collect(modules[j].UnknownKeys, $"targets[{i}].modules[{j}].", KnownKeys<MddJsonModule>(), warnings);
+        }
         return warnings;
     }
 

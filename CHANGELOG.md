@@ -16,6 +16,55 @@
 
 ---
 
+## [Unreleased]
+
+### 목록 원소의 길이 · 자리수 — `string(n)[]` 이 생성되고, 원소마다 검증된다
+
+- **`string(n)[]` 을 받는다**(종전 `MDD048`). 엔티티에 `[ElementStringLength(n)]`, PostgreSQL 은 `varchar(n)[]`(더 긴 원소를 엔진이 거절), SQL Server 는
+  `NVARCHAR(MAX)` JSON 그대로(어트리뷰트가 유일한 문).
+- 🔴 **`decimal(p,s)[]` 에 `[ElementDecimalDigits(p, s)]`** — 종전에는 원소의 자리수를 어느 층도 지키지 않았다(PostgreSQL 은 조용히 반올림). 더 많은 자리의 원소가 이제
+  `400 InvalidBody` 다.
+- 🔴 **런타임 요구** — 두 특성은 런타임 `Iyu.*` 의 0.43.0 다음 판이 정의한다(런타임 패키지의 README). 목록 칸이 있는 모델의 생성물은 그 판 없이 컴파일되지 않는다(`CS0246`) —
+  `Iyu.*` 를 함께 올린다.
+- 의미 형의 목록(`email[]` · `phone[]` · `url[]`)은 여전히 `MDD048` — `string(n)[]` 으로 적는다. TypeScript 필드 스키마는 목록에 `maxLength` 를 내지 않는다(값의 길이라는 뜻이다).
+
+### 다른 빌드의 게시 모델 위에 짓는다 — `references`
+
+`mdd.json` 최상위 `references: [{ sources, namespace }]` — 검증에 쓰고 생성하지 않는 원문. 자기 원문이 그 선언을 가리키고(참조 · lookup · enum ·
+`::aspect` 의 base) 한 빌드가 둘을 함께 검증한다. 어느 타깃도 참조된 선언을 내지 않는다. Model 타깃의 파일은 참조의 네임스페이스를 `using` 하고,
+생성 컨텍스트는 참조된 형의 `DbSet` 과 구성까지 이름으로 적용한다. 참조된 선언이 생성할 선언을 가리키면 빌드 오류(종료 코드 3), 설정이 잘못되면
+구성 오류(4). 참조된 모델로 향한 1:1 은 그 읽기 형에 역방향 navigation 을 만들지 않는다.
+참조 원문에 위치한 경고는 그 원문을 생성하는 빌드의 몫이라 보고하지 않는다(`treatWarningsAsErrors` 가 남의 원문으로 서지 않게 — 건수는 한 줄로
+알린다). 참조 원문의 에러는 그대로 빌드를 세운다.
+
+- **Api 타깃** — 각 엔티티 형을 그것이 사는 네임스페이스로 가리킨다: 모듈로 나눈 Model 타깃이면 그 모듈의, 참조된 빌드의 형이면 그 참조의, 그 밖에는
+  `entitiesNamespace` 의(종전대로).
+
+### Model 타깃이 엔티티를 층(모듈)마다 어셈블리로 낸다 — `modules`
+
+`modules: [{ owners, projectPath, namespace }]`(아래층부터)를 주면 소유자(`# Prefix:`)마다 모듈에 나눠 모듈의 프로젝트 · 네임스페이스에
+`Entity_gen/` · `Enum_gen/` 를 내고, 타깃 자신의 프로젝트에는 모든 모듈의 구성을 적용하는 컨텍스트만 낸다. 한 빌드가 모델 전체를 본다.
+
+- **방향** — 모듈의 선언이 뒤 모듈을 가리키면(참조 · enum · lookup · rollup · `### Relations` 역방향 끝 · 뷰의 읽기 대상) 빌드 오류(종료 코드 3).
+- 🔇 **모듈을 쓸 때만** — 위층의 1:1(`::aspect` 포함)이 아래층 모델을 가리키면 아래층 읽기 형의 역방향 navigation 을 만들지 않는다.
+  관계는 위층 쪽 navigation 으로 구성된다. 모듈이 없는 빌드는 무변.
+- 소유자가 어느 모듈에도 없거나 · 둘에 있거나 · 모델에 없으면 구성 오류(종료 코드 4). `modules` 는 Model 타깃에만(다른 타깃이면 구성 오류).
+
+### 🔴 Model 타깃의 EF 매핑이 엔티티 형마다 `IEntityTypeConfiguration<T>` 로 나온다
+
+종전에는 모든 매핑(관계 · 삭제 동작 · `ToView` · 열 이름 · 인덱스 · 목록 필드의 열 형)이 생성 DbContext 의 `OnModelCreating` 안에
+인라인으로 있었다. 이제 엔티티 형 하나에 구성 클래스 하나다 — 쓰기 형 `X`, 읽기 형 `XExt`, standalone 뷰의 읽기 형 각각.
+
+- **새 파일** — `Entity_gen/{X}Configuration.cs` · `Entity_gen/{X}ExtConfiguration.cs`(뷰는 `Entity_gen/{View}Configuration.cs`):
+  `public sealed class XConfiguration : IEntityTypeConfiguration<X>`, 엔티티와 같은 네임스페이스. 매핑이 비어 있는 형도 클래스를 받는다 —
+  어느 형에 구성이 있는지가 모델로 정해진다.
+- **생성 DbContext** — `OnModelCreating` 은 `base.OnModelCreating(modelBuilder)` 뒤에 형마다
+  `modelBuilder.ApplyConfiguration(new XConfiguration());` 한 줄씩(모델 이름 순 · 쓰기 형 다음 읽기 형 · 그다음 뷰). 어셈블리를 훑지 않는다 —
+  컨텍스트가 섬기는 형을 이름으로 적고, 없는 구성은 빌드 오류다.
+- **바뀌지 않는 것** — DB 스키마 · EF 모델. 같은 모델의 두 판 생성물이 짓는 EF 모델(`Model.ToDebugString`)이 같다.
+- **옮길 것** — 생성 출력 폴더를 컴파일하는 프로젝트는 그대로 컴파일된다(새 파일은 같은 `Entity_gen/` 에 있다). 생성 DbContext 의 텍스트를
+  읽거나 비교하던 도구가 있으면 매핑 문장은 이제 구성 클래스에 있다(`modelBuilder.Entity<X>().…` → `XConfiguration` 의 `builder.…`).
+
 ## 0.44.0
 
 ### 배열 필드 `T[]` 가 생성된다 — 길이 없는 원시형 원소

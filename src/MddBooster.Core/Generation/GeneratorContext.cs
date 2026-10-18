@@ -30,4 +30,20 @@ public sealed class GeneratorContext
     /// The Model target emits an entity for each, the Api target a read-only set.
     /// </summary>
     public IReadOnlyList<ResolvedView> ReadViews { get; init; } = Array.Empty<ResolvedView>();
+
+    /// <summary>
+    /// The sources read but not generated (<see cref="ReferenceSet"/>). <see cref="Models"/>, <see cref="Enums"/> and
+    /// the views hold their declarations too — they are what names resolve against; a generator emits only the
+    /// <c>Generated…</c> ones.
+    /// </summary>
+    public ReferenceSet References { get; init; } = ReferenceSet.None;
+
+    /// <summary>The models this build emits: every model but the referenced ones.</summary>
+    public IReadOnlyList<ResolvedModel> GeneratedModels => References.IsEmpty ? Models : Models.Where(m => !References.Contains(m)).ToList();
+
+    public IReadOnlyList<EnumNode> GeneratedEnums => References.IsEmpty ? Enums : Enums.Where(e => !References.Contains(e)).ToList();
+
+    public IReadOnlyList<ResolvedView> GeneratedViews => References.IsEmpty ? Views : Views.Where(v => !References.Contains(v)).ToList();
+
+    public IReadOnlyList<ResolvedView> GeneratedReadViews => References.IsEmpty ? ReadViews : ReadViews.Where(v => !References.Contains(v)).ToList();
 }

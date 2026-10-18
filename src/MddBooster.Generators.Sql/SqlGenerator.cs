@@ -70,7 +70,7 @@ public sealed class SqlGenerator : IArtifactGenerator
 
         // 1. Tables
         var tableFileNames = new List<string>();
-        foreach (var model in context.Models)
+        foreach (var model in context.GeneratedModels)
         {
             var sql = TableRenderer.Render(model, _options.Schema, enumLookup, _options.EmitEnumCheckConstraints, _options.EmitForeignKeyIndexes, context.Models);
             var fileName = $"{model.Name}.sql";
@@ -110,7 +110,9 @@ public sealed class SqlGenerator : IArtifactGenerator
 
         foreach (var plan in allPlans)
         {
-            if (!plan.NeedsAnyView) continue;
+            // Every model is planned — a referenced one's derived columns decide what a generated view reads — but a
+            // referenced model's views are its own build's.
+            if (!plan.NeedsAnyView || context.References.Contains(plan.Model)) continue;
 
             if (plan.NeedsUdView)
             {
@@ -130,7 +132,7 @@ public sealed class SqlGenerator : IArtifactGenerator
         }
 
         // 2b. Standalone ::view — after the FullViews they may read, in dependency order.
-        foreach (var view in context.Views)
+        foreach (var view in context.GeneratedViews)
         {
             var sql = StandaloneViewRenderer.Render(view, _options.Schema, derivedFieldsByModel);
             var fileName = $"{view.Name}.sql";

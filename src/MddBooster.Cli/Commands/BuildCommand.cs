@@ -1,4 +1,5 @@
 using MddBooster.Core.Generation;
+using MddBooster.Core.Naming;
 using MddBooster.Cli.Config;
 using MddBooster.Generators.Api;
 using MddBooster.Generators.TypeScript;
@@ -87,9 +88,36 @@ public sealed class BuildCommand
             return 4;
         }
 
+        // 참조 원문 — 함께 읽어 검증하되 어느 타깃도 내지 않는다. 설정이 가리킨 파일이 없거나, 생성할 원문과
+        // 같은 파일이거나, 네임스페이스가 없으면 설정 오류다(조용히 한쪽으로 접지 않는다).
+        var referenceProblems = new List<string>();
+        var namespaceOfReference = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var referenceEntries = cfg.References ?? [];
+        for (var i = 0; i < referenceEntries.Count; i++)
+        {
+            var entry = referenceEntries[i];
+            if (string.IsNullOrWhiteSpace(entry.Namespace)) referenceProblems.Add($"references[{i}]: namespace 가 없습니다.");
+            if (entry.Sources.Count == 0) referenceProblems.Add($"references[{i}]: sources 가 비어 있습니다.");
+            foreach (var rel in entry.Sources)
+            {
+                var abs = Path.GetFullPath(Path.Combine(configDirectory, rel));
+                if (!File.Exists(abs)) referenceProblems.Add($"references[{i}]: {rel} → {abs} 가 없습니다.");
+                else if (sourcePaths.Contains(abs, StringComparer.OrdinalIgnoreCase)) referenceProblems.Add($"references[{i}]: {rel} 는 sources 에도 있습니다 — 한 파일은 생성하거나(sources) 참조하거나(references) 둘 중 하나입니다.");
+                else if (!namespaceOfReference.TryAdd(abs, entry.Namespace)) referenceProblems.Add($"references[{i}]: {rel} 가 두 번 참조됩니다.");
+            }
+        }
+        if (referenceProblems.Count > 0)
+        {
+            Console.Error.WriteLine("[config] references:");
+            foreach (var p in referenceProblems) Console.Error.WriteLine($"  {p}");
+            return 4;
+        }
+        var references = new ReferenceSet(namespaceOfReference);
+        foreach (var refAbs in namespaceOfReference.Keys) sourcePaths.Add(refAbs);
+
         foreach (var srcAbs in sourcePaths)
         {
-            Console.WriteLine($"[m3l] 로딩: {srcAbs}");
+            Console.WriteLine(references.ContainsSource(srcAbs) ? $"[m3l] 로딩(참조 — 생성 안 함): {srcAbs}" : $"[m3l] 로딩: {srcAbs}");
         }
 
         M3L.Native.M3lAst mergedAst;
@@ -111,10 +139,15 @@ public sealed class BuildCommand
         // 검증기 결과도 파서가 낸 경고를 다시 담아 온다(M3L-W010 등). 같은 진단(코드·위치·문장)은
         // 두 채널 중 먼저 온 쪽에서 한 번만 보고한다 — 두 번 찍히면 승격 집계도 두 번 센다.
         var reportedM3l = new HashSet<string>(StringComparer.Ordinal);
+        // 참조 원문의 경고는 그 원문을 생성하는 빌드의 몫이다 — 여기서 보고하면(그리고 승격하면) 남이 고칠 원문이
+        // 이 빌드를 세운다. 조용히 버리지 않는다: 건수를 한 줄로 알린다. 참조 원문의 «에러»는 그대로 빌드를 세운다
+        // (검증할 수 없는 원문 위에 짓지 않는다).
+        var referenceWarnings = new HashSet<string>(StringComparer.Ordinal);
         foreach (var w in mergedAst.Warnings)
         {
             var line = $"[{w.Code}] {w.File}:{w.Line}:{w.Col} {w.Message}";
-            if (reportedM3l.Add(line)) ReportWarning("m3l", w.Code, line);
+            if (references.ContainsSource(w.File)) referenceWarnings.Add(line);
+            else if (reportedM3l.Add(line)) ReportWarning("m3l", w.Code, line);
         }
 
         // 검증기 진단 표면화 — 파서와 «다른 층»이다. 등록된 `::attribute` 의 오용
@@ -125,7 +158,8 @@ public sealed class BuildCommand
         foreach (var w in m3lDiagnostics.Warnings)
         {
             var line = $"[{w.Code}] {w.File}:{w.Line}:{w.Col} {w.Message}";
-            if (reportedM3l.Add(line)) ReportWarning("m3l", w.Code, line);
+            if (references.ContainsSource(w.File)) referenceWarnings.Add(line);
+            else if (reportedM3l.Add(line)) ReportWarning("m3l", w.Code, line);
         }
         // 검증기 «에러»는 빌드를 세운다 — 의미 분석 에러와 같은 종료 코드(3). 모델이 언어
         // 규칙을 어긴 채로 생성을 진행하면, 그 위반(예: 어디에도 정의되지 않은 타입 이름)이
@@ -151,7 +185,10 @@ public sealed class BuildCommand
         // A declared one-to-one is reported the same way composition is: silently producing a unique
         // index and nothing else is how the author finds out from the output instead of the build.
         // Conflicting reverse names stop the build rather than letting one of them win invisibly.
-        var oneToOne = OneToOneRelationships.Describe(allModels);
+        // In a layered build an inverse that would point up is not generated, so it collides with nothing — the same
+        // layers the Model target generates with (the references, and a single Model target's modules).
+        var layers = BuildLayers(cfg, allModels, allEnums, references);
+        var oneToOne = OneToOneRelationships.Describe(allModels, layers is null ? null : layers.HasInverse);
         foreach (var line in OneToOneRelationships.Describe(oneToOne))
             Console.WriteLine($"[m3l] 1:1 {line}");
         var conflicts = oneToOne.Where(r => r.ReverseNameConflict is not null).ToList();
@@ -192,7 +229,12 @@ public sealed class BuildCommand
         var warnings = diagnostics.Where(d => d.Severity == SemanticSeverity.Warning).ToList();
         var errors = diagnostics.Where(d => d.Severity == SemanticSeverity.Error).ToList();
         foreach (var w in warnings)
-            ReportWarning("semantic", w.Code, w.Format());
+        {
+            if (w.Location is { } at && references.ContainsSource(at.File)) referenceWarnings.Add(w.Format());
+            else ReportWarning("semantic", w.Code, w.Format());
+        }
+        if (referenceWarnings.Count > 0)
+            Console.WriteLine($"[m3l] 정보: 참조 원문(references)의 경고 {referenceWarnings.Count}건은 그 원문을 생성하는 빌드의 몫이라 보고하지 않습니다.");
 
         // standalone ::view 의 CREATE VIEW 는 Sql 타깃이 생성한다. 그 타깃이 없으면 뷰 자체는 이 빌드가 만들지 않는다 —
         // 로더 회계와 같은 자리에서 알린다(읽기 모델은 그래도 나오고, 그 이름의 뷰가 데이터베이스에 있다고 전제한다).
@@ -261,6 +303,19 @@ public sealed class BuildCommand
             return 3;
         }
 
+        // 참조 원문은 이 빌드가 내는 모든 것의 아래 층이다 — 참조된 선언이 생성할 선언을 가리키면, 그 원문을 낸 쪽은
+        // 이 빌드 없이 컴파일된다. 모델 오류(3), 가리키는 선언과 대상을 둘 다 적는다.
+        if (!references.IsEmpty)
+        {
+            var upward = LayerDirection.Of(references).Violations(allModels, allEnums, viewResolution.Views);
+            if (upward.Count > 0)
+            {
+                Console.Error.WriteLine($"[m3l] 참조 원문(references)이 생성할 원문(sources)의 선언을 가리킵니다 ({upward.Count}건):");
+                foreach (var line in upward) Console.Error.WriteLine($"  {line}");
+                return 3;
+            }
+        }
+
         var context = new GeneratorContext
         {
             Models = allModels,
@@ -268,6 +323,7 @@ public sealed class BuildCommand
             Enums = allEnums,
             Views = viewResolution.Views,
             ReadViews = readViews,
+            References = references,
         };
 
         // 1.6. 설정 위반 수집 — 전부 모아 한 번에 실패시킨다(한 건씩 고쳐가며 재실행하게 만들지 않는다).
@@ -344,6 +400,9 @@ public sealed class BuildCommand
         foreach (var target in cfg.Targets)
         {
             var label = $"{target.Type} 타깃({TargetPathOf(target)})";
+            // Model 타깃 전용 — 엔티티 어셈블리를 나누는 것은 엔티티를 내는 타깃뿐이다. 다른 타깃에서 조용히 무시하지 않는다.
+            if (target.Modules is not null && target.Type != "Model")
+                configViolations.Add($"{label}: modules 는 Model 타깃에만 지정할 수 있습니다.");
             var hasFilter = target.IncludeEntities?.Count > 0 || target.ExcludeEntities?.Count > 0
                 || target.IncludeOwners?.Count > 0 || target.ExcludeOwners?.Count > 0;
 
@@ -660,6 +719,7 @@ public sealed class BuildCommand
         // 타깃은 차례로 쓴다. 검증이 각 타깃의 Generate 안에만 있으면, 뒤 타깃이 모델을 거절할 때
         // 앞 타깃은 이미 새 모델로 다시 써진 뒤다 — 실패한 빌드가 «반쯤 갱신된» 트리를 남기고,
         // 생성물을 커밋하는 소비자에게는 멱등 검사(재생성 후 git diff)가 그 혼합을 변경으로 본다.
+        var entityNamespaces = EntityNamespaceMap(cfg, context);
         var prepared = cfg.Targets.Select(target =>
         {
             var filter = filters.TryGetValue(target, out var f) ? f : EntitySurfaceFilter.PassAll;
@@ -672,7 +732,7 @@ public sealed class BuildCommand
                 .SelectMany(kv => kv.Value)
                 .ToHashSet(StringComparer.Ordinal);
             return (Target: target, Filter: filter, FormsFilter: formsFilter,
-                Generator: ResolveGenerator(target, entitiesNamespace, filter, formsFilter, registeredElsewhere));
+                Generator: ResolveGenerator(target, entitiesNamespace, filter, formsFilter, registeredElsewhere, entityNamespaces));
         }).ToList();
 
         // 거절은 그 종류의 종료 코드로 — 모델을 이 타깃이 표현할 수 없으면 의미 분석 에러와 같은 3, 타깃의 설정이나
@@ -853,9 +913,65 @@ public sealed class BuildCommand
                 SelectOptions = target.FormSelectOptionsImport!,
             };
 
+    /// <summary>
+    /// The layers of this build for the one-to-one inverses (<see cref="LayerDirection"/>): a single Model target's modules
+    /// over the references, or the references alone — null when the build has neither. A module list that does not
+    /// assign cleanly falls back to the references here; the Model target refuses it, with every reason, when it validates.
+    /// </summary>
+    private static LayerDirection? BuildLayers(
+        MddJsonConfig cfg, IReadOnlyList<ResolvedModel> allModels, IReadOnlyList<M3L.Native.EnumNode> allEnums, ReferenceSet references)
+    {
+        var modular = cfg.Targets.Where(t => t.Type == "Model" && t.Modules is { Count: > 0 }).ToList();
+        if (modular.Count == 1)
+        {
+            try
+            {
+                var modules = MddBooster.Generators.Model.ModelModules.Assign(
+                    modular[0].Modules!.Select(m => new MddBooster.Generators.Model.ModelModule(m.Owners, m.ProjectPath, m.Namespace)).ToList(),
+                    allModels.Where(m => !references.Contains(m)).ToList(),
+                    allEnums.Where(e => !references.Contains(e)).ToList(),
+                    []);
+                return MddBooster.Generators.Model.ModuleDirection.For(modules, references);
+            }
+            catch (GeneratorRefusalException)
+            {
+                // Reported by the Model target's validation.
+            }
+        }
+        return references.IsEmpty ? null : LayerDirection.Of(references);
+    }
+
+    /// <summary>
+    /// The entity types (PascalCase model and view names) that do not live in the one entities namespace a surface
+    /// target is given: a referenced build's types (their reference's namespace), and the types of a Model target split
+    /// into modules (their module's). Modules count only when one Model target declares them — with several, which
+    /// split a surface target names is not knowable, and the target's <c>entitiesNamespace</c> rule applies as before.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> EntityNamespaceMap(MddJsonConfig cfg, GeneratorContext context)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var model in context.Models)
+            if (context.References.NamespaceOf(model) is { } ns) map[NameCasing.ToPascalCase(model.Name)] = ns;
+        foreach (var view in context.ReadViews)
+            if (context.References.NamespaceOf(view) is { } ns) map[NameCasing.ToPascalCase(view.Name)] = ns;
+
+        var modular = cfg.Targets.Where(t => t.Type == "Model" && t.Modules is { Count: > 0 }).ToList();
+        if (modular.Count != 1) return map;
+        var moduleOfOwner = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var module in modular[0].Modules!)
+            foreach (var owner in module.Owners)
+                moduleOfOwner.TryAdd(owner, module.Namespace);
+        foreach (var model in context.GeneratedModels)
+            if (moduleOfOwner.TryGetValue(EntitySurfaceFilter.OwnerOf(model), out var ns)) map[NameCasing.ToPascalCase(model.Name)] = ns;
+        foreach (var view in context.GeneratedReadViews)
+            if (moduleOfOwner.TryGetValue(view.Source.Prefix ?? "", out var ns)) map[NameCasing.ToPascalCase(view.Name)] = ns;
+        return map;
+    }
+
     private IArtifactGenerator ResolveGenerator(
         MddJsonTarget target, string? modelNamespace, EntitySurfaceFilter surfaceFilter,
-        EntitySurfaceFilter formsSurfaceFilter, IReadOnlySet<string> registeredElsewhere)
+        EntitySurfaceFilter formsSurfaceFilter, IReadOnlySet<string> registeredElsewhere,
+        IReadOnlyDictionary<string, string> entityNamespaces)
     {
         return target.Type switch
         {
@@ -870,6 +986,9 @@ public sealed class BuildCommand
                         ?? throw new InvalidOperationException("Model target requires 'dbContextName'."),
                     SqlProjectPath = target.SqlProjectPath,
                     PostgresNaming = IsPostgresDialect(target),
+                    Modules = target.Modules?
+                        .Select(m => new MddBooster.Generators.Model.ModelModule(m.Owners, m.ProjectPath, m.Namespace))
+                        .ToList(),
                 }),
             "Api" => new MddBooster.Generators.Api.ApiRegistrationGenerator(
                 new MddBooster.Generators.Api.ApiRegistrationGeneratorOptions
@@ -878,6 +997,7 @@ public sealed class BuildCommand
                     Namespace = target.Namespace
                         ?? throw new InvalidOperationException("Api target requires 'namespace'."),
                     EntitiesNamespace = modelNamespace,
+                    EntityNamespaces = entityNamespaces,
                     SurfaceFilter = surfaceFilter,
                     PermissionKeyTemplate = target.PermissionKeyTemplate,
                     Surfaces = MddBooster.Generators.Api.ApiSurfaceNames.Parse(target.Surfaces),

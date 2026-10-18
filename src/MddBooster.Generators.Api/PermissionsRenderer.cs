@@ -37,7 +37,7 @@ public static class PermissionsRenderer
 
     public static string Render(
         IReadOnlyList<ResolvedModel> models, string ns, string template, string? entitiesNamespace = null,
-        IReadOnlyList<ResolvedView>? readViews = null)
+        IReadOnlyList<ResolvedView>? readViews = null, IReadOnlyDictionary<string, string>? entityNamespaces = null)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentException.ThrowIfNullOrWhiteSpace(ns);
@@ -59,7 +59,7 @@ public static class PermissionsRenderer
             .OrderBy(e => e.Set, StringComparer.Ordinal)
             .ToList();
         // Entities are referred to by qualified name, as the registration file does — see EntityTypeRef.
-        var entityPrefix = EntityTypeRef.PrefixFor(ns, entitiesNamespace);
+        var names = new EntityNamespaces(entitiesNamespace, entityNamespaces);
 
         var sb = new StringBuilder();
         sb.AppendLine(Header);
@@ -114,7 +114,7 @@ public static class PermissionsRenderer
         sb.AppendLine("        {");
         foreach (var (entity, set) in entities)
         {
-            sb.Append("            [typeof(").Append(entityPrefix).Append(entity).Append("Ext)] = (")
+            sb.Append("            [typeof(").Append(names.PrefixFor(ns, entity)).Append(entity).Append("Ext)] = (")
               .Append(set).Append(NameOf(DefaultMapVerbs[0])).Append(", ")
               .Append(set).Append(NameOf(DefaultMapVerbs[1])).AppendLine("),");
         }
@@ -122,7 +122,7 @@ public static class PermissionsRenderer
         // one shape and no key is invented for a verb the set does not have.
         foreach (var (entity, set) in viewSets)
         {
-            sb.Append("            [typeof(").Append(entityPrefix).Append(entity).Append(")] = (")
+            sb.Append("            [typeof(").Append(names.PrefixFor(ns, entity)).Append(entity).Append(")] = (")
               .Append(set).Append(NameOf(Verbs[0])).Append(", ")
               .Append(set).Append(NameOf(Verbs[0])).AppendLine("),");
         }

@@ -129,7 +129,8 @@ public static class TsFieldSchemaRenderer
         // Extracting it separately here is how the two would drift into disagreeing about the
         // same column's limit. The effective bound, not the declared one: a field can be
         // bounded by its type without the declaration saying so.
-        int? maxLength = isDerived || engineSet ? null : MddBooster.Core.Ast.FieldAttributes.EffectiveMaxLength(field);
+        // Not on a list: `maxLength` is a value's length, and a list's bound is each element's (the schema has no slot for it).
+        int? maxLength = isDerived || engineSet || field.Array ? null : MddBooster.Core.Ast.FieldAttributes.EffectiveMaxLength(field);
 
         // Shared with the Model target's [Range] — see FieldAttributes.Number.
         double? min = isDerived || engineSet ? null : MddBooster.Core.Ast.FieldAttributes.Number(field, "min");

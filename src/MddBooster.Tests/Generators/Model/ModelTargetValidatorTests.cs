@@ -34,4 +34,56 @@ public class ModelTargetValidatorTests
         Assert.Contains("created_at", ex.Message);
         Assert.Contains("Timestampable", ex.Message);
     }
+
+    /// <summary>
+    /// A model named like another model's read type or configuration class would generate two classes of one name in
+    /// one folder. The target refuses before writing, naming both owners.
+    /// </summary>
+    [Theory]
+    [InlineData("OrderExt", "'OrderExt' — model 'Order' · model 'OrderExt'")]
+    [InlineData("OrderConfiguration", "'OrderConfiguration' — model 'Order' · model 'OrderConfiguration'")]
+    public void Refuses_two_generated_types_of_one_name(string second, string clash)
+    {
+        var models = LoadSource(
+            "## Order : Timestampable\n- id: identifier @pk @generated\n\n"
+            + $"## {second} : Timestampable\n- id: identifier @pk @generated\n");
+
+        var ex = Assert.Throws<GeneratorRefusalException>(() => ModelTargetValidator.Validate(models));
+
+        Assert.Contains(clash, ex.Message);
+    }
+
+    [Fact]
+    public void Refuses_a_context_named_like_a_generated_type()
+    {
+        var models = LoadSource("## Order : Timestampable\n- id: identifier @pk @generated\n");
+
+        var ex = Assert.Throws<GeneratorRefusalException>(
+            () => ModelTargetValidator.Validate(models, contextName: "OrderExt"));
+
+        Assert.Contains("'OrderExt' — model 'Order' · dbContextName", ex.Message);
+    }
+
+    [Fact]
+    public void Distinct_names_pass()
+    {
+        ModelTargetValidator.Validate(
+            LoadSource("## Order : Timestampable\n- id: identifier @pk @generated\n\n## OrderLine : Timestampable\n- id: identifier @pk @generated\n"),
+            contextName: "ShopDbContext");
+    }
+
+    private static IReadOnlyList<ResolvedModel> LoadSource(string models)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"mdd-validator-{Guid.NewGuid():N}.m3l.md");
+        File.WriteAllText(path,
+            "# Namespace: test\n\n## Timestampable ::interface\n- created_at: timestamp @not_null\n- updated_at: timestamp @not_null\n\n" + models);
+        try
+        {
+            return new InterfaceResolver(new M3lLoader().LoadFile(path)).ResolveAll().ToList();
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }

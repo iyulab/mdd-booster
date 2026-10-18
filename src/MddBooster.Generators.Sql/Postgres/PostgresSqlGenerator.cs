@@ -84,7 +84,7 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
 
         // 1. 테이블 — 위반은 모델 단위로 멈추지 않고 전부 수집한 뒤 한 번에 실패
         var tableArtifacts = new List<PgTableArtifact>();
-        foreach (var model in context.Models)
+        foreach (var model in context.GeneratedModels)
         {
             try
             {
@@ -191,7 +191,9 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
             File.WriteAllText(Path.Combine(tablesGenDir, artifact.TableName + ".sql"), artifact.Sql);
         }
 
-        foreach (var plan in renderablePlans)
+        // Every model is planned and named — a generated view may read a referenced one's — but only the generated
+        // ones are written: a referenced model's views are its own build's.
+        foreach (var plan in renderablePlans.Where(p => !context.References.Contains(p.Model)))
         {
             var table = tableNames[plan.Model.Name];
 
@@ -210,7 +212,7 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
             }
         }
 
-        foreach (var view in standaloneViews)
+        foreach (var view in standaloneViews.Where(v => !context.References.Contains(v)))
         {
             var sql = PgStandaloneViewRenderer.Render(
                 view, _options.Schema, tableNames, fullViewNames, standaloneViewNames, derivedFieldsByModel);

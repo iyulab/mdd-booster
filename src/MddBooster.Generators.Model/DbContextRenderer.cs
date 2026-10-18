@@ -1,7 +1,5 @@
 using System.Text;
-using M3L.Native;
 using MddBooster.Core.Ast;
-using MddBooster.Core.Generation;
 using MddBooster.Core.Naming;
 using MddBooster.Core.Semantic;
 
@@ -9,14 +7,14 @@ namespace MddBooster.Generators.Model;
 
 /// <summary>
 /// Renders a partial <c>{Name}DbContext</c> class that inherits from
-/// <c>IyuDbContext</c> and exposes a <c>DbSet&lt;T&gt;</c> and
-/// <c>DbSet&lt;TExt&gt;</c> for every entity in the input model collection.
+/// <c>IyuDbContext</c>, exposes a <c>DbSet&lt;T&gt;</c> and
+/// <c>DbSet&lt;TExt&gt;</c> for every entity in the input model collection,
+/// and applies each entity type's configuration (<see cref="EntityConfigurationRenderer"/>).
 /// </summary>
 /// <remarks>
-/// The Ext read model is mapped to the highest available view layer by priority:
-/// <c>ExtView</c> (user-maintained) &gt; <c>FullView</c> &gt; <c>UdView</c> &gt; base table.
-/// The caller passes <paramref name="customExtViewModels"/> for the ExtView tier;
-/// UdView and FullView tiers are detected from model fields.
+/// The configurations are applied by name, one call each, in <see cref="EntityConfigurationRenderer.ConfiguredTypes"/>
+/// order — not discovered by scanning an assembly. The context names exactly the types it serves, and a configuration
+/// missing from the assemblies it compiles against is a build error rather than a mapping silently left out.
 /// </remarks>
 public static class DbContextRenderer
 {
@@ -26,12 +24,7 @@ public static class DbContextRenderer
         IReadOnlyList<ResolvedModel> models,
         string contextName,
         string ns,
-        IReadOnlySet<string>? customExtViewModels = null,
-        bool postgresNaming = false,
-        IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne = null,
-        IReadOnlyList<ManyToOneNavigations.Navigation>? manyToOne = null,
-        IReadOnlyList<ResolvedView>? readViews = null,
-        IReadOnlyList<ReverseCollections.Collection>? collections = null)
+        IReadOnlyList<ResolvedView>? readViews = null)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentException.ThrowIfNullOrWhiteSpace(contextName);
@@ -52,9 +45,7 @@ public static class DbContextRenderer
           .Append("(DbContextOptions<").Append(contextName).AppendLine("> options)");
         sb.AppendLine("        : base(options) { }");
 
-        var ordered = models.OrderBy(m => m.Name, StringComparer.Ordinal).ToList();
-
-        foreach (var model in ordered)
+        foreach (var model in models.OrderBy(m => m.Name, StringComparer.Ordinal))
         {
             var name = NameCasing.ToPascalCase(model.Name);
             var plural = Pluralizer.Pluralize(name);
@@ -67,8 +58,7 @@ public static class DbContextRenderer
         }
 
         // A standalone view served as a read model: one set, no write half.
-        var views = (readViews ?? []).OrderBy(v => v.Name, StringComparer.Ordinal).ToList();
-        foreach (var view in views)
+        foreach (var view in (readViews ?? []).OrderBy(v => v.Name, StringComparer.Ordinal))
         {
             var name = NameCasing.ToPascalCase(view.Name);
             sb.AppendLine();
@@ -76,482 +66,17 @@ public static class DbContextRenderer
               .Append(Pluralizer.Pluralize(name)).Append(" => Set<").Append(name).AppendLine(">();");
         }
 
-        // OnModelCreating: map all Ext read models to their view layer.
-        // Priority: ExtView (user file) > FullView > UdView > base table.
-        var extMappings = ordered
-            .Select(m => new
-            {
-                Name = NameCasing.ToPascalCase(m.Name),
-                Backing = ClassifyBacking(m, customExtViewModels)
-            })
-            .ToList();
-
         sb.AppendLine();
         sb.AppendLine("    protected override void OnModelCreating(ModelBuilder modelBuilder)");
         sb.AppendLine("    {");
         sb.AppendLine("        base.OnModelCreating(modelBuilder);");
-
-        // 🔴 방언 분기 «앞»이다. 관계는 CLR 축의 사실이라 방언이 바꿀 것이 아닌데, 아래
-        // postgresNaming 갈래는 이른 return 을 한다 — 뒤에 두면 PG 소비자만 관계를 잃고
-        // 그 손실은 생성이 아니라 $expand 가 빈 값을 돌려줄 때 나타난다. 두 방언을 돌려
-        // 같은지 보는 테스트가 실제로 이것을 잡았다.
-        // ::aspect 의 1:1 만 «명시 구성»한다. 보통 1:1 은 관례가 찾아내므로 이 생성기가 구성
-        // 코드를 내지 않기로 했고, 그 결정의 근거가 「관례가 이미 추론한다」였다 — aspect 는
-        // PK 가 곧 FK 라 알아볼 `<Principal>Id` 프로퍼티가 없고, 그래서 그 근거가 성립하지
-        // 않는다. 두 처분이 갈리는 이유가 그것이지 예외를 둔 것이 아니다.
-        var aspectBases = ordered
-            .Where(m => m.AspectBase is not null)
-            .ToDictionary(m => m.Name, m => m.AspectBase!, StringComparer.Ordinal);
-
-        var byName = ordered.ToDictionary(m => m.Name, StringComparer.Ordinal);
-        foreach (var r in oneToOne ?? [])
+        foreach (var type in EntityConfigurationRenderer.ConfiguredTypes(models, readViews))
         {
-            if (r.ReverseNameConflict is not null) continue;
-            if (!aspectBases.TryGetValue(r.DependentModel, out var baseName)
-                || !string.Equals(baseName, r.TargetModel, StringComparison.Ordinal))
-            {
-                // An ordinary one-to-one is configured with its key, both ends and its delete action: the
-                // EF model then says what the schema says, whichever names ### Relations gave the ends.
-                if (!byName.TryGetValue(r.DependentModel, out var dep)) continue;
-                var key = dep.Fields.First(f => f.Name == r.ForeignKeyField);
-                var ext = NameCasing.ToPascalCase(r.DependentModel) + "Ext";
-                sb.Append("        modelBuilder.Entity<").Append(ext).Append(">()")
-                  .Append(".HasOne(e => e.").Append(r.ForwardName).Append(')')
-                  .Append(".WithOne(e => e.").Append(r.ReverseName).Append(')')
-                  .Append(".HasForeignKey<").Append(ext).Append(">(e => e.").Append(NameCasing.ToPascalCase(r.ForeignKeyField)).Append(')')
-                  .Append(".OnDelete(DeleteBehavior.").Append(DeleteBehaviorFor(dep, key)).AppendLine(");");
-                continue;
-            }
-
-            var dependent = NameCasing.ToPascalCase(r.DependentModel) + "Ext";
-            sb.Append("        modelBuilder.Entity<").Append(dependent).Append(">()")
-              .Append(".HasOne(e => e.").Append(r.ForwardName).Append(')')
-              .Append(".WithOne(e => e.").Append(r.ReverseName).Append(')')
-              .Append(".HasForeignKey<").Append(dependent).Append(">(e => e.Id)")
-              .AppendLine(".OnDelete(DeleteBehavior.Cascade);");
+            sb.Append("        modelBuilder.ApplyConfiguration(new ")
+              .Append(EntityConfiguration.ConfigurationClassName(type)).AppendLine("());");
         }
-
-        // Read-type many-to-one navigations are configured, not left to convention. Convention pairs
-        // reference navigations between two types into a one-to-one when it finds one each way, and
-        // refuses to choose when it finds more — a read type with a one-to-one to a target and an
-        // ordinary reference to the same target is exactly that. Naming each of these as a
-        // many-to-one with no inverse leaves convention only the one-to-one pairs it already finds.
-        // A declared reverse collection is the inverse of that many-to-one — named in the same configuration, so EF
-        // sees one relationship with two ends rather than two relationships on one key.
-        var emittedCollections = (collections ?? []).Where(c => c.CollidesWith is null).ToList();
-        foreach (var n in manyToOne ?? [])
-        {
-            if (n.CollidesWith is not null) continue;
-            var behavior = byName.TryGetValue(n.DependentModel, out var owner)
-                ? DeleteBehaviorFor(owner, owner.Fields.First(f => f.Name == n.ForeignKeyField))
-                : "NoAction";
-            var inverse = emittedCollections.FirstOrDefault(c => c.DependentModel == n.DependentModel && c.ForeignKeyField == n.ForeignKeyField);
-            sb.Append("        modelBuilder.Entity<").Append(NameCasing.ToPascalCase(n.DependentModel)).Append("Ext>()")
-              .Append(".HasOne(e => e.").Append(n.Name).Append(')')
-              .Append(inverse is null ? ".WithMany()" : $".WithMany(e => e.{inverse.Name})")
-              .Append(".HasForeignKey(e => e.").Append(NameCasing.ToPascalCase(n.ForeignKeyField)).Append(')')
-              .Append(".OnDelete(DeleteBehavior.").Append(behavior).AppendLine(");");
-        }
-        // A collection whose key has no forward navigation on the read type (its name was taken) is configured from
-        // its own end.
-        foreach (var c in emittedCollections.Where(c => c.ForwardName is null))
-        {
-            var behavior = byName.TryGetValue(c.DependentModel, out var owner)
-                ? DeleteBehaviorFor(owner, owner.Fields.First(f => f.Name == c.ForeignKeyField))
-                : "NoAction";
-            sb.Append("        modelBuilder.Entity<").Append(NameCasing.ToPascalCase(c.PrincipalModel)).Append("Ext>()")
-              .Append(".HasMany(e => e.").Append(c.Name).Append(')')
-              .Append(".WithOne()")
-              .Append(".HasForeignKey(e => e.").Append(NameCasing.ToPascalCase(c.ForeignKeyField)).Append(')')
-              .Append(".OnDelete(DeleteBehavior.").Append(behavior).AppendLine(");");
-        }
-
-        // The write entity carries the same key relationship, without navigations — the write types
-        // have none for it. The read-type configuration above is what $expand needs; this one is what
-        // a schema built from the EF model (EnsureCreated, migrations) needs, since it is the write
-        // entity that maps to the table. Without it that schema has no foreign key from the aspect's
-        // key to its base, and a row referring to no base row is stored instead of refused.
-        foreach (var (aspect, baseName) in aspectBases.OrderBy(p => p.Key, StringComparer.Ordinal))
-        {
-            var dependent = NameCasing.ToPascalCase(aspect);
-            sb.Append("        modelBuilder.Entity<").Append(dependent).Append(">()")
-              .Append(".HasOne<").Append(NameCasing.ToPascalCase(baseName)).Append(">()")
-              .Append(".WithOne()")
-              .Append(".HasForeignKey<").Append(dependent).Append(">(e => e.Id)")
-              .AppendLine(".OnDelete(DeleteBehavior.Cascade);");
-        }
-
-        // Every reference the write entity navigates is configured with its delete action — the declared one,
-        // or NoAction where none is declared, which is what the generated DDL says (no ON DELETE clause).
-        // Left to convention EF acts on tracked rows itself — a required key cascades, an optional one is
-        // cleared client-side — and deletes or detaches the children the database was told to keep: a
-        // refusal the schema makes would turn into a silent delete whenever the children happen to be
-        // tracked. The ::aspect key is configured above. A `@unique` reference is configured as a
-        // one-to-one: convention reads a reference navigation without an inverse as many-to-one.
-        foreach (var model in ordered)
-        {
-            var entity = NameCasing.ToPascalCase(model.Name);
-            var aspectKey = model.AspectBase is { } b ? AspectNaming.KeyFieldName(b) : null;
-            foreach (var field in model.Fields)
-            {
-                if (field.Kind != FieldKind.Stored || field.Name == aspectKey) continue;
-                if (!EntityPairRenderer.HasWriteNavigation(model.Source, field)) continue;
-                var behavior = DeleteBehaviorFor(model, field);
-                var uniqueKey = FieldAttributes.Has(field, "unique");
-                sb.Append("        modelBuilder.Entity<").Append(entity).Append(">()")
-                  .Append(".HasOne(e => e.").Append(ManyToOneNavigations.NavigationName(model.Source, field)).Append(')');
-                if (uniqueKey)
-                    sb.Append(".WithOne()")
-                      .Append(".HasForeignKey<").Append(entity).Append(">(e => e.").Append(NameCasing.ToPascalCase(field.Name)).Append(')');
-                else
-                    sb.Append(".WithMany()")
-                      .Append(".HasForeignKey(e => e.").Append(NameCasing.ToPascalCase(field.Name)).Append(')');
-                sb.Append(".OnDelete(DeleteBehavior.").Append(behavior).Append(')');
-                sb.AppendLine(";");
-            }
-        }
-
-
-        if (postgresNaming)
-        {
-            // ADR-0001 §2.3: 모델 PascalCase ↔ DB snake_case 간극은 생성 코드에 구운
-            // 명시 매핑이 흡수한다 — 런타임 컨벤션 추론 없음. 테이블명은 PG 방언과
-            // 같은 변환(PostgresIdentifiers), 컬럼명은 M3L 필드명 그대로.
-            RenderPostgresMappings(sb, ordered, customExtViewModels);
-            AppendViewMappings(sb, views, postgres: true);
-            sb.AppendLine("    }");
-            sb.AppendLine("}");
-            return sb.ToString();
-        }
-
-        foreach (var m in extMappings)
-        {
-            var viewName = m.Backing switch
-            {
-                "ext" => m.Name + "ExtView",
-                "full" => m.Name + "FullView",
-                "ud" => m.Name + "UdView",
-                _ => m.Name,   // base table
-            };
-            sb.Append("        modelBuilder.Entity<").Append(m.Name).Append("Ext>().ToTable((string?)null).ToView(")
-              .Append(SourceLiteral.CSharpString(viewName)).AppendLine(");");
-        }
-
-        // 공유/명명 PK(필드명 != id): 상속된 IyuEntity.Id를 실제 PK 컬럼으로 재매핑.
-        // 예: asset_id @pk @reference(Asset) → SQL 컬럼 [AssetId], 엔티티는 Id로 접근.
-        foreach (var model in ordered)
-        {
-            var pk = ModelPrimaryKey.Find(model);
-            if (pk is null || !ModelPrimaryKey.IsNonIdPk(pk)) continue;
-
-            var name = NameCasing.ToPascalCase(model.Name);
-            var column = NameCasing.ToPascalCase(pk.Name);
-            sb.Append("        modelBuilder.Entity<").Append(name)
-              .Append(">().Property(e => e.Id).HasColumnName(").Append(SourceLiteral.CSharpString(column)).AppendLine(");");
-            sb.Append("        modelBuilder.Entity<").Append(name)
-              .Append("Ext>().Property(e => e.Id).HasColumnName(").Append(SourceLiteral.CSharpString(column)).AppendLine(");");
-        }
-
-        // An array field's column is NVARCHAR(MAX) holding JSON (the Sql target's DDL). EF Core picks that type for a
-        // primitive collection by convention — but only below compatibility level 170: from there (or with
-        // UseAzureSql) it picks the json type, and would query a column the schema does not have. Naming the type
-        // keeps the EF model on the schema whatever level a host sets. Both types read the column — the Ext type
-        // through its view — except where the field is @internal, which the read type does not carry.
-        foreach (var model in ordered)
-        {
-            var name = NameCasing.ToPascalCase(model.Name);
-            foreach (var field in BaseColumnsOf(model).Where(f => f.Array))
-            {
-                var property = NameCasing.ToPascalCase(field.Name);
-                sb.Append("        modelBuilder.Entity<").Append(name)
-                  .Append(">().Property(e => e.").Append(property).AppendLine(").HasColumnType(\"nvarchar(max)\");");
-                if (EntitySurface.IsFieldInternal(field)) continue;
-                sb.Append("        modelBuilder.Entity<").Append(name)
-                  .Append("Ext>().Property(e => e.").Append(property).AppendLine(").HasColumnType(\"nvarchar(max)\");");
-            }
-        }
-
-        // field-level @unique/@index — SQL parity (TableRenderer). Write entity only; the Ext
-        // class maps to a view, which has no index of its own. Nullable-unique's filtered-index
-        // behavior (WHERE ... IS NOT NULL) needs no code here — the SQL Server provider's own
-        // SqlServerIndexConvention adds that filter automatically for any nullable column in a
-        // unique index, matching TableRenderer's manual CREATE UNIQUE ... WHERE branch exactly.
-        foreach (var model in ordered)
-        {
-            AppendIndexes(sb, model, NameCasing.ToPascalCase(model.Name), model.Name, isPostgres: false);
-            AppendSectionIndexes(sb, model, NameCasing.ToPascalCase(model.Name), model.Name, isPostgres: false);
-        }
-        AppendViewMappings(sb, views, postgres: false);
         sb.AppendLine("    }");
-
         sb.AppendLine("}");
         return sb.ToString();
     }
-
-    /// <summary>
-    /// Maps each read-model view's entity to the view the Sql target creates: no table, the view under the name
-    /// that target gives it, the key on <c>Id</c>. SQL Server's view columns are the property names; PostgreSQL's
-    /// are the declared column names, so each property is mapped to its column there.
-    /// </summary>
-    private static void AppendViewMappings(StringBuilder sb, IReadOnlyList<ResolvedView> views, bool postgres)
-    {
-        foreach (var view in views)
-        {
-            var name = NameCasing.ToPascalCase(view.Name);
-            sb.AppendLine();
-            sb.Append("        modelBuilder.Entity<").Append(name).AppendLine(">(e =>");
-            sb.AppendLine("        {");
-            sb.AppendLine("            e.ToTable((string?)null);");
-            sb.Append("            e.ToView(")
-              .Append(SourceLiteral.CSharpString(postgres ? PostgresIdentifiers.ToSnakeCase(view.Name) : view.Name)).AppendLine(");");
-            sb.AppendLine("            e.HasKey(x => x.Id);");
-            if (postgres)
-            {
-                foreach (var column in view.Columns)
-                {
-                    sb.Append("            e.Property(x => x.").Append(NameCasing.ToPascalCase(column.Name))
-                      .Append(").HasColumnName(").Append(SourceLiteral.CSharpString(column.Name)).AppendLine(");");
-                }
-            }
-            else
-            {
-                // A projected list column is the base table's JSON text — named for the reason the entities' are.
-                foreach (var column in view.Columns.Where(c => c.Field.Array))
-                {
-                    sb.Append("            e.Property(x => x.").Append(NameCasing.ToPascalCase(column.Name))
-                      .AppendLine(").HasColumnType(\"nvarchar(max)\");");
-                }
-            }
-            sb.AppendLine("        });");
-        }
-    }
-
-    /// <summary>
-    /// Emits <c>HasIndex()</c>/<c>HasIndex().IsUnique()</c> for every stored, non-PK field
-    /// carrying <c>@unique</c> or <c>@index</c> — the Model-target counterpart TableRenderer's own
-    /// disposition note names. PK is skipped: it already carries a unique index by definition, the
-    /// same reason TableRenderer/PgTableRenderer skip it. A field declaring both wins as unique
-    /// only, mirroring TableRenderer's <c>@unique @index</c> exclusion (a unique constraint already
-    /// owns its index). <paramref name="indexNamePrefix"/> is the SQL/PG object-name prefix
-    /// (<c>model.Name</c> for SQL Server, the mapped snake_case table for Postgres) so the emitted
-    /// <c>HasDatabaseName</c> matches the real constraint/index name exactly — a consumer reading a
-    /// unique-violation error by name finds the same identifier in the EF model.
-    /// </summary>
-    private static void AppendIndexes(
-        StringBuilder sb, ResolvedModel model, string entityName, string indexNamePrefix, bool isPostgres)
-    {
-        var receiver = isPostgres ? "e" : $"modelBuilder.Entity<{entityName}>()";
-        var indent = isPostgres ? "            " : "        ";
-
-        foreach (var field in BaseColumnsOf(model))
-        {
-            if (FieldAttributes.Has(field, "pk")) continue;
-
-            var property = NameCasing.ToPascalCase(field.Name);
-            var columnToken = isPostgres ? field.Name : property;
-
-            if (FieldAttributes.Has(field, "unique"))
-            {
-                sb.Append(indent).Append(receiver).Append(".HasIndex(x => x.").Append(property)
-                  .Append(").IsUnique().HasDatabaseName(")
-                  .Append(SourceLiteral.CSharpString(GeneratedObjectNames.For(isPostgres, GeneratedObjectNames.Kind.Unique, indexNamePrefix, columnToken)))
-                  .AppendLine(");");
-            }
-            else if (FieldAttributes.Has(field, "index"))
-            {
-                sb.Append(indent).Append(receiver).Append(".HasIndex(x => x.").Append(property)
-                  .Append(").HasDatabaseName(")
-                  .Append(SourceLiteral.CSharpString(GeneratedObjectNames.For(isPostgres, GeneratedObjectNames.Kind.Index, indexNamePrefix, columnToken)))
-                  .AppendLine(");");
-            }
-        }
-    }
-
-    /// <summary>
-    /// <c>### Indexes</c> 섹션의 복합 <c>@unique(...)</c>/<c>@index(...)</c> directive를
-    /// <c>HasIndex(x =&gt; new { ... })</c>로 emit한다 — <see cref="AppendIndexes"/>는 필드
-    /// 레벨(단일 컬럼) attribute만 훑으므로 별개다. 명명은 SQL/PG 렌더러(<c>TableRenderer</c>/
-    /// <c>PgTableRenderer</c>)의 <c>AppendSectionIndexes</c>와 맞춘다 — SQL Server는
-    /// PascalCase 컬럼 조인(<c>UK_</c>/<c>IX_</c>), PG는 원문 snake_case 컬럼 조인
-    /// (<c>uq_</c>/<c>ix_</c>). <c>nulls: "not_distinct"</c>가 선언된 unique
-    /// entry는 SQL Server에서 <c>SqlServerIndexConvention</c>의 자동 filtered-index를
-    /// <c>.HasFilter(null)</c>로 해제하고(<see cref="AppendIndexes"/> 헤더 주석이 이미 설명하는
-    /// 그 자동 필터), PG에서는 <c>.AreNullsDistinct(false)</c>(PG15+, Npgsql EF Core provider)로
-    /// 같은 의미를 낸다 — 둘 다 SQL 타깃 렌더러가 이미 하는 방언 매핑을 그대로 반복할 뿐이다.
-    /// </summary>
-    private static void AppendSectionIndexes(
-        StringBuilder sb, ResolvedModel model, string entityName, string indexNamePrefix, bool isPostgres)
-    {
-        var receiver = isPostgres ? "e" : $"modelBuilder.Entity<{entityName}>()";
-        var indent = isPostgres ? "            " : "        ";
-
-        var columnNullability = BaseColumnsOf(model).ToDictionary(
-            f => f.Name, f => f.Nullable, StringComparer.Ordinal);
-
-        foreach (var entry in SectionIndexParser.Parse(model))
-        {
-            var properties = entry.Columns.Select(NameCasing.ToPascalCase).ToList();
-            var propertyAccess = string.Join(", ", properties.Select(p => $"x.{p}"));
-            var nameTokens = isPostgres ? entry.Columns : properties;
-
-            sb.Append(indent).Append(receiver).Append(".HasIndex(x => new { ").Append(propertyAccess)
-              .Append(" })");
-
-            if (entry.IsUnique)
-            {
-                sb.Append(".IsUnique()");
-
-                var anyNullable = entry.Columns.Any(c =>
-                    columnNullability.TryGetValue(c, out var n) && n);
-                if (entry.Nulls == "not_distinct")
-                {
-                    sb.Append(isPostgres ? ".AreNullsDistinct(false)"
-                        : anyNullable ? ".HasFilter(null)" : "");
-                }
-            }
-
-            // The same name the SQL targets give it: the one the model gives (an item name or a directive's
-            // name:), or the generated one — from the same formula the SQL targets use.
-            var databaseName = entry.Name
-                ?? GeneratedObjectNames.For(isPostgres, entry.IsUnique ? GeneratedObjectNames.Kind.Unique : GeneratedObjectNames.Kind.Index, indexNamePrefix, nameTokens);
-            sb.Append(".HasDatabaseName(").Append(SourceLiteral.CSharpString(databaseName)).AppendLine(");");
-        }
-    }
-
-    /// <summary>
-    /// PG 방언의 엔티티별 명시 매핑 블록. 쓰기 엔티티는 snake 테이블로, Ext 읽기 모델은
-    /// 뷰 backing이 없으면 같은 snake 테이블을 뷰로 읽는다. 뷰 backing이 있으면 PG Sql
-    /// 타깃(<c>PostgresSqlGenerator</c>)이 실제로 방출하는 이름과 맞춘다 — Lookup/Rollup
-    /// 파생 필드·soft-delete는 <c>{table}_full_view</c>/<c>{table}_ud_view</c>(ADR-0001의
-    /// 비인용 snake_case 규칙); 사용자 관리 ExtView는 기존대로 PascalCase(별개 기능, 이
-    /// 변경의 범위 밖).
-    /// 컬럼 매핑은 저장 필드 전체 + (FullView backing일 때) 비-internal Lookup/Rollup 필드:
-    /// 속성 PascalCase → 컬럼 = M3L 필드명 그대로(파생 필드도 이미 snake_case 관례).
-    /// 공유 PK(필드명 != id)는 상속된 <c>Id</c> 속성이 그 필드의 물리명으로 간다.
-    /// <c>json</c> 필드는 DDL이 jsonb이므로 <c>HasColumnType("jsonb")</c>를 함께 굽는다(D24).
-    /// </summary>
-    private static void RenderPostgresMappings(
-        StringBuilder sb,
-        IReadOnlyList<ResolvedModel> ordered,
-        IReadOnlySet<string>? customExtViewModels)
-    {
-        var tableNames = PostgresIdentifiers.BuildTableNameMap(ordered.Select(m => m.Name));
-
-        foreach (var model in ordered)
-        {
-            var name = NameCasing.ToPascalCase(model.Name);
-            var table = tableNames[model.Name];
-            var pk = ModelPrimaryKey.Find(model);
-            var backing = ClassifyBacking(model, customExtViewModels);
-            var extView = backing switch
-            {
-                "ext" => name + "ExtView",   // 사용자 관리 뷰 — 이 변경의 범위 밖, 기존 명명 유지
-                "full" => table + "_full_view",
-                "ud" => table + "_ud_view",
-                _ => table,   // 뷰 backing 없음 — 같은 snake 테이블을 읽는다
-            };
-
-            sb.AppendLine();
-            sb.Append("        modelBuilder.Entity<").Append(name).AppendLine(">(e =>");
-            sb.AppendLine("        {");
-            sb.Append("            e.ToTable(").Append(SourceLiteral.CSharpString(table)).AppendLine(");");
-            AppendPostgresColumns(sb, model, pk, readsTable: true, readType: false);
-            AppendIndexes(sb, model, name, table, isPostgres: true);
-            AppendSectionIndexes(sb, model, name, table, isPostgres: true);
-            sb.AppendLine("        });");
-
-            sb.Append("        modelBuilder.Entity<").Append(name).AppendLine("Ext>(e =>");
-            sb.AppendLine("        {");
-            sb.AppendLine("            e.ToTable((string?)null);");
-            sb.Append("            e.ToView(").Append(SourceLiteral.CSharpString(extView)).AppendLine(");");
-            // The read type reads the table itself only when no view backs it.
-            AppendPostgresColumns(sb, model, pk, readsTable: extView == table, readType: true);
-            if (backing == "full")
-            {
-                AppendPostgresDerivedColumns(sb, model);
-            }
-            sb.AppendLine("        });");
-        }
-    }
-
-    /// <param name="readsTable">
-    /// Whether this mapping reads the table (the write type, or a read type no view backs) rather
-    /// than a view. Only a row version cares: PostgreSQL keeps it in the <c>xmin</c> system column,
-    /// which a table has and a view does not — the views project it under the field's name.
-    /// </param>
-    /// <param name="readType">
-    /// Whether this is the read type's mapping. A field-level <c>@internal</c> field is stored, so the
-    /// write type maps it, but the read type does not have the property at all — mapping it there
-    /// would not compile.
-    /// </param>
-    private static void AppendPostgresColumns(
-        StringBuilder sb, ResolvedModel model, FieldNode? pk, bool readsTable, bool readType)
-    {
-        foreach (var field in BaseColumnsOf(model))
-        {
-            if (readType && !ReferenceEquals(field, pk) && EntitySurface.IsFieldInternal(field)) continue;
-            // 공유/명명 PK 필드는 엔티티에 별도 속성이 없다 — 상속된 Id가 그 컬럼이다.
-            var property = ReferenceEquals(field, pk) ? "Id" : NameCasing.ToPascalCase(field.Name);
-            // A row version on a table is `xmin`. Named explicitly rather than left to Npgsql's
-            // convention, because an explicit column name — the one every other property gets —
-            // overrides that convention.
-            var column = readsTable && MddBooster.Core.Types.M3lPrimitives.IsRowVersion(field)
-                ? "xmin"
-                : field.Name;
-            sb.Append("            e.Property(x => x.").Append(property)
-              .Append(").HasColumnName(").Append(SourceLiteral.CSharpString(column)).Append(')');
-            if (string.Equals(field.Type, "json", StringComparison.Ordinal))
-            {
-                sb.Append(".HasColumnType(\"jsonb\")");
-            }
-            sb.AppendLine(";");
-        }
-    }
-
-    /// <summary>
-    /// Ext 읽기 모델 전용 — FullView가 프로젝션하는 비-internal Lookup/Rollup/Computed 컬럼의
-    /// 물리명을 명시한다. 이게 없으면 EF 기본 컨벤션이 속성 PascalCase(<c>WorkerName</c>)를 그대로
-    /// 컬럼명 삼아 실제 뷰 컬럼(<c>worker_name</c>)과 어긋난다 — <see cref="AppendPostgresColumns"/>가
-    /// 저장 필드만 훑는 이유와 대칭인 공백. Computed 는 PG FullView 가 이식 가능한 식의 번역으로
-    /// 같은 snake 이름(<c>AS grand_total</c>)으로 낸다.
-    /// </summary>
-    private static void AppendPostgresDerivedColumns(StringBuilder sb, ResolvedModel model)
-    {
-        var derived = model.Fields
-            .Where(f => f.Kind is FieldKind.Lookup or FieldKind.Rollup or FieldKind.Computed)
-            .Where(f => !EntitySurface.IsFieldInternal(f));
-        foreach (var field in derived)
-        {
-            var property = NameCasing.ToPascalCase(field.Name);
-            sb.Append("            e.Property(x => x.").Append(property)
-              .Append(").HasColumnName(").Append(SourceLiteral.CSharpString(field.Name)).AppendLine(");");
-        }
-    }
-
-    private static IEnumerable<FieldNode> BaseColumnsOf(ResolvedModel model)
-        => model.Fields.Where(f => f.Kind == FieldKind.Stored);
-
-    private static string ClassifyBacking(ResolvedModel model, IReadOnlySet<string>? customExtViewModels)
-    {
-        var name = NameCasing.ToPascalCase(model.Name);
-        if (customExtViewModels != null && customExtViewModels.Contains(name)) return "ext";
-        if (model.Fields.Any(f => f.Kind is FieldKind.Lookup or FieldKind.Rollup or FieldKind.Computed)) return "full";
-        if (SoftDelete.IsEnabled(model)) return "ud";
-        return "none";
-    }
-
-    /// <summary>
-    /// The delete behaviour the EF model gives a reference key — the one the schema has. A declared action
-    /// (<see cref="OnDeleteRule"/>) maps one to one; a key that declares none has no <c>ON DELETE</c> clause in the
-    /// generated DDL, which is the database's <c>NO ACTION</c>, so it is <c>NoAction</c> here too. Left to
-    /// convention, EF would make a required key <c>Cascade</c> (and an optional one <c>ClientSetNull</c>) and act on
-    /// tracked dependents itself — deleting, or clearing the key of, the very rows the database was told to keep.
-    /// </summary>
-    private static string DeleteBehaviorFor(ResolvedModel model, FieldNode field) => OnDeleteRule.For(model, field) switch
-    {
-        ReferentialAction.Cascade => "Cascade",
-        ReferentialAction.Restrict => "Restrict",
-        ReferentialAction.SetNull => "SetNull",
-        _ => "NoAction",
-    };
 }

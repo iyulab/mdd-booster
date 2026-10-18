@@ -19,6 +19,16 @@ public sealed class MddJsonConfig
     public List<MddJsonTarget> Targets { get; set; } = [];
 
     /// <summary>
+    /// Model sources read to check against but not generated — the model of something this build builds on, whose
+    /// generated types are published elsewhere (a package). Their declarations can be named by <see cref="Sources"/>
+    /// (a reference, a lookup, an aspect's base) and are checked like any (keys, inheritance), but no target emits them;
+    /// the Model target's files import their namespace and its context applies their configurations. A referenced
+    /// declaration may name only referenced ones.
+    /// </summary>
+    [JsonPropertyName("references")]
+    public List<MddJsonReference>? References { get; set; }
+
+    /// <summary>
     /// Report every coded warning (<c>MDDnnn</c>, <c>M3L-Wnnn</c>) as an error: the build stops with
     /// exit code 3 before generating anything. Codes in <see cref="NoWarn"/> are still suppressed.
     /// </summary>
@@ -38,6 +48,42 @@ public sealed class MddJsonConfig
     /// than dropped. A misspelt <c>"source"</c> used to leave <see cref="Sources"/> empty with nothing
     /// said about why; the JSON Schema flags it in an editor, but not in CI.
     /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? UnknownKeys { get; set; }
+}
+
+/// <summary>One entry of <see cref="MddJsonConfig.References"/>: model sources and the namespace of their generated types.</summary>
+public sealed class MddJsonReference
+{
+    /// <summary>The model files, relative to the config directory unless absolute.</summary>
+    [JsonPropertyName("sources")]
+    public List<string> Sources { get; set; } = [];
+
+    /// <summary>The C# namespace the types generated from these sources are in.</summary>
+    [JsonPropertyName("namespace")]
+    public string Namespace { get; set; } = "";
+
+    /// <summary>Keys a reference does not define — reported like <see cref="MddJsonConfig.UnknownKeys"/>.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? UnknownKeys { get; set; }
+}
+
+/// <summary>One module of a Model target's <see cref="MddJsonTarget.Modules"/>.</summary>
+public sealed class MddJsonModule
+{
+    /// <summary>The owners (<c># Prefix:</c>) whose models, enums and views this module holds. The empty string means files with no prefix.</summary>
+    [JsonPropertyName("owners")]
+    public List<string> Owners { get; set; } = [];
+
+    /// <summary>The module's project directory — its <c>Entity_gen/</c> and <c>Enum_gen/</c> go here. Relative to the config directory unless absolute.</summary>
+    [JsonPropertyName("projectPath")]
+    public string ProjectPath { get; set; } = "";
+
+    /// <summary>The C# namespace of the module's types.</summary>
+    [JsonPropertyName("namespace")]
+    public string Namespace { get; set; } = "";
+
+    /// <summary>Keys a module does not define — reported like <see cref="MddJsonConfig.UnknownKeys"/>.</summary>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? UnknownKeys { get; set; }
 }
@@ -121,6 +167,15 @@ public sealed class MddJsonTarget
     /// </summary>
     [JsonPropertyName("sqlProjectPath")]
     public string? SqlProjectPath { get; set; }
+
+    /// <summary>
+    /// Model target: split the entities into modules — each its own project and namespace — by owner (a file's
+    /// <c># Prefix:</c>). Listed lowest layer first: a module's models may refer to models of the modules before it,
+    /// never after (a build error). Every owner the model has belongs to exactly one module. The target's own
+    /// <see cref="ProjectPath"/>/<see cref="Namespace"/> are then where the context goes. Omitted: one project, as before.
+    /// </summary>
+    [JsonPropertyName("modules")]
+    public List<MddJsonModule>? Modules { get; set; }
 
     // TypeScript target
     [JsonPropertyName("outputPath")]

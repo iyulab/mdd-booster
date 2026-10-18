@@ -151,7 +151,7 @@ public class ModelTargetAstAxisCoverageTests
 
     /// <summary>The <c>Refused</c> claims, pinned by behaviour: each shape stops the build with MDD048.</summary>
     [Theory]
-    [InlineData("- tags: string(20)[]\n", "배열")]
+    [InlineData("- mails: email[]\n", "배열")]
     [InlineData("- status: enum = \"draft\"\n  - draft: \"Draft\"\n", "인라인 `enum`")]
     [InlineData("- meta: map<string, integer>?\n", "`map<K, V>`")]
     [InlineData("- address: object\n  - city: string(50)\n", "`object`")]

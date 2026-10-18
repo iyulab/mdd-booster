@@ -73,6 +73,10 @@ public class GeneratedCodeCompilesWithoutRuntimeReferencesTests
         [System.AttributeUsage(System.AttributeTargets.Property)]
         public sealed class DecimalDigitsAttribute : System.Attribute
         { public DecimalDigitsAttribute(int precision, int scale) { _ = precision; _ = scale; } }
+        public sealed class ElementStringLengthAttribute : System.Attribute
+        { public ElementStringLengthAttribute(int maximumLength) { _ = maximumLength; } }
+        public sealed class ElementDecimalDigitsAttribute : System.Attribute
+        { public ElementDecimalDigitsAttribute(int precision, int scale) { _ = precision; _ = scale; } }
 
         """;
 
@@ -87,6 +91,9 @@ public class GeneratedCodeCompilesWithoutRuntimeReferencesTests
             "EF Core 실물이 필요하다(DbContextOptions<>·DbSet<>·ModelBuilder 의 fluent 체인). " +
             "그 체인을 스텁으로 흉내내면 실물과 어긋난 서명 위에서 초록이 나온다 — 이 게이트의 목적은 " +
             "BCL 이름 해석이지 런타임 API 정합성이 아니다.",
+        [EntityConfigurations] =
+            "Entity_gen 의 엔티티 구성(IEntityTypeConfiguration<T>)도 같은 EF fluent 체인(EntityTypeBuilder<T>)이라 " +
+            "DbContext_gen 과 같은 이유로 제외한다.",
         ["ApiRegistration_gen"] =
             "IyuMainServerOptions 의 «구조»(ODataModel/GraphQL 하위 객체와 그 제네릭 메서드)가 필요하다. " +
             "위와 같은 이유로 이름만으로는 세울 수 없다.",
@@ -129,10 +136,21 @@ public class GeneratedCodeCompilesWithoutRuntimeReferencesTests
             .OrderBy(p => p, StringComparer.Ordinal)
             .ToList();
 
-    private static bool IsCovered(string path) =>
-        !NotCovered.Keys.Any(dir =>
-            path.Contains(Path.DirectorySeparatorChar + dir + Path.DirectorySeparatorChar, StringComparison.Ordinal)
-            || Path.GetFileNameWithoutExtension(path).Equals(dir, StringComparison.Ordinal));
+    private static bool IsCovered(string path) => !NotCovered.Keys.Any(key => Excludes(key, path));
+
+    /// <summary>
+    /// The key of the entity configurations: they sit in <c>Entity_gen</c> beside the entities, so they are told apart
+    /// by what they declare rather than by where they are or what they are named — an entity may be named
+    /// <c>*Configuration</c> too.
+    /// </summary>
+    private const string EntityConfigurations = "IEntityTypeConfiguration";
+
+    /// <summary>A key names a directory or a file name — or, for <see cref="EntityConfigurations"/>, what the file declares.</summary>
+    private static bool Excludes(string key, string path) =>
+        key == EntityConfigurations
+            ? File.ReadAllText(path).Contains(": IEntityTypeConfiguration<", StringComparison.Ordinal)
+            : path.Contains(Path.DirectorySeparatorChar + key + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+              || Path.GetFileNameWithoutExtension(path).Equals(key, StringComparison.Ordinal);
 
     private static IReadOnlyList<Diagnostic> Compile(IEnumerable<string> sourceFiles, string extraGlobalUsings)
     {
@@ -194,9 +212,7 @@ public class GeneratedCodeCompilesWithoutRuntimeReferencesTests
             {
                 if (IsCovered(f)) continue;
 
-                var key = NotCovered.Keys.First(k =>
-                    f.Contains(Path.DirectorySeparatorChar + k + Path.DirectorySeparatorChar, StringComparison.Ordinal)
-                    || Path.GetFileNameWithoutExtension(f).Equals(k, StringComparison.Ordinal));
+                var key = NotCovered.Keys.First(k => Excludes(k, f));
                 Assert.False(string.IsNullOrWhiteSpace(NotCovered[key]),
                     $"{key} 가 사유 없이 제외돼 있다.");
             }
@@ -205,9 +221,7 @@ public class GeneratedCodeCompilesWithoutRuntimeReferencesTests
             var all = AllGenerated(modelDir, apiDir);
             foreach (var key in NotCovered.Keys)
             {
-                Assert.Contains(all, f =>
-                    f.Contains(Path.DirectorySeparatorChar + key + Path.DirectorySeparatorChar, StringComparison.Ordinal)
-                    || Path.GetFileNameWithoutExtension(f).Equals(key, StringComparison.Ordinal));
+                Assert.Contains(all, f => Excludes(key, f));
             }
         }
         finally { try { Directory.Delete(root, recursive: true); } catch { } }
@@ -313,20 +327,20 @@ public class GeneratedCodeCompilesWithoutRuntimeReferencesTests
     }
 
     /// <summary>
-    /// <c>::aspect</c> 가 만든 navigation 쌍이 «컴파일되는 이름»인지, 그리고 <c>DbContext</c> 가
+    /// <c>::aspect</c> 가 만든 navigation 쌍이 «컴파일되는 이름»인지, 그리고 엔티티 구성이
     /// 그 이름들을 그대로 쓰는지.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// 🔴 두 단언이 짝이어야 하는 이유: <c>DbContext_gen</c> 은 EF 실물이 필요해
+    /// 🔴 두 단언이 짝이어야 하는 이유: 엔티티 구성(<c>IEntityTypeConfiguration</c>)은 EF 실물이 필요해
     /// <see cref="NotCovered"/> 에 있고, 그래서 <c>HasOne(e =&gt; e.Asset)</c> 의 람다는 여기서
     /// 컴파일되지 <b>않는다</b>. 엔티티만 컴파일하면 프로퍼티가 «있다»는 것까지만 알고,
-    /// <c>DbContext</c> 가 <b>같은 이름</b>을 쓰는지는 모른다. 그래서 컴파일 뒤에 그 이름들이
+    /// 구성이 <b>같은 이름</b>을 쓰는지는 모른다. 그래서 컴파일 뒤에 그 이름들이
     /// 실제로 방출된 텍스트에 있는지 대조한다 — 둘을 잇는 것이 이 테스트의 일이다.
     /// </para>
     /// </remarks>
     [Fact]
-    public void An_aspects_navigation_pair_compiles_and_the_context_uses_those_same_names()
+    public void An_aspects_navigation_pair_compiles_and_the_configuration_uses_those_same_names()
     {
         var (modelDir, apiDir, root) = Generate("aspect-shared-key.m3l.md");
         try
@@ -345,10 +359,10 @@ public class GeneratedCodeCompilesWithoutRuntimeReferencesTests
             Assert.Contains("public AssetExt Asset { get; set; } = null!;", entities);
             Assert.Contains("public AssetMaintenanceProfileExt? MaintenanceProfile { get; set; }", entities);
 
-            // 컴파일된 엔티티의 이름과 DbContext 가 쓰는 이름을 잇는다.
-            var context = File.ReadAllText(
-                all.Single(p => Path.GetFileNameWithoutExtension(p).EndsWith("DbContext", StringComparison.Ordinal)));
-            Assert.Contains(".HasOne(e => e.Asset).WithOne(e => e.MaintenanceProfile)", context);
+            // 컴파일된 엔티티의 이름과 읽기 타입의 구성이 쓰는 이름을 잇는다.
+            var configuration = File.ReadAllText(
+                all.Single(p => Path.GetFileNameWithoutExtension(p).Equals("AssetMaintenanceProfileExtConfiguration", StringComparison.Ordinal)));
+            Assert.Contains(".HasOne(e => e.Asset).WithOne(e => e.MaintenanceProfile)", configuration);
         }
         finally { try { Directory.Delete(root, recursive: true); } catch { } }
     }
