@@ -19,6 +19,16 @@ public sealed class MddJsonConfig
     public List<MddJsonTarget> Targets { get; set; } = [];
 
     /// <summary>
+    /// Model sources read to check against but not generated — the model of something this build builds on, whose
+    /// generated types are published elsewhere (a package). Their declarations can be named by <see cref="Sources"/>
+    /// (a reference, a lookup, an aspect's base) and are checked like any (keys, inheritance), but no target emits them;
+    /// the Model target's files import their namespace and its context applies their configurations. A referenced
+    /// declaration may name only referenced ones.
+    /// </summary>
+    [JsonPropertyName("references")]
+    public List<MddJsonReference>? References { get; set; }
+
+    /// <summary>
     /// Report every coded warning (<c>MDDnnn</c>, <c>M3L-Wnnn</c>) as an error: the build stops with
     /// exit code 3 before generating anything. Codes in <see cref="NoWarn"/> are still suppressed.
     /// </summary>
@@ -38,6 +48,22 @@ public sealed class MddJsonConfig
     /// than dropped. A misspelt <c>"source"</c> used to leave <see cref="Sources"/> empty with nothing
     /// said about why; the JSON Schema flags it in an editor, but not in CI.
     /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? UnknownKeys { get; set; }
+}
+
+/// <summary>One entry of <see cref="MddJsonConfig.References"/>: model sources and the namespace of their generated types.</summary>
+public sealed class MddJsonReference
+{
+    /// <summary>The model files, relative to the config directory unless absolute.</summary>
+    [JsonPropertyName("sources")]
+    public List<string> Sources { get; set; } = [];
+
+    /// <summary>The C# namespace the types generated from these sources are in.</summary>
+    [JsonPropertyName("namespace")]
+    public string Namespace { get; set; } = "";
+
+    /// <summary>Keys a reference does not define — reported like <see cref="MddJsonConfig.UnknownKeys"/>.</summary>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? UnknownKeys { get; set; }
 }

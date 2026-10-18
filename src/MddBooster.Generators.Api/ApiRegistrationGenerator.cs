@@ -25,8 +25,8 @@ public sealed class ApiRegistrationGenerator(ApiRegistrationGeneratorOptions opt
 
         // 타깃별 방출 범위. context.Models 는 해상도 범위(전 sources)이며 두 축은 별개다 —
         // 여기서 좁혀야 다른 타깃의 산출물이 영향받지 않는다.
-        var models = _options.SurfaceFilter.Apply(context.Models).ToList();
-        var readViews = context.ReadViews.Where(_options.SurfaceFilter.Admits).ToList();
+        var models = _options.SurfaceFilter.Apply(context.GeneratedModels).ToList();
+        var readViews = context.GeneratedReadViews.Where(_options.SurfaceFilter.Admits).ToList();
 
         var rendered = ApiRegistrationRenderer.Render(
             models,

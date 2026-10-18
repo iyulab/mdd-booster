@@ -29,8 +29,9 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
     {
         ModelTargetValidator.Validate(context.Models, context.ReadViews, context.Enums, _options.DbContextName);
         if (_options.Modules is not { } modules) return null;
-        var assigned = ModelModules.Assign(modules, context.Models, context.Enums, context.ReadViews);
-        ModuleDirection.Validate(assigned, context.Models, context.Enums, context.ReadViews);
+        // The referenced declarations are in no module — they are the layer below every module.
+        var assigned = ModelModules.Assign(modules, context.GeneratedModels, context.GeneratedEnums, context.GeneratedReadViews);
+        ModuleDirection.Validate(assigned, context.References, context.Models, context.Enums, context.ReadViews);
         return assigned;
     }
 
@@ -47,12 +48,14 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
 
         // Where each declaration's files go. One project unless the target is split into modules; the target's own
         // Entity_gen/Enum_gen are emptied either way — a target that became modular must not keep its old entities.
+        // Every file may name a referenced type, so every file imports the references' namespaces.
+        var referenced = context.References.Namespaces;
         var placements = (modules?.Modules ?? []).Select((m, i) => new Placement(
             Path.Combine(ConfiguredPathResolver.Resolve(context.WorkingDirectory, m.ProjectPath, $"modules[{i}].projectPath"), "Entity_gen"),
             Path.Combine(ConfiguredPathResolver.Resolve(context.WorkingDirectory, m.ProjectPath, $"modules[{i}].projectPath"), "Enum_gen"),
             m.Namespace,
-            modules!.ImportsOf(i))).ToList();
-        var single = new Placement(Path.Combine(projectRoot, "Entity_gen"), Path.Combine(projectRoot, "Enum_gen"), _options.Namespace, []);
+            [.. referenced, .. modules!.ImportsOf(i)])).ToList();
+        var single = new Placement(Path.Combine(projectRoot, "Entity_gen"), Path.Combine(projectRoot, "Enum_gen"), _options.Namespace, referenced);
         Placement Of(int? module) => module is { } i ? placements[i] : single;
 
         CleanDir(single.EntityDir);
@@ -64,7 +67,7 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
             CleanDir(p.EnumDir);
         }
 
-        foreach (var enumNode in context.Enums)
+        foreach (var enumNode in context.GeneratedEnums)
         {
             var at = Of(modules?.IndexOf(enumNode));
             var rendered = EnumRenderer.Render(enumNode, _options.Namespace);
@@ -78,12 +81,15 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
 
         // Computed once for the whole set, not per model: the navigation a read type gains on the
         // target side comes from a declaration in some other model, so no model can derive its own.
+        // A lower layer (an earlier module, a reference) does not get the inverse of a one-to-one from a higher one.
+        var layers = modules is not null ? ModuleDirection.For(modules, context.References)
+            : context.References.IsEmpty ? null : LayerDirection.Of(context.References);
         var oneToOne = OneToOneRelationships.Describe(context.Models);
-        if (modules is not null) oneToOne = ModuleDirection.WithoutUpwardInverses(oneToOne, modules, context.Models);
+        if (layers is not null) oneToOne = layers.WithoutUpwardInverses(oneToOne, context.Models);
         var manyToOne = ManyToOneNavigations.Describe(context.Models, oneToOne);
         var collections = ReverseCollections.Describe(context.Models, oneToOne, manyToOne);
 
-        foreach (var model in context.Models)
+        foreach (var model in context.GeneratedModels)
         {
             var backing = DetermineExtBacking(model, customExtViewModels);
             var rendered = EntityPairRenderer.Render(
@@ -98,7 +104,7 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
 
         // A standalone view served as a read model: one read entity beside the pairs.
         var viewEnumNames = context.Enums.Select(e => e.Name).ToHashSet(StringComparer.Ordinal);
-        foreach (var view in context.ReadViews)
+        foreach (var view in context.GeneratedReadViews)
         {
             var at = Of(modules?.IndexOf(view));
             File.WriteAllText(
@@ -117,21 +123,23 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
             context.ReadViews,
             collections);
         // A type's configuration sits beside the type: whichever project compiles the entities compiles their mapping.
+        // A referenced type's configuration is in the referenced assembly — the context applies it, nothing writes it.
         var moduleOfType = new Dictionary<string, int?>(StringComparer.Ordinal);
-        foreach (var model in context.Models)
+        foreach (var model in context.GeneratedModels)
         {
             var name = NameCasing.ToPascalCase(model.Name);
             moduleOfType[name] = moduleOfType[name + "Ext"] = modules?.IndexOf(model);
         }
-        foreach (var view in context.ReadViews)
+        foreach (var view in context.GeneratedReadViews)
             moduleOfType[NameCasing.ToPascalCase(view.Name)] = modules?.IndexOf(view);
         foreach (var configuration in mapping.Configurations)
         {
-            var at = Of(moduleOfType[configuration.EntityType]);
+            if (!moduleOfType.TryGetValue(configuration.EntityType, out var module)) continue;
+            var at = Of(module);
             File.WriteAllText(Path.Combine(at.EntityDir, $"{configuration.ClassName}.cs"), at.Place(configuration.Source));
         }
-        // The context serves every module, so it imports every module's namespace.
-        var contextImports = placements.Select(p => p.Namespace).Distinct(StringComparer.Ordinal).ToList();
+        // The context serves every module and every referenced type, so it imports all their namespaces.
+        var contextImports = referenced.Concat(placements.Select(p => p.Namespace)).Distinct(StringComparer.Ordinal).ToList();
         File.WriteAllText(
             Path.Combine(contextDir, $"{_options.DbContextName}.cs"),
             GeneratedFilePlacement.Place(mapping.Context, _options.Namespace, contextImports));

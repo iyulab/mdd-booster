@@ -87,9 +87,36 @@ public sealed class BuildCommand
             return 4;
         }
 
+        // 참조 원문 — 함께 읽어 검증하되 어느 타깃도 내지 않는다. 설정이 가리킨 파일이 없거나, 생성할 원문과
+        // 같은 파일이거나, 네임스페이스가 없으면 설정 오류다(조용히 한쪽으로 접지 않는다).
+        var referenceProblems = new List<string>();
+        var namespaceOfReference = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var referenceEntries = cfg.References ?? [];
+        for (var i = 0; i < referenceEntries.Count; i++)
+        {
+            var entry = referenceEntries[i];
+            if (string.IsNullOrWhiteSpace(entry.Namespace)) referenceProblems.Add($"references[{i}]: namespace 가 없습니다.");
+            if (entry.Sources.Count == 0) referenceProblems.Add($"references[{i}]: sources 가 비어 있습니다.");
+            foreach (var rel in entry.Sources)
+            {
+                var abs = Path.GetFullPath(Path.Combine(configDirectory, rel));
+                if (!File.Exists(abs)) referenceProblems.Add($"references[{i}]: {rel} → {abs} 가 없습니다.");
+                else if (sourcePaths.Contains(abs, StringComparer.OrdinalIgnoreCase)) referenceProblems.Add($"references[{i}]: {rel} 는 sources 에도 있습니다 — 한 파일은 생성하거나(sources) 참조하거나(references) 둘 중 하나입니다.");
+                else if (!namespaceOfReference.TryAdd(abs, entry.Namespace)) referenceProblems.Add($"references[{i}]: {rel} 가 두 번 참조됩니다.");
+            }
+        }
+        if (referenceProblems.Count > 0)
+        {
+            Console.Error.WriteLine("[config] references:");
+            foreach (var p in referenceProblems) Console.Error.WriteLine($"  {p}");
+            return 4;
+        }
+        var references = new ReferenceSet(namespaceOfReference);
+        foreach (var refAbs in namespaceOfReference.Keys) sourcePaths.Add(refAbs);
+
         foreach (var srcAbs in sourcePaths)
         {
-            Console.WriteLine($"[m3l] 로딩: {srcAbs}");
+            Console.WriteLine(references.ContainsSource(srcAbs) ? $"[m3l] 로딩(참조 — 생성 안 함): {srcAbs}" : $"[m3l] 로딩: {srcAbs}");
         }
 
         M3L.Native.M3lAst mergedAst;
@@ -261,6 +288,19 @@ public sealed class BuildCommand
             return 3;
         }
 
+        // 참조 원문은 이 빌드가 내는 모든 것의 아래 층이다 — 참조된 선언이 생성할 선언을 가리키면, 그 원문을 낸 쪽은
+        // 이 빌드 없이 컴파일된다. 모델 오류(3), 가리키는 선언과 대상을 둘 다 적는다.
+        if (!references.IsEmpty)
+        {
+            var upward = LayerDirection.Of(references).Violations(allModels, allEnums, viewResolution.Views);
+            if (upward.Count > 0)
+            {
+                Console.Error.WriteLine($"[m3l] 참조 원문(references)이 생성할 원문(sources)의 선언을 가리킵니다 ({upward.Count}건):");
+                foreach (var line in upward) Console.Error.WriteLine($"  {line}");
+                return 3;
+            }
+        }
+
         var context = new GeneratorContext
         {
             Models = allModels,
@@ -268,6 +308,7 @@ public sealed class BuildCommand
             Enums = allEnums,
             Views = viewResolution.Views,
             ReadViews = readViews,
+            References = references,
         };
 
         // 1.6. 설정 위반 수집 — 전부 모아 한 번에 실패시킨다(한 건씩 고쳐가며 재실행하게 만들지 않는다).

@@ -18,6 +18,13 @@
 
 ## [Unreleased]
 
+### 다른 빌드의 게시 모델 위에 짓는다 — `references`
+
+`mdd.json` 최상위 `references: [{ sources, namespace }]` — 검증에 쓰고 생성하지 않는 원문. 자기 원문이 그 선언을 가리키고(참조 · lookup · enum ·
+`::aspect` 의 base) 한 빌드가 둘을 함께 검증한다. 어느 타깃도 참조된 선언을 내지 않는다. Model 타깃의 파일은 참조의 네임스페이스를 `using` 하고,
+생성 컨텍스트는 참조된 형의 `DbSet` 과 구성까지 이름으로 적용한다. 참조된 선언이 생성할 선언을 가리키면 빌드 오류(종료 코드 3), 설정이 잘못되면
+구성 오류(4). 참조된 모델로 향한 1:1 은 그 읽기 형에 역방향 navigation 을 만들지 않는다.
+
 ### Model 타깃이 엔티티를 층(모듈)마다 어셈블리로 낸다 — `modules`
 
 `modules: [{ owners, projectPath, namespace }]`(아래층부터)를 주면 소유자(`# Prefix:`)마다 모듈에 나눠 모듈의 프로젝트 · 네임스페이스에
