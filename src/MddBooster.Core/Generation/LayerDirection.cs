@@ -15,7 +15,7 @@ namespace MddBooster.Core.Generation;
 /// declaration naming one above it could not be built there.
 /// <para>
 /// A one-to-one key also gives its target a navigation back, which the target never declares. When the target is in a
-/// lower layer that navigation is not generated (<see cref="WithoutUpwardInverses"/>) rather than refused — nothing in
+/// lower layer that navigation is not generated (<see cref="HasInverse"/>) rather than refused — nothing in
 /// the lower layer's text named the upper one. Declaring that end on the lower model does, and is refused.
 /// </para>
 /// </remarks>
@@ -93,17 +93,11 @@ public sealed class LayerDirection(
     }
 
     /// <summary>
-    /// The one-to-one relationships with the inverse navigation dropped where it would point up: a dependent in a layer
-    /// above its target's (see the type's remarks).
+    /// Whether a one-to-one's target gets the inverse navigation: not when the dependent is in a layer above the
+    /// target's (see the type's remarks). Passed to <see cref="OneToOneRelationships.Describe"/>, so a dropped inverse
+    /// also takes no name on its target.
     /// </summary>
-    public IReadOnlyList<OneToOneRelationships.Relationship> WithoutUpwardInverses(
-        IReadOnlyList<OneToOneRelationships.Relationship> oneToOne, IReadOnlyList<ResolvedModel> models)
-    {
-        var byName = models.ToDictionary(m => m.Name, StringComparer.Ordinal);
-        return oneToOne
-            .Select(r => layerOfModel(byName[r.DependentModel]) > layerOfModel(byName[r.TargetModel]) ? r with { HasInverse = false } : r)
-            .ToList();
-    }
+    public bool HasInverse(ResolvedModel dependent, ResolvedModel target) => layerOfModel(dependent) <= layerOfModel(target);
 
     /// <summary>The two layers of a build with references and no modules: the references below, everything else above.</summary>
     public static LayerDirection Of(ReferenceSet references) => new(

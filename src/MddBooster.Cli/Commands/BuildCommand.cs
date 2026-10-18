@@ -185,7 +185,10 @@ public sealed class BuildCommand
         // A declared one-to-one is reported the same way composition is: silently producing a unique
         // index and nothing else is how the author finds out from the output instead of the build.
         // Conflicting reverse names stop the build rather than letting one of them win invisibly.
-        var oneToOne = OneToOneRelationships.Describe(allModels);
+        // In a layered build an inverse that would point up is not generated, so it collides with nothing — the same
+        // layers the Model target generates with (the references, and a single Model target's modules).
+        var layers = BuildLayers(cfg, allModels, allEnums, references);
+        var oneToOne = OneToOneRelationships.Describe(allModels, layers is null ? null : layers.HasInverse);
         foreach (var line in OneToOneRelationships.Describe(oneToOne))
             Console.WriteLine($"[m3l] 1:1 {line}");
         var conflicts = oneToOne.Where(r => r.ReverseNameConflict is not null).ToList();
@@ -909,6 +912,34 @@ public sealed class BuildCommand
                 Controls = target.FormControlsImport!,
                 SelectOptions = target.FormSelectOptionsImport!,
             };
+
+    /// <summary>
+    /// The layers of this build for the one-to-one inverses (<see cref="LayerDirection"/>): a single Model target's modules
+    /// over the references, or the references alone — null when the build has neither. A module list that does not
+    /// assign cleanly falls back to the references here; the Model target refuses it, with every reason, when it validates.
+    /// </summary>
+    private static LayerDirection? BuildLayers(
+        MddJsonConfig cfg, IReadOnlyList<ResolvedModel> allModels, IReadOnlyList<M3L.Native.EnumNode> allEnums, ReferenceSet references)
+    {
+        var modular = cfg.Targets.Where(t => t.Type == "Model" && t.Modules is { Count: > 0 }).ToList();
+        if (modular.Count == 1)
+        {
+            try
+            {
+                var modules = MddBooster.Generators.Model.ModelModules.Assign(
+                    modular[0].Modules!.Select(m => new MddBooster.Generators.Model.ModelModule(m.Owners, m.ProjectPath, m.Namespace)).ToList(),
+                    allModels.Where(m => !references.Contains(m)).ToList(),
+                    allEnums.Where(e => !references.Contains(e)).ToList(),
+                    []);
+                return MddBooster.Generators.Model.ModuleDirection.For(modules, references);
+            }
+            catch (GeneratorRefusalException)
+            {
+                // Reported by the Model target's validation.
+            }
+        }
+        return references.IsEmpty ? null : LayerDirection.Of(references);
+    }
 
     /// <summary>
     /// The entity types (PascalCase model and view names) that do not live in the one entities namespace a surface

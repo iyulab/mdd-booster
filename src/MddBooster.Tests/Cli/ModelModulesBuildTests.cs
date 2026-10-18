@@ -148,6 +148,36 @@ public class ModelModulesBuildTests
         finally { Cleanup(root); }
     }
 
+    /// <summary>
+    /// Two upper one-to-ones onto one lower model whose inverses would take the same name: without modules both
+    /// inverses exist and collide (a refusal); with modules neither is generated, so nothing collides.
+    /// </summary>
+    [Fact]
+    public void Inverses_that_are_not_generated_do_not_collide()
+    {
+        const string colliding = Maint + """
+
+## MaintSeal : Timestampable
+- id: identifier @pk @generated
+- asset_id: identifier @not_null @unique @reference(Asset)
+
+## MaintAssetSeal ::aspect(Asset) : Timestampable
+- grade: integer?
+""";
+        var flat = NewRoot(maint: colliding);
+        var layered = NewRoot(maint: colliding);
+        try
+        {
+            var (flatExit, flatErr) = Build(flat, modules: "");
+            Assert.Equal(3, flatExit);
+            Assert.Contains("MaintSeal", flatErr);
+
+            var (exit, stderr) = Build(layered);
+            Assert.True(exit == 0, stderr);
+        }
+        finally { Cleanup(flat); Cleanup(layered); }
+    }
+
     [Fact]
     public void Without_modules_the_inverse_is_generated_as_before()
     {

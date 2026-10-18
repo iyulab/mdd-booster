@@ -84,8 +84,7 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
         // A lower layer (an earlier module, a reference) does not get the inverse of a one-to-one from a higher one.
         var layers = modules is not null ? ModuleDirection.For(modules, context.References)
             : context.References.IsEmpty ? null : LayerDirection.Of(context.References);
-        var oneToOne = OneToOneRelationships.Describe(context.Models);
-        if (layers is not null) oneToOne = layers.WithoutUpwardInverses(oneToOne, context.Models);
+        var oneToOne = OneToOneRelationships.Describe(context.Models, layers is null ? null : layers.HasInverse);
         var manyToOne = ManyToOneNavigations.Describe(context.Models, oneToOne);
         var collections = ReverseCollections.Describe(context.Models, oneToOne, manyToOne);
 

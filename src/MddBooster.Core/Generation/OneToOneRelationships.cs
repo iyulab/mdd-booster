@@ -81,7 +81,13 @@ public static class OneToOneRelationships
     /// A reference whose target is not in the model set is left out: the semantic analyzer already
     /// reports an unresolvable target, and repeating it here would give the same model two voices.
     /// </remarks>
-    public static IReadOnlyList<Relationship> Describe(IReadOnlyList<ResolvedModel> models)
+    /// <param name="hasInverse">
+    /// Whether the target of a relationship (dependent, target) gets the inverse navigation — null: every target does.
+    /// A layered model set drops the ones that would point up (<see cref="LayerDirection.HasInverse"/>). A dropped
+    /// inverse takes no name on its target, so it collides with nothing.
+    /// </param>
+    public static IReadOnlyList<Relationship> Describe(
+        IReadOnlyList<ResolvedModel> models, Func<ResolvedModel, ResolvedModel, bool>? hasInverse = null)
     {
         ArgumentNullException.ThrowIfNull(models);
 
@@ -120,7 +126,8 @@ public static class OneToOneRelationships
                     ReverseName: declaredReverse ?? ReverseNameFor(model.Name, target, AspectNaming.PascalPrefix(model)),
                     IsOptional: field.Nullable,
                     // On a self-reference both ends are members of one type — the same name twice is a collision too.
-                    ReverseNameConflict: selfReference && declaredReverse == forward ? field.Name : null));
+                    ReverseNameConflict: selfReference && declaredReverse == forward ? field.Name : null,
+                    HasInverse: hasInverse?.Invoke(model, targetModel) ?? true));
             }
         }
 
@@ -178,8 +185,10 @@ public static class OneToOneRelationships
         var result = new List<Relationship>(found.Count);
         foreach (var r in found)
         {
-            var other = found.FirstOrDefault(o =>
+            // Only inverses that are generated hold a name on their target.
+            var other = !r.HasInverse ? null : found.FirstOrDefault(o =>
                 !ReferenceEquals(o, r)
+                && o.HasInverse
                 && string.Equals(o.TargetModel, r.TargetModel, StringComparison.Ordinal)
                 && string.Equals(o.ReverseName, r.ReverseName, StringComparison.Ordinal));
 
