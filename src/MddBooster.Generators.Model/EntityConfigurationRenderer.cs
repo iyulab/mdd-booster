@@ -211,22 +211,8 @@ public static class EntityConfigurationRenderer
             body.Statement(name + "Ext").Append(".Property(e => e.Id).HasColumnName(").Append(column).AppendLine(");");
         }
 
-        // An array field's column is NVARCHAR(MAX) holding JSON (the Sql target's DDL). EF Core picks that type for a
-        // primitive collection by convention — but only below compatibility level 170: from there (or with
-        // UseAzureSql) it picks the json type, and would query a column the schema does not have. Naming the type
-        // keeps the EF model on the schema whatever level a host sets. Both types read the column — the Ext type
-        // through its view — except where the field is @internal, which the read type does not carry.
-        foreach (var model in ordered)
-        {
-            var name = NameCasing.ToPascalCase(model.Name);
-            foreach (var field in BaseColumnsOf(model).Where(f => f.Array))
-            {
-                var property = NameCasing.ToPascalCase(field.Name);
-                body.Statement(name).Append(".Property(e => e.").Append(property).AppendLine(").HasColumnType(\"nvarchar(max)\");");
-                if (EntitySurface.IsFieldInternal(field)) continue;
-                body.Statement(name + "Ext").Append(".Property(e => e.").Append(property).AppendLine(").HasColumnType(\"nvarchar(max)\");");
-            }
-        }
+        // An array field's column type is not named here: it is NVARCHAR(MAX) on SQL Server only, and the
+        // configuration does not know the provider — the context names it, on SQL Server (JsonTextListColumns).
 
         // field-level @unique/@index — SQL parity (TableRenderer). Write entity only; the Ext
         // class maps to a view, which has no index of its own. Nullable-unique's filtered-index
@@ -282,16 +268,40 @@ public static class EntityConfigurationRenderer
                       .Append(").HasColumnName(").Append(SourceLiteral.CSharpString(column.Name)).AppendLine(");");
                 }
             }
-            else
-            {
-                // A projected list column is the base table's JSON text — named for the reason the entities' are.
-                foreach (var column in view.Columns.Where(c => c.Field.Array))
-                {
-                    body.Statement(name).Append(".Property(x => x.").Append(NameCasing.ToPascalCase(column.Name))
-                      .AppendLine(").HasColumnType(\"nvarchar(max)\");");
-                }
-            }
         }
+    }
+
+    /// <summary>
+    /// The list properties whose SQL Server column is JSON text — <c>NVARCHAR(MAX)</c>, the Sql target's DDL — as
+    /// (entity type, property) in <see cref="ConfiguredTypes"/> order: a model's list fields on its write type and, unless
+    /// <c>@internal</c>, its read type; a read-model view's projected list columns.
+    /// </summary>
+    /// <remarks>
+    /// EF Core's SQL Server provider picks that type for a primitive collection by convention only below compatibility
+    /// level 170 — from there, or with <c>UseAzureSql</c>, it picks the <c>json</c> type, and a write to the text column
+    /// fails (<c>Implicit conversion from data type json to nvarchar(max) is not allowed</c>, measured on SQL Server 2025).
+    /// So the type is named — but by the context, behind its provider check (<see cref="DbContextRenderer"/>): the name
+    /// is SQL Server's, another provider refuses it (SQLite: <c>near "max": syntax error</c> at <c>EnsureCreated</c>), and
+    /// a configuration cannot tell which provider it is configuring.
+    /// </remarks>
+    public static IReadOnlyList<(string EntityType, string Property)> JsonTextListColumns(
+        IReadOnlyList<ResolvedModel> models, IReadOnlyList<ResolvedView>? readViews)
+    {
+        var columns = new List<(string, string)>();
+        foreach (var model in models.OrderBy(m => m.Name, StringComparer.Ordinal))
+        {
+            var name = NameCasing.ToPascalCase(model.Name);
+            var fields = BaseColumnsOf(model).Where(f => f.Array).ToList();
+            columns.AddRange(fields.Select(f => (name, NameCasing.ToPascalCase(f.Name))));
+            columns.AddRange(fields.Where(f => !EntitySurface.IsFieldInternal(f))
+                .Select(f => (name + "Ext", NameCasing.ToPascalCase(f.Name))));
+        }
+        foreach (var view in (readViews ?? []).OrderBy(v => v.Name, StringComparer.Ordinal))
+        {
+            var name = NameCasing.ToPascalCase(view.Name);
+            columns.AddRange(view.Columns.Where(c => c.Field.Array).Select(c => (name, NameCasing.ToPascalCase(c.Name))));
+        }
+        return columns;
     }
 
     /// <summary>

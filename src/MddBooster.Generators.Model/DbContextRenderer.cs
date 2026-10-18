@@ -15,6 +15,12 @@ namespace MddBooster.Generators.Model;
 /// The configurations are applied by name, one call each, in <see cref="EntityConfigurationRenderer.ConfiguredTypes"/>
 /// order — not discovered by scanning an assembly. The context names exactly the types it serves, and a configuration
 /// missing from the assemblies it compiles against is a build error rather than a mapping silently left out.
+/// <para>
+/// One statement of storage is the context's rather than a configuration's: on the SQL Server dialect a list field's
+/// column type, which only holds on SQL Server and so needs the provider the context knows and a configuration does
+/// not (<see cref="EntityConfigurationRenderer.JsonTextListColumns"/>). It covers referenced types too — the context
+/// serves them, and their configurations, generated elsewhere, stay provider-neutral like this build's.
+/// </para>
 /// </remarks>
 public static class DbContextRenderer
 {
@@ -24,7 +30,8 @@ public static class DbContextRenderer
         IReadOnlyList<ResolvedModel> models,
         string contextName,
         string ns,
-        IReadOnlyList<ResolvedView>? readViews = null)
+        IReadOnlyList<ResolvedView>? readViews = null,
+        bool sqlServer = true)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentException.ThrowIfNullOrWhiteSpace(contextName);
@@ -74,6 +81,21 @@ public static class DbContextRenderer
         {
             sb.Append("        modelBuilder.ApplyConfiguration(new ")
               .Append(EntityConfiguration.ConfigurationClassName(type)).AppendLine("());");
+        }
+        var listColumns = sqlServer ? EntityConfigurationRenderer.JsonTextListColumns(models, readViews) : [];
+        if (listColumns.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("        // A list field's column is JSON text, NVARCHAR(MAX). SQL Server's provider picks the json type for a list from");
+            sb.AppendLine("        // compatibility level 170, and the text column refuses its writes; another provider keeps its own storage.");
+            sb.AppendLine("        if (Database.ProviderName == \"Microsoft.EntityFrameworkCore.SqlServer\")");
+            sb.AppendLine("        {");
+            foreach (var (type, property) in listColumns)
+            {
+                sb.Append("            modelBuilder.Entity<").Append(type).Append(">().Property(e => e.").Append(property)
+                  .AppendLine(").HasColumnType(\"nvarchar(max)\");");
+            }
+            sb.AppendLine("        }");
         }
         sb.AppendLine("    }");
         sb.AppendLine("}");

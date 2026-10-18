@@ -34,7 +34,7 @@ public static class ModelMappingRenderer
         IReadOnlyList<ResolvedView>? readViews = null,
         IReadOnlyList<ReverseCollections.Collection>? collections = null)
         => new(
-            DbContextRenderer.Render(models, contextName, ns, readViews),
+            DbContextRenderer.Render(models, contextName, ns, readViews, sqlServer: !postgresNaming),
             EntityConfigurationRenderer.Render(
                 models, ns, customExtViewModels, postgresNaming, oneToOne, manyToOne, readViews, collections));
 }

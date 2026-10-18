@@ -276,12 +276,18 @@ CREATE TABLE public.array_holder
         var (_, models) = LoadFixture();
         var mapping = ModelMappingRenderer.Render(models, "ArraysDbContext", "Arrays.Entities");
 
-        Assert.Contains("builder.Property(e => e.Tags).HasColumnType(\"nvarchar(max)\");", mapping["ArrayHolder"]);
-        Assert.Contains("builder.Property(e => e.Tags).HasColumnType(\"nvarchar(max)\");", mapping["ArrayHolderExt"]);
-        Assert.Contains("builder.Property(e => e.Stamps).HasColumnType(\"nvarchar(max)\");", mapping["ArrayHolder"]);
+        // Behind the provider check: the type name is SQL Server's, and SQLite refuses it at EnsureCreated.
+        var context = mapping.Context;
+        var gate = context.IndexOf("if (Database.ProviderName == \"Microsoft.EntityFrameworkCore.SqlServer\")", StringComparison.Ordinal);
+        Assert.True(gate > 0, context);
+        Assert.True(context.IndexOf("modelBuilder.Entity<ArrayHolder>().Property(e => e.Tags).HasColumnType(\"nvarchar(max)\");", StringComparison.Ordinal) > gate);
+        Assert.Contains("modelBuilder.Entity<ArrayHolderExt>().Property(e => e.Tags).HasColumnType(\"nvarchar(max)\");", context);
+        Assert.Contains("modelBuilder.Entity<ArrayHolder>().Property(e => e.Stamps).HasColumnType(\"nvarchar(max)\");", context);
         // The read type has no @internal property to configure.
-        Assert.Contains("builder.Property(e => e.SecretCodes)", mapping["ArrayHolder"]);
-        Assert.DoesNotContain("builder.Property(e => e.SecretCodes)", mapping["ArrayHolderExt"]);
+        Assert.Contains("modelBuilder.Entity<ArrayHolder>().Property(e => e.SecretCodes)", context);
+        Assert.DoesNotContain("modelBuilder.Entity<ArrayHolderExt>().Property(e => e.SecretCodes)", context);
+        // No configuration names it — a configuration does not know its provider.
+        Assert.DoesNotContain("nvarchar(max)", string.Concat(mapping.Configurations.Select(c => c.Source)));
         // A scalar column is left to convention, as before.
         Assert.DoesNotContain("e.Title).HasColumnType", string.Concat(mapping.Sources));
     }
@@ -385,8 +391,9 @@ CREATE TABLE public.array_holder
         var entity = ViewEntityRenderer.Render(view, "Test", knownEnumNames: null);
         Assert.Contains("using System.Collections.Generic;", entity);
         Assert.Contains("public List<string> Labels { get; set; } = [];", entity);
-        var configuration = Normalize(ModelMappingRenderer.Render([], "Test", "TestDb", readViews: [view])["Labels"]);
-        Assert.Contains("builder.Property(x => x.Labels).HasColumnType(\"nvarchar(max)\");", configuration);
+        var mapping = ModelMappingRenderer.Render([], "Test", "TestDb", readViews: [view]);
+        Assert.DoesNotContain("nvarchar(max)", mapping["Labels"]);
+        Assert.Contains("modelBuilder.Entity<Labels>().Property(e => e.Labels).HasColumnType(\"nvarchar(max)\");", Normalize(mapping.Context));
     }
 
     [Theory]

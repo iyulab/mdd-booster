@@ -61,6 +61,11 @@
 - **생성 DbContext** — `OnModelCreating` 은 `base.OnModelCreating(modelBuilder)` 뒤에 형마다
   `modelBuilder.ApplyConfiguration(new XConfiguration());` 한 줄씩(모델 이름 순 · 쓰기 형 다음 읽기 형 · 그다음 뷰). 어셈블리를 훑지 않는다 —
   컨텍스트가 섬기는 형을 이름으로 적고, 없는 구성은 빌드 오류다.
+- **하나는 컨텍스트에 남는다 — 목록 칸의 형(SQL Server 방언)**: `HasColumnType("nvarchar(max)")` 는 SQL Server 의 형 이름이라, 생성 컨텍스트가
+  `Database.ProviderName == "Microsoft.EntityFrameworkCore.SqlServer"` 일 때만 적는다(참조된 형의 목록 칸 포함). 🔇 종전(0.44.0)에는 무조건 적어
+  같은 컨텍스트를 SQLite 로 띄우는 호스트(시험 · 로컬 개발)의 `EnsureCreated` 가 목록 칸 하나로 섰다(`near "max": syntax error`) — 이제 그 제공자의
+  기본 저장(SQLite `TEXT`)을 쓴다. SQL Server 에서는 그대로다: 호환 수준 170 이상(또는 `UseAzureSql`)에서 EF 가 고르는 `json` 형은 텍스트 칸이
+  쓰기를 거절하므로(SQL Server 2025 실측) 형을 계속 적는다.
 - **바뀌지 않는 것** — DB 스키마 · EF 모델. 같은 모델의 두 판 생성물이 짓는 EF 모델(`Model.ToDebugString`)이 같다.
 - **옮길 것** — 생성 출력 폴더를 컴파일하는 프로젝트는 그대로 컴파일된다(새 파일은 같은 `Entity_gen/` 에 있다). 생성 DbContext 의 텍스트를
   읽거나 비교하던 도구가 있으면 매핑 문장은 이제 구성 클래스에 있다(`modelBuilder.Entity<X>().…` → `XConfiguration` 의 `builder.…`).
