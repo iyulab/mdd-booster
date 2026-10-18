@@ -73,6 +73,10 @@ public class GeneratedCodeCompilesWithoutRuntimeReferencesTests
         [System.AttributeUsage(System.AttributeTargets.Property)]
         public sealed class DecimalDigitsAttribute : System.Attribute
         { public DecimalDigitsAttribute(int precision, int scale) { _ = precision; _ = scale; } }
+        public sealed class ElementStringLengthAttribute : System.Attribute
+        { public ElementStringLengthAttribute(int maximumLength) { _ = maximumLength; } }
+        public sealed class ElementDecimalDigitsAttribute : System.Attribute
+        { public ElementDecimalDigitsAttribute(int precision, int scale) { _ = precision; _ = scale; } }
 
         """;
 

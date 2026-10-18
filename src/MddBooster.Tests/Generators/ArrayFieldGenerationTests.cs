@@ -57,6 +57,8 @@ public class ArrayFieldGenerationTests
     [InlineData("- scores: integer[]?\n")]
     [InlineData("- prices: decimal(10,2)[]\n")]
     [InlineData("- amounts: decimal[]\n")]
+    [InlineData("- codes: string(20)[]\n")]
+    [InlineData("- codes: string(20)?[]?\n")]
     [InlineData("- ids: identifier?[]?\n")]
     [InlineData("- tags: string[] @system\n")]
     [InlineData("- tags: string[] @immutable\n")]
@@ -68,9 +70,8 @@ public class ArrayFieldGenerationTests
     // ---- the build: what it still refuses, and that the message names the combination ----
 
     [Theory]
-    [InlineData("- tags: string(20)[]\n", "길이 상한", "string(20)")]
-    [InlineData("- mails: email[]\n", "길이 상한", "email")]
-    [InlineData("- phones: phone?[]\n", "길이 상한", "phone")]
+    [InlineData("- mails: email[]\n", "의미 형 `email`", "string(n)[]")]
+    [InlineData("- phones: phone?[]\n", "의미 형 `phone`", "string(n)[]")]
     [InlineData("- blobs: binary[]\n", "배열 원소로 생성하지 않는다", "binary")]
     [InlineData("- docs: json[]\n", "배열 원소로 생성하지 않는다", "json")]
     [InlineData("- small: byte[]\n", "배열 원소로 생성하지 않는다", "byte")]
@@ -121,10 +122,10 @@ public class ArrayFieldGenerationTests
     [Fact]
     public void Every_problem_on_one_field_is_named_in_one_refusal()
     {
-        var refusal = Assert.Single(Analyze("- tags: string(20)[] @unique\n"), d => d.Code == "MDD048");
-        Assert.Contains("길이 상한", refusal.Message);
+        var refusal = Assert.Single(Analyze("- mails: email[] @unique\n"), d => d.Code == "MDD048");
+        Assert.Contains("의미 형 `email`", refusal.Message);
         Assert.Contains("`@unique`", refusal.Message);
-        Assert.Contains("`string(20)[]`", refusal.Message);
+        Assert.Contains("`email[]`", refusal.Message);
     }
 
     // ---- SQL Server ----
@@ -246,12 +247,13 @@ CREATE TABLE public.array_holder
             Assert.Contains("    public List<DateOnly> Dates { get; set; } = [];", cls);
             Assert.Contains("    public List<DateTimeOffset>? Stamps { get; set; }", cls);
 
-            // A length or digit rule describes one value; on a list it would describe the list. The one length rule is
-            // the scalar title's.
+            // A length or digit rule on [StringLength]/[DecimalDigits] describes one value; on a list it would describe
+            // the list. The one single-value length rule is the scalar title's; a list of decimals gets the per-element form.
             Assert.Single(System.Text.RegularExpressions.Regex.Matches(cls, @"\[StringLength\("));
             Assert.Contains("[StringLength(100)]\n    public string Title", Normalize(cls));
             Assert.DoesNotContain("MaxLength", cls);
-            Assert.DoesNotContain("DecimalDigits", cls);
+            Assert.DoesNotContain("[DecimalDigits(", cls);
+            Assert.Contains("[ElementDecimalDigits(10, 2)]\n    public List<decimal> Prices", Normalize(cls));
             Assert.DoesNotContain("Column(TypeName", cls);
         }
 

@@ -18,6 +18,16 @@
 
 ## [Unreleased]
 
+### 목록 원소의 길이 · 자리수 — `string(n)[]` 이 생성되고, 원소마다 검증된다
+
+- **`string(n)[]` 을 받는다**(종전 `MDD048`). 엔티티에 `[ElementStringLength(n)]`, PostgreSQL 은 `varchar(n)[]`(더 긴 원소를 엔진이 거절), SQL Server 는
+  `NVARCHAR(MAX)` JSON 그대로(어트리뷰트가 유일한 문).
+- 🔴 **`decimal(p,s)[]` 에 `[ElementDecimalDigits(p, s)]`** — 종전에는 원소의 자리수를 어느 층도 지키지 않았다(PostgreSQL 은 조용히 반올림). 더 많은 자리의 원소가 이제
+  `400 InvalidBody` 다.
+- 🔴 **런타임 의존** — 두 어트리뷰트는 `Iyu.Core.Attributes` 의 것이다(그것을 싣는 `Iyu.*` 판). 목록 칸이 있는 모델의 생성물은 그 판 없이 컴파일되지 않는다(`CS0246`) —
+  `Iyu.*` 를 함께 올린다.
+- 의미 형의 목록(`email[]` · `phone[]` · `url[]`)은 여전히 `MDD048` — `string(n)[]` 으로 적는다. TypeScript 필드 스키마는 목록에 `maxLength` 를 내지 않는다(값의 길이라는 뜻이다).
+
 ### 다른 빌드의 게시 모델 위에 짓는다 — `references`
 
 `mdd.json` 최상위 `references: [{ sources, namespace }]` — 검증에 쓰고 생성하지 않는 원문. 자기 원문이 그 선언을 가리키고(참조 · lookup · enum ·

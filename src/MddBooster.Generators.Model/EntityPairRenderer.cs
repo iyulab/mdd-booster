@@ -521,8 +521,9 @@ public static class EntityPairRenderer
             // the written one is how a column came to be narrower than the
             // attribute guarding writes to it. Independent of nullability: an
             // optional `string(50)?` is still bounded at 50.
+            // On a list the bound is each element's: [StringLength] there would count the elements.
             if (MddBooster.Core.Ast.FieldAttributes.EffectiveMaxLength(f) is { } maxLength)
-                sb.Append("    [StringLength(").Append(maxLength).AppendLine(")]");
+                sb.Append(f.Array ? "    [ElementStringLength(" : "    [StringLength(").Append(maxLength).AppendLine(")]");
 
             // [Range(min, max)] — the numeric bounds the model declares, which until now
             // reached the generated TypeScript field schema and stopped there: the same
@@ -540,13 +541,14 @@ public static class EntityPairRenderer
             // [DecimalDigits(p, s)] — a decimal's digits, the way [StringLength] carries a string's bound: the column
             // keeps exactly these, and without the rule in front of it a value with more decimal places was stored
             // rounded (the caller reads back a number it never sent) and one with more integer digits failed the write.
-            // The same digits the SQL column is declared with, bare decimal included. Not on an array of decimals: the
-            // attribute validates one decimal value, and a list is not one.
-            if (f.Type == "decimal" && !f.Array)
+            // The same digits the SQL column is declared with, bare decimal included. On a list of decimals the runtime's
+            // per-element form: [DecimalDigits] validates one value, and a list is not one.
+            if (f.Type == "decimal")
             {
                 var (precision, scale) = MddBooster.Core.Types.M3lPrimitives.DecimalDigitsOf(
                     MddBooster.Core.Ast.FieldAttributes.TypeParams(f));
-                sb.Append("    [DecimalDigits(").Append(precision).Append(", ").Append(scale).AppendLine(")]");
+                sb.Append(f.Array ? "    [ElementDecimalDigits(" : "    [DecimalDigits(")
+                  .Append(precision).Append(", ").Append(scale).AppendLine(")]");
             }
 
             // [Editable] — who may supply the value, as metadata. @system: nobody outside the
