@@ -101,6 +101,25 @@ public class ReferenceSourcesBuildTests
         finally { Cleanup(root); }
     }
 
+    /// <summary>
+    /// A referenced model's views are its own build's; a generated view that reads one is still planned against it.
+    /// </summary>
+    [Fact]
+    public void The_sql_target_writes_only_the_generated_models_views()
+    {
+        var root = NewRoot(standard: Standard + "\n- kind_label: string? @computed(\"name\")\n");
+        try
+        {
+            var (exit, stderr) = Build(root);
+            Assert.True(exit == 0, stderr);
+
+            Assert.True(Exists(root, "db", "dbo", "Views_gen", "CusInspectionFullView.sql"));
+            Assert.False(Exists(root, "db", "dbo", "Views_gen", "AssetFullView.sql"));
+            Assert.Contains("[Asset]", Read(root, "db", "dbo", "Views_gen", "CusInspectionFullView.sql"));
+        }
+        finally { Cleanup(root); }
+    }
+
     /// <summary>The generated types name the referenced ones through the reference's namespace.</summary>
     [Fact]
     public void Generated_types_import_the_referenced_namespace_and_name_its_types()
@@ -157,6 +176,30 @@ public class ReferenceSourcesBuildTests
 
             Assert.Contains("builder.HasOne(e => e.Asset).WithOne().HasForeignKey<CusAssetNoteExt>(e => e.Id)",
                 Read(root, "model", "Entity_gen", "CusAssetNoteExtConfiguration.cs"));
+        }
+        finally { Cleanup(root); }
+    }
+
+    /// <summary>
+    /// A warning in a referenced source is its own build's to fix: it is not reported here, so it cannot stop this
+    /// build through <c>treatWarningsAsErrors</c> — but it is counted, not dropped.
+    /// </summary>
+    [Fact]
+    public void A_referenced_sources_warnings_are_counted_not_reported()
+    {
+        // A model in a prefixed file whose name lacks the prefix is a warning (MDD017).
+        var root = NewRoot(standard: Standard.Replace("# Namespace: std", "# Namespace: std\n# Prefix: std"));
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "mdd", "mdd.json"),
+                $$"""{ "sources": ["./custom.m3l.md"], "references": {{Reference}}, "treatWarningsAsErrors": true, "targets": [ {{Targets}} ] }""");
+            using var output = new ConsoleOutCapture(this);
+            using var err = new ConsoleErrorCapture(this);
+            var exit = Program.Main(["build", Path.Combine(root, "mdd")]);
+
+            Assert.True(exit == 0, err.Text);
+            Assert.DoesNotContain("MDD017", err.Text + output.Text);
+            Assert.Contains("참조 원문(references)의 경고", output.Text);
         }
         finally { Cleanup(root); }
     }

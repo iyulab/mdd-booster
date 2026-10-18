@@ -34,6 +34,7 @@ public sealed class ApiRegistrationGenerator(ApiRegistrationGeneratorOptions opt
             _options.EntitiesNamespace,
             surfaces: _options.Surfaces,
             registeredElsewhere: _options.RegisteredElsewhere,
+            entityNamespaces: _options.EntityNamespaces,
             readViews: readViews);
 
         File.WriteAllText(Path.Combine(apiDir, "ApiRegistration_gen.cs"), rendered);
@@ -45,7 +46,7 @@ public sealed class ApiRegistrationGenerator(ApiRegistrationGeneratorOptions opt
             File.WriteAllText(
                 Path.Combine(apiDir, "Permissions_gen.cs"),
                 PermissionsRenderer.Render(models, _options.Namespace, _options.PermissionKeyTemplate, _options.EntitiesNamespace,
-                    readViews));
+                    readViews, _options.EntityNamespaces));
         }
 
         // OData 컨트롤러는 OData 셋의 엔드포인트다 — 셋을 등록하지 않으면 낼 것이 없다
@@ -56,7 +57,8 @@ public sealed class ApiRegistrationGenerator(ApiRegistrationGeneratorOptions opt
                 models,
                 _options.Namespace,
                 _options.EntitiesNamespace,
-                readViews);
+                readViews,
+                _options.EntityNamespaces);
 
             File.WriteAllText(Path.Combine(apiDir, "Controllers_gen.cs"), controllers);
         }
@@ -90,6 +92,12 @@ public sealed class ApiRegistrationGeneratorOptions
     /// the registration class can reference entities by short name.
     /// </summary>
     public string? EntitiesNamespace { get; init; }
+
+    /// <summary>
+    /// The entity types (PascalCase model and view names) that live in a namespace other than
+    /// <see cref="EntitiesNamespace"/> — a module's of a Model target split into modules, or a referenced build's.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? EntityNamespaces { get; init; }
 
     /// <summary>
     /// 이 타깃의 엔티티 부분집합 필터 (<c>includeEntities</c>/<c>excludeEntities</c>).

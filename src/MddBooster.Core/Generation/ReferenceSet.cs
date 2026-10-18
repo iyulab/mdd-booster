@@ -37,6 +37,15 @@ public sealed class ReferenceSet
 
     public bool Contains(ResolvedView view) => ContainsSource(view.Source.Source);
 
+    /// <summary>The namespace of a referenced model's generated types, or null when this build generates the model.</summary>
+    public string? NamespaceOf(ResolvedModel model) => NamespaceOfSource(model.Source.Source);
+
+    /// <summary>The namespace of a referenced view's generated type, or null when this build generates the view.</summary>
+    public string? NamespaceOf(ResolvedView view) => NamespaceOfSource(view.Source.Source);
+
+    private string? NamespaceOfSource(string source) =>
+        !string.IsNullOrEmpty(source) && _namespaceOfSource.TryGetValue(Normalize(source), out var ns) ? ns : null;
+
     public bool ContainsSource(string source) => !string.IsNullOrEmpty(source) && _namespaceOfSource.ContainsKey(Normalize(source));
 
     private static string Normalize(string path) => Path.GetFullPath(path);

@@ -241,6 +241,26 @@ public class ModelModulesBuildTests
         finally { Cleanup(root); }
     }
 
+    /// <summary>An Api target names each entity in the namespace of its module.</summary>
+    [Fact]
+    public void An_Api_target_names_each_entity_in_its_modules_namespace()
+    {
+        var root = NewRoot();
+        try
+        {
+            var (exit, stderr) = Build(root, extraTargets: """
+                , { "type": "Api", "projectPath": "../api", "namespace": "Layers.Server", "entitiesNamespace": "Layers.Host" }
+                """);
+            Assert.True(exit == 0, stderr);
+
+            var registration = Read(root, "api", "Api_gen", "ApiRegistration_gen.cs");
+            Assert.Contains("Layers.Core.AssetExt, Layers.Core.Asset>", registration);
+            Assert.Contains("Layers.Maint.MaintWorkOrderExt, Layers.Maint.MaintWorkOrder>", registration);
+            Assert.Contains("Layers.Maint.MaintWorkOrderExt, Layers.Maint.MaintWorkOrder>", Read(root, "api", "Api_gen", "Controllers_gen.cs"));
+        }
+        finally { Cleanup(root); }
+    }
+
     [Fact]
     public void Modules_on_another_target_is_a_configuration_error()
     {

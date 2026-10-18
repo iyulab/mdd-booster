@@ -25,7 +25,8 @@ public static class ODataControllerRenderer
         IReadOnlyList<ResolvedModel> models,
         string ns,
         string? entitiesNamespace = null,
-        IReadOnlyList<ResolvedView>? readViews = null)
+        IReadOnlyList<ResolvedView>? readViews = null,
+        IReadOnlyDictionary<string, string>? entityNamespaces = null)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentException.ThrowIfNullOrWhiteSpace(ns);
@@ -38,7 +39,7 @@ public static class ODataControllerRenderer
         // 파일의 네임스페이스는 `{ns}.Controllers` 이지만 판별 기준은 `ns` 다: entitiesNamespace 가
         // `ns` 와 같으면 엔티티는 «둘러싼» 네임스페이스에 있어 임포트 없이 찾아지고, 둘러싼
         // 네임스페이스는 임포트보다 먼저 해석되므로 그 경우에도 충돌이 성립하지 않는다.
-        var entityPrefix = EntityTypeRef.PrefixFor(ns, entitiesNamespace);
+        var names = new EntityNamespaces(entitiesNamespace, entityNamespaces);
         sb.Append("namespace ").Append(ns).AppendLine(".Controllers;");
         sb.AppendLine();
 
@@ -52,8 +53,8 @@ public static class ODataControllerRenderer
 
             sb.Append("public sealed partial class ").Append(setName).AppendLine("Controller");
             sb.Append("    : IyuODataController<")
-              .Append(entityPrefix).Append(entity).Append("Ext, ")
-              .Append(entityPrefix).Append(entity).AppendLine(">");
+              .Append(names.PrefixFor(ns, entity)).Append(entity).Append("Ext, ")
+              .Append(names.PrefixFor(ns, entity)).Append(entity).AppendLine(">");
             sb.AppendLine("{");
             sb.Append("    public ").Append(setName).AppendLine("Controller(IyuDbContext context)");
             sb.AppendLine("        : base(context) { }");
@@ -68,7 +69,7 @@ public static class ODataControllerRenderer
             var setName = Pluralizer.Pluralize(entity);
 
             sb.Append("public sealed partial class ").Append(setName).AppendLine("Controller");
-            sb.Append("    : IyuODataReadOnlyController<").Append(entityPrefix).Append(entity).AppendLine(">");
+            sb.Append("    : IyuODataReadOnlyController<").Append(names.PrefixFor(ns, entity)).Append(entity).AppendLine(">");
             sb.AppendLine("{");
             sb.Append("    public ").Append(setName).AppendLine("Controller(IyuDbContext context)");
             sb.AppendLine("        : base(context) { }");

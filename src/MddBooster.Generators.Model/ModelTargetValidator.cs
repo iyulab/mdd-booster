@@ -76,7 +76,7 @@ public static class ModelTargetValidator
         if (clashes.Count > 0)
         {
             throw new GeneratorRefusalException(GeneratorRefusalKind.Model,
-                "Model 타깃이 같은 네임스페이스에 같은 이름의 형을 둘 생성합니다 — 모델 · 뷰 · enum 이름이나 dbContextName 을 바꾸세요:\n  "
+                "Model 타깃이 다루는 형 둘이 같은 이름입니다(생성 형끼리는 한 폴더의 같은 파일, 참조 형과는 같은 테이블) — 모델 · 뷰 · enum 이름이나 dbContextName 을 바꾸세요:\n  "
                 + string.Join("\n  ", clashes));
         }
     }
