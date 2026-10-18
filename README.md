@@ -262,6 +262,32 @@ export * from './enum_labels_gen'
   참조된 구성을 이름으로 적용하므로, 어셈블리에 그 형이 없으면 빌드 오류가 된다.
 - 파일이 `sources` 와 `references` 에 함께 있거나 · 없거나 · `namespace` 가 비면 구성 오류(종료 코드 4).
 
+**패키징 레시피 — 원문이 DLL 과 같은 판으로 오게.** `mdd.json` 은 경로만 받고, NuGet 은 패키지를 판마다 다른 경로(전역 패키지 폴더)에 푼다.
+그래서 표준 패키지가 원문과 함께 **그 원문을 소비 프로젝트의 고정 경로로 복사하는 빌드 타깃**을 싣는다:
+
+```xml
+<!-- 표준 패키지(Acme.Core)의 프로젝트 -->
+<ItemGroup>
+  <None Include="model/core.m3l.md" Pack="true" PackagePath="model/" />
+  <None Include="build/Acme.Core.targets" Pack="true" PackagePath="build/" />
+</ItemGroup>
+```
+
+```xml
+<!-- build/Acme.Core.targets — 패키지를 참조한 프로젝트의 빌드가 가져온다 -->
+<Project>
+  <Target Name="AcmeCoreCopyM3l" BeforeTargets="BeforeBuild">
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)../model/core.m3l.md"
+          DestinationFolder="$(MSBuildProjectDirectory)/m3l/Acme.Core" SkipUnchangedFiles="true" />
+  </Target>
+</Project>
+```
+
+소비 리포는 그 패키지를 참조한 프로젝트를 한 번 빌드한 뒤 복사본을 가리킨다 — `"references": [{ "sources": ["../App.Entities/m3l/Acme.Core/core.m3l.md"], "namespace": "Acme.Core.Entities" }]`.
+패키지 판을 올리면 다음 빌드가 그 판의 원문으로 바꿔 쓴다 — 원문과 DLL 이 같은 복원 결과에서 온다. 복사본(`m3l/`)은 복원의 산출물이라 커밋하지
+않는 편이 맞다(그러면 `mdd build` 앞에 그 프로젝트의 `dotnet build` 가 선다). 패키지가 이 타깃을 싣지 않으면 소비 프로젝트가 같은 복사를 직접 할 수 있다 —
+`<PackageReference Include="Acme.Core" Version="…" GeneratePathProperty="true" />` 로 `$(PkgAcme_Core)` 를 얻어 `$(PkgAcme_Core)/model/core.m3l.md` 를 복사.
+
 #### `field_schema_gen.ts` — 소비 계약
 
 TypeScript 타깃은 타입·폼과 함께 **필드 스키마 맵**을 낸다. 산출물 목록에는 있었지만 **무엇을
