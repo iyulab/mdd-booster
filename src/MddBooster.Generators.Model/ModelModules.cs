@@ -4,8 +4,11 @@ using MddBooster.Core.Semantic;
 
 namespace MddBooster.Generators.Model;
 
-/// <summary>One module of a Model target: the owners (<c># Prefix:</c>) it holds, its project, its namespace.</summary>
-public sealed record ModelModule(IReadOnlyList<string> Owners, string ProjectPath, string Namespace);
+/// <summary>
+/// One module of a Model target: the owners (<c># Prefix:</c>) it holds, its project, its namespace — and, optionally,
+/// the name of the layer's data interface (<see cref="DataInterfaceRenderer"/>).
+/// </summary>
+public sealed record ModelModule(IReadOnlyList<string> Owners, string ProjectPath, string Namespace, string? DataInterface = null);
 
 /// <summary>
 /// Which module each model, enum and standalone view of a model set belongs to — by its owner (the declaring file's
@@ -51,12 +54,19 @@ public sealed class ModelModules
         if (modules.Count == 0) problems.Add("modules 가 비어 있습니다 — 모듈로 나누지 않으려면 키를 빼세요.");
 
         var moduleOfOwner = new Dictionary<string, int>(StringComparer.Ordinal);
+        var moduleOfInterface = new Dictionary<string, int>(StringComparer.Ordinal);
         for (var i = 0; i < modules.Count; i++)
         {
             var module = modules[i];
             if (string.IsNullOrWhiteSpace(module.ProjectPath)) problems.Add($"modules[{i}]: projectPath 가 없습니다.");
             if (string.IsNullOrWhiteSpace(module.Namespace)) problems.Add($"modules[{i}]: namespace 가 없습니다.");
             if (module.Owners.Count == 0) problems.Add($"modules[{i}]: owners 가 비어 있습니다.");
+            if (module.DataInterface is { } di)
+            {
+                if (!IsIdentifier(di)) problems.Add($"modules[{i}]: dataInterface '{di}' 는 C# 형 이름이 아닙니다.");
+                else if (!moduleOfInterface.TryAdd(di, i))
+                    problems.Add($"modules[{moduleOfInterface[di]}] 와 modules[{i}] 가 같은 dataInterface '{di}' 를 냅니다.");
+            }
             foreach (var owner in module.Owners)
             {
                 if (!moduleOfOwner.TryAdd(owner, i))
@@ -81,6 +91,9 @@ public sealed class ModelModules
     }
 
     private static string Label(string owner) => owner.Length == 0 ? "\"\"(접두어 없는 파일)" : $"'{owner}'";
+
+    private static bool IsIdentifier(string name)
+        => name.Length > 0 && (char.IsLetter(name[0]) || name[0] == '_') && name.All(c => char.IsLetterOrDigit(c) || c == '_');
 }
 
 /// <summary>

@@ -32,7 +32,30 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
         // The referenced declarations are in no module — they are the layer below every module.
         var assigned = ModelModules.Assign(modules, context.GeneratedModels, context.GeneratedEnums, context.GeneratedReadViews);
         ModuleDirection.Validate(assigned, context.References, context.Models, context.Enums, context.ReadViews);
+        ValidateDataInterfaceNames(assigned, context);
         return assigned;
+    }
+
+    /// <summary>A data interface's name must not be one a generated type already has — the two would be one name twice.</summary>
+    private void ValidateDataInterfaceNames(ModelModules modules, GeneratorContext context)
+    {
+        var taken = new HashSet<string>(StringComparer.Ordinal) { _options.DbContextName };
+        foreach (var model in context.Models)
+        {
+            var name = NameCasing.ToPascalCase(model.Name);
+            taken.UnionWith([name, "I" + name, name + "Ext"]);
+        }
+        foreach (var view in context.ReadViews) taken.Add(NameCasing.ToPascalCase(view.Name));
+        foreach (var e in context.Enums) taken.Add(e.Name);
+        taken.UnionWith(EntityConfigurationRenderer.ConfiguredTypes(context.Models, context.ReadViews).Select(EntityConfiguration.ConfigurationClassName));
+
+        var clashes = modules.Modules
+            .Select((m, i) => (m.DataInterface, i))
+            .Where(x => x.DataInterface is { } n && taken.Contains(n))
+            .Select(x => $"modules[{x.i}]: dataInterface '{x.DataInterface}' 는 생성되는 형의 이름입니다 — 다른 이름을 고르세요.")
+            .ToList();
+        if (clashes.Count > 0)
+            throw new GeneratorRefusalException(GeneratorRefusalKind.Configuration, "Model 타깃의 modules:\n  " + string.Join("\n  ", clashes));
     }
 
     public void Generate(GeneratorContext context)
@@ -111,6 +134,35 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
                 at.Place(ViewEntityRenderer.Render(view, _options.Namespace, viewEnumNames, _options.PostgresNaming)));
         }
 
+        // The layers' data interfaces, lowest first. A declared one holds the sets of its own module and of the modules
+        // since the declared one beneath it (an undeclared module's types belong to the next interface up); the lowest
+        // also holds the referenced types' — the layer below every module — and the context's own surface. Each extends
+        // the one beneath, and the context implements the topmost, so a layer's code never needs the context's type.
+        string? topInterface = null;
+        if (modules is not null)
+        {
+            var referencedModels = context.Models.Where(context.References.Contains).ToList();
+            var referencedViews = context.ReadViews.Where(context.References.Contains).ToList();
+            var from = 0;
+            for (var i = 0; i < modules.Modules.Count; i++)
+            {
+                if (modules.Modules[i].DataInterface is not { } name) continue;
+                var layer = Enumerable.Range(from, i - from + 1).ToHashSet();
+                var layerModels = context.GeneratedModels.Where(m => layer.Contains(modules.IndexOf(m)));
+                var layerViews = context.GeneratedReadViews.Where(v => layer.Contains(modules.IndexOf(v)));
+                if (topInterface is null)
+                {
+                    layerModels = referencedModels.Concat(layerModels);
+                    layerViews = referencedViews.Concat(layerViews);
+                }
+                var sets = DbContextRenderer.Sets(layerModels, layerViews).ToList();
+                var source = DataInterfaceRenderer.Render(name, _options.Namespace, sets, topInterface);
+                File.WriteAllText(Path.Combine(placements[i].EntityDir, $"{name}.cs"), placements[i].Place(source));
+                topInterface = name;
+                from = i + 1;
+            }
+        }
+
         var mapping = ModelMappingRenderer.Render(
             context.Models.ToList(),
             _options.DbContextName,
@@ -120,7 +172,8 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
             oneToOne,
             manyToOne,
             context.ReadViews,
-            collections);
+            collections,
+            topInterface);
         // A type's configuration sits beside the type: whichever project compiles the entities compiles their mapping.
         // A referenced type's configuration is in the referenced assembly — the context applies it, nothing writes it.
         var moduleOfType = new Dictionary<string, int?>(StringComparer.Ordinal);

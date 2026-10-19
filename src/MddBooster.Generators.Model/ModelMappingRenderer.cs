@@ -32,9 +32,10 @@ public static class ModelMappingRenderer
         IReadOnlyList<OneToOneRelationships.Relationship>? oneToOne = null,
         IReadOnlyList<ManyToOneNavigations.Navigation>? manyToOne = null,
         IReadOnlyList<ResolvedView>? readViews = null,
-        IReadOnlyList<ReverseCollections.Collection>? collections = null)
+        IReadOnlyList<ReverseCollections.Collection>? collections = null,
+        string? contextImplements = null)
         => new(
-            DbContextRenderer.Render(models, contextName, ns, readViews, sqlServer: !postgresNaming),
+            DbContextRenderer.Render(models, contextName, ns, readViews, sqlServer: !postgresNaming, implements: contextImplements),
             EntityConfigurationRenderer.Render(
                 models, ns, customExtViewModels, postgresNaming, oneToOne, manyToOne, readViews, collections));
 }

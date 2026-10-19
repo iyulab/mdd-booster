@@ -107,6 +107,14 @@ public sealed class MddJsonModule
     [JsonPropertyName("namespace")]
     public string Namespace { get; set; } = "";
 
+    /// <summary>
+    /// Optional: the name of this layer's data interface, generated into the module — the sets of the layer's types
+    /// (and of any module beneath without one), extending the interface of the layer below; the generated context
+    /// implements the topmost. Code in a layer then receives the context as that interface.
+    /// </summary>
+    [JsonPropertyName("dataInterface")]
+    public string? DataInterface { get; set; }
+
     /// <summary>Keys a module does not define — reported like <see cref="MddJsonConfig.UnknownKeys"/>.</summary>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? UnknownKeys { get; set; }

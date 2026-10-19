@@ -18,6 +18,15 @@
 
 ## [Unreleased]
 
+### 층마다 데이터 인터페이스 — `modules[].dataInterface`
+
+- **Model 타깃의 모듈 행에 `dataInterface`(선택)** — 그 층의 데이터 인터페이스를 그 모듈에 낸다: 그 층(과 아래 층 중 인터페이스를 적지 않은
+  모듈)의 `DbSet` 속성 · 바로 아래 인터페이스를 이음 · 가장 아래 것은 `references` 형의 셋과 컨텍스트 면(`Set<T>` · `Database` · `ChangeTracker` ·
+  `Entry` · `Add`/`Remove`(`Range`) · `SaveChanges(Async)` 두 겹 — `DbContext` 서명 그대로). 생성 컨텍스트가 맨 위 것을 구현한다
+  (`: IyuDbContext, IMaintData`). 위층 서버 코드가 컨텍스트를 자기 층의 인터페이스로 받아, 컨텍스트 프로젝트를 참조하지 않고 다른 제품 층의
+  형을 컴파일 시점에 보지 않는다. 인스턴스는 컨텍스트 그 자신이다(전달 없음).
+- 형 이름이 아니거나 · 두 모듈이 같은 이름이거나 · 생성되는 형과 같은 이름이면 구성 오류(종료 코드 4). 적지 않으면 생성물은 바이트 그대로다.
+
 ### 이름에 접두를 두지 않는 소유자 — `owners.<p>.namePrefix: false`
 
 - **`mdd.json` 최상위 `owners`** — 소유자(`# Prefix:`)마다 이 빌드가 정하는 성질. 첫 성질 `namePrefix`(기본 `true`): `false` 이면 그 소유자는

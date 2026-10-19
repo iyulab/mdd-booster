@@ -307,4 +307,98 @@ public class ModelModulesBuildTests
         }
         finally { Cleanup(root); }
     }
+
+    private const string DataInterfaces = """
+    "modules": [
+      { "owners": [""], "projectPath": "../core", "namespace": "Layers.Core", "dataInterface": "ICoreData" },
+      { "owners": ["maint"], "projectPath": "../maint", "namespace": "Layers.Maint", "dataInterface": "IMaintData" } ]
+""";
+
+    /// <summary>
+    /// Each layer's data interface sits in its module with that layer's sets, extends the one beneath, and the lowest
+    /// carries the context surface; the context implements the topmost.
+    /// </summary>
+    [Fact]
+    public void Each_layer_gets_a_data_interface_the_context_implements()
+    {
+        var root = NewRoot();
+        try
+        {
+            var (exit, stderr) = Build(root, DataInterfaces);
+            Assert.True(exit == 0, stderr);
+
+            var core = Read(root, "core", "Entity_gen", "ICoreData.cs");
+            Assert.Contains("namespace Layers.Core;", core);
+            Assert.Contains("public interface ICoreData\n", core.ReplaceLineEndings("\n"));
+            Assert.Contains("DbSet<TEntity> Set<TEntity>() where TEntity : class;", core);
+            Assert.Contains("DatabaseFacade Database { get; }", core);
+            Assert.Contains("DbSet<Asset> Assets { get; }", core);
+            Assert.Contains("DbSet<AssetExt> AssetsExt { get; }", core);
+            Assert.DoesNotContain("MaintWorkOrder", core);
+
+            var maint = Read(root, "maint", "Entity_gen", "IMaintData.cs");
+            Assert.Contains("namespace Layers.Maint;", maint);
+            Assert.Contains("using Layers.Core;", maint);
+            Assert.Contains("public interface IMaintData : ICoreData", maint);
+            Assert.Contains("DbSet<MaintWorkOrder> MaintWorkOrders { get; }", maint);
+            Assert.Contains("DbSet<MaintAssetProfileExt> MaintAssetProfilesExt { get; }", maint);
+            Assert.DoesNotContain("DbSet<Asset> ", maint);
+            Assert.DoesNotContain("SaveChanges", maint); // the surface is the lowest interface's, inherited
+
+            Assert.Contains("public partial class LayersDbContext : IyuDbContext, IMaintData",
+                Read(root, "host", "DbContext_gen", "LayersDbContext.cs"));
+        }
+        finally { Cleanup(root); }
+    }
+
+    /// <summary>A module without one belongs to the next interface up — here the only one holds both layers' sets.</summary>
+    [Fact]
+    public void A_module_without_an_interface_is_part_of_the_next_one_up()
+    {
+        var root = NewRoot();
+        try
+        {
+            var (exit, stderr) = Build(root, DataInterfaces.Replace(", \"dataInterface\": \"ICoreData\"", ""));
+            Assert.True(exit == 0, stderr);
+
+            Assert.False(File.Exists(Path.Combine(root, "core", "Entity_gen", "ICoreData.cs")));
+            var maint = Read(root, "maint", "Entity_gen", "IMaintData.cs");
+            Assert.Contains("public interface IMaintData\n", maint.ReplaceLineEndings("\n"));
+            Assert.Contains("SaveChanges", maint);
+            Assert.Contains("DbSet<Asset> Assets { get; }", maint);
+            Assert.Contains("DbSet<MaintWorkOrder> MaintWorkOrders { get; }", maint);
+        }
+        finally { Cleanup(root); }
+    }
+
+    /// <summary>Without any, the context is as before.</summary>
+    [Fact]
+    public void Without_data_interfaces_the_context_implements_nothing_more()
+    {
+        var root = NewRoot();
+        try
+        {
+            var (exit, stderr) = Build(root);
+            Assert.True(exit == 0, stderr);
+            Assert.Contains("public partial class LayersDbContext : IyuDbContext\n",
+                Read(root, "host", "DbContext_gen", "LayersDbContext.cs").ReplaceLineEndings("\n"));
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Theory]
+    [InlineData("\"IMaintData\"", "\"ICoreData\"", "같은 dataInterface 'ICoreData'")]
+    [InlineData("\"IMaintData\"", "\"I-Maint\"", "C# 형 이름이 아닙니다")]
+    [InlineData("\"IMaintData\"", "\"IAsset\"", "생성되는 형의 이름")]
+    public void A_data_interface_name_that_cannot_stand_is_a_configuration_error(string from, string to, string message)
+    {
+        var root = NewRoot();
+        try
+        {
+            var (exit, stderr) = Build(root, DataInterfaces.Replace(from, to));
+            Assert.Equal(4, exit);
+            Assert.Contains(message, stderr);
+        }
+        finally { Cleanup(root); }
+    }
 }

@@ -238,6 +238,37 @@ export * from './enum_labels_gen'
 - 모듈 분할은 부분 집합이 아니다 — 한 빌드가 여전히 모델 전체를 보고 FK · 상속을 검증한다(Model 타깃에 `includeOwners` 를
   걸 수 없는 이유가 그대로다).
 
+**층의 코드가 컨텍스트를 무엇으로 받는가 — `dataInterface`.** 컨텍스트는 구체 형 하나라, 위층 코드가 그것을 받으면 컨텍스트
+프로젝트(모든 모듈을 참조)를 참조하게 되고 다른 제품 층의 형까지 컴파일 시점에 본다. 모듈 행에 인터페이스 이름을 적으면 그 층의
+**데이터 인터페이스**가 그 모듈에 생긴다:
+
+```json
+"modules": [
+  { "owners": [""],      "projectPath": "../Acme.Core.Entities",  "namespace": "Acme.Core.Entities",  "dataInterface": "ICoreData" },
+  { "owners": ["maint"], "projectPath": "../Acme.Maint.Entities", "namespace": "Acme.Maint.Entities", "dataInterface": "IMaintData" } ]
+```
+
+```csharp
+public interface ICoreData                       // Acme.Core.Entities — 가장 아래 것이 컨텍스트 면을 싣는다
+{
+    DbSet<TEntity> Set<TEntity>() where TEntity : class;
+    DatabaseFacade Database { get; }
+    // ChangeTracker · Entry · Add/Remove(Range) · SaveChanges(Async)
+    DbSet<Asset> Assets { get; }
+    DbSet<AssetExt> AssetsExt { get; }
+}
+public interface IMaintData : ICoreData { DbSet<MaintWorkOrder> MaintWorkOrders { get; } /* … */ }
+public partial class AcmeDbContext : IyuDbContext, IMaintData { … }   // 생성 컨텍스트가 맨 위 것을 구현한다
+```
+
+- 인터페이스는 **그 층(과 아래 층 중 인터페이스를 적지 않은 모듈)의 셋**을 싣고 바로 아래 인터페이스를 잇는다. 가장 아래 것이
+  `references` 의 형의 셋과 컨텍스트 면(데이터 서비스가 쓰는 `DbContext` 멤버 — 그대로의 서명)을 싣는다. 모든 멤버가 컨텍스트에
+  이미 같은 서명으로 있어 따로 구현되는 것이 없다 — 층의 코드가 받는 것은 **컨텍스트 그 인스턴스**다(변경 추적 · 트랜잭션 하나).
+- 호스트는 같은 scoped 인스턴스를 각 인터페이스로 등록한다 — `services.AddScoped<IMaintData>(sp => sp.GetRequiredService<AcmeDbContext>())`.
+  그러면 위층 서버 코드는 자기 인터페이스만 받고 컨텍스트 프로젝트를 참조하지 않는다.
+- 선택이다 — 적지 않으면 아무것도 생기지 않는다. 형 이름이 아니거나 · 두 모듈이 같은 이름이거나 · 생성되는 형(엔티티 · 구성 ·
+  enum · 컨텍스트)과 같은 이름이면 구성 오류(종료 코드 4).
+
 #### 다른 빌드의 게시 모델 위에 — `references`
 
 게시된 패키지(그 엔티티 어셈블리)의 모델 위에 자기 모델을 짓는 리포는, 그 모델의 원문을 **참조**로 읽는다 — 검증에 쓰고 생성하지 않는다:

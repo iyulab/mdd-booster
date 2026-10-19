@@ -212,6 +212,11 @@
               "namespace": {
                 "type": "string",
                 "description": "C# namespace of the module's types."
+              },
+              "dataInterface": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                "description": "Optional: the name of this layer's data interface, generated into the module's Entity_gen/ — the DbSet properties of the layer's types (and of any module beneath without one), extending the interface of the layer below; the lowest one also declares the context members a data service uses (Set<T>, Database, ChangeTracker, Entry, Add/Remove(Range), SaveChanges(Async)). The generated context implements the topmost, so a layer's code receives the context as its own interface."
               }
             }
           }
