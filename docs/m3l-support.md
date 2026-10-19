@@ -98,6 +98,12 @@ rounds), and on SQL Server the attribute is the only place the bound holds. The 
 gives a list no `maxLength`. The generated form draws no control for an array field: it is left out of the form
 component, its override keys and its form-state helpers.
 
+A list of an enum's members (`states: doc_state[]`) is generated too: `List<DocState>` on the entity, stored by
+each member's wire name the way a single enum is (the runtime's conversion — `Iyu.*` from the release after 0.43.0,
+see its README), `DocState[]` in TypeScript. With `emitEnumCheckConstraints`, PostgreSQL holds each element to the
+members in the column's CHECK (`array_remove(col, NULL)::text[] <@ ARRAY[…]::text[]`, joined to the NULL-element
+part by `AND`); SQL Server keeps the list as JSON text and holds only the single enum fields to their members.
+
 Still refused, with `MDD048` naming the combination: a semantic element type with an implied length
 (`email[]`, `phone[]`, `url[]` — write `string(n)[]`), an enum element, `binary`, `json`, `rowversion`, `byte`, `time` and `datetime`
 elements, and an array that is derived (lookup, rollup, computed), declares a default, or carries

@@ -48,10 +48,11 @@ public static class M3lPrimitives
     /// <remarks>
     /// <para>
     /// The set is the elements both dialects can store with the same meaning: SQL Server keeps the list as JSON text, where
-    /// nothing below the column can be constrained, and PostgreSQL keeps a native array of the element's own type. An
-    /// element whose value carries a bound — a length (<c>string(n)</c>, <c>email</c>), an enum's members — would be
-    /// enforced by one dialect and not the other, and a length attribute on the property would bound the list's count, not
-    /// its elements. Those stay refused until the element's validation has a home.
+    /// nothing below the column can be constrained, and PostgreSQL keeps a native array of the element's own type. A bound
+    /// on the element is kept per element where a single value keeps it: <c>string(n)</c> and <c>decimal(p,s)</c> by the
+    /// runtime's element attributes, an enum's members (accepted beside this set — an enum is no primitive) by the
+    /// runtime's wire-name conversion. The semantic types with an implicit length (<c>email</c>, <c>phone</c>,
+    /// <c>url</c>) stay refused.
     /// </para>
     /// <para>
     /// <c>byte</c>, <c>time</c> and <c>datetime</c> are left out on purpose rather than by omission: each maps to a

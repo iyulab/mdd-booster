@@ -720,8 +720,7 @@ public sealed class SemanticAnalyzer
 
         if (_enumNames.Contains(type))
         {
-            parts.Add($"원소가 enum `{type}` 이다 — 목록 칸에서는 원소가 그 멤버인지 데이터베이스가 지킬 수 없다. " +
-                      "`string[]` 으로 두거나 별도 모델과 `@reference` 로 나눈다");
+            // A list of enum members is generated: each element is stored by its wire name, as a single enum is.
         }
         else if (M3lPrimitives.ImplicitMaxLengthOf(type) is not null)
         {

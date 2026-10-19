@@ -18,6 +18,16 @@
 
 ## [Unreleased]
 
+### enum 원소 목록 — `states: doc_state[]` (런타임 `Iyu.*` 0.43.0 다음 판과 짝)
+
+- **enum 멤버의 목록을 생성한다** — 종전 `MDD048` 거절. 엔티티 `List<DocState>`(`doc_state?[]?` → `List<DocState?>?`) ·
+  SQL Server `NVARCHAR(MAX)` JSON + `ISJSON` · PostgreSQL `varchar(n)[]` · TS `DocState[]`. 원소는 단일 enum 처럼 wire 이름으로
+  저장 · 기술된다 — 그 변환은 런타임(`IyuDbContext` · `$metadata`)이 걸고, 0.43.0 런타임에서는 목록이 CLR 이름으로 저장되고
+  `/$data` 가 wire 이름을 거절하므로 **다음 `Iyu.*` 판과 함께** 올린다.
+- `emitEnumCheckConstraints` 면 PostgreSQL 이 원소마다 멤버 CHECK(`array_remove(col, NULL)::text[] <@ ARRAY[…]::text[]` — 원소 NULL
+  금지와 한 제약에 `AND`). SQL Server 는 JSON 텍스트라 단일 enum 칸만 CHECK 를 받는다 — 🔇 종전에는 옵트인이 목록 칸에도 스칼라
+  `IN` CHECK 를 낼 뻔한 자리(목록이 거절돼 도달하지 않았다)를 목록에서 제외했다.
+
 ### 층마다 데이터 인터페이스 — `modules[].dataInterface`
 
 - **Model 타깃의 모듈 행에 `dataInterface`(선택)** — 그 층의 데이터 인터페이스를 그 모듈에 낸다: 그 층(과 아래 층 중 인터페이스를 적지 않은

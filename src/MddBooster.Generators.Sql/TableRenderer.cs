@@ -101,7 +101,9 @@ public static class TableRenderer
         // DB 레벨 강제를 켠다. NULL은 IN 술어에서 UNKNOWN → CHECK 통과(nullable enum 안전).
         if (emitEnumCheckConstraints && enumLookup is not null)
         {
-            foreach (var field in storedFields)
+            // A list of enum members is JSON text here, and a CHECK cannot look inside it — the wire-name conversion at the
+            // runtime is that column's guard (the array CHECK below holds it to JSON).
+            foreach (var field in storedFields.Where(f => !f.Array))
             {
                 if (field.Type is null || !enumLookup.TryGetValue(field.Type, out var enumNode)) continue;
                 if (enumNode.Values.Count == 0) continue;

@@ -95,14 +95,6 @@ public class ArrayFieldGenerationTests
     }
 
     [Fact]
-    public void An_array_of_enum_members_is_refused()
-    {
-        var diagnostics = Analyze("- states: doc_state[]\n", "## doc_state ::enum\n- draft: \"Draft\"\n- done: \"Done\"\n\n");
-        var refusal = Assert.Single(diagnostics, d => d.Code == "MDD048");
-        Assert.Contains("enum `doc_state`", refusal.Message);
-    }
-
-    [Fact]
     public void An_array_a_section_index_names_is_refused()
     {
         var diagnostics = Analyze("- tags: string[]\n\n### Indexes\n- @index(tags)\n");

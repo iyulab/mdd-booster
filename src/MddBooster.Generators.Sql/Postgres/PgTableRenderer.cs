@@ -135,7 +135,7 @@ public static class PgTableRenderer
         // enum CHECK opt-in — 리터럴은 ANSI 표기('value'), T-SQL의 N'..'와 저장값은 동일
         if (emitEnumCheckConstraints && enumLookup is not null)
         {
-            foreach (var field in storedFields)
+            foreach (var field in storedFields.Where(f => !f.Array))
             {
                 if (field.Type is null || !enumLookup.TryGetValue(field.Type, out var enumNode)) continue;
                 if (enumNode.Values.Count == 0) continue;
@@ -150,11 +150,21 @@ public static class PgTableRenderer
         // PostgreSQL array does not keep is the element's nullability — every array admits NULL elements — so an
         // array declared with non-null elements (`string[]`, not `string?[]`) says so in a CHECK. array_position finds
         // a NULL element (it compares IS NOT DISTINCT FROM); a NULL column passes, its nullability is the column's.
-        foreach (var field in storedFields.Where(f => f.Array && !f.ArrayItemNullable))
+        // A list of enum members, under the same opt-in as a single enum, also holds each non-null element to the
+        // members: array_remove drops the NULLs (their admission is the nullability part's), <@ is containment. Both parts
+        // share the column's one CHECK name, so they are one constraint.
+        foreach (var field in storedFields.Where(f => f.Array))
         {
+            var parts = new List<string>();
+            if (!field.ArrayItemNullable)
+                parts.Add($"array_position({field.Name}, NULL) IS NULL");
+            if (emitEnumCheckConstraints && enumLookup is not null && field.Type is not null
+                && enumLookup.TryGetValue(field.Type, out var enumNode) && enumNode.Values.Count > 0)
+                parts.Add($"array_remove({field.Name}, NULL)::text[] <@ ARRAY[{AnsiCheckValues(enumNode)}]::text[]");
+            if (parts.Count == 0) continue;
             constraints.Add((
                 GeneratedObjectNames.For(true, GeneratedObjectNames.Kind.Check, tableName, field.Name),
-                $"CHECK (array_position({field.Name}, NULL) IS NULL)"));
+                $"CHECK ({string.Join(" AND ", parts)})"));
         }
 
         // 제약명 게이트 — 테이블명·컬럼명이 각각 통과해도 조합(fk_{t}_{c})은 63바이트를
