@@ -248,6 +248,94 @@ public class StandaloneViewBuildTests
         finally { Cleanup(root); }
     }
 
+    private const string LeftJoinModel = """
+        # Namespace: test
+
+        ## Region
+        - id: identifier @pk @generated
+        - tier: string(20) @not_null
+
+        ## Client
+        - id: identifier @pk @generated
+        - name: string(100) @not_null
+        - region_id: identifier? @reference(Region)
+
+        ## Purchase
+        - id: identifier @pk @generated
+        - client_id: identifier? @reference(Client)
+        - amount: decimal(12,2) @not_null
+
+        ## PurchaseList ::view
+        ### Source
+        - from: Purchase
+        - left_join: Client on Purchase.client_id = Client.id
+        - left_join: Region on Client.region_id = Region.id
+
+        - amount: decimal(12,2) @from(Purchase.amount)
+        - client_name: string(100)? @from(Client.name)
+        - tier: string(20)? @from(Region.tier)
+
+        ## ClientPurchases ::view
+        ### Source
+        - from: Purchase
+        - join: Client on Purchase.client_id = Client.id
+
+        - amount: decimal(12,2) @from(Purchase.amount)
+        - client_name: string(100) @from(Client.name)
+        """;
+
+    [Fact]
+    public void A_left_join_renders_as_LEFT_JOIN_and_a_join_as_INNER_JOIN_on_SQL_Server()
+    {
+        var mddDir = Scaffold(LeftJoinModel, TsqlTarget, out var root);
+        try
+        {
+            Assert.Equal(0, new BuildCommand().Run(mddDir));
+            var views = Path.Combine(root, "db", "dbo", "Views_gen");
+            var list = File.ReadAllText(Path.Combine(views, "PurchaseList.sql"));
+            Assert.Contains("LEFT JOIN [dbo].[Client] AS [Client] ON [Purchase].[ClientId] = [Client].[Id]", list);
+            Assert.Contains("LEFT JOIN [dbo].[Region] AS [Region] ON [Client].[RegionId] = [Region].[Id]", list);
+            Assert.DoesNotContain("INNER JOIN", list);
+            Assert.Contains(
+                "INNER JOIN [dbo].[Client] AS [Client] ON [Purchase].[ClientId] = [Client].[Id]",
+                File.ReadAllText(Path.Combine(views, "ClientPurchases.sql")));
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    public void A_left_join_renders_as_LEFT_JOIN_and_a_join_as_INNER_JOIN_on_PostgreSQL()
+    {
+        var mddDir = Scaffold(LeftJoinModel, PgTarget, out var root);
+        try
+        {
+            Assert.Equal(0, new BuildCommand().Run(mddDir));
+            var views = Path.Combine(root, "db", "views_gen");
+            var list = File.ReadAllText(Path.Combine(views, "purchase_list.sql"));
+            Assert.Contains("LEFT JOIN public.client AS client ON purchase.client_id = client.id", list);
+            Assert.Contains("LEFT JOIN public.region AS region ON client.region_id = region.id", list);
+            Assert.DoesNotContain("INNER JOIN", list);
+            Assert.Contains(
+                "INNER JOIN public.client AS client ON purchase.client_id = client.id",
+                File.ReadAllText(Path.Combine(views, "client_purchases.sql")));
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    public void A_left_joined_column_declared_not_null_stops_the_build()
+    {
+        var model = LeftJoinModel.Replace("- client_name: string(100)? @from(Client.name)", "- client_name: string(100) @from(Client.name)");
+        var mddDir = Scaffold(model, TsqlTarget, out var root);
+        using var stderr = new ConsoleErrorCapture(this);
+        try
+        {
+            Assert.NotEqual(0, new BuildCommand().Run(mddDir));
+            Assert.Contains("M3L-E036", stderr.Text);
+        }
+        finally { Cleanup(root); }
+    }
+
     [Fact]
     public void Without_a_Sql_target_the_build_says_the_views_are_not_generated()
     {

@@ -25,8 +25,21 @@ public sealed record ViewColumnRef(ViewRelation Relation, string Column);
 /// <summary>One <c>Left = Right</c> term of a join condition.</summary>
 public sealed record ViewJoinTerm(ViewColumnRef Left, ViewColumnRef Right);
 
+/// <summary>How a view source joins a relation (M3L §4.7.1).</summary>
+public enum ViewJoinKind
+{
+    /// <summary><c>join:</c> — only the rows the condition matches.</summary>
+    Inner,
+    /// <summary><c>left_join:</c> — every row of what came before; the joined relation's columns are null where nothing matches.</summary>
+    Left,
+}
+
 /// <summary><c>join: Target on A.x = B.y [AND …]</c>, the condition read as structure rather than as an expression.</summary>
-public sealed record ViewJoin(ViewRelation Target, IReadOnlyList<ViewJoinTerm> On);
+public sealed record ViewJoin(ViewRelation Target, IReadOnlyList<ViewJoinTerm> On, ViewJoinKind Kind)
+{
+    /// <summary>The SQL join keyword — the same in both dialects.</summary>
+    public string Keyword => Kind == ViewJoinKind.Left ? "LEFT JOIN" : "INNER JOIN";
+}
 
 /// <summary>An output column of a view, by where its value comes from.</summary>
 public abstract record ViewColumn(FieldNode Field)
@@ -186,8 +199,20 @@ public static class ViewResolver
                     ok = false;
                     continue;
                 }
+                ViewJoinKind? kind = join.Kind switch
+                {
+                    "inner" => ViewJoinKind.Inner,
+                    "left" => ViewJoinKind.Left,
+                    _ => null,
+                };
+                if (kind is null)
+                {
+                    diagnostics.Add(Unsupported(view, $"'{target.Name}' 의 조인 종류 '{join.Kind}' 를 알지 못한다"));
+                    ok = false;
+                    continue;
+                }
                 var terms = JoinTerms(join, view, relations, ref ok);
-                if (terms is not null) joins.Add(new ViewJoin(target, terms));
+                if (terms is not null) joins.Add(new ViewJoin(target, terms, kind.Value));
             }
             if (!ok) return null;
 

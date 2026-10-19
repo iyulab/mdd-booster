@@ -118,7 +118,7 @@ public static class PgStandaloneViewRenderer
         sb.Append("FROM ").AppendLine(Source(view.From));
         foreach (var join in view.Joins)
         {
-            sb.Append("INNER JOIN ").Append(Source(join.Target)).Append(" ON ")
+            sb.Append(join.Keyword).Append(' ').Append(Source(join.Target)).Append(" ON ")
               .AppendLine(string.Join(" AND ", join.On.Select(t => $"{Column(t.Left)} = {Column(t.Right)}")));
         }
         if (view.WhereFor(SqlDialect.PostgreSql) is { } where)

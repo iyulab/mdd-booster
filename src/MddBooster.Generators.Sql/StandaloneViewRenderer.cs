@@ -11,7 +11,7 @@ namespace MddBooster.Generators.Sql;
 /// <remarks>
 /// <para>
 /// Each relation is aliased by its own name (<c>[Customer]</c>), so a <c>Relation.field</c> in the model
-/// reads the same in the SQL. Joins are <c>INNER JOIN</c>s on the resolved terms. <c>@rollup</c> is the
+/// reads the same in the SQL. A <c>join:</c> is an <c>INNER JOIN</c> and a <c>left_join:</c> a <c>LEFT JOIN</c>, on the resolved terms. <c>@rollup</c> is the
 /// FullView's correlated subquery, correlated on the <c>from</c> model's key.
 /// </para>
 /// <para>
@@ -72,7 +72,7 @@ public static class StandaloneViewRenderer
         body.Append(indent).Append("FROM ").AppendLine(Source(view, view.From, schema, derivedFieldsByModel));
         foreach (var join in view.Joins)
         {
-            body.Append(indent).Append("INNER JOIN ").Append(Source(view, join.Target, schema, derivedFieldsByModel))
+            body.Append(indent).Append(join.Keyword).Append(' ').Append(Source(view, join.Target, schema, derivedFieldsByModel))
                 .Append(" ON ")
                 .AppendLine(string.Join(" AND ", join.On.Select(t => $"{Column(t.Left)} = {Column(t.Right)}")));
         }

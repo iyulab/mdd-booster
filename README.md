@@ -858,7 +858,7 @@ PostgreSQL `views_gen/<snake_name>.sql`. 빌드가 먼저 뷰를 모델에 대�
 
 | 원소 | 생성 |
 |---|---|
-| `from` · `join` | 모델 또는 다른 standalone 뷰(중첩). 관계마다 그 이름이 별칭이 된다. join 은 `INNER JOIN` — 조건을 **구조로** 읽는다(`Model.field = Model.field` 항을 `AND` 로 이은 것만, 그 밖은 `MDD030`) |
+| `from` · `join` · `left_join` | 모델 또는 다른 standalone 뷰(중첩). 관계마다 그 이름이 별칭이 된다. `join` 은 `INNER JOIN`, `left_join` 은 `LEFT JOIN`(그 관계의 `@from` 칸은 `?` — `M3L-E036`) — 조건을 **구조로** 읽는다(`Model.field = Model.field` 항을 `AND` 로 이은 것만, 그 밖은 `MDD030`) |
 | 읽는 모델 | 그 모델의 **읽기 표면**과 같은 행 — 파생 열(lookup·rollup·computed)을 읽으면 FullView, 소프트 삭제 모델이면 UdView, 아니면 테이블 |
 | `@from(Relation.field)` | 그 관계의 열 |
 | `@rollup(Target.fk, …)` | FullView 와 같은 상관 서브쿼리 — `from` 모델의 키에 상관 |
