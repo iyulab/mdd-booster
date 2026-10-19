@@ -112,6 +112,8 @@ public sealed class M3lLoader
                 diagnostics: messages);
         }
 
+        // Names written qualified become the short names this generator names its outputs by (MDD053 keeps them unique).
+        ShortNames.Apply(ast);
         return ast;
     }
 }
