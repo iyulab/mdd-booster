@@ -37,9 +37,12 @@ public static class AspectNaming
         return (name, !string.Equals(name, model.Name, StringComparison.Ordinal));
     }
 
-    /// <summary>파일이 선언한 <c># Prefix:</c> 를 PascalCase 로. 없으면 빈 문자열.</summary>
+    /// <summary>
+    /// 모델명이 지니는 접두(<see cref="ResolvedModel.NamePrefix"/> — 보통 파일의 <c># Prefix:</c>, 이름에 접두를 두지 않는
+    /// 층이면 빈 문자열)를 PascalCase 로. 없으면 빈 문자열.
+    /// </summary>
     public static string PascalPrefix(ResolvedModel model)
-        => model.Source.Prefix is { Length: > 0 } p ? NameCasing.ToPascalCase(p) : "";
+        => model.NamePrefix is { Length: > 0 } p ? NameCasing.ToPascalCase(p) : "";
 
     /// <summary>
     /// <c>::aspect(Base)</c> 가 만드는 키 필드의 이름 — <c>&lt;base&gt;_id</c>.

@@ -174,7 +174,27 @@ public sealed class BuildCommand
 
         var allUnconsumed = new List<string>(AstAccounting.ListUnconsumed(mergedAst));
 
-        var allModels = new List<ResolvedModel>(new InterfaceResolver(mergedAst).ResolveAll());
+        // owners — 소유자마다 이 빌드가 정한 성질. 모델에 없는 소유자를 적은 것은 설정 오류다(modules 의 소유자와 같다):
+        // 오타 난 소유자를 조용히 무시하면 그 성질이 걸리지 않은 채 빌드가 지나간다.
+        var declaredOwners = mergedAst.Models.Select(m => m.Prefix)
+            .Concat(mergedAst.Enums.Select(e => e.Prefix))
+            .Concat(mergedAst.Interfaces.Select(i => i.Prefix))
+            .Concat(mergedAst.Views.Select(v => v.Prefix))
+            .OfType<string>().Where(p => p.Length > 0)
+            .ToHashSet(StringComparer.Ordinal);
+        var unknownOwners = (cfg.Owners ?? []).Keys.Where(o => !declaredOwners.Contains(o)).ToList();
+        if (unknownOwners.Count > 0)
+        {
+            Console.Error.WriteLine(
+                $"[config] owners 의 소유자 {string.Join(", ", unknownOwners.Select(o => $"'{o}'"))} 를 선언한 파일(# Prefix:)이 없습니다"
+                + (declaredOwners.Count > 0 ? $" — 있는 소유자: {string.Join(", ", declaredOwners.Order(StringComparer.Ordinal))}." : " — 이 빌드에는 접두를 선언한 파일이 없습니다."));
+            return 4;
+        }
+        var ownersWithoutNamePrefix = (cfg.Owners ?? [])
+            .Where(o => !o.Value.NamePrefix).Select(o => o.Key)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var allModels = new List<ResolvedModel>(new InterfaceResolver(mergedAst, ownersWithoutNamePrefix).ResolveAll());
         var allEnums = new List<M3L.Native.EnumNode>(mergedAst.Enums);
 
         Console.WriteLine($"[m3l] 모델 {allModels.Count}개, enum {allEnums.Count}개 로드됨: {string.Join(", ", allModels.Select(m => m.Name))}");

@@ -42,7 +42,8 @@ internal static class ExtensionRules
     private static void CheckModelName(ResolvedModel model, List<SemanticDiagnostic> diagnostics)
     {
         if (model.Source.Base is not null) return;
-        if (model.Source.Prefix is not { Length: > 0 } prefix) return;
+        // 이름에 접두를 두지 않는 층(mdd.json owners.<p>.namePrefix: false)은 NamePrefix 가 비어 이 검사를 받지 않는다.
+        if (model.NamePrefix is not { Length: > 0 } prefix) return;
         var expected = NameCasing.ToPascalCase(prefix);
         if (model.Name.StartsWith(expected, StringComparison.Ordinal)) return;
         diagnostics.Add(new SemanticDiagnostic("MDD017",

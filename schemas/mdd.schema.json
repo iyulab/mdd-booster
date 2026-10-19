@@ -59,6 +59,25 @@
       "items": { "type": "string", "pattern": "^(MDD\\d{3}|M3L-W\\d{3})$" },
       "description": "Warning codes not reported at all. Takes precedence over treatWarningsAsErrors."
     },
+    "owners": {
+      "type": "object",
+      "description": "What this build says about an owner (a file's # Prefix:), keyed by the prefix. Naming an owner no file declares is a configuration error (exit code 4).",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9]*$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "patternProperties": {
+          "^_": { "description": "A note — a key starting with \"_\" records the reason for a nearby setting and is ignored without a warning (JSON has no comment an editor accepts)." }
+        },
+        "properties": {
+          "namePrefix": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether this owner's model names begin with its prefix. false for a layer (the shared base under products): MDD017 does not ask for the prefix, an ::aspect is named <Base><Name> (MDD019), and its navigation on the base is <Name>."
+          }
+        }
+      }
+    },
     "targets": {
       "type": "array",
       "description": "One or more generation targets. The same type may appear more than once (e.g. two Api targets for two servers sharing one model) as long as their path differs.",

@@ -29,6 +29,14 @@ public sealed class MddJsonConfig
     public List<MddJsonReference>? References { get; set; }
 
     /// <summary>
+    /// What this build says about an owner (a file's <c># Prefix:</c>), keyed by the prefix. An owner is often a module
+    /// whose names should show it (<c>MDD017</c>, <c>MDD019</c>); a layer — the shared base under products — is an owner
+    /// whose names should not, and says so here with <c>namePrefix: false</c>.
+    /// </summary>
+    [JsonPropertyName("owners")]
+    public Dictionary<string, MddJsonOwner>? Owners { get; set; }
+
+    /// <summary>
     /// Report every coded warning (<c>MDDnnn</c>, <c>M3L-Wnnn</c>) as an error: the build stops with
     /// exit code 3 before generating anything. Codes in <see cref="NoWarn"/> are still suppressed.
     /// </summary>
@@ -64,6 +72,22 @@ public sealed class MddJsonReference
     public string Namespace { get; set; } = "";
 
     /// <summary>Keys a reference does not define — reported like <see cref="MddJsonConfig.UnknownKeys"/>.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? UnknownKeys { get; set; }
+}
+
+/// <summary>One entry of <see cref="MddJsonConfig.Owners"/>.</summary>
+public sealed class MddJsonOwner
+{
+    /// <summary>
+    /// Whether this owner's model names begin with its prefix (default <see langword="true"/>). <see langword="false"/>:
+    /// the names are the layer's own — <c>MDD017</c> does not ask for the prefix, an <c>::aspect</c> is named
+    /// <c>&lt;Base&gt;&lt;Name&gt;</c> (<c>MDD019</c>), and its navigation on the base is <c>&lt;Name&gt;</c>.
+    /// </summary>
+    [JsonPropertyName("namePrefix")]
+    public bool NamePrefix { get; set; } = true;
+
+    /// <summary>Keys an owner entry does not define — reported like <see cref="MddJsonConfig.UnknownKeys"/>.</summary>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? UnknownKeys { get; set; }
 }

@@ -61,6 +61,8 @@ public static class ConfigLoader
         var references = config.References ?? [];
         for (var i = 0; i < references.Count; i++)
             Collect(references[i].UnknownKeys, $"references[{i}].", KnownKeys<MddJsonReference>(), warnings);
+        foreach (var (owner, entry) in config.Owners ?? [])
+            Collect(entry.UnknownKeys, $"owners.{owner}.", KnownKeys<MddJsonOwner>(), warnings);
         for (var i = 0; i < config.Targets.Count; i++)
         {
             Collect(config.Targets[i].UnknownKeys, $"targets[{i}].", KnownKeys<MddJsonTarget>(), warnings);

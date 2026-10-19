@@ -7,11 +7,18 @@ public sealed class InterfaceResolver
 {
     private readonly M3lAst _ast;
     private readonly Dictionary<string, ModelNode> _interfacesByName;
+    private readonly IReadOnlySet<string> _ownersWithoutNamePrefix;
 
-    public InterfaceResolver(M3lAst ast)
+    /// <param name="ast">The merged model.</param>
+    /// <param name="ownersWithoutNamePrefix">
+    /// Owners (<c># Prefix:</c>) whose model names do not begin with the prefix — a layer, not a module
+    /// (<see cref="ResolvedModel.NamePrefix"/>).
+    /// </param>
+    public InterfaceResolver(M3lAst ast, IReadOnlySet<string>? ownersWithoutNamePrefix = null)
     {
         _ast = ast ?? throw new ArgumentNullException(nameof(ast));
         _interfacesByName = ast.Interfaces.ToDictionary(i => i.Name, StringComparer.Ordinal);
+        _ownersWithoutNamePrefix = ownersWithoutNamePrefix ?? new HashSet<string>(StringComparer.Ordinal);
     }
 
     public IReadOnlyList<ResolvedModel> ResolveAll()
@@ -66,6 +73,7 @@ public sealed class InterfaceResolver
             Fields = merged,
             Source = model,
             AspectBase = aspectBase,
+            NameCarriesPrefix = model.Prefix is not { Length: > 0 } owner || !_ownersWithoutNamePrefix.Contains(owner),
         };
     }
 
