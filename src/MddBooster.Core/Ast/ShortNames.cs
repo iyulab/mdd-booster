@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace MddBooster.Core.Ast;
 
@@ -15,10 +16,10 @@ namespace MddBooster.Core.Ast;
 /// </para>
 /// <para>
 /// Rewritten: a parent (<c>inherits</c>), a base, a key's <c>@reference</c> target, a type that names a declaration, a
-/// rollup target, a view's <c>from</c> and joins and the relation of its <c>@from(Relation.field)</c>. A name the
+/// rollup target, a view's <c>from</c> and joins, and the relation of its <c>@from(Relation.field)</c> and of each side of
+/// a join's <c>on</c> condition — each written the way the view's <c>from</c>/<c>join</c> wrote the relation. A name the
 /// parser resolved to none — or to more than one — is left as written; the diagnostic for it is the parser's or this
-/// generator's. A join's <c>on</c> condition is left as written: it is an expression, and a qualified relation in it is
-/// not read here.
+/// generator's.
 /// </para>
 /// </remarks>
 public static class ShortNames
@@ -55,7 +56,23 @@ public static class ShortNames
             relations[join.Model] = Short(joinName);
             join.Model = Short(joinName);
         }
+        // A join's `on` condition names its relations the way `from` and `join` wrote them (a join may name one an earlier
+        // line wrote), so it is read once every relation is known.
+        foreach (var join in source.Joins ?? [])
+            if (!string.IsNullOrEmpty(join.On)) join.On = Condition(join.On, relations);
         return relations;
+    }
+
+    /// <summary>
+    /// A join condition with each relation it names qualified — <c>core.Asset.id</c>, <c>inv.Asset.id</c> — as the short name
+    /// it resolved to. The longest written name goes first, and a name is only replaced where it starts a reference
+    /// (not inside another identifier or after a dot).
+    /// </summary>
+    private static string Condition(string condition, IReadOnlyDictionary<string, string> relations)
+    {
+        foreach (var (written, shortName) in relations.Where(r => r.Key != r.Value).OrderByDescending(r => r.Key.Length))
+            condition = Regex.Replace(condition, $@"(?<![A-Za-z0-9_.]){Regex.Escape(written)}\.", shortName + ".");
+        return condition;
     }
 
     private static void Fields(List<FieldNode>? fields, IReadOnlyDictionary<string, string> relations)

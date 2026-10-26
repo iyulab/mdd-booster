@@ -16,6 +16,14 @@
 
 ---
 
+## [Unreleased]
+
+### 뷰 `join` 의 `on` 식이 한정 · 별칭으로 쓴 관계 이름을 읽는다
+
+- **`- join: Order on core.Asset.id = Order.asset_id`** — `on` 의 각 변이 뷰의 `from`/`join` 이 쓴 그대로(네임스페이스로 한정하거나 import 별칭으로)
+  관계를 가리키면 파서가 해석한 선언으로 읽는다. 종전에는 `@from(core.Asset.id)` 만 그렇게 읽고 `on` 안의 한정 이름은 «해석할 수 없다»(`MDD030`)였다. 짧은 이름으로 쓴
+  모델의 출력은 바이트 그대로다.
+
 ## 0.46.0
 
 ### 형제 층 — `modules[].dependsOn`

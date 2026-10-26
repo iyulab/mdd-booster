@@ -103,4 +103,61 @@ public class QualifiedReferenceBuildTests
             try { Directory.Delete(root, recursive: true); } catch { }
         }
     }
+
+    /// <summary>
+    /// A join's <c>on</c> condition names its relations the way the view's <c>from</c> and <c>join</c> wrote them — through
+    /// a namespace or an import alias — and is read as the declarations they resolve to.
+    /// </summary>
+    [Theory]
+    [InlineData("core.Asset", "core.Asset.id = Order.asset_id")]
+    [InlineData("c.Asset", "c.Asset.id = Order.asset_id")]
+    [InlineData("core.Asset", "Order.asset_id = core.Asset.id")]
+    public void A_join_condition_reads_qualified_and_aliased_relation_names(string from, string on)
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"mdd-qualified-on-{Guid.NewGuid():N}");
+        var mdd = Path.Combine(root, "mdd");
+        Directory.CreateDirectory(mdd);
+        File.WriteAllText(Path.Combine(mdd, "core.m3l.md"), """
+            # Namespace: core
+
+            ## Asset
+            - id: identifier @pk @generated
+            - name: string(50) @not_null
+            """);
+        File.WriteAllText(Path.Combine(mdd, "sales.m3l.md"), $$"""
+            # Namespace: sales
+
+            @import "./core.m3l" as c
+
+            ## Order
+            - id: identifier @pk @generated
+            - asset_id: identifier @not_null @reference(c.Asset)
+            - quantity: integer @not_null
+
+            ## AssetOrders ::view
+            ### Source
+            - from: {{from}}
+            - join: Order on {{on}}
+
+            - id: identifier @from(Order.id)
+            - asset_name: string @from({{from}}.name)
+            - quantity: integer @from(Order.quantity)
+            """);
+        File.WriteAllText(Path.Combine(mdd, "mdd.json"), """
+            { "sources": ["./core.m3l.md", "./sales.m3l.md"],
+              "targets": [ { "type": "Sql", "projectPath": "../db", "emitSqlProj": false } ] }
+            """);
+        using var stderr = new ConsoleErrorCapture(this);
+        try
+        {
+            Assert.True(new BuildCommand().Run(mdd) == 0, stderr.Text);
+            var view = File.ReadAllText(Directory.GetFiles(Path.Combine(root, "db"), "AssetOrders.sql", SearchOption.AllDirectories).Single());
+            Assert.Contains("INNER JOIN", view);
+            Assert.Matches(@"\[Asset\]\.\[Id\]\s*=\s*\[Order\]\.\[AssetId\]|\[Order\]\.\[AssetId\]\s*=\s*\[Asset\]\.\[Id\]", view);
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
 }
