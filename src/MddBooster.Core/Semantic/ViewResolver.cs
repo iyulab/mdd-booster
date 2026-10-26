@@ -152,6 +152,25 @@ public static class ViewResolver
             }
             resolved[view.Name] = result;
             ordered.Add(result);
+            // @searchable narrows what `$search` matches on a read type; a view that is no read model has none, so the
+            // declaration would be dropped without a word.
+            if (!Generation.ViewReadModels.IsReadModel(result))
+            {
+                var searchable = result.Columns
+                    .Where(c => Ast.FieldAttributes.Has(c.Field, "searchable"))
+                    .Select(c => $"'{c.Name}'")
+                    .ToList();
+                if (searchable.Count > 0)
+                {
+                    var why = Generation.ViewReadModels.IsInternal(result)
+                        ? "`@internal` 이 읽기 모델로 내지 않는다"
+                        : "행을 가리킬 키 열(`- id: identifier @from(<관계>.id)`)이 없어 읽기 모델로 내지 않는다";
+                    diagnostics.Add(new SemanticDiagnostic("MDD054",
+                        $"뷰 '{view.Name}' 의 열 {string.Join(", ", searchable)} 의 `@searchable` 은 닿는 곳이 없다 — {why}. "
+                        + "`$search` 는 읽기 모델의 속성에만 걸린다. 선언을 지우거나, 읽기 모델로 낸다.",
+                        view.Loc, SemanticSeverity.Warning));
+                }
+            }
             if (result.Depth > 2)
             {
                 diagnostics.Add(new SemanticDiagnostic("MDD032",

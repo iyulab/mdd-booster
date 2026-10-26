@@ -40,6 +40,10 @@ public static class ViewEntityRenderer
             var initializer = field.Nullable ? string.Empty
                 : field.Array ? CSharpTypeMapper.ArrayInitializer
                 : CSharpTypeMapper.DefaultInitializer(field.Type!, postgres);
+            // [Searchable] — @searchable on a column, with the same meaning as on a model's field: the runtime's $search
+            // reads it from the read type, and once a type marks any property only the marked ones are searched.
+            if (MddBooster.Core.Ast.FieldAttributes.Has(field, "searchable"))
+                sb.AppendLine("    [Searchable]");
             sb.Append("    public ").Append(type).Append(nullable).Append(' ')
               .Append(NameCasing.ToPascalCase(field.Name)).Append(" { get; set; }").AppendLine(initializer);
         }

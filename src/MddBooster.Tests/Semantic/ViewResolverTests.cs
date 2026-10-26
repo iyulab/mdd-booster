@@ -225,4 +225,56 @@ public class ViewResolverTests
         Assert.Equal(3, result.Views.Count);
         Assert.Equal(3, result.Views.Single(v => v.Name == "V3").Depth);
     }
+
+    // ---- @searchable on a view column reaches the read type; where there is none it is said, not dropped ----
+
+    [Fact]
+    public void A_searchable_column_of_a_view_with_no_key_is_warned_because_nothing_reads_it()
+    {
+        var result = ResolveInline("""
+            ## CustomerNames ::view
+            ### Source
+            - from: Customer
+
+            - name: string @from(Customer.name) @searchable
+            """);
+
+        var warning = Assert.Single(result.Diagnostics);
+        Assert.Equal(("MDD054", SemanticSeverity.Warning), (warning.Code, warning.Severity));
+        Assert.Contains("'CustomerNames'", warning.Message);
+        Assert.Contains("'name'", warning.Message);
+        Assert.Contains("키 열", warning.Message);
+    }
+
+    [Fact]
+    public void A_searchable_column_of_an_internal_view_is_warned_with_the_reason()
+    {
+        var result = ResolveInline("""
+            ## CustomerNames ::view @internal
+            ### Source
+            - from: Customer
+
+            - id: identifier @from(Customer.id)
+            - name: string @from(Customer.name) @searchable
+            """);
+
+        var warning = Assert.Single(result.Diagnostics);
+        Assert.Equal("MDD054", warning.Code);
+        Assert.Contains("@internal", warning.Message);
+    }
+
+    [Fact]
+    public void A_searchable_column_of_a_read_model_view_is_not_warned()
+    {
+        var result = ResolveInline("""
+            ## CustomerNames ::view
+            ### Source
+            - from: Customer
+
+            - id: identifier @from(Customer.id)
+            - name: string @from(Customer.name) @searchable
+            """);
+
+        Assert.Empty(result.Diagnostics);
+    }
 }
