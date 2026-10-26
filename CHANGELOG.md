@@ -18,19 +18,19 @@
 
 ## [Unreleased]
 
-### enum 원소 목록 — `states: doc_state[]` (런타임 `Iyu.*` 0.43.0 다음 판과 짝)
+### enum 원소 목록 — `states: doc_state[]` (런타임 `Iyu.*` 0.44.0 부터)
 
 - **enum 멤버의 목록을 생성한다** — 종전 `MDD048` 거절. 엔티티 `List<DocState>`(`doc_state?[]?` → `List<DocState?>?`) ·
   SQL Server `NVARCHAR(MAX)` JSON + `ISJSON` · PostgreSQL `varchar(n)[]` · TS `DocState[]`. 원소는 단일 enum 처럼 wire 이름으로
-  저장 · 기술된다 — 그 변환은 런타임(`IyuDbContext` · `$metadata`)이 걸고, 0.43.0 런타임에서는 목록이 CLR 이름으로 저장되고
-  `/$data` 가 wire 이름을 거절하므로 **다음 `Iyu.*` 판과 함께** 올린다.
+  저장 · 기술된다 — 그 변환은 런타임(`IyuDbContext` · `$metadata`)이 걸고, 0.43.0 까지의 런타임에서는 목록이 CLR 이름으로 저장되고
+  `/$data` 가 wire 이름을 거절하므로 **`Iyu.*` 0.44.0 이상과 함께** 올린다.
 - `emitEnumCheckConstraints` 면 PostgreSQL 이 원소마다 멤버 CHECK(`array_remove(col, NULL)::text[] <@ ARRAY[…]::text[]` — 원소 NULL
   금지와 한 제약에 `AND`). SQL Server 는 JSON 텍스트라 단일 enum 칸만 CHECK 를 받는다 — 🔇 종전에는 옵트인이 목록 칸에도 스칼라
   `IN` CHECK 를 낼 뻔한 자리(목록이 거절돼 도달하지 않았다)를 목록에서 제외했다.
 
-### 같은 짧은 이름 둘 — `MDD053` · 한정 이름으로 쓴 부모 (`M3L.Native` 다음 판과 짝)
+### 같은 짧은 이름 둘 — `MDD053` · 한정 이름으로 쓴 부모 (`M3L.Native` 0.25.0)
 
-- 🔴 **`M3L.Native` 다음 판부터 다른 네임스페이스의 같은 짧은 이름이 합법이다**(M3L §2.1.3 — 종전 `M3L-E008`). 이 생성기는 산출물 이름(C# 형 ·
+- 🔴 **`M3L.Native` 0.25.0 부터 다른 네임스페이스의 같은 짧은 이름이 합법이다**(M3L §2.1.3 — 종전 `M3L-E008`). 이 생성기는 산출물 이름(C# 형 ·
   테이블 · 데이터 셋 · TypeScript 형)을 짧은 이름에서 지으므로 둘이 한 이름이 된다 — **`MDD053`** 로 생성 전에 선다(종료 코드 3, 둘의 한정 이름을
   적는다). 짧은 이름을 빌드 안에서 유일하게 두면 바뀌는 것이 없다 — 승인 모델의 생성물 · 빌드 로그가 바이트 그대로(실측).
 - **한정 이름이나 import 별칭으로 쓴 이름이 그 선언으로 읽힌다** — 부모(`## Order : core.Stamped`) · base · 키 대상(`@reference(c.Asset)`) · 형
@@ -38,7 +38,7 @@
   쓴다(`MDD053` 이 짧은 이름을 빌드 안에서 유일하게 지키므로 그 이름이 곧 그 선언이다). 종전 판(m3l 0.24)에서는 한정 이름이 이 자리들에 오지 않았다.
   뷰 `join` 의 `on` 식 안의 한정 관계 이름은 읽지 않는다.
 
-### standalone 뷰의 `left_join:` → `LEFT JOIN` (`M3L.Native` 다음 판과 짝)
+### standalone 뷰의 `left_join:` → `LEFT JOIN` (`M3L.Native` 0.25.0)
 
 - **뷰 `### Source` 의 `- left_join: Target on Cond`**(M3L §4.7.1) 를 두 방언 다 `LEFT JOIN` 으로 낸다 — 기준의 행이 짝 없이도 남고 조인한
   관계의 칸은 NULL 이다. `- join:` 은 종전 그대로 `INNER JOIN`. 선택 참조나 1:1 확장(`::aspect`)을 뷰에 붙여 «기준 전부 + 확장 칸» 목록을
