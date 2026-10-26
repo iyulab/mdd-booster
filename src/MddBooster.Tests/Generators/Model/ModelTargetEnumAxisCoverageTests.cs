@@ -110,6 +110,11 @@ public class ModelTargetEnumAxisCoverageTests
                 "counterpart — an enum cannot derive from another — and nothing here needs it. Until the parser " +
                 "did the joining this was UnimplementedEverywhere and the generated enum silently lacked the " +
                 "inherited members; the test below pins the members being present"),
+            ["InheritsQualifiedNames"] = (Disposition.NotApplicable,
+                "the parser's resolution of each parent — the parent's values arrive joined into Values, so its name, " +
+                "qualified or not, is not needed"),
+            ["QualifiedName"] = (Disposition.Carried,
+                "names the declarations MDD053 refuses for sharing a short name — the generated enum is named by the short name"),
             ["Label"] = (Disposition.UnimplementedEverywhere,
                 "a display name for the enum type itself. No target reads it; the type's own label has no " +
                 "counterpart in any generated artifact, unlike a member's — so the build says so (AstAccounting " +

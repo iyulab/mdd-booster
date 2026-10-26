@@ -70,6 +70,12 @@ public class ModelTargetAstAxisCoverageTests
             ["Attributes"] = (Disposition.Carried, "the attribute vocabulary — ratcheted on its own in ModelTargetAxisCoverageTests"),
             ["FrameworkAttrs"] = (Disposition.Reported, "custom framework attributes — listed among the unconsumed elements (AstAccounting)"),
             ["Lookup"] = (Disposition.Carried, "`@lookup(path)` — the read model's joined column"),
+            ["ReferenceQualifiedName"] = (Disposition.UnimplementedEverywhere,
+                "the parser's resolution of a key's target. The targets match the written target by short name, which is " +
+                "unique in a build (MDD053) — but a target written qualified (`@reference(core.Asset)`) is not followed yet"),
+            ["TypeQualifiedName"] = (Disposition.UnimplementedEverywhere,
+                "the parser's resolution of a type that names a declaration. Matched by short name as written (unique in a " +
+                "build, MDD053) — a type written qualified is not followed yet"),
             ["Rollup"] = (Disposition.Carried, "`@rollup(…)` — the read model's aggregate column"),
             ["Computed"] = (Disposition.Carried, "`@computed(…)` — the read model's expression column"),
             ["Binding"] = (Disposition.Carried, "`# Entity.Column` binding — [Binding] on the entity property"),
@@ -102,6 +108,10 @@ public class ModelTargetAstAxisCoverageTests
                 "on, and said so, when no preScriptsPath is configured"),
             ["Line"] = (Disposition.NotApplicable, "source bookkeeping — used by diagnostics"),
             ["Inherits"] = (Disposition.Carried, "the interfaces a model inherits — flattened into its fields (InterfaceResolver)"),
+            ["InheritsQualifiedNames"] = (Disposition.Carried,
+                "the parser's resolution of each parent — how InterfaceResolver finds a parent written qualified or through an alias"),
+            ["QualifiedName"] = (Disposition.Carried,
+                "names the declarations MDD053 refuses for sharing a short name — the generated names come from the short name"),
             ["Description"] = (Disposition.Carried, "the XML doc comment of the generated types and the TypeScript interface"),
             ["Attributes"] = (Disposition.Carried, "model-level attributes — read where a target acts on them (the entity surface among them)"),
             ["Fields"] = (Disposition.Carried, "the fields; see the field axes above"),

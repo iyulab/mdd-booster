@@ -17,7 +17,13 @@ public sealed class InterfaceResolver
     public InterfaceResolver(M3lAst ast, IReadOnlySet<string>? ownersWithoutNamePrefix = null)
     {
         _ast = ast ?? throw new ArgumentNullException(nameof(ast));
-        _interfacesByName = ast.Interfaces.ToDictionary(i => i.Name, StringComparer.Ordinal);
+        // By short name and by qualified name — a model names its parent either way (see Resolve).
+        _interfacesByName = new Dictionary<string, ModelNode>(StringComparer.Ordinal);
+        foreach (var i in ast.Interfaces)
+        {
+            _interfacesByName.TryAdd(i.Name, i);
+            if (i.QualifiedName is { } q) _interfacesByName.TryAdd(q, i);
+        }
         _ownersWithoutNamePrefix = ownersWithoutNamePrefix ?? new HashSet<string>(StringComparer.Ordinal);
     }
 
@@ -35,8 +41,13 @@ public sealed class InterfaceResolver
         var inheritedFieldNames = new HashSet<string>(StringComparer.Ordinal);
         var inheritedFields = new List<FieldNode>();
 
-        foreach (var parentName in model.Inherits)
+        for (var i = 0; i < model.Inherits.Count; i++)
         {
+            // The parser's resolution of the parent — a parent written qualified (`: core.Stamped`) or through an
+            // import's alias names its interface only through it. Short names are unique in a build (MDD053).
+            var parentName = i < model.InheritsQualifiedNames.Count && model.InheritsQualifiedNames[i] is { } qualified
+                ? qualified
+                : model.Inherits[i];
             if (!_interfacesByName.TryGetValue(parentName, out var parent))
             {
                 // MVP에서는 인터페이스가 아닌 부모는 무시 (모델 상속은 향후 지원).

@@ -174,6 +174,26 @@ public sealed class BuildCommand
 
         var allUnconsumed = new List<string>(AstAccounting.ListUnconsumed(mergedAst));
 
+        // MDD053 — 한 빌드에서 같은 짧은 이름의 선언 둘. M3L 은 네임스페이스마다 이름 공간이 따로라 그것을 허용하지만(§2.1.3),
+        // 이 생성기의 산출물 이름 — C# 형 · 테이블 · 데이터 셋 · TypeScript 형 — 은 짧은 이름에서 나와 둘이 한 이름이 된다.
+        // 네임스페이스별 출력은 아직 없으므로 생성 전에 세운다 — 조용히 하나가 다른 하나를 덮게 두지 않는다.
+        var shortNameClashes = mergedAst.Models.Select(m => (m.Name, Qualified: m.QualifiedName ?? m.Name, Kind: "model"))
+            .Concat(mergedAst.Views.Select(v => (v.Name, Qualified: v.QualifiedName ?? v.Name, Kind: "view")))
+            .Concat(mergedAst.Interfaces.Select(i => (i.Name, Qualified: i.QualifiedName ?? i.Name, Kind: "interface")))
+            .Concat(mergedAst.Enums.Select(e => (e.Name, Qualified: e.QualifiedName ?? e.Name, Kind: "enum")))
+            .GroupBy(d => d.Name, StringComparer.Ordinal)
+            .Where(g => g.Count() > 1)
+            .ToList();
+        if (shortNameClashes.Count > 0)
+        {
+            Console.Error.WriteLine($"[m3l] 에러 {shortNameClashes.Count}건:");
+            foreach (var clash in shortNameClashes)
+                Console.Error.WriteLine(
+                    $"  [MDD053] '{clash.Key}' 를 {string.Join(", ", clash.Select(d => $"{d.Kind} {d.Qualified}"))} 가 함께 선언합니다 — "
+                    + "생성되는 형 · 테이블 이름이 짧은 이름에서 나와 부딪히므로 한쪽의 이름을 바꾸십시오(네임스페이스마다 따로 내는 출력은 아직 없습니다).");
+            return 3;
+        }
+
         // owners — 소유자마다 이 빌드가 정한 성질. 모델에 없는 소유자를 적은 것은 설정 오류다(modules 의 소유자와 같다):
         // 오타 난 소유자를 조용히 무시하면 그 성질이 걸리지 않은 채 빌드가 지나간다.
         var declaredOwners = mergedAst.Models.Select(m => m.Prefix)

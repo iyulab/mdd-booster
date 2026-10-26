@@ -70,4 +70,38 @@ public class InterfaceResolverTests
         }
         finally { File.Delete(tmp); }
     }
+
+    /// <summary>
+    /// A parent written qualified — or through an import's alias — is found through the parser's resolution, so its
+    /// fields are recognised as inherited and keep their place after the model's own.
+    /// </summary>
+    [Fact]
+    public void A_parent_written_qualified_is_recognised_as_the_interface()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"mdd-res-qual-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        var core = Path.Combine(dir, "core.m3l.md");
+        var sales = Path.Combine(dir, "sales.m3l.md");
+        File.WriteAllText(core, """
+            # Namespace: core
+
+            ## Stamped ::interface
+            - created_at: timestamp @not_null
+            """);
+        File.WriteAllText(sales, """
+            # Namespace: sales
+
+            ## Order : core.Stamped
+            - id: identifier @primary
+            - title: string(50)
+            """);
+        try
+        {
+            var resolved = new InterfaceResolver(new M3lLoader().LoadFiles([core, sales]))
+                .ResolveAll().Single(m => m.Name == "Order");
+
+            Assert.Equal(["id", "title", "created_at"], resolved.Fields.Select(f => f.Name));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
 }
