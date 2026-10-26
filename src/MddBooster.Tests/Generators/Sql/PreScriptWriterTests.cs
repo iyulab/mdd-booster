@@ -125,6 +125,47 @@ public sealed class PreScriptWriterTests : IDisposable
     }
 
     /// <summary>
+    /// A name for an unnamed multi-column unique constraint or index carries the table and every column
+    /// (<c>UK_CustomerOrder_CustomerCode_Seq</c>). The table step changes the owner token under every combination of the
+    /// names its columns have had or have; a column step changes that column's token wherever it sits in the name. A
+    /// name the model gives the index is never touched.
+    /// </summary>
+    [Fact]
+    public void Multi_column_names_follow_the_table_and_each_column()
+    {
+        const string model = "## CustomerOrder @renamed_from(SalesOrder)\n- id: identifier @pk @generated\n" +
+                             "- customer_code: string(20) @not_null @renamed_from(code)\n- seq: int @not_null\n\n" +
+                             "### Indexes\n- @unique(customer_code, seq)\n- @index(seq, customer_code)\n" +
+                             "- @unique(customer_code, seq, name: \"ux_fixed\")\n";
+        var steps = RenameSteps.Of(Load(model));
+        Assert.Equal(
+            [(RenameSteps.Kind.Table, "SalesOrder"), (RenameSteps.Kind.Column, "code")],
+            steps.Select(s => (s.Kind, s.From)));
+
+        var pg = new PreScriptWriter(SqlDialect.PostgreSql, "public", n => PostgresIdentifiers.ToSnakeCase(n));
+        var pgTable = pg.Render(steps[0]);
+        Assert.Contains("RENAME CONSTRAINT uq_sales_order_code_seq TO uq_customer_order_code_seq;", pgTable);
+        Assert.Contains("RENAME CONSTRAINT uq_sales_order_customer_code_seq TO uq_customer_order_customer_code_seq;", pgTable);
+        Assert.Contains("ALTER INDEX public.ix_sales_order_seq_code RENAME TO ix_customer_order_seq_code;", pgTable);
+        var pgColumn = pg.Render(steps[1]);
+        Assert.Contains("RENAME CONSTRAINT uq_customer_order_code_seq TO uq_customer_order_customer_code_seq;", pgColumn);
+        Assert.Contains("ALTER INDEX public.ix_customer_order_seq_code RENAME TO ix_customer_order_seq_customer_code;", pgColumn);
+
+        var ts = new PreScriptWriter(SqlDialect.SqlServer, "dbo", n => n);
+        var tsTable = ts.Render(steps[0]);
+        Assert.Contains("EXEC sp_rename N'[dbo].[UK_SalesOrder_Code_Seq]', N'UK_CustomerOrder_Code_Seq', N'OBJECT';", tsTable);
+        Assert.Contains("EXEC sp_rename N'[dbo].[UK_SalesOrder_CustomerCode_Seq]', N'UK_CustomerOrder_CustomerCode_Seq', N'OBJECT';", tsTable);
+        Assert.Contains("EXEC sp_rename N'[dbo].[CustomerOrder].[IX_SalesOrder_Seq_Code]', N'IX_CustomerOrder_Seq_Code', N'INDEX';", tsTable);
+        var tsColumn = ts.Render(steps[1]);
+        Assert.Contains("EXEC sp_rename N'[dbo].[UK_CustomerOrder_Code_Seq]', N'UK_CustomerOrder_CustomerCode_Seq', N'OBJECT';", tsColumn);
+        Assert.Contains("EXEC sp_rename N'[dbo].[CustomerOrder].[IX_CustomerOrder_Seq_Code]', N'IX_CustomerOrder_Seq_CustomerCode', N'INDEX';", tsColumn);
+
+        // The index the model names is the model's; the two statements above are the only ones that touch composites.
+        foreach (var script in new[] { pgTable, pgColumn, tsTable, tsColumn })
+            Assert.DoesNotContain("ux_fixed", script);
+    }
+
+    /// <summary>
     /// SQL Server refuses to rename what a schema-bound view depends on (Msg 15336) — and an <c>@indexed</c> rollup
     /// makes this generator write one. The T-SQL rename drops the views bound to the table first, inside the rename's
     /// guard; the declarative stage creates them again. PostgreSQL views follow a rename on their own.

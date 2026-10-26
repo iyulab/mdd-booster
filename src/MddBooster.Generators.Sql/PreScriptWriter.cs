@@ -208,7 +208,9 @@ public sealed class PreScriptWriter(SqlDialect dialect, string schema, Func<stri
     /// The generated constraint and index names the step changes, old and new (<see cref="GeneratedObjectNames"/>) —
     /// a table step changes the owner token of every single-column name (and PostgreSQL's primary key); a column step
     /// changes the column token. Each is renamed only if it exists, so naming a kind the table does not have is
-    /// harmless. Names the model gives (an <c>### Indexes</c> item's) and multi-column names are not derived here.
+    /// harmless. A multi-column name (an unnamed <c>### Indexes</c> entry's) carries the table and every column, so the
+    /// step changes the one token it renames across every combination of names the other columns have had or have.
+    /// Names the model gives an index are not derived here.
     /// </summary>
     private IEnumerable<(string Old, string New)> GeneratedNameRenames(RenameSteps.Step step, bool postgres)
     {
@@ -231,6 +233,16 @@ public sealed class PreScriptWriter(SqlDialect dialect, string schema, Func<stri
                     var old = GeneratedObjectNames.For(postgres, kind, oldOwner, column);
                     if (seen.Add(old)) yield return (old, GeneratedObjectNames.For(postgres, kind, newOwner, column));
                 }
+            foreach (var composite in step.Composites)
+            {
+                var kind = composite.Unique ? GeneratedObjectNames.Kind.Unique : GeneratedObjectNames.Kind.Index;
+                foreach (var tokens in Combinations(composite.Columns.Select(names => names.Select(Column).ToList()).ToList()))
+                {
+                    var old = GeneratedObjectNames.For(postgres, kind, oldOwner, tokens);
+                    var renamed = GeneratedObjectNames.For(postgres, kind, newOwner, tokens);
+                    if (Derivable(postgres, old, renamed) && seen.Add(old)) yield return (old, renamed);
+                }
+            }
             yield break;
         }
 
@@ -240,7 +252,49 @@ public sealed class PreScriptWriter(SqlDialect dialect, string schema, Func<stri
             var old = GeneratedObjectNames.For(postgres, kind, owner, Column(step.From));
             if (seen.Add(old)) yield return (old, GeneratedObjectNames.For(postgres, kind, owner, Column(step.To)));
         }
+
+        foreach (var composite in step.Composites)
+        {
+            var kind = composite.Unique ? GeneratedObjectNames.Kind.Unique : GeneratedObjectNames.Kind.Index;
+            for (var position = 0; position < composite.Columns.Count; position++)
+            {
+                // The column being renamed sits at this position: its names are From then To, and every other column
+                // is at whichever of its names the database holds.
+                if (!composite.Columns[position].Contains(step.From, StringComparer.Ordinal)
+                    || !composite.Columns[position].Contains(step.To, StringComparer.Ordinal)) continue;
+                var choices = composite.Columns.Select(names => names.Select(Column).ToList()).ToList();
+                choices[position] = [Column(step.From)];
+                foreach (var tokens in Combinations(choices))
+                {
+                    var renamedTokens = tokens.ToList();
+                    renamedTokens[position] = Column(step.To);
+                    var old = GeneratedObjectNames.For(postgres, kind, owner, tokens);
+                    var renamed = GeneratedObjectNames.For(postgres, kind, owner, renamedTokens);
+                    if (Derivable(postgres, old, renamed) && seen.Add(old)) yield return (old, renamed);
+                }
+            }
+        }
     }
+
+    /// <summary>Every way to pick one name per column, in column order.</summary>
+    private static IEnumerable<IReadOnlyList<string>> Combinations(IReadOnlyList<List<string>> choices)
+    {
+        IEnumerable<List<string>> acc = [[]];
+        foreach (var options in choices)
+        {
+            var step = options;
+            acc = acc.SelectMany(prefix => step.Select(option => new List<string>(prefix) { option }));
+        }
+        return acc;
+    }
+
+    /// <summary>
+    /// PostgreSQL cuts an identifier at 63 bytes without saying so, so a name past that is not the name the database
+    /// holds and cannot be renamed by its derived form. The semantic analysis already reports such a name in the model;
+    /// this only keeps a script from renaming it to itself.
+    /// </summary>
+    private static bool Derivable(bool postgres, string oldName, string newName)
+        => !postgres || (Encoding.UTF8.GetByteCount(oldName) <= 63 && Encoding.UTF8.GetByteCount(newName) <= 63);
 
     private static string Escape(string text) => text.Replace("'", "''", StringComparison.Ordinal);
 }

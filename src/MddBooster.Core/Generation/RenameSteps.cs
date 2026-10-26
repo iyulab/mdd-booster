@@ -31,7 +31,24 @@ public static class RenameSteps
     /// generated for the table's constraints and indexes can carry when the step runs (a column renamed in the same
     /// change is still at an older name then). Empty for a column step.
     /// </param>
-    public sealed record Step(Kind Kind, string Model, string From, string To, IReadOnlyList<string> ColumnNames);
+    /// <param name="Composites">
+    /// The model's unnamed multi-column unique constraints and indexes — the ones whose names this generator derives from
+    /// the table and <em>every</em> column (<c>UK_Order_CustomerId_Number</c>). A step that renames the table or one of the
+    /// columns changes a token in each such name. Empty when the model has none.
+    /// </param>
+    public sealed record Step(Kind Kind, string Model, string From, string To, IReadOnlyList<string> ColumnNames,
+        IReadOnlyList<CompositeKey>? Composites = null)
+    {
+        public IReadOnlyList<CompositeKey> Composites { get; } = Composites ?? [];
+    }
+
+    /// <summary>An unnamed multi-column unique constraint or index of a model.</summary>
+    /// <param name="Unique">Unique constraint (<see langword="true"/>) or plain index.</param>
+    /// <param name="Columns">
+    /// One list per column, in the entry's order: every name that column has had or has, oldest first (a column renamed
+    /// in a change that has not run everywhere yet is still at an older name in some databases).
+    /// </param>
+    public sealed record CompositeKey(bool Unique, IReadOnlyList<IReadOnlyList<string>> Columns);
 
     /// <summary>Every step <paramref name="models"/> declares, models in their given order.</summary>
     public static IReadOnlyList<Step> Of(IReadOnlyList<ResolvedModel> models)
@@ -45,13 +62,29 @@ public static class RenameSteps
                 .SelectMany(f => (f.RenamedFrom ?? []).Append(f.Name))
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
+            var composites = CompositeKeys(model, stored);
             foreach (var (from, to) in History(model.Source.RenamedFrom, model.Name))
-                steps.Add(new Step(Kind.Table, model.Name, from, to, columnNames));
+                steps.Add(new Step(Kind.Table, model.Name, from, to, columnNames, composites));
             foreach (var field in stored)
                 foreach (var (from, to) in History(field.RenamedFrom, field.Name))
-                    steps.Add(new Step(Kind.Column, model.Name, from, to, []));
+                    steps.Add(new Step(Kind.Column, model.Name, from, to, [], composites));
         }
         return steps;
+    }
+
+    private static List<CompositeKey> CompositeKeys(ResolvedModel model, IReadOnlyList<FieldNode> stored)
+    {
+        IReadOnlyList<string> NamesOf(string column)
+        {
+            var field = stored.FirstOrDefault(f => string.Equals(f.Name, column, StringComparison.Ordinal))
+                        ?? stored.FirstOrDefault(f => string.Equals(f.Name, column, StringComparison.OrdinalIgnoreCase));
+            return field is null ? [column] : (field.RenamedFrom ?? []).Append(field.Name).Distinct(StringComparer.Ordinal).ToList();
+        }
+
+        return SectionIndexParser.Parse(model)
+            .Where(e => e.Name is null && e.Columns.Count > 1)
+            .Select(e => new CompositeKey(e.IsUnique, e.Columns.Select(NamesOf).ToList()))
+            .ToList();
     }
 
     private static IEnumerable<(string From, string To)> History(IReadOnlyList<string>? formerNames, string current)
