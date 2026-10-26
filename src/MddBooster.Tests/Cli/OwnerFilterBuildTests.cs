@@ -182,9 +182,25 @@ public class OwnerFilterBuildTests
 - grade: InspGrade "등급"
 """;
 
-    private static string ScaffoldWithEnums(string targetsJson, out string root)
+    /// <summary>
+    /// The module's only use of <c>AssetColor</c> (another owner's enum) is a column of a keyed view — no model
+    /// of the module has a field of that type.
+    /// </summary>
+    private const string ModuleWithEnumView = ModuleWithEnums + """
+
+
+## InspAssetColors ::view
+
+### Source
+- from: Asset
+
+- id: identifier @from(Asset.id)
+- color: AssetColor? @from(Asset.color)
+""";
+
+    private static string ScaffoldWithEnums(string targetsJson, out string root, string module = ModuleWithEnums)
     {
-        var mddDir = Scaffold(targetsJson, out root, ModuleWithEnums);
+        var mddDir = Scaffold(targetsJson, out root, module);
         File.WriteAllText(Path.Combine(mddDir, "base.m3l.md"), BaseWithEnums);
         return mddDir;
     }
@@ -244,6 +260,54 @@ public class OwnerFilterBuildTests
             var entities = Entities(root, "module");
             Assert.Contains("import type { IyuEntity } from '@acme/base/types'", entities);
             Assert.DoesNotContain("export interface IyuEntity", entities);
+        }
+        finally { Cleanup(root); }
+    }
+
+    /// <summary>
+    /// An enum of another owner that only a view column uses is carried like one a model field uses: the
+    /// interface file imports it from <c>./enums_gen</c>, so that file must export it — re-exported from the
+    /// shared source when the target names one.
+    /// </summary>
+    [Fact]
+    public void A_foreign_enum_used_only_by_a_view_column_is_re_exported_from_the_shared_source()
+    {
+        var mddDir = ScaffoldWithEnums(
+            """{ "type": "TypeScript", "outputPath": "../module", "includeOwners": ["insp"], "sharedTypesImport": "@acme/base/types" }""",
+            out var root, ModuleWithEnumView);
+        try
+        {
+            Assert.Equal(0, new BuildCommand().Run(mddDir));
+
+            var entities = Entities(root, "module");
+            Assert.Contains("import type { AssetColor, AssetKind, InspGrade } from './enums_gen'", entities);
+            Assert.Contains("interface InspAssetColors ", entities);
+
+            var moduleEnums = Enums(root, "module");
+            Assert.Contains("export type { AssetColor, AssetKind } from '@acme/base/types'", moduleEnums);
+            Assert.DoesNotContain("export type AssetColor =", moduleEnums);
+
+            var labels = File.ReadAllText(Path.Combine(root, "module", "enum_labels_gen.ts"));
+            Assert.Contains("AssetColorLabels", labels);
+            Assert.DoesNotContain("export const AssetColorLabels", labels);
+        }
+        finally { Cleanup(root); }
+    }
+
+    /// <summary>Without a shared source the same enum is declared by the target that uses it.</summary>
+    [Fact]
+    public void A_foreign_enum_used_only_by_a_view_column_is_declared_without_a_shared_source()
+    {
+        var mddDir = ScaffoldWithEnums(
+            """{ "type": "TypeScript", "outputPath": "../module", "includeOwners": ["insp"] }""",
+            out var root, ModuleWithEnumView);
+        try
+        {
+            Assert.Equal(0, new BuildCommand().Run(mddDir));
+
+            var moduleEnums = Enums(root, "module");
+            Assert.Contains("export type AssetColor =", moduleEnums);
+            Assert.Contains("export type AssetKind =", moduleEnums);
         }
         finally { Cleanup(root); }
     }

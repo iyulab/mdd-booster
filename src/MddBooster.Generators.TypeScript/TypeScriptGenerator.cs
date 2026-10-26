@@ -48,7 +48,7 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
 
         // enums_gen.ts — 엔티티 필터(이름 목록)로는 가지치지 않는다: enum 은 엔티티 파생물이 아니고, 가지치면
         // 소비자가 그 파일에서 가져오던 enum 이 사라진다. 소유자 축이 있으면 enum 도 그 축으로 가른다(PartitionEnums).
-        var (declaredEnums, sharedEnums) = PartitionEnums(context.Enums, models, enumNames);
+        var (declaredEnums, sharedEnums) = PartitionEnums(context.Enums, models, readViews, enumNames);
         var enumsContent = TsEnumRenderer.RenderAll(declaredEnums, sharedEnums, _options.SharedTypesImport);
         File.WriteAllText(Path.Combine(outDir, "enums_gen.ts"), enumsContent);
 
@@ -131,7 +131,8 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
     /// is this target's own when its file's owner passes the filter, like a model's; an enum of
     /// another owner is carried only when one of this target's models references it — a module
     /// target no longer repeats the whole base vocabulary, and a base target no longer carries a
-    /// module's enums that none of its models use.
+    /// module's enums that none of its models use. A column of a read-model view counts as a use like a
+    /// model's field does: the interface file imports every enum its views name from <c>./enums_gen</c>.
     /// </para>
     /// <para>
     /// A referenced enum of another owner is declared here unless the target names a shared source,
@@ -141,13 +142,17 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
     /// </para>
     /// </remarks>
     private (IReadOnlyList<EnumNode> Declared, IReadOnlyList<EnumNode> Shared) PartitionEnums(
-        IReadOnlyList<EnumNode> all, IReadOnlyList<ResolvedModel> models, IReadOnlySet<string> enumNames)
+        IReadOnlyList<EnumNode> all,
+        IReadOnlyList<ResolvedModel> models,
+        IReadOnlyList<ResolvedView> readViews,
+        IReadOnlySet<string> enumNames)
     {
         var filter = _options.SurfaceFilter;
         if (!filter.HasOwnerFilter) return (all, []);
 
         var referenced = new HashSet<string>(
             models.SelectMany(m => m.Fields)
+                .Concat(readViews.SelectMany(v => v.Columns).Select(c => c.Field))
                 .Select(f => f.Type)
                 .Where(t => !string.IsNullOrWhiteSpace(t) && enumNames.Contains(t!))
                 .Select(t => t!),

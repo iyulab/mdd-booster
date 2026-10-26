@@ -18,6 +18,13 @@
 
 ## [Unreleased]
 
+### TypeScript — 읽기 뷰의 칸이 쓰는 다른 소유자의 enum 도 같은 길을 탄다
+
+- 🐛 **키 있는 뷰의 칸이 다른 소유자(`# Prefix:`)의 enum 을 쓰면 `entities_gen.ts` 가 그 enum 을 `./enums_gen` 에서 가져오는데 `enums_gen.ts` 에는
+  없어 컴파일되지 않았다.** `includeOwners` · `excludeOwners` 가 있는 타깃은 다른 소유자의 enum 을 «이 타깃의 모델 칸이 쓸 때만» 실었고 뷰 칸을 세지
+  않았다. 이제 뷰 칸도 쓰는 것으로 센다 — `sharedTypesImport` 가 있으면 그 모듈에서 다시 내보내고(라벨 포함), 없으면 이 타깃이 선언한다. 보통 엔티티의
+  칸과 같은 규칙이다. 소유자 필터를 쓰지 않는 타깃과 모델 칸만 쓰는 enum 의 출력은 바이트 그대로다.
+
 ### enum 원소 목록 — `states: doc_state[]` (런타임 `Iyu.*` 0.44.0 부터)
 
 - **enum 멤버의 목록을 생성한다** — 종전 `MDD048` 거절. 엔티티 `List<DocState>`(`doc_state?[]?` → `List<DocState?>?`) ·
