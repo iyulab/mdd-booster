@@ -134,33 +134,31 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
                 at.Place(ViewEntityRenderer.Render(view, _options.Namespace, viewEnumNames, _options.PostgresNaming)));
         }
 
-        // The layers' data interfaces, lowest first. A declared one holds the sets of its own module and of the modules
-        // since the declared one beneath it (an undeclared module's types belong to the next interface up); the lowest
-        // also holds the referenced types' — the layer below every module — and the context's own surface. Each extends
-        // the one beneath, and the context implements the topmost, so a layer's code never needs the context's type.
-        string? topInterface = null;
+        // The layers' data interfaces, lowest first (ModelModules.DataInterfaces). A declared one holds the sets of its own
+        // module and of the modules it builds on that no interface it extends already reaches (an undeclared module's types
+        // belong to the next interface up); the lowest — the one that extends none — also holds the referenced types' (the
+        // layer below every module) and the context's own surface. Each extends the nearest ones beneath it, and the context
+        // implements the topmost, so a layer's code never needs the context's type.
+        string? topInterfaces = null;
         if (modules is not null)
         {
             var referencedModels = context.Models.Where(context.References.Contains).ToList();
             var referencedViews = context.ReadViews.Where(context.References.Contains).ToList();
-            var from = 0;
-            for (var i = 0; i < modules.Modules.Count; i++)
+            foreach (var layer in modules.DataInterfaces)
             {
-                if (modules.Modules[i].DataInterface is not { } name) continue;
-                var layer = Enumerable.Range(from, i - from + 1).ToHashSet();
-                var layerModels = context.GeneratedModels.Where(m => layer.Contains(modules.IndexOf(m)));
-                var layerViews = context.GeneratedReadViews.Where(v => layer.Contains(modules.IndexOf(v)));
-                if (topInterface is null)
+                var own = layer.Own.ToHashSet();
+                var layerModels = context.GeneratedModels.Where(m => own.Contains(modules.IndexOf(m)));
+                var layerViews = context.GeneratedReadViews.Where(v => own.Contains(modules.IndexOf(v)));
+                if (layer.Extends.Count == 0)
                 {
                     layerModels = referencedModels.Concat(layerModels);
                     layerViews = referencedViews.Concat(layerViews);
                 }
                 var sets = DbContextRenderer.Sets(layerModels, layerViews).ToList();
-                var source = DataInterfaceRenderer.Render(name, _options.Namespace, sets, topInterface);
-                File.WriteAllText(Path.Combine(placements[i].EntityDir, $"{name}.cs"), placements[i].Place(source));
-                topInterface = name;
-                from = i + 1;
+                var source = DataInterfaceRenderer.Render(layer.Name, _options.Namespace, sets, layer.Extends);
+                File.WriteAllText(Path.Combine(placements[layer.Module].EntityDir, $"{layer.Name}.cs"), placements[layer.Module].Place(source));
             }
+            if (modules.TopDataInterfaces is { Count: > 0 } tops) topInterfaces = string.Join(", ", tops);
         }
 
         var mapping = ModelMappingRenderer.Render(
@@ -173,7 +171,7 @@ public sealed class ModelGenerator(ModelGeneratorOptions options) : IArtifactGen
             manyToOne,
             context.ReadViews,
             collections,
-            topInterface);
+            topInterfaces);
         // A type's configuration sits beside the type: whichever project compiles the entities compiles their mapping.
         // A referenced type's configuration is in the referenced assembly — the context applies it, nothing writes it.
         var moduleOfType = new Dictionary<string, int?>(StringComparer.Ordinal);

@@ -115,6 +115,15 @@ public sealed class MddJsonModule
     [JsonPropertyName("dataInterface")]
     public string? DataInterface { get; set; }
 
+    /// <summary>
+    /// Optional: the owners (<c># Prefix:</c>) of the modules this one builds on — each names the module that holds that owner, which
+    /// must be listed before this one. Absent means every module before it. With it, the generated files import only the namespaces
+    /// of the named modules and what they build on, a declaration naming any other module is an error, and the data interface
+    /// extends the nearest interfaces among them.
+    /// </summary>
+    [JsonPropertyName("dependsOn")]
+    public List<string>? DependsOn { get; set; }
+
     /// <summary>Keys a module does not define — reported like <see cref="MddJsonConfig.UnknownKeys"/>.</summary>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? UnknownKeys { get; set; }

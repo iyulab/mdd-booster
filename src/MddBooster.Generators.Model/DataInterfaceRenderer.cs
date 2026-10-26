@@ -27,19 +27,21 @@ public static class DataInterfaceRenderer
     /// <param name="name">The interface's name.</param>
     /// <param name="ns">The namespace it is rendered in (placement moves it into its module's).</param>
     /// <param name="sets">The sets of the types this layer adds.</param>
-    /// <param name="extends">The interface of the layer beneath, or <see langword="null"/> for the lowest — which then carries the context surface.</param>
-    public static string Render(string name, string ns, IReadOnlyList<DbContextRenderer.ContextSet> sets, string? extends)
+    /// <param name="extends">The interfaces of the layers beneath this one builds on, or none for the lowest — which then carries the context surface.</param>
+    public static string Render(string name, string ns, IReadOnlyList<DbContextRenderer.ContextSet> sets, IReadOnlyList<string> extends)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(ns);
         ArgumentNullException.ThrowIfNull(sets);
+        ArgumentNullException.ThrowIfNull(extends);
+        var lowest = extends.Count == 0;
 
         var sb = new StringBuilder();
         sb.AppendLine(Header);
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
         sb.AppendLine("using Microsoft.EntityFrameworkCore;");
-        if (extends is null)
+        if (lowest)
         {
             sb.AppendLine("using Microsoft.EntityFrameworkCore.ChangeTracking;");
             sb.AppendLine("using Microsoft.EntityFrameworkCore.Infrastructure;");
@@ -48,16 +50,16 @@ public static class DataInterfaceRenderer
         sb.Append("namespace ").Append(ns).AppendLine(";");
         sb.AppendLine();
         sb.AppendLine("/// <summary>");
-        sb.AppendLine(extends is null
+        sb.AppendLine(lowest
             ? "/// The data of this layer, as the generated context serves it — its sets and the context's own surface."
             : "/// The data of this layer and the layers beneath it, as the generated context serves it.");
         sb.AppendLine("/// </summary>");
         sb.Append("public interface ").Append(name);
-        if (extends is not null) sb.Append(" : ").Append(extends);
+        if (!lowest) sb.Append(" : ").Append(string.Join(", ", extends));
         sb.AppendLine();
         sb.AppendLine("{");
 
-        if (extends is null)
+        if (lowest)
         {
             foreach (var member in ContextSurface) sb.Append("    ").AppendLine(member);
             if (sets.Count > 0) sb.AppendLine();

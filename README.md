@@ -238,6 +238,25 @@ export * from './enum_labels_gen'
 - 모듈 분할은 부분 집합이 아니다 — 한 빌드가 여전히 모델 전체를 보고 FK · 상속을 검증한다(Model 타깃에 `includeOwners` 를
   걸 수 없는 이유가 그대로다).
 
+**형제 층 — `dependsOn`.** 공통 층 하나 위에 제품이 **둘 이상** 설 때, 목록의 순서만으로는 둘째 제품이 첫째 제품 «위에» 놓인다 — 둘째의 생성 파일이
+첫째의 네임스페이스를 `using` 하고, 첫째 제품을 가리키는 선언도 방향 검사가 막지 않는다. 모듈 행에 `dependsOn` 을 적으면 그 모듈이 딛는 모듈만
+정한다:
+
+```json
+"modules": [
+  { "owners": ["core"],     "projectPath": "../Acme.Core.Entities", "namespace": "Acme.Core.Entities" },
+  { "owners": ["", "maint"], "projectPath": "../Acme.Maint.Entities", "namespace": "Acme.Maint.Entities", "dependsOn": ["core"] },
+  { "owners": ["fleet"],    "projectPath": "../Acme.Fleet.Entities", "namespace": "Acme.Fleet.Entities", "dependsOn": ["core"] } ]
+```
+
+- `dependsOn` 은 **소유자 이름의 목록**이다(`""` 는 접두어 없는 파일) — 그 소유자를 가진 모듈을 가리킨다. 목록에서 **앞** 모듈만 가리킬 수 있다 —
+  순서가 아래층부터라는 규칙은 그대로다. 없는 소유자 · 자기 · 뒤 모듈은 구성 오류(종료 코드 4)다.
+- 적으면 «앞 모듈 전부» 대신 그 모듈이 딛는 모듈의 **닫힘**(가리킨 모듈과, 그들이 딛는 모듈 — 전이)이 쓰인다: ⑴ 생성 파일이 `using` 하는 네임스페이스
+  ⑵ 방향 검사 — 닫힘 밖(형제 제품)을 가리키는 선언은 빌드 오류 ⑶ 아래 데이터 인터페이스의 이음. 위 예에서 `fleet` 의 파일은 `core` 만 `using` 하고,
+  `fleet` 모델이 `maint` 모델을 가리키면 오류다.
+- **적지 않으면 종전 그대로** — 앞 모듈 전부를 딛고, 생성물은 바이트 그대로다. `"dependsOn": []` 는 «아무것도 딛지 않는다».
+- 닫힘 안의 형은 `using` 으로 보일 뿐, **프로젝트 참조는 여전히 소비자가 짠다** — `fleet` 프로젝트는 `core` 프로젝트를 참조하고 `maint` 를 참조하지 않는다.
+
 **층의 코드가 컨텍스트를 무엇으로 받는가 — `dataInterface`.** 컨텍스트는 구체 형 하나라, 위층 코드가 그것을 받으면 컨텍스트
 프로젝트(모든 모듈을 참조)를 참조하게 되고 다른 제품 층의 형까지 컴파일 시점에 본다. 모듈 행에 인터페이스 이름을 적으면 그 층의
 **데이터 인터페이스**가 그 모듈에 생긴다:
@@ -266,6 +285,11 @@ public partial class AcmeDbContext : IyuDbContext, IMaintData { … }   // 생�
   이미 같은 서명으로 있어 따로 구현되는 것이 없다 — 층의 코드가 받는 것은 **컨텍스트 그 인스턴스**다(변경 추적 · 트랜잭션 하나).
 - 호스트는 같은 scoped 인스턴스를 각 인터페이스로 등록한다 — `services.AddScoped<IMaintData>(sp => sp.GetRequiredService<AcmeDbContext>())`.
   그러면 위층 서버 코드는 자기 인터페이스만 받고 컨텍스트 프로젝트를 참조하지 않는다.
+- **`dependsOn` 과 함께**(위 «형제 층») — 인터페이스는 모듈이 딛는 모듈 가운데 **가장 가까운 인터페이스를 모두** 잇는다(둘 이상이면 다중 이음):
+  `fleet` 의 `IFleetData` 는 `ICoreData` 만 잇고 `maint` 의 `IMaintData` 를 보지 못한다. 닫힘 안에 인터페이스를 적지 않은 모듈이 있으면 그 셋은 이 인터페이스에
+  실린다(종전과 같다). 생성 컨텍스트는 **맨 위 인터페이스 전부**를 구현한다(`: IyuDbContext, IMaintData, IFleetData`). 인터페이스가 있는 모듈 가운데
+  가장 아래 것은 **하나**여야 한다 — 서로 아래층을 모르는 인터페이스가 둘이면 컨텍스트 면(`Set<T>` · `Database` …)이 둘에 중복돼, 둘을 함께 받는 코드가 모호해진다.
+  공통 층에 `dataInterface` 를 둔다(아니면 구성 오류).
 - 선택이다 — 적지 않으면 아무것도 생기지 않는다. 형 이름이 아니거나 · 두 모듈이 같은 이름이거나 · 생성되는 형(엔티티 · 구성 ·
   enum · 컨텍스트)과 같은 이름이면 구성 오류(종료 코드 4).
 

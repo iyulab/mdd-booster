@@ -23,8 +23,16 @@ public sealed class LayerDirection(
     Func<ResolvedModel, int> layerOfModel,
     Func<EnumNode, int> layerOfEnum,
     Func<ResolvedView, int> layerOfView,
-    Func<int, string> layerName)
+    Func<int, string> layerName,
+    Func<int, int, bool>? sees = null)
 {
+    /// <summary>
+    /// Whether a declaration of layer <paramref name="from"/> may name one of layer <paramref name="to"/>. By default a
+    /// layer knows itself and every layer below it; <paramref name="sees"/> replaces that where the layers are not a
+    /// line — modules that each name the modules they build on.
+    /// </summary>
+    private bool Sees(int from, int to) => sees?.Invoke(from, to) ?? to <= from;
+
     /// <summary>Every upward name in the set, one line each — empty when the set keeps to the rule.</summary>
     public IReadOnlyList<string> Violations(IReadOnlyList<ResolvedModel> models, IReadOnlyList<EnumNode> enums, IReadOnlyList<ResolvedView> views)
     {
@@ -34,7 +42,14 @@ public sealed class LayerDirection(
 
         void Check(int from, string subject, string what, int to, string target)
         {
-            if (to <= from) return;
+            if (Sees(from, to)) return;
+            // A layer below in the list that this one does not build on (modules with dependsOn): a sibling, not an upper layer.
+            if (sees is not null && to < from)
+            {
+                problems.Add($"{subject}({layerName(from)}) 가 {what} {target}({layerName(to)}) 을 가리킵니다 — {layerName(from)} 은 "
+                    + $"{layerName(to)} 을 딛지 않습니다(dependsOn 의 닫힘 밖). {layerName(to)} 을 dependsOn 에 더하거나, 그 선언을 딛는 층으로 옮기세요.");
+                return;
+            }
             problems.Add($"{subject}({layerName(from)}) 가 {what} {target}({layerName(to)}) 을 가리킵니다 — 아래 층은 위 층을 모릅니다. "
                 + $"그 선언을 {layerName(to)} 이상의 층으로 옮기거나, 관계를 위 층 쪽에서 선언하세요.");
         }
@@ -97,7 +112,7 @@ public sealed class LayerDirection(
     /// target's (see the type's remarks). Passed to <see cref="OneToOneRelationships.Describe"/>, so a dropped inverse
     /// also takes no name on its target.
     /// </summary>
-    public bool HasInverse(ResolvedModel dependent, ResolvedModel target) => layerOfModel(dependent) <= layerOfModel(target);
+    public bool HasInverse(ResolvedModel dependent, ResolvedModel target) => Sees(layerOfModel(target), layerOfModel(dependent));
 
     /// <summary>The two layers of a build with references and no modules: the references below, everything else above.</summary>
     public static LayerDirection Of(ReferenceSet references) => new(

@@ -217,6 +217,11 @@
                 "type": "string",
                 "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
                 "description": "Optional: the name of this layer's data interface, generated into the module's Entity_gen/ — the DbSet properties of the layer's types (and of any module beneath without one), extending the interface of the layer below; the lowest one also declares the context members a data service uses (Set<T>, Database, ChangeTracker, Entry, Add/Remove(Range), SaveChanges(Async)). The generated context implements the topmost, so a layer's code receives the context as its own interface."
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Optional: the owners (# Prefix:) of the modules this one builds on — each names the module that holds that owner, which must be listed before this one. Absent means every module before it. With it, the generated files import only the namespaces of the named modules and what they build on, a declaration naming any other module is an error, and the data interface extends the nearest interfaces among them."
               }
             }
           }

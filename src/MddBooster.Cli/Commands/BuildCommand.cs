@@ -967,7 +967,7 @@ public sealed class BuildCommand
             try
             {
                 var modules = MddBooster.Generators.Model.ModelModules.Assign(
-                    modular[0].Modules!.Select(m => new MddBooster.Generators.Model.ModelModule(m.Owners, m.ProjectPath, m.Namespace, m.DataInterface)).ToList(),
+                    modular[0].Modules!.Select(m => new MddBooster.Generators.Model.ModelModule(m.Owners, m.ProjectPath, m.Namespace, m.DataInterface, m.DependsOn)).ToList(),
                     allModels.Where(m => !references.Contains(m)).ToList(),
                     allEnums.Where(e => !references.Contains(e)).ToList(),
                     []);
@@ -1027,7 +1027,7 @@ public sealed class BuildCommand
                     SqlProjectPath = target.SqlProjectPath,
                     PostgresNaming = IsPostgresDialect(target),
                     Modules = target.Modules?
-                        .Select(m => new MddBooster.Generators.Model.ModelModule(m.Owners, m.ProjectPath, m.Namespace, m.DataInterface))
+                        .Select(m => new MddBooster.Generators.Model.ModelModule(m.Owners, m.ProjectPath, m.Namespace, m.DataInterface, m.DependsOn))
                         .ToList(),
                 }),
             "Api" => new MddBooster.Generators.Api.ApiRegistrationGenerator(
