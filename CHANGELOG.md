@@ -16,7 +16,7 @@
 
 ---
 
-## [Unreleased]
+## 0.46.0
 
 ### 형제 층 — `modules[].dependsOn`
 
