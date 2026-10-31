@@ -14,6 +14,7 @@ M3L → SQL/C#/API 코드 생성기. 단일 `tables.m3l.md` 소스로 SSDT 스�
 | **Sql** | tsql(기본): `dbo/Tables_gen/{Entity}.sql`, `dbo/Views_gen/{Entity}_{full,ext}.sql`, `.sqlproj` ItemGroup 패치 · postgres: `tables_gen/{table}.sql` (snake_case, 아래 방언 절) | SSDT 프로젝트 · desired-state 스타일 스키마 관리 도구 |
 | **Model** | `Entity_gen/{I,}{Entity}{,Ext}.cs` + 형마다 EF 매핑 `Entity_gen/{Entity}{,Ext}Configuration.cs`(`IEntityTypeConfiguration<T>` — auto-`ToView` 포함), `Enum_gen/{Enum}.cs`, `DbContext_gen/{Name}.cs`(DbSet · 구성 적용) | C# classlib (EF Core + 소비앱의 런타임 패키지) |
 | **Api** | `Api_gen/ApiRegistration_gen.cs` (OData + GraphQL 엔티티 페어 등록) | ASP.NET Core 서버 (OData/GraphQL 런타임) |
+| **TypeScript** | `outputPath` 아래 `enums_gen.ts` · `entities_gen.ts` · `entity_names_gen.ts` · `enum_labels_gen.ts` · `field_schema_gen.ts`, 그리고 `formsOutputPath` 를 주면 `{Entity}Form_gen.tsx` (옵션은 아래 «TypeScript 타깃 옵션») | 프론트엔드(타입 · 폼 · 필드 스키마) |
 
 ## 사용법
 
