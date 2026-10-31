@@ -8,7 +8,8 @@
 import type { CSSProperties, ReactNode } from 'react'
 
 export interface FormSectionProps {
-  title: string
+  // Optional: a form whose fields are all ungrouped renders one section with no heading.
+  title?: string
   className?: string
   style?: CSSProperties
   children?: ReactNode

@@ -59,6 +59,54 @@ public class TsFormRendererTests
     }
 
     [Fact]
+    public void A_form_with_no_group_has_one_untitled_section()
+    {
+        // The implicit "기타" bucket is the only section — a heading would name nothing to
+        // distinguish it from. The sectionProps passthrough still keys on the bucket name.
+        var models = LoadInline(
+            "## Sample\n" +
+            "- id: identifier @pk @generated\n" +
+            "- name: string(20) \"이름\"\n" +
+            "- memo: text? \"메모\"\n");
+        var content = TsFormRenderer.RenderAll(models, [], TestImports)["Sample"];
+
+        Assert.Contains(
+            "<FormSection className={sectionProps?.['기타']?.className} style={sectionProps?.['기타']?.style}>",
+            content);
+        Assert.DoesNotContain("title=\"기타\"", content);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(content, "<FormSection"));
+    }
+
+    [Fact]
+    public void An_authored_group_keeps_its_title_even_when_it_is_the_only_one()
+    {
+        // A name someone wrote is information, whatever it is — including @group("기타").
+        var models = LoadInline(
+            "## Sample\n" +
+            "- id: identifier @pk @generated\n" +
+            "- name: string(20) @group(\"기타\") \"이름\"\n" +
+            "- memo: text? @group(\"기타\") \"메모\"\n");
+        var content = TsFormRenderer.RenderAll(models, [], TestImports)["Sample"];
+
+        Assert.Contains("<FormSection title=\"기타\" ", content);
+    }
+
+    [Fact]
+    public void Ungrouped_fields_beside_a_group_still_get_the_default_heading()
+    {
+        // Two sections: the fallback now separates "the rest" from the named group.
+        var models = LoadInline(
+            "## Sample\n" +
+            "- id: identifier @pk @generated\n" +
+            "- name: string(20) @group(\"기본\") \"이름\"\n" +
+            "- memo: text? \"메모\"\n");
+        var content = TsFormRenderer.RenderAll(models, [], TestImports)["Sample"];
+
+        Assert.Contains("<FormSection title=\"기본\" ", content);
+        Assert.Contains("<FormSection title=\"기타\" ", content);
+    }
+
+    [Fact]
     public void Emits_a_section_props_type_and_wires_it_through_FormBase()
     {
         // A passthrough for consumer-side per-section className/style, so a

@@ -1076,7 +1076,11 @@ export function enumToOptions(labels: Record<string, string>): /* USelect의 opt
 
 #### `formLayoutImport` 가 가리킬 모듈 — 레이아웃
 
-`FormSection`(`title` **`className?: string`** **`style?: CSSProperties`**) · `FormRow`(`full?`) 를 export해야 한다.
+`FormSection`(`title?` **`className?: string`** **`style?: CSSProperties`**) · `FormRow`(`full?`) 를 export해야 한다.
+
+- **`title` 은 선택이다 — 없으면 제목 줄을 그리지 않아야 한다.** 필드가 하나도 `@group` 을 갖지 않는 엔티티의 폼은 섹션이 하나뿐이라
+  제목이 가를 대상이 없으므로 `<FormSection>` 에 `title` 을 싣지 않는다(`@group` 을 하나라도 쓴 폼은 그대로다).
+  `title` 을 필수로 선언한 `FormSection` 은 이 폼들의 컴파일이 깨진다.
 
 - **`className`·`style`는 새로 추가된 요구조건이다**(버전은 [CHANGELOG](https://github.com/iyulab/mdd-booster/blob/main/CHANGELOG.md) 참조)
   — 생성 폼의 `{Entity}FormBase`가 받는 `sectionProps?: {Entity}FormSectionProps`(섹션 제목 →
@@ -1228,7 +1232,7 @@ mdd-booster 고유**이며, 다른 생성기는 이들을 무시한다.
 
 | attribute | 대상 | 생성 결과 |
 |---|---|---|
-| `@group("이름")` | 필드 | 폼을 `<FormSection title="이름">`으로 묶는다. 없으면 `"기타"` 섹션 |
+| `@group("이름")` | 필드 | 폼을 `<FormSection title="이름">`으로 묶는다. 없는 필드는 `"기타"` 섹션에 모이고, 폼의 모든 필드가 그렇다면(섹션이 하나뿐이면) 제목 없이 그린다 |
 | `@help("설명")` | 필드 | 컨트롤에 `description="설명"` — 라벨은 짧게 두고 예시·부연을 아래로 분리 |
 | `@slot` | 필드 | 인라인 컨트롤 대신 **슬롯**으로 렌더 — 호출부가 준 내용만 그린다(`slots` 의 키는 전부 필수, 빈 칸은 `null`). `@reference` FK 필드는 자동으로 슬롯 |
 | `@display_labels(다른Enum)` | enum 필드 | 표시 텍스트만 다른 enum의 라벨맵으로 교체. **저장/캐스트 타입은 그대로** |

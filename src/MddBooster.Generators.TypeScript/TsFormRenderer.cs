@@ -194,6 +194,13 @@ public static class TsFormRenderer
             sections[group].Add(field);
         }
 
+        // A form whose fields all fell into the implicit "기타" bucket has one section and nothing
+        // to tell it apart from, so its heading carries no information — and a name for "the rest"
+        // reads as noise. The title is dropped (the layout contract's `title` is optional); an
+        // author-written @group — even @group("기타") — is a name someone chose, and stays.
+        var untitledDefaultSection = sections.Count == 1
+            && storedFields.All(f => MddBooster.Core.Ast.FieldAttributes.EffectiveGroup(f) is null);
+
         // Collect slot fields: @reference FK fields AND @slot-annotated non-FK fields.
         // @slot allows non-FK fields (e.g. a field with a custom auto-generate button) to be
         // rendered as caller-filled slots rather than as inline form controls.
@@ -361,8 +368,12 @@ public static class TsFormRenderer
         foreach (var (sectionTitle, fields) in sections)
         {
             var titleKey = SourceLiteral.TypeScriptString(sectionTitle);
-            sb.Append("      <FormSection ").Append(SourceLiteral.JsxStringAttribute("title", sectionTitle))
-              .Append(" className={sectionProps?.[").Append(titleKey).Append("]?.className}")
+            // sectionProps stays keyed by the bucket name even when the heading is dropped, so a
+            // consumer's per-section className/style keeps reaching the section.
+            sb.Append("      <FormSection");
+            if (!untitledDefaultSection)
+                sb.Append(' ').Append(SourceLiteral.JsxStringAttribute("title", sectionTitle));
+            sb.Append(" className={sectionProps?.[").Append(titleKey).Append("]?.className}")
               .Append(" style={sectionProps?.[").Append(titleKey).AppendLine("]?.style}>");
             RenderSectionRows(sb, fields, enumNames, withExcludedValues);
             sb.AppendLine("      </FormSection>");
