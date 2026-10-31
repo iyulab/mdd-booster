@@ -48,6 +48,7 @@ public sealed class SemanticAnalyzer
 
         foreach (var model in _models)
         {
+            CheckCompositePrimaryKey(model, diagnostics);
             foreach (var field in model.Fields)
             {
                 CheckFieldType(model, field, diagnostics);
@@ -76,6 +77,26 @@ public sealed class SemanticAnalyzer
         CheckUnreadIndexItems(diagnostics);
 
         return diagnostics;
+    }
+
+    /// <summary>
+    /// <c>MDD055</c> (error): a model declares more than one primary-key column (<c>@primary(1)</c> + <c>@primary(2)</c>).
+    /// No target produces a composite key — the runtime entity base class carries a single <c>Id</c> — so the input is
+    /// refused here, once, for every target and both SQL dialects. Left to the generators it came out three ways: the
+    /// Model target threw, SQL Server repeated an inline <c>PRIMARY KEY</c> on each column, and PostgreSQL kept the first
+    /// column and silently dropped the rest.
+    /// </summary>
+    private static void CheckCompositePrimaryKey(ResolvedModel model, List<SemanticDiagnostic> diagnostics)
+    {
+        var keyFields = model.Fields.Where(f => Ast.FieldAttributes.Has(f, "pk")).ToList();
+        if (keyFields.Count < 2) return;
+        diagnostics.Add(new SemanticDiagnostic(
+            "MDD055",
+            $"'{model.Name}' 의 기본키가 열 {keyFields.Count}개({string.Join(", ", keyFields.Select(f => f.Name))})다 — " +
+            "복합 기본키는 어느 타깃도 생성하지 않는다(런타임 엔티티 기반 클래스의 키는 하나뿐이다). " +
+            "하나의 `identifier` 기본키로 모델링하고, 열 짝의 유일성은 복합 `@unique(열, 열)` 로 지킨다.",
+            keyFields[0].Loc,
+            SemanticSeverity.Error));
     }
 
     /// <summary>

@@ -76,6 +76,7 @@ public static class EntityPairRenderer
 
         // PK 지원 게이트 — IyuEntity.Id(Guid 단일 키)와 양립 불가한 모델은 조용히
         // 삼키지 않고 명시적으로 실패한다. (silent drop 금지 — 2026-07-22 이슈)
+        // 복합 PK 는 빌드가 MDD055 로 먼저 세우므로 아래 첫 분기는 렌더러를 직접 부르는 호출자의 방어선이다.
         var pkFields = model.Fields.Where(f => HasAttribute(f, "pk")).ToList();
         if (pkFields.Count > 1)
         {

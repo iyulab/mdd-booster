@@ -251,10 +251,12 @@ appears in no output; the build reports it as unconsumed.
 
 ## §4.1 Composite Key Definition
 
-**What this generator implements**: the attribute form only. `@primary(1)`/`@primary(2)` is read as
-a composite key. The multi-line `### PrimaryKey` form is not — the section is carried into the model
-as unstructured entries and nothing reads them, so the fields it names are **not** marked as keys.
-The build reports the section as unconsumed. Declare composite keys with `@primary(order)`.
+**What this generator implements**: nothing — composite keys are refused. A model that declares more than one
+primary-key column (`@primary(1)` + `@primary(2)`) stops the build with `MDD055` on every target, because the
+runtime entity base class carries a single `Id`. Model the table with one `identifier` key and guard the pair with a
+composite `@unique(a, b)`. The multi-line `### PrimaryKey` form is not read either — the section is carried into the
+model as unstructured entries, the fields it names are **not** marked as keys, and the build reports the section as
+unconsumed.
 
 ## §4.3.2 Behavior Section (Recommended for Multiple Behaviors)
 
