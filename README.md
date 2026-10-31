@@ -16,6 +16,8 @@ M3L → SQL/C#/API 코드 생성기. 단일 `tables.m3l.md` 소스로 SSDT 스�
 | **Api** | `Api_gen/ApiRegistration_gen.cs` (OData + GraphQL 엔티티 페어 등록) | ASP.NET Core 서버 (OData/GraphQL 런타임) |
 | **TypeScript** | `outputPath` 아래 `enums_gen.ts` · `entities_gen.ts` · `entity_names_gen.ts` · `enum_labels_gen.ts` · `field_schema_gen.ts`, 그리고 `formsOutputPath` 를 주면 `{Entity}Form_gen.tsx` (옵션은 아래 «TypeScript 타깃 옵션») | 프론트엔드(타입 · 폼 · 필드 스키마) |
 
+**에이전트 skill** — [`skills/mdd/SKILL.md`](./skills/mdd/SKILL.md) 는 모델 수정 → `mdd build` → 종료 코드 · 진단 코드로 고치기 → 생성물 diff 검토 순환과 함정(생성 파일 직접 수정 금지 · 경고를 CI 에서 거는 법 · 개명)을 [Agent Skills](https://agentskills.io) 형식으로 담는다. 에이전트의 skills 디렉터리에 두면 된다.
+
 ## 사용법
 
 ### mdd.json (소비 프로젝트에 배치)

@@ -18,6 +18,10 @@
 
 ## Unreleased
 
+### Agent Skill — `skills/mdd/SKILL.md`
+
+- The edit-the-model → `mdd build` → fix-by-diagnostic-code → review-the-generated-diff loop, the exit codes, the targets, how to gate warnings in CI, how a rename reaches the database, and the pitfalls — in the [Agent Skills](https://agentskills.io) format.
+
 ### 복합 기본키는 모든 타깃에서 같은 진단으로 거절된다 — `MDD055`
 
 - **`@primary(1)` + `@primary(2)` 처럼 기본키 열이 둘 이상인 모델은 어느 타깃을 쓰든 빌드가 `MDD055`(종료 코드 3)로 서고 아무것도 쓰지 않는다.** 종전에는 같은 입력이 타깃마다 달랐다:
