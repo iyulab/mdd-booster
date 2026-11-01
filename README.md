@@ -7,6 +7,55 @@ M3L → SQL/C#/API 코드 생성기. 단일 `tables.m3l.md` 소스로 SSDT 스�
 > 릴리스별 변경은 [CHANGELOG](./CHANGELOG.md) 를 볼 것.
 > 이전 `MDD-Booster` 전역 도구는 이 저장소의 과거 버전이며, 현재 입력 형식·설정과 호환되지 않는다.
 
+## 빠른 시작
+
+.NET 10 SDK 가 필요하다.
+
+```bash
+dotnet tool install -g mdd
+mkdir hello && cd hello
+```
+
+모델 `tables.m3l.md` — 문법은 [M3L 명세](https://github.com/iyulab/m3l/blob/main/docs/specification.md)에 있다:
+
+```markdown
+# Namespace: hello
+
+## Author
+- id: identifier @pk @generated
+- name: string(80) @not_null
+```
+
+설정 `mdd.json` — SQL 만 생성하는 가장 작은 형태다(`emitSqlProj`·`emitRefreshScript` 는 SSDT 전용 산출물을 끈다):
+
+```json
+{
+  "sources": ["./tables.m3l.md"],
+  "targets": [
+    { "type": "Sql", "projectPath": "./generated/Database", "schema": "dbo", "emitSqlProj": false, "emitRefreshScript": false }
+  ]
+}
+```
+
+```bash
+mdd build .
+# [m3l] 모델 1개, enum 0개 로드됨: Author
+# [sql] 완료
+# build 완료.
+```
+
+`generated/Database/dbo/Tables_gen/Author.sql` 이 생긴다:
+
+```sql
+CREATE TABLE [dbo].[Author]
+(
+    [Id] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
+    [Name] NVARCHAR(80) NOT NULL
+)
+```
+
+모델이 틀리면 진단 코드와 줄·열 위치를 내고 0 이 아닌 종료 코드로 끝난다([종료 코드](#종료-코드)). 엔티티·API·TypeScript 타깃과 나머지 설정은 아래 «사용법», 더 큰 모델 예시(참조·lookup·rollup·enum)는 저장소의 [`samples/`](https://github.com/iyulab/mdd-booster/tree/main/samples) 에 있다.
+
 ## 생성 타깃
 
 | 타입 | 출력 | 소비자 |
@@ -630,25 +679,21 @@ Lookup/Rollup 파생 컬럼도 `HasColumnName`으로 명시한다.
 ### 빌드 실행
 
 ```bash
-dotnet run --project src/MddBooster.Cli -- build path/to/mdd
-```
-
-또는 설치된 CLI:
-
-```bash
 mdd build ./mdd   # mdd.json 이 있는 디렉터리 — 생략하면 현재 디렉터리
 ```
 
-**바로 실행해 볼 수 있는 예시**는 이 리포의 [`samples/`](./samples)에 있다 —
+**더 큰 예시**는 이 저장소의 [`samples/`](https://github.com/iyulab/mdd-booster/tree/main/samples)에 있다 —
 `tables.m3l.md`(Project/Task, `@reference`·`@lookup`·`@rollup`·`@computed`·enum 을 갖춘 작은
 모델) + `mdd.json`(Sql·Model·Api 3타깃, `emitSqlProj: false`로 desired-state 스타일 스키마
-관리 도구 소비를 가정) 한 쌍이다:
+관리 도구 소비를 가정) 한 쌍이다. 두 파일을 내려받아 한 디렉터리에 두고 빌드한다:
 
 ```bash
-dotnet run --project src/MddBooster.Cli -- build ./samples
+mdd build ./samples
 # → samples/generated/{Database,Entities,Server}/ 에 SSDT 스키마·EF Core 엔티티·
-#   OData/GraphQL 등록 코드가 생성된다(gitignore 대상 — 매 빌드마다 새로 나온다)
+#   OData/GraphQL 등록 코드가 생성된다(매 빌드마다 새로 나온다)
 ```
+
+이 저장소를 클론해 소스에서 돌리는 방법(`dotnet run --project src/MddBooster.Cli -- build …`)은 [CONTRIBUTING](./CONTRIBUTING.md) 에 있다.
 
 **Model 타깃 출력을 컴파일하려면 소비 프로젝트에 `global using` 선언이 필요하다.** 생성된
 엔티티는 런타임 기반 타입(`IyuEntity` 등)을 단순 이름으로만 참조한다 — 이 저장소는 그 타입들이

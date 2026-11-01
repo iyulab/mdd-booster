@@ -22,6 +22,10 @@
 
 - The edit-the-model → `mdd build` → fix-by-diagnostic-code → review-the-generated-diff loop, the exit codes, the targets, how to gate warnings in CI, how a rename reaches the database, and the pitfalls — in the [Agent Skills](https://agentskills.io) format.
 
+### README 가 설치한 사람의 첫 실행에서 시작한다
+
+- **README 맨 앞에 «빠른 시작» 이 생겼다**: 설치 → 네 줄 모델 → SQL 만 만드는 최소 `mdd.json` → `mdd build .` → 나온 파일. 종전에는 첫 빌드 명령이 저장소를 클론해야 돌아가는 `dotnet run --project …` 였고, 예시는 저장소의 `samples/` 를 가리켜 NuGet 으로 설치한 사람에게는 닿지 않았다. 저장소에서 소스로 돌리는 방법은 `CONTRIBUTING` 으로 옮겼고, `samples/` 링크는 GitHub 주소다.
+
 ### 복합 기본키는 모든 타깃에서 같은 진단으로 거절된다 — `MDD055`
 
 - **`@primary(1)` + `@primary(2)` 처럼 기본키 열이 둘 이상인 모델은 어느 타깃을 쓰든 빌드가 `MDD055`(종료 코드 3)로 서고 아무것도 쓰지 않는다.** 종전에는 같은 입력이 타깃마다 달랐다:
