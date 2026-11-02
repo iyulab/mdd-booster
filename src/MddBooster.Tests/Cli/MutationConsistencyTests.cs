@@ -297,7 +297,169 @@ public class MutationConsistencyTests
         return null;
     }
 
+    /// <summary>A type written as <c>name: type?</c> — nullable — and nothing between the type and the question mark.</summary>
+    private static readonly Regex NullableType = new(@"^(- \w+: \w+(?:\([^)]*\))?)\?(?= |$)", RegexOptions.Compiled);
+
+    private static Mutation? RequireField(string[] lines, Entity entity)
+    {
+        foreach (var at in entity.FieldLines)
+        {
+            if (!IsPlainField(lines[at])) continue;
+            if (!NullableType.IsMatch(lines[at])) continue;
+            var changed = (string[])lines.Clone();
+            changed[at] = NullableType.Replace(lines[at], "$1", 1);
+            return new Mutation(changed, FieldName(lines[at]));
+        }
+        return null;
+    }
+
+    // ---- enums: a value added to a type used by stored columns ---------------------------------
+
+    /// <summary>An enum block of the model text: its name and the index of its first value line.</summary>
+    private sealed record EnumBlock(string Name, int FirstValue);
+
+    private static List<EnumBlock> ReadEnums(string[] lines)
+    {
+        var enums = new List<EnumBlock>();
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (!lines[i].StartsWith("## ", StringComparison.Ordinal) || !lines[i].Contains("::enum")) continue;
+            var name = lines[i][3..].Trim().Split(' ', ':')[0];
+            for (var j = i + 1; j < lines.Length && !lines[j].StartsWith('#'); j++)
+            {
+                if (!IsFieldLine(lines[j])) continue;
+                enums.Add(new EnumBlock(name, j));
+                break;
+            }
+        }
+        return enums;
+    }
+
+    /// <summary>
+    /// The entities that store a column of <paramref name="enumName"/>: those with a field of that type
+    /// in their own block, or in a block they inherit from (<c>## Thing : Base</c>), however far up.
+    /// </summary>
+    private static HashSet<string> EntitiesStoring(string[] lines, string enumName)
+    {
+        var uses = new Regex($@"^- \w+: {Regex.Escape(enumName)}\b");
+        var direct = new HashSet<string>(StringComparer.Ordinal);
+        var bases = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        string? block = null;
+        foreach (var line in lines)
+        {
+            if (line.StartsWith("## ", StringComparison.Ordinal))
+            {
+                var heading = line[3..].Trim();
+                block = heading.Split(' ', ':')[0];
+                var inherits = heading.Contains(" : ") ? heading[(heading.IndexOf(" : ", StringComparison.Ordinal) + 3)..] : "";
+                bases[block] = inherits.Split(',').Select(b => b.Trim().Split(' ', ':')[0]).Where(b => b.Length > 0).ToList();
+            }
+            else if (line.StartsWith('#'))
+            {
+                block = null;
+            }
+            else if (block is not null && uses.IsMatch(line))
+            {
+                direct.Add(block);
+            }
+        }
+
+        bool Reaches(string name, HashSet<string> seen) =>
+            direct.Contains(name)
+            || (bases.TryGetValue(name, out var parents) && seen.Add(name) && parents.Any(p => Reaches(p, seen)));
+
+        return ReadEntities(lines).Select(e => e.Name).Where(n => Reaches(n, [])).ToHashSet(StringComparer.Ordinal);
+    }
+
+    /// <summary>A value name of the given length, which is what sets the width of an enum's columns (never below 20).</summary>
+    private static string ValueNameOfLength(int length) => "z".PadRight(length, 'z');
+
+    /// <summary>
+    /// Adds one value to each of the first few enums that some entity stores a column of, builds, and hands
+    /// the entities that store it and the files that changed to <paramref name="check"/>.
+    /// </summary>
+    private static (List<string> Violations, int Ran) EnumSweep(
+        string dialect, int valueNameLength, Func<string, HashSet<string>, Dictionary<string, string>, Dictionary<string, string>, List<string>> check)
+    {
+        var text = File.ReadAllText(AcceptanceModel.FixturePath).Replace("\r\n", "\n");
+        var lines = text.Split('\n');
+        var before = Generate(text, dialect);
+        var violations = new List<string>();
+        var ran = 0;
+
+        foreach (var block in ReadEnums(lines))
+        {
+            if (ran == EntitiesPerRelation) break;
+            var storing = EntitiesStoring(lines, block.Name);
+            if (storing.Count == 0) continue;
+            ran++;
+
+            var mutated = lines.Take(block.FirstValue)
+                .Append($"- {ValueNameOfLength(valueNameLength)}: \"probe\"")
+                .Concat(lines.Skip(block.FirstValue)).ToArray();
+
+            Dictionary<string, string> after;
+            try
+            {
+                after = Generate(string.Join('\n', mutated), dialect);
+            }
+            catch (Exception e)
+            {
+                violations.Add($"[{dialect}] enum {block.Name}: the mutated model did not build: {e.Message.Split('\n')[0]}");
+                continue;
+            }
+            violations.AddRange(check($"[{dialect}] enum {block.Name}", storing, before, after));
+        }
+        return (violations, ran);
+    }
+
     // ---- the relations -----------------------------------------------------------------------
+
+    [Theory]
+    [MemberData(nameof(Dialects))]
+    public void Making_a_nullable_field_required_turns_only_its_column_to_not_null_in_that_entitys_files(string dialect) =>
+        AssertClean(Sweep(dialect, RequireField, (where, d, column) =>
+            AllCarry(where, "an added", d.Added, column)
+                .Concat(AllCarry(where, "a removed", d.Removed, column))
+                .Concat(d.Added.Count == d.Removed.Count ? [] : [$"{where}: {d.Added.Count} lines added, {d.Removed.Count} removed"])
+                .Concat(d.Added.Where(l => !l.Contains("NOT NULL")).Select(l => $"{where}: an added line is not NOT NULL: '{l}'"))
+                .Concat(d.Removed.Where(l => l.Contains("NOT NULL")).Select(l => $"{where}: a removed line was already NOT NULL: '{l}'"))
+                .ToList()));
+
+    [Theory]
+    [MemberData(nameof(Dialects))]
+    public void A_value_no_longer_than_the_columns_already_are_changes_no_generated_file(string dialect) =>
+        AssertClean(EnumSweep(dialect, valueNameLength: 3, (where, _, before, after) =>
+            ChangedFiles(before, after).Select(f => $"{where}: a value that fits changed '{f}'").ToList()));
+
+    [Theory]
+    [MemberData(nameof(Dialects))]
+    public void A_longer_value_widens_only_the_columns_of_that_enum_in_the_files_of_the_entities_that_store_it(string dialect)
+    {
+        const int Width = 90;
+        AssertClean(EnumSweep(dialect, Width, (where, storing, before, after) =>
+        {
+            var violations = new List<string>();
+            var changed = ChangedFiles(before, after);
+            if (changed.Count == 0) violations.Add($"{where}: a value of {Width} characters changed no file");
+
+            foreach (var file in changed)
+            {
+                var name = Squash(Path.GetFileNameWithoutExtension(file));
+                if (!IsTableFile(file) || !storing.Any(e => Squash(e) == name))
+                {
+                    violations.Add($"{where}: changed '{file}', which is not the table of an entity that stores the enum");
+                    continue;
+                }
+                var delta = LineDelta(before.GetValueOrDefault(file, ""), after[file]);
+                if (delta.Added.Count == 0 || delta.Added.Count != delta.Removed.Count)
+                    violations.Add($"{where} {file}: {delta.Added.Count} lines added, {delta.Removed.Count} removed");
+                violations.AddRange(delta.Added.Where(l => !l.Contains($"({Width})")).Select(l => $"{where} {file}: an added line is not the widened column: '{l}'"));
+                violations.AddRange(delta.Removed.Where(l => l.Contains($"({Width})")).Select(l => $"{where} {file}: a removed line already had the width: '{l}'"));
+            }
+            return violations;
+        }));
+    }
 
     [Theory]
     [MemberData(nameof(Dialects))]
