@@ -147,10 +147,19 @@ public class MutationConsistencyTests
 
             Assert.Equal(0, new BuildCommand().Run(mddDir));
 
-            return Directory.EnumerateFiles(dbDir, "*", SearchOption.AllDirectories)
+            var generated = Directory.EnumerateFiles(dbDir, "*", SearchOption.AllDirectories)
                 .ToDictionary(
                     f => Path.GetRelativePath(dbDir, f).Replace('\\', '/'),
                     f => File.ReadAllText(f).Replace("\r\n", "\n"));
+
+            // A rename writes its script beside the project, in the folder preScriptsPath names.
+            var preDir = Path.Combine(root, "pre");
+            if (Directory.Exists(preDir))
+            {
+                foreach (var f in Directory.EnumerateFiles(preDir, "*", SearchOption.AllDirectories))
+                    generated["pre/" + Path.GetRelativePath(preDir, f).Replace('\\', '/')] = File.ReadAllText(f).Replace("\r\n", "\n");
+            }
+            return generated;
         }
         finally
         {
@@ -378,6 +387,29 @@ public class MutationConsistencyTests
         return null;
     }
 
+    private static readonly Regex AfterType = new(@"^(- \w+: \w+(?:\([^)]*\))?\??)", RegexOptions.Compiled);
+
+    /// <summary>The suffix a renamed field gets, so the old name is still found inside the new one.</summary>
+    private const string RenamedSuffix = "_v2";
+
+    private static Mutation? RenameField(string[] lines, Entity entity)
+    {
+        var text = string.Join('\n', lines);
+        foreach (var at in entity.FieldLines)
+        {
+            if (!IsPlainField(lines[at]) || lines[at].Contains("@renamed_from")) continue;
+            var name = FieldName(lines[at]);
+            // Only a field nothing else names: a lookup, an index or a rollup that reads it would have to follow it.
+            if (Regex.Matches(text, $@"\b{Regex.Escape(name)}\b").Count != 1) continue;
+            if (!AfterType.IsMatch(lines[at])) continue;
+            var changed = (string[])lines.Clone();
+            var renamed = $"- {name}{RenamedSuffix}:" + lines[at][(lines[at].IndexOf(':') + 1)..];
+            changed[at] = AfterType.Replace(renamed, $"$1 @renamed_from({name})", 1);
+            return new Mutation(changed, name);
+        }
+        return null;
+    }
+
     // ---- enums: a value added to a type used by stored columns ---------------------------------
 
     /// <summary>An enum block of the model text: its name and the index of its first value line.</summary>
@@ -566,6 +598,31 @@ public class MutationConsistencyTests
     [MemberData(nameof(Dialects))]
     public void Removing_a_field_removes_only_the_lines_of_that_column_from_that_entitys_files(string dialect) =>
         AssertClean(Sweep(dialect, RemoveField, CheckRemoved));
+
+    private static Dictionary<string, string> GenerateWithRenames(string modelText, string dialect) =>
+        GenerateWith(modelText, $$"""{ "type": "Sql", "dialect": "{{dialect}}", "projectPath": "../db", "preScriptsPath": "../pre", "emitSqlProj": false }""");
+
+    private static bool BelongsToRename(string file, Entity entity) =>
+        file.StartsWith("pre/", StringComparison.Ordinal)
+            ? Squash(file).Contains(Squash("rename_column_" + entity.Name), StringComparison.Ordinal)
+            : BelongsTo(file, entity);
+
+    [Theory]
+    [MemberData(nameof(Dialects))]
+    public void Renaming_a_field_renames_its_column_and_writes_one_script_for_it_and_changes_nothing_else(string dialect) =>
+        AssertClean(Sweep(new Target($"[{dialect}]", t => GenerateWithRenames(t, dialect), BelongsToRename, IsTableFile), RenameField,
+            (where, d, column) =>
+            {
+                if (!where.Contains(" pre/", StringComparison.Ordinal))
+                    return CheckRewritten(where, d, column);
+
+                // The script is a new file: all of it is added, and it has to name both the old and the new column.
+                var script = Squash(string.Concat(d.Added));
+                return d.Removed.Select(l => $"{where}: a script line disappeared: '{l}'")
+                    .Concat(script.Contains(Squash(column), StringComparison.Ordinal) ? [] : [$"{where}: the script does not name '{column}'"])
+                    .Concat(script.Contains(Squash(column + RenamedSuffix), StringComparison.Ordinal) ? [] : [$"{where}: the script does not name '{column}{RenamedSuffix}'"])
+                    .ToList();
+            }));
 
     // ---- the relations on C# entities ----------------------------------------------------------
     // The Model target writes a class, an interface and an EF configuration per entity, and a context for
