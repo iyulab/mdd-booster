@@ -86,7 +86,47 @@ public class MutationConsistencyTests
 
     // ---- generating --------------------------------------------------------------------------
 
-    private static Dictionary<string, string> Generate(string modelText, string dialect)
+    private static Dictionary<string, string> Generate(string modelText, string dialect) =>
+        GenerateWith(modelText, $$"""{ "type": "Sql", "dialect": "{{dialect}}", "projectPath": "../db", "emitSqlProj": false }""");
+
+    /// <summary>The Model (C#) target, which needs a namespace and a context name of its own.</summary>
+    private static Dictionary<string, string> GenerateModel(string modelText) =>
+        GenerateWith(modelText, """{ "type": "Model", "projectPath": "../db", "namespace": "Mutation.Entities", "dbContextName": "MutationDb" }""")
+            .ToDictionary(file => file.Key, file => JoinAnnotations(file.Value));
+
+    /// <summary>
+    /// A C# property is its attributes and doc comment plus the declaration, and only the declaration names the
+    /// column. Joining each run of attribute and comment lines onto the line that follows makes one item of it,
+    /// the way a column definition is one line in SQL.
+    /// </summary>
+    private static string JoinAnnotations(string text)
+    {
+        var output = new List<string>();
+        var pending = new List<string>();
+        foreach (var line in text.Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.StartsWith('[') || trimmed.StartsWith("///", StringComparison.Ordinal))
+            {
+                pending.Add(trimmed);
+            }
+            else if (pending.Count > 0 && trimmed.Length > 0)
+            {
+                output.Add(string.Join(' ', pending) + " " + trimmed);
+                pending.Clear();
+            }
+            else
+            {
+                output.AddRange(pending);
+                pending.Clear();
+                output.Add(line);
+            }
+        }
+        output.AddRange(pending);
+        return string.Join('\n', output);
+    }
+
+    private static Dictionary<string, string> GenerateWith(string modelText, string targetJson)
     {
         var root = Path.Combine(Path.GetTempPath(), $"mdd-mutation-{Guid.NewGuid():N}");
         var mddDir = Path.Combine(root, "mdd");
@@ -100,7 +140,7 @@ public class MutationConsistencyTests
             {
               "sources": ["./tables.m3l.md"],
               "targets": [
-                { "type": "Sql", "dialect": "{{dialect}}", "projectPath": "../db", "emitSqlProj": false }
+                {{targetJson}}
               ]
             }
             """);
@@ -187,46 +227,60 @@ public class MutationConsistencyTests
     private static (List<string> Violations, int Ran) Sweep(
         string dialect,
         Func<string[], Entity, Mutation?> mutate,
+        Func<string, (List<string> Added, List<string> Removed), string, List<string>> check) =>
+        Sweep(new Target($"[{dialect}]", t => Generate(t, dialect), BelongsTo, IsTableFile), mutate, check);
+
+    /// <summary>What a sweep needs to know about the generator it runs: how to build, which files are an entity's, which one must move.</summary>
+    private sealed record Target(
+        string Label,
+        Func<string, Dictionary<string, string>> Generate,
+        Func<string, Entity, bool> Belongs,
+        Func<string, bool> IsPrimary,
+        int Limit = EntitiesPerRelation);
+
+    private static (List<string> Violations, int Ran) Sweep(
+        Target target,
+        Func<string[], Entity, Mutation?> mutate,
         Func<string, (List<string> Added, List<string> Removed), string, List<string>> check)
     {
         var text = File.ReadAllText(AcceptanceModel.FixturePath).Replace("\r\n", "\n");
         var lines = text.Split('\n');
-        var before = Generate(text, dialect);
+        var before = target.Generate(text);
         var violations = new List<string>();
         var ran = 0;
 
         foreach (var entity in ReadEntities(lines))
         {
-            if (ran == EntitiesPerRelation) break;
+            if (ran == target.Limit) break;
             if (mutate(lines, entity) is not { } mutation) continue;
             ran++;
 
             Dictionary<string, string> after;
             try
             {
-                after = Generate(string.Join('\n', mutation.Lines), dialect);
+                after = target.Generate(string.Join('\n', mutation.Lines));
             }
             catch (Exception e)
             {
-                violations.Add($"[{dialect}] {entity.Name}: the mutated model did not build: {e.Message.Split('\n')[0]}");
+                violations.Add($"{target.Label} {entity.Name}: the mutated model did not build: {e.Message.Split('\n')[0]}");
                 continue;
             }
 
             var changed = ChangedFiles(before, after);
-            var strangers = changed.Where(f => !BelongsTo(f, entity)).ToList();
+            var strangers = changed.Where(f => !target.Belongs(f, entity)).ToList();
             if (strangers.Count > 0)
             {
-                violations.Add($"[{dialect}] {entity.Name}: changed files that are not {entity.Name}'s: {string.Join(", ", strangers)}");
+                violations.Add($"{target.Label} {entity.Name}: changed files that are not {entity.Name}'s: {string.Join(", ", strangers)}");
             }
-            if (!changed.Any(IsTableFile))
+            if (!changed.Any(target.IsPrimary))
             {
-                violations.Add($"[{dialect}] {entity.Name}: its table file did not change; changed: [{string.Join(", ", changed)}]");
+                violations.Add($"{target.Label} {entity.Name}: its main file did not change; changed: [{string.Join(", ", changed)}]");
             }
 
-            foreach (var file in changed.Where(f => BelongsTo(f, entity)))
+            foreach (var file in changed.Where(f => target.Belongs(f, entity)))
             {
                 var delta = LineDelta(before.GetValueOrDefault(file, ""), after[file]);
-                violations.AddRange(check($"[{dialect}] {entity.Name} {file}", delta, mutation.Column));
+                violations.AddRange(check($"{target.Label} {entity.Name} {file}", delta, mutation.Column));
             }
         }
         return (violations, ran);
@@ -246,11 +300,20 @@ public class MutationConsistencyTests
 
     // ---- the operators -----------------------------------------------------------------------
 
+    /// <summary>A field is its line and the indented lines under it (a description sits there): how many lines in all.</summary>
+    private static int FieldExtent(string[] lines, int at)
+    {
+        var extent = 1;
+        while (at + extent < lines.Length && lines[at + extent].Length > 0 && char.IsWhiteSpace(lines[at + extent][0]))
+            extent++;
+        return extent;
+    }
+
     private static Mutation? AddField(string[] lines, Entity entity)
     {
-        // After the first field line, where a column list can take one more.
-        var at = entity.FieldLines[0];
-        return new Mutation(lines.Take(at + 1).Append($"- {Probe}: string(30)").Concat(lines.Skip(at + 1)).ToArray(), Probe);
+        // After the first field, where a column list can take one more.
+        var after = entity.FieldLines[0] + FieldExtent(lines, entity.FieldLines[0]);
+        return new Mutation(lines.Take(after).Append($"- {Probe}: string(30)").Concat(lines.Skip(after)).ToArray(), Probe);
     }
 
     private static Mutation? SwapAdjacentFields(string[] lines, Entity entity)
@@ -292,7 +355,9 @@ public class MutationConsistencyTests
             var name = FieldName(lines[at]);
             // Only a field nothing else in the model names: removing a referenced one is a different test.
             if (Regex.Matches(text, $@"\b{Regex.Escape(name)}\b").Count != 1) continue;
-            return new Mutation(lines.Where((_, i) => i != at).ToArray(), name);
+            // The field and its indented description go together: left behind, the description would read as the previous field's.
+            var extent = FieldExtent(lines, at);
+            return new Mutation(lines.Where((_, i) => i < at || i >= at + extent).ToArray(), name);
         }
         return null;
     }
@@ -413,7 +478,28 @@ public class MutationConsistencyTests
         return (violations, ran);
     }
 
-    // ---- the relations -----------------------------------------------------------------------
+    // ---- what each operator is allowed to do to a file -----------------------------------------
+
+    private static List<string> CheckAdded(string where, (List<string> Added, List<string> Removed) d, string column) =>
+        d.Removed.Select(l => $"{where}: a line disappeared: '{l}'")
+            .Concat(d.Added.Count == 0 ? [$"{where}: changed without adding a line"] : [])
+            .Concat(AllCarry(where, "an added", d.Added, column)).ToList();
+
+    private static List<string> CheckOrderOnly(string where, (List<string> Added, List<string> Removed) d, string column) =>
+        d.Added.Concat(d.Removed).Select(l => $"{where}: more than the order changed: '{l}'").ToList();
+
+    private static List<string> CheckRewritten(string where, (List<string> Added, List<string> Removed) d, string column) =>
+        AllCarry(where, "an added", d.Added, column)
+            .Concat(AllCarry(where, "a removed", d.Removed, column))
+            .Concat(d.Added.Count == d.Removed.Count ? [] : [$"{where}: {d.Added.Count} lines added, {d.Removed.Count} removed"])
+            .ToList();
+
+    private static List<string> CheckRemoved(string where, (List<string> Added, List<string> Removed) d, string column) =>
+        d.Added.Select(l => $"{where}: a line appeared: '{l}'")
+            .Concat(d.Removed.Count == 0 ? [$"{where}: changed without removing a line"] : [])
+            .Concat(AllCarry(where, "a removed", d.Removed, column)).ToList();
+
+    // ---- the relations on SQL ------------------------------------------------------------------
 
     [Theory]
     [MemberData(nameof(Dialects))]
@@ -464,33 +550,63 @@ public class MutationConsistencyTests
     [Theory]
     [MemberData(nameof(Dialects))]
     public void Adding_a_field_adds_lines_for_it_to_that_entitys_files_and_changes_nothing_else(string dialect) =>
-        AssertClean(Sweep(dialect, AddField, (where, d, column) =>
-            d.Removed.Select(l => $"{where}: a line disappeared: '{l}'")
-                .Concat(d.Added.Count == 0 ? [$"{where}: changed without adding a line"] : [])
-                .Concat(AllCarry(where, "an added", d.Added, column)).ToList()));
+        AssertClean(Sweep(dialect, AddField, CheckAdded));
 
     [Theory]
     [MemberData(nameof(Dialects))]
     public void Swapping_two_adjacent_fields_changes_only_their_order_in_that_entitys_files(string dialect) =>
-        AssertClean(Sweep(dialect, SwapAdjacentFields, (where, d, _) =>
-            d.Added.Concat(d.Removed).Select(l => $"{where}: more than the order changed: '{l}'").ToList()));
+        AssertClean(Sweep(dialect, SwapAdjacentFields, CheckOrderOnly));
 
     [Theory]
     [MemberData(nameof(Dialects))]
     public void Lengthening_a_string_rewrites_only_the_lines_of_that_column_in_that_entitys_files(string dialect) =>
-        AssertClean(Sweep(dialect, LengthenString, (where, d, column) =>
-            AllCarry(where, "an added", d.Added, column)
-                .Concat(AllCarry(where, "a removed", d.Removed, column))
-                .Concat(d.Added.Count == d.Removed.Count ? [] : [$"{where}: {d.Added.Count} lines added, {d.Removed.Count} removed"])
-                .ToList()));
+        AssertClean(Sweep(dialect, LengthenString, CheckRewritten));
 
     [Theory]
     [MemberData(nameof(Dialects))]
     public void Removing_a_field_removes_only_the_lines_of_that_column_from_that_entitys_files(string dialect) =>
-        AssertClean(Sweep(dialect, RemoveField, (where, d, column) =>
-            d.Added.Select(l => $"{where}: a line appeared: '{l}'")
-                .Concat(d.Removed.Count == 0 ? [$"{where}: changed without removing a line"] : [])
-                .Concat(AllCarry(where, "a removed", d.Removed, column)).ToList()));
+        AssertClean(Sweep(dialect, RemoveField, CheckRemoved));
+
+    // ---- the relations on C# entities ----------------------------------------------------------
+    // The Model target writes a class, an interface and an EF configuration per entity, and a context for
+    // all of them. An entity's files are named after it, with an I in front, an Ext after it or Configuration
+    // after that; the context and the enums are not any one entity's.
+
+    private static bool BelongsToModelEntity(string file, Entity entity)
+    {
+        var name = Squash(Path.GetFileNameWithoutExtension(file));
+        var entityName = Squash(entity.Name);
+        return file.Contains("Entity_gen/", StringComparison.Ordinal)
+            && new[] { "", "ext", "configuration", "extconfiguration" }
+                .SelectMany(suffix => new[] { entityName + suffix, "i" + entityName + suffix })
+                .Contains(name);
+    }
+
+    private static bool IsModelEntityClass(string file) =>
+        file.Contains("Entity_gen/", StringComparison.Ordinal)
+        && !Path.GetFileNameWithoutExtension(file).EndsWith("Configuration", StringComparison.Ordinal);
+
+    private static readonly Target ModelTarget = new("[model]", GenerateModel, BelongsToModelEntity, IsModelEntityClass, Limit: 4);
+
+    [Fact]
+    public void Adding_a_field_adds_lines_for_it_to_that_entitys_classes_and_changes_nothing_else() =>
+        AssertClean(Sweep(ModelTarget, AddField, CheckAdded));
+
+    [Fact]
+    public void Swapping_two_adjacent_fields_changes_only_their_order_in_that_entitys_classes() =>
+        AssertClean(Sweep(ModelTarget, SwapAdjacentFields, CheckOrderOnly));
+
+    [Fact]
+    public void Lengthening_a_string_rewrites_only_the_lines_of_that_column_in_that_entitys_classes() =>
+        AssertClean(Sweep(ModelTarget, LengthenString, CheckRewritten));
+
+    [Fact]
+    public void Removing_a_field_removes_only_the_lines_of_that_column_from_that_entitys_classes() =>
+        AssertClean(Sweep(ModelTarget, RemoveField, CheckRemoved));
+
+    [Fact]
+    public void Making_a_nullable_field_required_rewrites_only_the_lines_of_that_column_in_that_entitys_classes() =>
+        AssertClean(Sweep(ModelTarget, RequireField, CheckRewritten));
 
     // ---- the comparison holds itself to what it must see ---------------------------------------
 
