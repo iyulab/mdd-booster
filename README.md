@@ -99,6 +99,10 @@ SSDT dacpac은 CHECK diff가 불안정하므로 선언형 스키마 관리 도�
 `emitForeignKeyIndexes`(기본 true, 0.13.0부터 — 아래),
 `preScriptsPath`(기본 없음 — 아래 «개명»).
 
+enum 컬럼은 문자열 컬럼이고 폭은 **가장 긴 값 이름의 길이**(하한 20)다. 모델에 더 긴 이름의 값을 나중에 더하면 그 enum 을
+쓰는 모든 테이블의 컬럼 정의가 바뀐다 — 스키마 비교에는 컬럼 변경으로 나타난다. 폭 안에 들어가는 값을 더하면 생성 SQL 은
+달라지지 않는다(`emitEnumCheckConstraints` 가 켜진 때는 CHECK 의 값 목록이 달라진다).
+
 **`projectPath`/`outputPath`/`formsOutputPath`/`sqlProjectPath`는 상대경로면 `mdd.json`이 있는
 디렉터리 기준, 절대경로면 그대로 쓴다.** 절대경로를 쓰면서 같은 저장소를 여러 물리적
 체크아웃(linked git worktree, 별도 클론)에서 빌드하면, `mdd build`를 어디서 실행하든 그
