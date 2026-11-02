@@ -476,11 +476,13 @@ public class MutationConsistencyTests
     /// the entities that store it and the files that changed to <paramref name="check"/>.
     /// </summary>
     private static (List<string> Violations, int Ran) EnumSweep(
-        string dialect, int valueNameLength, Func<string, HashSet<string>, Dictionary<string, string>, Dictionary<string, string>, List<string>> check)
+        string dialect, int valueNameLength, Func<string, HashSet<string>, Dictionary<string, string>, Dictionary<string, string>, List<string>> check,
+        Func<string, Dictionary<string, string>>? generate = null)
     {
+        generate ??= t => Generate(t, dialect);
         var text = File.ReadAllText(AcceptanceModel.FixturePath).Replace("\r\n", "\n");
         var lines = text.Split('\n');
-        var before = Generate(text, dialect);
+        var before = generate(text);
         var violations = new List<string>();
         var ran = 0;
 
@@ -498,7 +500,7 @@ public class MutationConsistencyTests
             Dictionary<string, string> after;
             try
             {
-                after = Generate(string.Join('\n', mutated), dialect);
+                after = generate(string.Join('\n', mutated));
             }
             catch (Exception e)
             {
@@ -549,6 +551,35 @@ public class MutationConsistencyTests
     public void A_value_no_longer_than_the_columns_already_are_changes_no_generated_file(string dialect) =>
         AssertClean(EnumSweep(dialect, valueNameLength: 3, (where, _, before, after) =>
             ChangedFiles(before, after).Select(f => $"{where}: a value that fits changed '{f}'").ToList()));
+
+    /// <summary>With the CHECK constraints on, a value that fits the width still reaches the tables: as the constraint's list.</summary>
+    [Theory]
+    [MemberData(nameof(Dialects))]
+    public void With_check_constraints_on_a_value_that_fits_changes_only_the_constraint_of_that_enum_in_the_tables_that_store_it(string dialect) =>
+        AssertClean(EnumSweep(dialect, valueNameLength: 3, (where, storing, before, after) =>
+        {
+            var violations = new List<string>();
+            var changed = ChangedFiles(before, after);
+            if (changed.Count == 0) violations.Add($"{where}: a value changed no constraint");
+            foreach (var file in changed)
+            {
+                var name = Squash(Path.GetFileNameWithoutExtension(file));
+                if (!IsTableFile(file) || !storing.Any(e => Squash(e) == name))
+                {
+                    violations.Add($"{where}: changed '{file}', which is not the table of an entity that stores the enum");
+                    continue;
+                }
+                var delta = LineDelta(before.GetValueOrDefault(file, ""), after[file]);
+                if (delta.Added.Count == 0 || delta.Added.Count != delta.Removed.Count)
+                    violations.Add($"{where} {file}: {delta.Added.Count} lines added, {delta.Removed.Count} removed");
+                violations.AddRange(delta.Added.Concat(delta.Removed).Where(l => !l.Contains("CK_", StringComparison.OrdinalIgnoreCase))
+                    .Select(l => $"{where} {file}: a changed line is not a CHECK constraint: '{l}'"));
+                violations.AddRange(delta.Added.Where(l => !Squash(l).Contains(Squash(ValueNameOfLength(3)), StringComparison.Ordinal))
+                    .Select(l => $"{where} {file}: an added constraint does not list the new value: '{l}'"));
+            }
+            return violations;
+        }, text => GenerateWith(text,
+            $$"""{ "type": "Sql", "dialect": "{{dialect}}", "projectPath": "../db", "emitSqlProj": false, "emitEnumCheckConstraints": true }""")));
 
     [Theory]
     [MemberData(nameof(Dialects))]
