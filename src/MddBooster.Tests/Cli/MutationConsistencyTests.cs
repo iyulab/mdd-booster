@@ -608,6 +608,99 @@ public class MutationConsistencyTests
     public void Making_a_nullable_field_required_rewrites_only_the_lines_of_that_column_in_that_entitys_classes() =>
         AssertClean(Sweep(ModelTarget, RequireField, CheckRewritten));
 
+    // ---- the Api target: entities reach it, fields do not --------------------------------------
+    // The Api target writes a controller per entity and one registration. Neither names a plain stored field,
+    // so editing one must leave both files as they were; adding an entity must add lines for that entity to them.
+
+    private static Dictionary<string, string> GenerateApi(string modelText) =>
+        GenerateWith(modelText, """
+            { "type": "Model", "projectPath": "../db/ent", "namespace": "Mutation.Entities", "dbContextName": "MutationDb" },
+            { "type": "Api", "projectPath": "../db/api", "namespace": "Mutation.Server" }
+            """)
+            .Where(file => file.Key.StartsWith("api/", StringComparison.Ordinal))
+            .ToDictionary(file => file.Key, file => file.Value);
+
+    [Fact]
+    public void Editing_a_plain_field_changes_no_file_of_the_api_target()
+    {
+        var text = File.ReadAllText(AcceptanceModel.FixturePath).Replace("\r\n", "\n");
+        var lines = text.Split('\n');
+        var before = GenerateApi(text);
+        Assert.NotEmpty(before);
+
+        var violations = new List<string>();
+        var ran = 0;
+        foreach (var (operatorName, mutate) in new (string, Func<string[], Entity, Mutation?>)[]
+                 { ("add", AddField), ("swap", SwapAdjacentFields), ("lengthen", LengthenString), ("remove", RemoveField), ("require", RequireField) })
+        {
+            foreach (var entity in ReadEntities(lines).Where(e => mutate(lines, e) is not null).Take(2))
+            {
+                ran++;
+                var after = GenerateApi(string.Join('\n', mutate(lines, entity)!.Lines));
+                violations.AddRange(ChangedFiles(before, after).Select(f => $"[api] {operatorName} on {entity.Name}: changed '{f}'"));
+            }
+        }
+        AssertClean((violations, ran));
+    }
+
+    /// <summary>A model with one more entity, which nothing else refers to.</summary>
+    private const string ProbeEntity = "MutationProbeThing";
+
+    private static string WithProbeEntity(string text) =>
+        text.TrimEnd('\n') + $"\n\n## {ProbeEntity} : Timestampable\n\n- id: identifier @pk @generated\n- note: string(30)?\n";
+
+    public static IEnumerable<object[]> Generators() => [["tsql"], ["postgres"], ["model"], ["api"]];
+
+    private static readonly Regex Structural = new(@"^(?:[{}()\[\];,\s]*|:\s*base\(.*\)\s*(?:\{\s*\})?)$", RegexOptions.Compiled);
+
+    /// <summary>A line that is only the shape of a block: braces, a closing parenthesis, a constructor's base call.</summary>
+    private static bool IsStructural(string line) => Structural.IsMatch(line.Trim());
+
+    private static Dictionary<string, string> GenerateFor(string generator, string text) => generator switch
+    {
+        "model" => GenerateModel(text),
+        "api" => GenerateApi(text),
+        _ => Generate(text, generator),
+    };
+
+    [Theory]
+    [MemberData(nameof(Generators))]
+    public void Adding_an_entity_adds_files_and_lines_for_it_and_changes_nothing_of_the_others(string generator)
+    {
+        var text = File.ReadAllText(AcceptanceModel.FixturePath).Replace("\r\n", "\n");
+        var before = GenerateFor(generator, text);
+        var after = GenerateFor(generator, WithProbeEntity(text));
+        var names = Squash(ProbeEntity);
+        var violations = new List<string>();
+
+        foreach (var file in ChangedFiles(before, after))
+        {
+            if (!after.ContainsKey(file))
+            {
+                violations.Add($"[{generator}] a file disappeared: '{file}'");
+                continue;
+            }
+            if (!before.ContainsKey(file))
+            {
+                // A file that is new must be the new entity's own.
+                if (!Squash(file).Contains(names, StringComparison.Ordinal))
+                    violations.Add($"[{generator}] a new file that is not {ProbeEntity}'s: '{file}'");
+                continue;
+            }
+            var delta = LineDelta(before[file], after[file]);
+            violations.AddRange(delta.Removed.Select(l => $"[{generator}] {file}: a line disappeared: '{l}'"));
+            // A class takes several lines and only some of them name it: braces and a constructor's base call
+            // come with it. SQL lines are each their own definition and must all name the entity.
+            var csharp = generator is "model" or "api";
+            var named = delta.Added.Where(l => CarriesColumn(l, ProbeEntity)).ToList();
+            violations.AddRange(AllCarry($"[{generator}] {file}", "an added", delta.Added.Where(l => !csharp || !IsStructural(l)).ToList(), ProbeEntity));
+            if (named.Count == 0) violations.Add($"[{generator}] {file}: changed, but no added line names {ProbeEntity}");
+        }
+
+        Assert.True(ChangedFiles(before, after).Count > 0, $"[{generator}] adding an entity changed nothing");
+        AssertClean((violations, 1));
+    }
+
     // ---- the comparison holds itself to what it must see ---------------------------------------
 
     // The relations pass when nothing moves, so the comparison itself is checked against an added
