@@ -18,6 +18,12 @@
 
 ## Unreleased
 
+### 핀 `M3L.Native` 0.26.0
+
+파서의 판이 바뀌어 모델을 읽는 결과가 달라지는 자리(그 판의 CHANGELOG):
+
+- 🔇 **`-` 뒤에 공백이 둘 이상이거나 탭이 있는 필드 줄이 그 필드로 읽힌다** — 종전에는 `-   id: identifier @pk` 가 타입 없는 이름 없는 필드가 되고 `-<탭>id: identifier` 는 모델에서 사라졌는데 검증은 둘 다 말하지 않았다. 이 모양으로 필드를 쓴 모델은 이제 의도한 필드를 얻는다.
+
 ### PostgreSQL 목표 버전 — `postgresVersion` (Sql 타깃, postgres 방언, 기본 15 — 산출물 불변)
 
 - **Sql 타깃에 `postgresVersion` 이 생겼다.** 산출물이 어느 PostgreSQL 주 버전까지 기대어도 되는지를 적는다. 생략하면 15 —
