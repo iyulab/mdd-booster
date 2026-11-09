@@ -12,7 +12,7 @@ jobs:
     name: Build, test and pack
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # 릴리스 게이트: 이 태그의 버전이 CHANGELOG 에 절로 존재하는가 «만» 본다.
       #
@@ -57,7 +57,7 @@ jobs:
           exit 1
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
@@ -66,7 +66,7 @@ jobs:
       # 스스로 `npm ci` 로 복원한 뒤 실패 시 소리내어 실패한다 — 여기서 Node 를 고정해
       # 그 복원이 러너 기본 버전에 좌우되지 않게 한다.
       - name: Setup Node
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: 22.x
           cache: npm
@@ -74,7 +74,7 @@ jobs:
 
       # NuGet 복원 캐시: csproj 해시 키 + OS prefix fallback (CLAUDE.md GitHub Actions 정책).
       - name: Cache NuGet packages
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}

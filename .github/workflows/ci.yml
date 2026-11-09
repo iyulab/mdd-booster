@@ -17,10 +17,10 @@ jobs:
   build-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
@@ -28,7 +28,7 @@ jobs:
       # (GeneratedTypeScriptCompilesTests), restoring its toolchain with `npm ci` itself;
       # Node is pinned so that restore does not depend on the runner's default version.
       - name: Setup Node
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: 22.x
           cache: npm
@@ -36,7 +36,7 @@ jobs:
 
       # No packages.lock.json in this repository; csproj hashes are the restore input.
       - name: Cache NuGet packages
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
