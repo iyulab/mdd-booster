@@ -194,6 +194,16 @@ public sealed class MddJsonTarget
     [JsonPropertyName("emitForeignKeyIndexes")]
     public bool? EmitForeignKeyIndexes { get; set; }
 
+    /// <summary>
+    /// Sql target, <c>postgres</c> dialect only: the PostgreSQL major version the generated SQL may rely on. Omitted:
+    /// 15 — the lowest version the output supports (<c>UNIQUE NULLS NOT DISTINCT</c> needs it), so omitting changes
+    /// nothing. 18 or later: a generated primary key (<c>@pk @generated</c>) defaults to the time-ordered
+    /// <c>uuidv7()</c> instead of the random <c>gen_random_uuid()</c> — what SQL Server's sequential GUID already gives
+    /// — which keeps new rows together in the key's B-tree. Below 15 is a build error.
+    /// </summary>
+    [JsonPropertyName("postgresVersion")]
+    public int? PostgresVersion { get; set; }
+
     // Model target
     [JsonPropertyName("namespace")]
     public string? Namespace { get; set; }

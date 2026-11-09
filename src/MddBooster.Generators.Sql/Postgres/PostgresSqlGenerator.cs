@@ -22,6 +22,12 @@ public sealed class PostgresSqlGeneratorOptions
     public bool EmitForeignKeyIndexes { get; init; }
 
     /// <summary>
+    /// The PostgreSQL major version the output may rely on. Default 15 — the lowest the output supports, so the
+    /// default changes nothing. From 18 a generated primary key defaults to the time-ordered <c>uuidv7()</c>.
+    /// </summary>
+    public int PostgresVersion { get; init; } = PgTableRenderer.MinimumPostgresVersion;
+
+    /// <summary>
     /// Where declared renames (<c>@renamed_from</c>) are written as run-once pre-comparison scripts — see
     /// <see cref="SqlGeneratorOptions.PreScriptsPath"/>. Relative to the working directory; outside <see cref="ProjectPath"/>.
     /// </summary>
@@ -91,7 +97,8 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
                 var artifact = PgTableRenderer.Render(
                     model, _options.Schema, tableNames, modelLookup, enumLookup,
                     _options.EmitEnumCheckConstraints,
-                    _options.EmitForeignKeyIndexes);
+                    _options.EmitForeignKeyIndexes,
+                    _options.PostgresVersion);
                 foreach (var warning in artifact.Warnings)
                 {
                     Console.Error.WriteLine($"[sql-pg] 경고 ({model.Name}): {warning}");

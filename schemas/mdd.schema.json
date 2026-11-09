@@ -136,6 +136,12 @@
           "default": true,
           "description": "Create an index on every @reference foreign-key column the model has not already covered by a PK/unique/composite-index leading column. Default true since 0.13.0 (was false before) — set false to keep pre-0.13 output."
         },
+        "postgresVersion": {
+          "type": "integer",
+          "minimum": 15,
+          "default": 15,
+          "description": "Sql target, postgres dialect only: the PostgreSQL major version the generated SQL may rely on. Omitted: 15, the lowest supported (UNIQUE NULLS NOT DISTINCT needs it), so omitting changes nothing. 18 or later: a generated primary key (@pk @generated) defaults to the time-ordered uuidv7() instead of the random gen_random_uuid() — the counterpart of SQL Server's sequential GUID, which keeps new rows together in the key's B-tree. Setting it on an existing PostgreSQL database changes those columns' defaults, so the next diff shows them."
+        },
         "preScriptsPath": {
           "type": "string",
           "description": "Directory where renames the model declares (@renamed_from) are written as run-once scripts V{n}__rename_….sql, for a schema tool's stage that runs before its comparison. Relative to this file; must lie outside projectPath. Files already there are never rewritten. Omitted: no scripts, and a declared rename is reported as not acted on."

@@ -18,6 +18,15 @@
 
 ## Unreleased
 
+### PostgreSQL 목표 버전 — `postgresVersion` (Sql 타깃, postgres 방언, 기본 15 — 산출물 불변)
+
+- **Sql 타깃에 `postgresVersion` 이 생겼다.** 산출물이 어느 PostgreSQL 주 버전까지 기대어도 되는지를 적는다. 생략하면 15 —
+  지금까지 암묵적이던 하한(`UNIQUE NULLS NOT DISTINCT` 가 15 를 요구한다)을 처음으로 선언한 값이라 **생략한 기존 설정의 산출물은
+  한 줄도 달라지지 않는다.** 15 미만은 빌드 오류이고, T-SQL 방언에 쓰면 오류다. `schemas/mdd.schema.json` 에도 있다.
+- **18 이상이면 생성된 기본키(`@pk @generated`)의 기본값이 `uuidv7()` 이 된다**(생략 · 15 ~ 17 은 종전의 `gen_random_uuid()`). SQL Server
+  의 `NEWSEQUENTIALID()` 와 같은 지역성을 PostgreSQL 에서도 고를 수 있게 한 것이다. 이미 운영 중인 DB 에 18 이상을 처음 적으면 그
+  컬럼들의 기본값이 바뀌어 다음 diff 에 나타난다 — 기존 행은 그대로다. 식 안에서 쓴 `uuid()` 는 그대로 무작위다.
+
 ### Agent Skill — `skills/mdd/SKILL.md`
 
 - The edit-the-model → `mdd build` → fix-by-diagnostic-code → review-the-generated-diff loop, the exit codes, the targets, how to gate warnings in CI, how a rename reaches the database, and the pitfalls — in the [Agent Skills](https://agentskills.io) format.

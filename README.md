@@ -97,6 +97,7 @@ Sql 타깃 선택 노브(모두 생략 가능): `emitSqlProj`(기본 true — SS
 `emitEnumCheckConstraints`(기본 false — enum 컬럼 table-level `CK_{Table}_{Column}` CHECK.
 SSDT dacpac은 CHECK diff가 불안정하므로 선언형 스키마 관리 도구 소비자용 opt-in),
 `emitForeignKeyIndexes`(기본 true, 0.13.0부터 — 아래),
+`postgresVersion`(기본 15, postgres 방언 전용 — 아래),
 `preScriptsPath`(기본 없음 — 아래 «개명»).
 
 enum 컬럼은 문자열 컬럼이고 폭은 **가장 긴 값 이름의 길이**(하한 20)다. 모델에 더 긴 이름의 값을 나중에 더하면 그 enum 을
@@ -196,6 +197,22 @@ T-SQL `IX_{Model}_{Column}` · PostgreSQL `ix_{table}_{column}`. 대상 판정�
 > 알려진 예외: **널 허용 유니크** 컬럼은 T-SQL 에서 filtered unique index 가 되어 일반 조인에는
 > 쓰이지 않지만(PG 의 plain unique index 와 다르다), 판정기는 양쪽 모두 덮인 것으로 본다.
 > 좁은 형태(널 허용 유니크 FK = 선택적 1:1)이고, 고치려면 판정기가 방언을 알아야 하므로 유지했다.
+
+#### PostgreSQL 목표 버전 (`postgresVersion`)
+
+postgres 방언 Sql 타깃이 **어느 PostgreSQL 주 버전까지 기대어도 되는지**를 적는다. 생략하면 15 — 산출물이
+지원하는 가장 낮은 버전(`UNIQUE NULLS NOT DISTINCT` 가 15 를 요구한다)이라 **생략해도 산출물이 달라지지 않는다.**
+15 미만은 빌드 오류이고, T-SQL 방언에 쓰면 오류다.
+
+| `postgresVersion` | 생성되는 기본키(`@pk @generated`) 기본값 |
+|---|---|
+| 생략 · 15 ~ 17 | `DEFAULT gen_random_uuid()` — 무작위 |
+| 18 이상 | `DEFAULT uuidv7()` — 시간 순서 |
+
+SQL Server 쪽은 `NEWSEQUENTIALID()` 라 새 행이 키 B-tree 의 끝에 모이는데, 무작위 UUID 는 큰 테이블에서 그
+지역성을 잃는다. PostgreSQL 18 부터 시간 순서 UUID 가 내장이라 같은 성질을 고를 수 있다. **이미 운영 중인 DB 에
+18 이상을 처음 적으면 그 컬럼들의 기본값이 바뀌어 다음 diff 에 나타난다**(기존 행은 그대로이고 새 행만 영향을 받는다).
+식 안에서 직접 쓴 `uuid()` 는 이 옵션과 무관하게 무작위(`gen_random_uuid()`)다 — SQL Server 의 `NEWID()` 와 같다.
 
 #### 타깃별 엔티티 부분집합 (`includeEntities` / `excludeEntities`)
 

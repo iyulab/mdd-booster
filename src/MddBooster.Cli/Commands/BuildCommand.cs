@@ -858,6 +858,11 @@ public sealed class BuildCommand
         switch (target.Dialect?.ToLowerInvariant())
         {
             case null or "tsql":
+                if (target.PostgresVersion is not null)
+                {
+                    throw new InvalidOperationException(
+                        "postgresVersion은 dialect 'postgres' 전용입니다 (PostgreSQL 목표 버전) — 옵션을 제거하세요.");
+                }
                 return new SqlGenerator(new SqlGeneratorOptions
                 {
                     ProjectPath = target.ProjectPath,
@@ -880,6 +885,13 @@ public sealed class BuildCommand
                     throw new InvalidOperationException(
                         "dialect 'postgres'는 emitRefreshScript를 지원하지 않습니다 (sp_refreshview는 T-SQL 개념) — 옵션을 제거하세요.");
                 }
+                if (target.PostgresVersion is { } version && version < MddBooster.Generators.Sql.Postgres.PgTableRenderer.MinimumPostgresVersion)
+                {
+                    throw new InvalidOperationException(
+                        $"postgresVersion {version}은 지원하지 않습니다 — 산출물은 PostgreSQL " +
+                        $"{MddBooster.Generators.Sql.Postgres.PgTableRenderer.MinimumPostgresVersion} 이상을 전제합니다 " +
+                        "(UNIQUE NULLS NOT DISTINCT). 값을 올리거나 옵션을 제거하세요.");
+                }
                 return new MddBooster.Generators.Sql.Postgres.PostgresSqlGenerator(
                     new MddBooster.Generators.Sql.Postgres.PostgresSqlGeneratorOptions
                     {
@@ -888,6 +900,8 @@ public sealed class BuildCommand
                         EmitEnumCheckConstraints = target.EmitEnumCheckConstraints ?? false,
                         EmitForeignKeyIndexes = target.EmitForeignKeyIndexes ?? true,
                         PreScriptsPath = target.PreScriptsPath,
+                        PostgresVersion = target.PostgresVersion
+                            ?? MddBooster.Generators.Sql.Postgres.PgTableRenderer.MinimumPostgresVersion,
                     });
 
             default:
