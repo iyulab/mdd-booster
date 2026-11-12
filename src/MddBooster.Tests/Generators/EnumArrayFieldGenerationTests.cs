@@ -100,7 +100,7 @@ public class EnumArrayFieldGenerationTests
     public void The_typescript_interface_carries_an_array_of_the_member_union()
     {
         var (_, models) = Load();
-        var ts = TsInterfaceRenderer.RenderAll(models, knownEnumNames: new HashSet<string> { "doc_state" });
+        var ts = TSInterfaceRenderer.RenderAll(models, knownEnumNames: new HashSet<string> { "doc_state" });
         var lines = ts.Replace("\r\n", "\n").Split('\n');
         Assert.Contains("  States: DocState[]", lines);
         Assert.Contains("  PastStates: (DocState | null)[] | null", lines);

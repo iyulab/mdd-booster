@@ -312,7 +312,7 @@ CREATE TABLE public.array_holder
     public void The_typescript_interface_carries_each_array_as_an_array_type()
     {
         var (_, models) = LoadFixture();
-        var ts = TsInterfaceRenderer.RenderAll(models);
+        var ts = TSInterfaceRenderer.RenderAll(models);
 
         Assert.Contains("  Tags: string[]\n", Normalize(ts));
         Assert.Contains("  Notes: (string | null)[]\n", Normalize(ts));
@@ -331,7 +331,7 @@ CREATE TABLE public.array_holder
     public void The_generated_form_leaves_array_fields_out_consistently()
     {
         var (_, models) = LoadFixture();
-        var form = TsFormRenderer.RenderAll(models, [], TestImports)["ArrayHolder"];
+        var form = TSFormRenderer.RenderAll(models, [], TestImports)["ArrayHolder"];
 
         Assert.Contains("Title", form);
         foreach (var array in new[] { "Tags", "Notes", "Scores", "Prices", "RelatedIds", "Stamps" })

@@ -3,7 +3,7 @@ using M3L.Native;
 namespace MddBooster.Core.Semantic;
 
 /// <summary>One FK step of a lookup path: the key on <see cref="Owner"/> and the model it references.</summary>
-public sealed record LookupHop(ResolvedModel Owner, FieldNode FkField, ResolvedModel Target);
+public sealed record LookupHop(ResolvedModel Owner, FieldNode FKField, ResolvedModel Target);
 
 /// <summary>Why a lookup path did not resolve.</summary>
 public enum LookupPathFailure
@@ -13,7 +13,7 @@ public enum LookupPathFailure
     /// <summary>Not <c>fk.column</c> or <c>fk.fk….column</c> — too few segments, or an empty one.</summary>
     Malformed,
     /// <summary>A hop names a field its model does not have.</summary>
-    MissingFk,
+    MissingFK,
     /// <summary>A hop's field has no <c>@reference(Target)</c>.</summary>
     NoReference,
     /// <summary>A hop references a model outside the resolved set.</summary>
@@ -85,7 +85,7 @@ public static class LookupPath
         {
             var fkField = current.Fields.FirstOrDefault(f => f.Name == segment);
             if (fkField is null)
-                return new LookupPathWalk(hops, null, LookupPathFailure.MissingFk, current, segment);
+                return new LookupPathWalk(hops, null, LookupPathFailure.MissingFK, current, segment);
 
             var targetName = ReferenceTarget(fkField);
             if (targetName is null)

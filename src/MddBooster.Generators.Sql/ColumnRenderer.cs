@@ -19,7 +19,7 @@ public static class ColumnRenderer
     /// 검사하므로 같은 뜻이다.
     /// </param>
     /// <param name="referencedKey">
-    /// <c>@reference</c> 필드가 가리키는 키 — <c>[schema].[Table]([PkColumn])</c>. 대상 모델을 아는 쪽
+    /// <c>@reference</c> 필드가 가리키는 키 — <c>[schema].[Table]([PKColumn])</c>. 대상 모델을 아는 쪽
     /// (<see cref="TableRenderer"/>)이 해석해 넘긴다: 대상의 PK 가 <c>Id</c> 라는 보장이 없고
     /// (공유 PK 확장 · <c>code @pk</c>), 스키마는 설정값이다. 참조 필드인데 비어 있으면 예외.
     /// </param>
@@ -55,9 +55,9 @@ public static class ColumnRenderer
         var parts = new List<string>();
 
         // PK + @generated 처리 (identifier 전제)
-        var isPk = HasAttribute(field, "pk");
+        var isPK = HasAttribute(field, "pk");
         var isGenerated = HasAttribute(field, "generated");
-        if (isPk)
+        if (isPK)
         {
             parts.Add("PRIMARY KEY");
             if (isGenerated && m3lType == "identifier")

@@ -8,12 +8,12 @@ namespace MddBooster.Generators.Sql;
 /// <summary>One <c>LEFT JOIN</c> a FullView needs for its lookups.</summary>
 /// <param name="Alias">The join's alias — <c>j_{fk}</c> for a first hop, <c>j_{fk}__{fk}</c> below it.</param>
 /// <param name="ParentAlias">The alias the join's key is read from: <c>b</c> at the first hop.</param>
-/// <param name="FkField">The key's m3l field name on the parent, un-cased.</param>
+/// <param name="FKField">The key's m3l field name on the parent, un-cased.</param>
 /// <param name="Target">The referenced model's name.</param>
 /// <param name="UsesFullView">Whether the join reads the target's FullView rather than its table.</param>
 /// <param name="Depth">1 for a first hop — joins are emitted in depth order so a parent precedes its children.</param>
 internal sealed record LookupJoin(
-    string Alias, string ParentAlias, string FkField, string Target, bool UsesFullView, int Depth);
+    string Alias, string ParentAlias, string FKField, string Target, bool UsesFullView, int Depth);
 
 /// <summary>A lookup field's projected column: <c>{JoinAlias}.{Column}</c> as <see cref="Field"/>.</summary>
 internal sealed record LookupColumn(FieldNode Field, string JoinAlias, string Column);
@@ -71,7 +71,7 @@ internal static class LookupJoinPlanner
                 var isLast = depth == chain.Hops.Count;
                 var fullView = terminalUsesFullView.TryGetValue(prefix, out var tv) && tv;
 
-                if (!isLast && fullView && chain.Hops[depth].FkInternal)
+                if (!isLast && fullView && chain.Hops[depth].FKInternal)
                     fullView = false;
 
                 var alias = "j_" + prefix.Replace(".", "__", StringComparison.Ordinal);
@@ -80,7 +80,7 @@ internal static class LookupJoinPlanner
 
                 if (!joins.TryGetValue((prefix, fullView), out var join))
                 {
-                    join = new LookupJoin(alias, parentAlias, hop.FkField, hop.Target, fullView, depth);
+                    join = new LookupJoin(alias, parentAlias, hop.FKField, hop.Target, fullView, depth);
                     joins[(prefix, fullView)] = join;
                 }
                 parentAlias = join.Alias;
@@ -119,7 +119,7 @@ internal static class LookupJoinPlanner
     }
 
     /// <summary>One hop as the SQL side needs it: the key's name, the model it references, and whether the key is internal.</summary>
-    internal sealed record Hop(string FkField, string Target, bool FkInternal);
+    internal sealed record Hop(string FKField, string Target, bool FKInternal);
 
     /// <summary>A lookup path resolved to its hops and final column.</summary>
     internal sealed record Chain(IReadOnlyList<Hop> Hops, string Column);
@@ -158,5 +158,5 @@ internal static class LookupJoinPlanner
     }
 
     private static string Prefix(IReadOnlyList<Hop> hops, int depth)
-        => string.Join('.', hops.Take(depth).Select(h => h.FkField));
+        => string.Join('.', hops.Take(depth).Select(h => h.FKField));
 }

@@ -23,9 +23,9 @@ public sealed class TypeScriptGeneratorOptions
     /// <remarks>
     /// Deliberately does not cover the generator's own output — that specifier
     /// is derived from <see cref="OutputPath"/> and <see cref="FormsOutputPath"/>,
-    /// because this class already knows it. See <see cref="TsFormImports"/>.
+    /// because this class already knows it. See <see cref="TSFormImports"/>.
     /// </remarks>
-    public TsFormModuleImports? FormModules { get; init; }
+    public TSFormModuleImports? FormModules { get; init; }
 
     /// <summary>
     /// 이 타깃의 엔티티 부분집합 필터 (<c>includeEntities</c>/<c>excludeEntities</c>, <c>includeOwners</c>/<c>excludeOwners</c>).

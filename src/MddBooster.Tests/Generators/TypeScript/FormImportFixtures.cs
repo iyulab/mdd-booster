@@ -6,7 +6,7 @@ namespace MddBooster.Tests.Generators.TypeScript;
 /// The import specifiers renderer-level tests render against.
 /// </summary>
 /// <remarks>
-/// <see cref="TsFormRenderer"/> takes these rather than defaulting them, because
+/// <see cref="TSFormRenderer"/> takes these rather than defaulting them, because
 /// the specifier for the generator's own output depends on where the caller
 /// writes both file sets. Tests that exercise the renderer in isolation still
 /// have to name one, so they name the layout the generator emitted before the
@@ -25,14 +25,14 @@ namespace MddBooster.Tests.Generators.TypeScript;
 /// </remarks>
 internal static class FormImportFixtures
 {
-    public static readonly TsFormModuleImports TestModules = new()
+    public static readonly TSFormModuleImports TestModules = new()
     {
         Layout = "@example/layout",
         Controls = "@example/controls",
         SelectOptions = "@example/enum-options",
     };
 
-    public static readonly TsFormImports TestImports = new()
+    public static readonly TSFormImports TestImports = new()
     {
         GeneratedTypesBase = "../types",
         Modules = TestModules,

@@ -180,7 +180,7 @@ public static class FieldAttributes
     /// </summary>
     /// <remarks>
     /// <see cref="DisplayLabel"/> 이 있으면 그것, 없으면 <c>PascalCase(필드명)</c>(전에 없던 fallback을
-    /// 새로 발명하지 않는다 — <c>TsEnumLabelsRenderer</c>가 enum 값에 이미 쓰는 것과 같은 모양).
+    /// 새로 발명하지 않는다 — <c>TSEnumLabelsRenderer</c>가 enum 값에 이미 쓰는 것과 같은 모양).
     /// </remarks>
     public static string EffectiveLabel(FieldNode field)
     {

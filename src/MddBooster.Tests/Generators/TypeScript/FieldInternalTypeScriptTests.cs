@@ -55,7 +55,7 @@ public class FieldInternalTypeScriptTests
     {
         var models = LoadInline(Account);
 
-        var result = TsInterfaceRenderer.RenderAll(models, new HashSet<string> { "HashScheme" });
+        var result = TSInterfaceRenderer.RenderAll(models, new HashSet<string> { "HashScheme" });
 
         Assert.Contains("Username", result);
         Assert.DoesNotContain("PasswordHash", result);
@@ -69,7 +69,7 @@ public class FieldInternalTypeScriptTests
     {
         var models = LoadInline(Account);
 
-        var result = TsFieldSchemaRenderer.RenderAll(models);
+        var result = TSFieldSchemaRenderer.RenderAll(models);
 
         Assert.Contains("Username:", result);
         Assert.DoesNotContain("PasswordHash", result);
@@ -80,7 +80,7 @@ public class FieldInternalTypeScriptTests
     {
         var models = LoadInline(Account);
 
-        var form = TsFormRenderer.RenderAll(models, [], TestImports)["Account"];
+        var form = TSFormRenderer.RenderAll(models, [], TestImports)["Account"];
 
         Assert.Contains("Username", form);
         Assert.DoesNotContain("PasswordHash", form);
@@ -91,7 +91,7 @@ public class FieldInternalTypeScriptTests
     {
         var models = LoadInline(Account);
 
-        var result = TsInterfaceRenderer.RenderAll(models, new HashSet<string> { "HashScheme" });
+        var result = TSInterfaceRenderer.RenderAll(models, new HashSet<string> { "HashScheme" });
 
         Assert.Contains("export interface ServiceClient", result);
         Assert.Contains("SecretHash", result);

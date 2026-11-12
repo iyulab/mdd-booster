@@ -224,6 +224,6 @@ public static class TableRenderer
         if (string.IsNullOrEmpty(target)) return null;
 
         var targetModel = TargetKey.Resolve(target!, findModel, $"'{owner.Name}.{field.Name}'");
-        return $"[{schema}].[{targetModel.Name}]([{TargetKey.PkColumn(targetModel)}])";
+        return $"[{schema}].[{targetModel.Name}]([{TargetKey.PKColumn(targetModel)}])";
     }
 }

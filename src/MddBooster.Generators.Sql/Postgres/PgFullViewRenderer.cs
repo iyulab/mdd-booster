@@ -67,7 +67,7 @@ public static class PgFullViewRenderer
         var sourceRelation = plan.NeedsUdView ? UdViewNameOf(tableName) : tableName;
         const string baseAlias = "b";
 
-        var basePk = ModelPrimaryKey.Find(model)
+        var basePK = ModelPrimaryKey.Find(model)
             ?? throw new InvalidOperationException($"모델 '{model.Name}'에 PK가 없어 Rollup 상관 서브쿼리를 렌더할 수 없습니다.");
 
         var baseProjection = string.Join(", ", BaseColumns.StoredFields(model, excludeFieldInternal: true)
@@ -94,7 +94,7 @@ public static class PgFullViewRenderer
                 ?? throw new InvalidOperationException(
                     $"Rollup 필드 '{model.Name}.{rollup.Name}'에 파싱된 RollupDef가 없습니다.");
             var targetSoftDeletes = modelLookup.TryGetValue(def.Target, out var rollupTarget) && SoftDelete.IsEnabled(rollupTarget);
-            rollupColumns.Add((RenderRollupSubquery(def, schema, baseAlias, basePk.Name, tableNameMap, viewNameMap, derivedFieldsByModel, targetSoftDeletes), rollup.Name));
+            rollupColumns.Add((RenderRollupSubquery(def, schema, baseAlias, basePK.Name, tableNameMap, viewNameMap, derivedFieldsByModel, targetSoftDeletes), rollup.Name));
         }
 
         var allProjected = lookupColumns.Concat(rollupColumns).ToList();
@@ -115,13 +115,13 @@ public static class PgFullViewRenderer
             var targetModel = modelLookup.TryGetValue(join.Target, out var tm)
                 ? tm
                 : throw new InvalidOperationException($"참조 대상 모델 '{join.Target}'을(를) 찾을 수 없습니다.");
-            var targetPk = ModelPrimaryKey.Find(targetModel)
+            var targetPK = ModelPrimaryKey.Find(targetModel)
                 ?? throw new InvalidOperationException($"참조 대상 모델 '{join.Target}'에 PK가 없어 JOIN을 렌더할 수 없습니다.");
             var relation = join.UsesFullView ? viewNameMap[join.Target] : tableNameMap[join.Target];
             sb.Append("LEFT JOIN ").Append(schema).Append('.').Append(relation)
               .Append(" AS ").Append(join.Alias)
-              .Append(" ON ").Append(join.ParentAlias).Append('.').Append(join.FkField)
-              .Append(" = ").Append(join.Alias).Append('.').AppendLine(targetPk.Name);
+              .Append(" ON ").Append(join.ParentAlias).Append('.').Append(join.FKField)
+              .Append(" = ").Append(join.Alias).Append('.').AppendLine(targetPK.Name);
         }
         // FROM/JOIN 라인들은 전부 AppendLine으로 끝났다 — 마지막 개행을 지우고 문장을 종결한다.
         sb.Length -= Environment.NewLine.Length;
@@ -166,7 +166,7 @@ public static class PgFullViewRenderer
         RollupDef def,
         string schema,
         string baseAlias,
-        string basePkName,
+        string basePKName,
         IReadOnlyDictionary<string, string> tableNameMap,
         IReadOnlyDictionary<string, string> viewNameMap,
         IReadOnlyDictionary<string, IReadOnlySet<string>> derivedFieldsByModel,
@@ -193,7 +193,7 @@ public static class PgFullViewRenderer
                 $"지원하지 않는 rollup: aggregate='{aggregate}' field='{field}'."),
         };
 
-        var whereClause = $"{fkColumn} = {baseAlias}.{basePkName}";
+        var whereClause = $"{fkColumn} = {baseAlias}.{basePKName}";
         if (targetSoftDeletes && !readsFullView)
             whereClause += $" AND {LiveRowColumnPredicate}";
         if (ExpressionSelection.Select(def.Where, def.WhereRaw, SqlDialect.PostgreSql) is { } filter)

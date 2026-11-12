@@ -14,11 +14,11 @@ namespace MddBooster.Generators.TypeScript;
 /// <remarks>
 /// Which modules the rendered file imports from — its layout components, its
 /// controls, and the option-list helper — is not decided here; see
-/// <see cref="TsFormImports"/>. The rendered file is <c>DO NOT EDIT</c>, so a
+/// <see cref="TSFormImports"/>. The rendered file is <c>DO NOT EDIT</c>, so a
 /// specifier chosen in this class is a folder layout the consumer would be
 /// required to build rather than a default they could override.
 /// </remarks>
-public static class TsFormRenderer
+public static class TSFormRenderer
 {
     // Match the convention used by all other TS renderers in this project.
     /// <summary>The first line of every form this renderer emits — how the generator recognises its own files.</summary>
@@ -38,7 +38,7 @@ public static class TsFormRenderer
     public static IReadOnlyDictionary<string, string> RenderAll(
         IReadOnlyList<ResolvedModel> models,
         IReadOnlyList<EnumNode> enums,
-        TsFormImports imports)
+        TSFormImports imports)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentNullException.ThrowIfNull(enums);
@@ -161,7 +161,7 @@ public static class TsFormRenderer
         ResolvedModel model,
         IReadOnlySet<string> enumNames,
         IReadOnlySet<string> withExcludedValues,
-        TsFormImports imports)
+        TSFormImports imports)
     {
         var storedFields = model.Fields
             .Where(f => f.Kind == FieldKind.Stored)
@@ -271,7 +271,7 @@ public static class TsFormRenderer
             sb.Append("import { ").Append(string.Join(", ", uiImports))
               .Append(" } from '").Append(imports.Modules.Controls).AppendLine("'");
         // The generator's own output — the specifier is derived from where both
-        // file sets are written, never assumed (see TsFormImports).
+        // file sets are written, never assumed (see TSFormImports).
         var typesBase = imports.GeneratedTypesBase;
         sb.Append("import type { ").Append(entityName)
           .Append(" } from '").Append(typesBase).AppendLine("/entities_gen'");
@@ -468,7 +468,7 @@ public static class TsFormRenderer
         if (!string.IsNullOrEmpty(def))
         {
             // Enum defaults arrive as the bare wire-form member name (the parser strips the
-            // quotes) — the same spelling TsEnumRenderer now uses for the union's own literal
+            // quotes) — the same spelling TSEnumRenderer now uses for the union's own literal
             // members, so this must stay a member of that type, not the PascalCase C# member
             // expression EntityPairRenderer emits for the same default on the model side.
             if (isEnum) return $"'{def}'";

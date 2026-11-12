@@ -116,7 +116,7 @@ public static class FullViewRenderer
                     $"Rollup field '{plan.Model.Name}.{rollup.Name}' has no parsed RollupDef.");
             var rollupTarget = findModel(def.Target);
             rollupColumns.Add((
-                expr: RenderRollupSubquery(def, schema, baseAlias, TargetKey.PkColumn(plan.Model), derivedFieldsByModel,
+                expr: RenderRollupSubquery(def, schema, baseAlias, TargetKey.PKColumn(plan.Model), derivedFieldsByModel,
                     targetSoftDeletes: rollupTarget is not null && SoftDelete.IsEnabled(rollupTarget)),
                 alias: NameCasing.ToPascalCase(rollup.Name)));
         }
@@ -210,24 +210,24 @@ public static class FullViewRenderer
         foreach (var join in joins)
         {
             var table = join.UsesFullView ? join.Target + "FullView" : join.Target;
-            var targetPk = TargetKey.PkColumn(
+            var targetPK = TargetKey.PKColumn(
                 TargetKey.Resolve(join.Target, findModel, $"lookup JOIN {join.Alias}"));
             sb.Append(indent)
               .Append("LEFT JOIN [").Append(schema).Append("].[").Append(table)
               .Append("] AS ").Append(join.Alias)
-              .Append(" ON ").Append(join.ParentAlias).Append(".[").Append(NameCasing.ToPascalCase(join.FkField)).Append("] = ")
-              .Append(join.Alias).Append(".[").Append(targetPk).AppendLine("]");
+              .Append(" ON ").Append(join.ParentAlias).Append(".[").Append(NameCasing.ToPascalCase(join.FKField)).Append("] = ")
+              .Append(join.Alias).Append(".[").Append(targetPK).AppendLine("]");
         }
     }
 
-    /// <param name="basePkColumn">The owning model's PK column — what the target's FK points at.</param>
+    /// <param name="basePKColumn">The owning model's PK column — what the target's FK points at.</param>
     /// <param name="targetSoftDeletes">
     /// The target soft-deletes (<see cref="SoftDelete"/>): its deleted rows are not counted. A
     /// FullView source already excludes them (it reads the UdView); a base-table source filters
     /// them here — so every rollup over the same target counts the same set of rows, whichever
     /// columns it happens to read.
     /// </param>
-    internal static string RenderRollupSubquery(RollupDef def, string schema, string baseAlias, string basePkColumn,
+    internal static string RenderRollupSubquery(RollupDef def, string schema, string baseAlias, string basePKColumn,
         IReadOnlyDictionary<string, IReadOnlySet<string>>? derivedFieldsByModel, bool targetSoftDeletes = false)
     {
         var target = def.Target;
@@ -252,7 +252,7 @@ public static class FullViewRenderer
                 $"Unsupported rollup: aggregate='{aggregate}' field='{field}'."),
         };
 
-        var whereClause = $"[{fkColumn}] = {baseAlias}.[{basePkColumn}]";
+        var whereClause = $"[{fkColumn}] = {baseAlias}.[{basePKColumn}]";
         if (targetSoftDeletes && !readsFullView)
             whereClause += " AND " + LiveRowPredicate;
         if (ExpressionSelection.Select(def.Where, def.WhereRaw, SqlDialect.SqlServer) is { } filter)

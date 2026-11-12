@@ -108,10 +108,10 @@ public sealed class FormControlContractRatchetTests
             Path.Combine(AppContext.BaseDirectory, "fixtures", "form-control-contract.m3l.md"));
         var models = new InterfaceResolver(ast).ResolveAll();
 
-        return TsFormRenderer.RenderAll(models, ast.Enums, new TsFormImports
+        return TSFormRenderer.RenderAll(models, ast.Enums, new TSFormImports
         {
             GeneratedTypesBase = "@@types",
-            Modules = new TsFormModuleImports
+            Modules = new TSFormModuleImports
             {
                 Layout = "@@layout",
                 Controls = "@@controls",

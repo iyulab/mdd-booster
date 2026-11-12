@@ -41,7 +41,7 @@ public sealed class FormImportSurfaceRatchetTests
     /// the one the six removed literals failed: <b>does naming this module
     /// constrain the consumer's project layout, or the identity of a package
     /// they must install?</b> If either, it belongs in
-    /// <see cref="TsFormModuleImports"/> instead.
+    /// <see cref="TSFormModuleImports"/> instead.
     /// </remarks>
     private static readonly Dictionary<string, string> AllowedLiterals = new(StringComparer.Ordinal)
     {
@@ -56,10 +56,10 @@ public sealed class FormImportSurfaceRatchetTests
             Path.Combine(AppContext.BaseDirectory, "fixtures", "form-import-surface.m3l.md"));
         var models = new InterfaceResolver(ast).ResolveAll();
 
-        return TsFormRenderer.RenderAll(models, ast.Enums, new TsFormImports
+        return TSFormRenderer.RenderAll(models, ast.Enums, new TSFormImports
         {
             GeneratedTypesBase = TypesBase,
-            Modules = new TsFormModuleImports
+            Modules = new TSFormModuleImports
             {
                 Layout = Layout,
                 Controls = Controls,
@@ -88,7 +88,7 @@ public sealed class FormImportSurfaceRatchetTests
 
         Assert.True(unaccounted.Count == 0,
             $"generated form imports {string.Join(", ", unaccounted.Select(u => $"'{u}'"))} " +
-            "literally. Route it through TsFormModuleImports (consumer's choice) or derive it " +
+            "literally. Route it through TSFormModuleImports (consumer's choice) or derive it " +
             "from the output paths (this generator's own file) — or, if it genuinely cannot be " +
             "either, add it to AllowedLiterals with the reason.");
     }

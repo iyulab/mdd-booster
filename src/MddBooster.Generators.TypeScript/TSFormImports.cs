@@ -15,7 +15,7 @@ namespace MddBooster.Generators.TypeScript;
 /// consumer's to supply. Neither has a default.
 /// </para>
 /// </remarks>
-public sealed record TsFormImports
+public sealed record TSFormImports
 {
     /// <summary>
     /// Module specifier prefix for the generator's own TypeScript output —
@@ -30,7 +30,7 @@ public sealed record TsFormImports
     public required string GeneratedTypesBase { get; init; }
 
     /// <summary>Modules the generator does not produce. Consumer-supplied, all three.</summary>
-    public required TsFormModuleImports Modules { get; init; }
+    public required TSFormModuleImports Modules { get; init; }
 }
 
 /// <summary>
@@ -39,7 +39,7 @@ public sealed record TsFormImports
 /// </summary>
 /// <remarks>
 /// <b>None of the three has a default</b>, for the same reason
-/// <see cref="TsFormImports.GeneratedTypesBase"/> has none. A default could only
+/// <see cref="TSFormImports.GeneratedTypesBase"/> has none. A default could only
 /// be a guess — at a folder layout in the consumer's tree, or at a component
 /// library this generator does not depend on. The first is wrong for every
 /// consumer laid out differently; the second is knowledge of a package the
@@ -48,7 +48,7 @@ public sealed record TsFormImports
 /// Which library to point at is the consumer's decision, and the recommendation
 /// belongs in that library's own documentation.
 /// </remarks>
-public sealed record TsFormModuleImports
+public sealed record TSFormModuleImports
 {
     /// <summary>
     /// Supplies <c>FormSection</c> and <c>FormRow</c>.

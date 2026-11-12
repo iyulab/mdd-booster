@@ -264,7 +264,7 @@ public class FieldConstraintRenderTests
     // ---------------------------------------------------------------- [Editable(false)]
 
     /// <summary>
-    /// Mirrors TS's `disabled` (TsFormRenderer) — write protection
+    /// Mirrors TS's `disabled` (TSFormRenderer) — write protection
     /// against an accidental edit, not an enforced boundary. Nothing in this
     /// repo's generated API layer checks <c>EditableAttribute</c>, the same way
     /// nothing here enforces it for TS's `disabled` prop either; an actual

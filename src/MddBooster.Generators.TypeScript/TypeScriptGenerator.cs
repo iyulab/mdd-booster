@@ -49,29 +49,29 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
         // enums_gen.ts — 엔티티 필터(이름 목록)로는 가지치지 않는다: enum 은 엔티티 파생물이 아니고, 가지치면
         // 소비자가 그 파일에서 가져오던 enum 이 사라진다. 소유자 축이 있으면 enum 도 그 축으로 가른다(PartitionEnums).
         var (declaredEnums, sharedEnums) = PartitionEnums(context.Enums, models, readViews, enumNames);
-        var enumsContent = TsEnumRenderer.RenderAll(declaredEnums, sharedEnums, _options.SharedTypesImport);
+        var enumsContent = TSEnumRenderer.RenderAll(declaredEnums, sharedEnums, _options.SharedTypesImport);
         File.WriteAllText(Path.Combine(outDir, "enums_gen.ts"), enumsContent);
 
         // entities_gen.ts — 두 결의 @internal 을 다르게 다룬다. 필드 단위는 **존중한다**: 이 인터페이스는
         // OData wire 모양의 미러인데, 그 칸은 읽기 타입에 없어 응답에도 쓰기 본문에도 실리지 않는다 —
         // 남겨 두면 어떤 응답도 싣지 않는 값을 약속한다. 엔티티 단위는 존중하지 않는다: 데이터 API 셋이
         // 아예 없는 엔티티의 타입은 OData 미러가 아니라 전용 엔드포인트가 쓰는 모양일 수 있다.
-        var entitiesContent = TsInterfaceRenderer.RenderAll(models, enumNames, _options.SharedTypesImport, readViews);
+        var entitiesContent = TSInterfaceRenderer.RenderAll(models, enumNames, _options.SharedTypesImport, readViews);
         File.WriteAllText(Path.Combine(outDir, "entities_gen.ts"), entitiesContent);
 
         // entity_names_gen.ts — @internal 을 **존중한다**. 이 목록은 OData entity set 이름의
         // 미러이고 소비자가 이걸로 OData URL 을 만든다. @internal 엔티티는 AddEntityPair 가
         // 등록하지 않으므로, 목록에 남겨 두면 타입세이프하게 404 경로를 광고하는 셈이 된다.
-        var namesContent = TsEntityNamesRenderer.RenderAll(
+        var namesContent = TSEntityNamesRenderer.RenderAll(
             [.. models.Where(m => !EntitySurface.IsInternal(m))], readViews);
         File.WriteAllText(Path.Combine(outDir, "entity_names_gen.ts"), namesContent);
 
         // enum_labels_gen.ts — enums_gen.ts 와 같은 분할.
-        var enumLabelsContent = TsEnumLabelsRenderer.RenderAll(declaredEnums, sharedEnums, _options.SharedTypesImport);
+        var enumLabelsContent = TSEnumLabelsRenderer.RenderAll(declaredEnums, sharedEnums, _options.SharedTypesImport);
         File.WriteAllText(Path.Combine(outDir, "enum_labels_gen.ts"), enumLabelsContent);
 
         // field_schema_gen.ts — entities_gen.ts 와 같은 규칙(필드 단위 @internal 제외).
-        var fieldSchemaContent = TsFieldSchemaRenderer.RenderAll(models);
+        var fieldSchemaContent = TSFieldSchemaRenderer.RenderAll(models);
         File.WriteAllText(Path.Combine(outDir, "field_schema_gen.ts"), fieldSchemaContent);
 
         // {Entity}Form_gen.tsx (optional) — 필드 단위 @internal 칸을 내지 않는다: 폼은 OData 쓰기 본문을
@@ -88,9 +88,9 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
             // independent user input, so the specifier between them is derived —
             // assuming a layout is what made a wrong pair emit files that this
             // generator reported as written and the consumer's compiler rejected.
-            var imports = new TsFormImports
+            var imports = new TSFormImports
             {
-                GeneratedTypesBase = TsModuleSpecifier.RelativeBase(
+                GeneratedTypesBase = TSModuleSpecifier.RelativeBase(
                     formsDir, outDir, "formsOutputPath", "outputPath"),
                 Modules = _options.FormModules!,
             };
@@ -99,7 +99,7 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
             // 타깃 집합의 부분집합이라는 것이 별도 검사 없이 성립한다(임포트 정합성).
             var formModels = _options.FormsSurfaceFilter.Apply(models);
 
-            var formFiles = TsFormRenderer.RenderAll(formModels, context.Enums, imports);
+            var formFiles = TSFormRenderer.RenderAll(formModels, context.Enums, imports);
             // The file system's own rule: on a case-insensitive one, a form renamed only in case is
             // written into the existing file, which keeps its old spelling — comparing ordinally
             // would then delete the form just written.
@@ -201,6 +201,6 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
     private static bool StartsWithGeneratedHeader(string path)
     {
         using var reader = new StreamReader(path);
-        return string.Equals(reader.ReadLine(), TsFormRenderer.Header, StringComparison.Ordinal);
+        return string.Equals(reader.ReadLine(), TSFormRenderer.Header, StringComparison.Ordinal);
     }
 }

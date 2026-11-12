@@ -728,7 +728,7 @@ public sealed class BuildCommand
         // 대상은 **조용한** 축 하나뿐이다. `timestamp`/`datetime` 은 `type="datetime"` 토큰을
         // 방출해 이미 말하고 있고, `money`/`percentage` 는 빌드가 실패한다. 남는 것은 `time` —
         // 네이티브 피커가 소수 초를 조용히 버리기 때문에 자유 텍스트로 두는 축이다
-        // (근거: `TsFormRenderer` 의 remarks 실측 표). 새로 조용한 축이 생기면 여기 더한다.
+        // (근거: `TSFormRenderer` 의 remarks 실측 표). 새로 조용한 축이 생기면 여기 더한다.
         var tsTargets = cfg.Targets.Where(t => t.Type == "TypeScript").ToList();
         if (tsTargets.Count > 0)
         {
@@ -957,10 +957,10 @@ public sealed class BuildCommand
     /// forms. Only called after <see cref="FormImportViolations"/> found none, so
     /// a forms-emitting target has all three.
     /// </summary>
-    private static TsFormModuleImports? FormModulesFor(MddJsonTarget target) =>
+    private static TSFormModuleImports? FormModulesFor(MddJsonTarget target) =>
         string.IsNullOrWhiteSpace(target.FormsOutputPath)
             ? null
-            : new TsFormModuleImports
+            : new TSFormModuleImports
             {
                 Layout = target.FormLayoutImport!,
                 Controls = target.FormControlsImport!,

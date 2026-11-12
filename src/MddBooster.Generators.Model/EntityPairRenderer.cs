@@ -583,7 +583,7 @@ public static class EntityPairRenderer
         // does NOT fall back to the PascalCase field name — presence of Name here signals
         // authored, meaningful text (No_Display_when_field_has_no_label_or_group pins the
         // alternative: omit [Display] entirely rather than restate the property's own name).
-        // @help(text) maps to Description — the same free-text field TsFormRenderer's helpText
+        // @help(text) maps to Description — the same free-text field TSFormRenderer's helpText
         // already reads, so this mirrors an existing, established mapping rather than inventing one.
         var displayLabel = MddBooster.Core.Ast.FieldAttributes.DisplayLabel(f);
         var displayGroup = MddBooster.Core.Ast.FieldAttributes.EffectiveGroup(f);

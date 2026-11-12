@@ -13,7 +13,7 @@ namespace MddBooster.Generators.Sql;
 internal static class TargetKey
 {
     /// <summary>The model's PK column in PascalCase, e.g. <c>Id</c>, <c>AssetId</c>, <c>Code</c>.</summary>
-    public static string PkColumn(ResolvedModel model)
+    public static string PKColumn(ResolvedModel model)
     {
         ArgumentNullException.ThrowIfNull(model);
         var pk = ModelPrimaryKey.Find(model)

@@ -41,7 +41,7 @@ public class DisplayLabelTests
         Assert.Contains("[Display(Name = \"이름\")]", write);
         Assert.DoesNotContain("Name = \"사업자", write);
 
-        var schema = TsFieldSchemaRenderer.RenderAll(models);
+        var schema = TSFieldSchemaRenderer.RenderAll(models);
         Assert.Contains("label: '이름'", schema);
         Assert.DoesNotContain("label: '사업자", schema);
     }
@@ -61,7 +61,7 @@ public class DisplayLabelTests
             "## Customer\n- id: identifier @pk @generated\n- name(고객명): string(100) \"긴 설명\"\n\n" +
             "## Order\n- id: identifier @pk @generated\n- customer_id: identifier @reference(Customer)\n" +
             "- customer_name: string @lookup(customer_id.name)\n")).ResolveAll();
-        var schema = TsFieldSchemaRenderer.RenderAll(models);
+        var schema = TSFieldSchemaRenderer.RenderAll(models);
         Assert.Contains("CustomerName: { label: '고객명', derived: 'lookup'", schema);
     }
 
@@ -105,7 +105,7 @@ public class DisplayLabelTests
         // The description is still the member's doc comment.
         Assert.Contains("Waiting for someone to pick it up", csharp);
 
-        var labels = TsEnumLabelsRenderer.RenderAll([status]);
+        var labels = TSEnumLabelsRenderer.RenderAll([status]);
         Assert.Contains("open: 'Opened'", labels);
         Assert.Contains("closed: 'Done'", labels);
         Assert.Contains("archived: 'Archived'", labels);

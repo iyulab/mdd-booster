@@ -50,7 +50,7 @@ public static class StandaloneViewRenderer
                     break;
                 case ViewRollupColumn rollup:
                     projected.Add((FullViewRenderer.RenderRollupSubquery(
-                        rollup.Rollup, schema, Alias(view.From), TargetKey.PkColumn(fromModel!), derivedFieldsByModel,
+                        rollup.Rollup, schema, Alias(view.From), TargetKey.PKColumn(fromModel!), derivedFieldsByModel,
                         targetSoftDeletes: SoftDelete.IsEnabled(rollup.Target)), alias));
                     break;
                 case ViewComputedColumn c:

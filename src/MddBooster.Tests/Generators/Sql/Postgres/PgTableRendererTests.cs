@@ -58,7 +58,7 @@ CREATE TABLE public.bank_account
     }
 
     [Fact]
-    public void Render_SharedPkExtension_EmitsPkAndFkOnSameColumn()
+    public void Render_SharedPKExtension_EmitsPKAndFKOnSameColumn()
     {
         var (_, lookup, tableNames, enums) = Load("shared-pk-extension.m3l.md");
         var model = lookup["AssetMaintenanceProfile"];
@@ -82,7 +82,7 @@ CREATE TABLE public.asset_maintenance_profile
     }
 
     [Fact]
-    public void Render_FkTargetWithNonIdPk_ReferencesTargetPkPhysicalName()
+    public void Render_FKTargetWithNonIdPK_ReferencesTargetPKPhysicalName()
     {
         // FacilityProfile의 PK 물리명은 facility_id — [Id] 하드코딩이 제거됐다는 증명
         var (_, lookup, tableNames, enums) = Load("pg-reference-chain.m3l.md");

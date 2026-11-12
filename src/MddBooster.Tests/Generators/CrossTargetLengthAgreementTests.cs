@@ -93,8 +93,8 @@ public class CrossTargetLengthAgreementTests
         var enumLookup = ast.Enums.ToDictionary(e => e.Name, StringComparer.Ordinal);
 
         var entityAttrs = AttributesByProperty(EntityPairRenderer.Render(model, "Test.Entities", enumNames).Write);
-        var schema = TsFieldSchemaRenderer.RenderAll(models);
-        var form = TsFormRenderer.RenderAll(models, ast.Enums, TestImports)["Sample"];
+        var schema = TSFieldSchemaRenderer.RenderAll(models);
+        var form = TSFormRenderer.RenderAll(models, ast.Enums, TestImports)["Sample"];
 
         foreach (var (property, m3lType) in ImpliedBoundFields)
         {

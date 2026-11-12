@@ -25,7 +25,7 @@ public class ExtensionCrossTargetTests
         Assert.Matches(new Regex(@"\[Display\([^\]]*GroupName = ""Location""[^\]]*\)\](?:\s*\[[^\]]*\])*\s+public string\? InspZone"), cs);
         Assert.DoesNotMatch(new Regex(@"GroupName[^\]]*\]\s+public string Name"), cs);
 
-        var ts = TsFieldSchemaRenderer.RenderAll(models);
+        var ts = TSFieldSchemaRenderer.RenderAll(models);
         Assert.Contains("group: 'insp'", ts.Replace('"', '\''));
         Assert.Contains("group: 'Location'", ts.Replace('"', '\''));
     }
@@ -35,7 +35,7 @@ public class ExtensionCrossTargetTests
     {
         var (_, models) = TwoFileModel.Load(Files);
 
-        var form = TsFormRenderer.RenderAll(models, [], FormImportFixtures.TestImports)["Asset"];
+        var form = TSFormRenderer.RenderAll(models, [], FormImportFixtures.TestImports)["Asset"];
 
         var inspSection = SectionBody(form, "insp");
         Assert.Contains("onChange({ InspGrade: v })", inspSection);
@@ -70,7 +70,7 @@ public class ExtensionCrossTargetTests
         Assert.Contains("public string? InspGrade { get; set; }", pair.Read);
         Assert.Contains("string? InspGrade { get; }", pair.Interface);
 
-        var ts = MddBooster.Generators.TypeScript.TsInterfaceRenderer.RenderAll(models, new HashSet<string>());
+        var ts = MddBooster.Generators.TypeScript.TSInterfaceRenderer.RenderAll(models, new HashSet<string>());
         Assert.Contains("InspGrade: string | null", ts);
     }
 }

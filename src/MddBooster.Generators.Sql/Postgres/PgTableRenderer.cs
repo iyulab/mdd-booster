@@ -94,7 +94,7 @@ public static class PgTableRenderer
                 throw new InvalidOperationException(
                     $"모델 '{model.Name}' 필드 '{field.Name}'의 참조 대상 모델 '{target}'을(를) 찾을 수 없습니다.");
             }
-            var targetPk = ModelPrimaryKey.Find(targetModel)
+            var targetPK = ModelPrimaryKey.Find(targetModel)
                 ?? throw new InvalidOperationException(
                     $"참조 대상 모델 '{target}'에 PK가 없어 FK를 렌더할 수 없습니다.");
 
@@ -110,7 +110,7 @@ public static class PgTableRenderer
 
             constraints.Add((
                 GeneratedObjectNames.For(true, GeneratedObjectNames.Kind.ForeignKey, tableName, field.Name),
-                $"FOREIGN KEY ({field.Name}) REFERENCES {schema}.{targetTable} ({targetPk.Name}){cascade}"));
+                $"FOREIGN KEY ({field.Name}) REFERENCES {schema}.{targetTable} ({targetPK.Name}){cascade}"));
         }
 
         // field-level @unique — PG UNIQUE는 NULL을 distinct로 취급하므로

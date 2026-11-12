@@ -35,7 +35,7 @@ namespace MddBooster.Tests.Cli;
 [Collection(ConsoleCaptureCollection.Name)]
 public class LargeModelAcceptanceTests
 {
-    private sealed record Layout(string Root, string MddDir, string DbDir, string ModelDir, string ApiDir, string TsDir);
+    private sealed record Layout(string Root, string MddDir, string DbDir, string ModelDir, string ApiDir, string TSDir);
 
     private static Layout Scaffold(string? modelPath = null)
     {
@@ -48,7 +48,7 @@ public class LargeModelAcceptanceTests
             Path.Combine(root, "src", "Sample.Server"),
             Path.Combine(root, "src", "sample-ui"));
 
-        foreach (var dir in new[] { layout.MddDir, layout.DbDir, layout.ModelDir, layout.ApiDir, layout.TsDir })
+        foreach (var dir in new[] { layout.MddDir, layout.DbDir, layout.ModelDir, layout.ApiDir, layout.TSDir })
             Directory.CreateDirectory(dir);
 
         File.Copy(modelPath ?? AcceptanceModel.Path, Path.Combine(layout.MddDir, "tables.m3l.md"));
@@ -165,9 +165,9 @@ public class LargeModelAcceptanceTests
             foreach (var sql in allSql)
                 Assert.True(new FileInfo(sql).Length > 0, $"{Path.GetFileName(sql)} is empty");
 
-            var allTs = Directory.GetFiles(layout.TsDir, "*.ts", SearchOption.AllDirectories);
-            Assert.NotEmpty(allTs);
-            foreach (var ts in allTs)
+            var allTS = Directory.GetFiles(layout.TSDir, "*.ts", SearchOption.AllDirectories);
+            Assert.NotEmpty(allTS);
+            foreach (var ts in allTS)
                 Assert.True(new FileInfo(ts).Length > 0, $"{Path.GetFileName(ts)} is empty");
         }
         finally { Cleanup(layout); }
@@ -242,7 +242,7 @@ public class LargeModelAcceptanceTests
             Assert.Matches(@"public int AssetFloorLevel \{", ext);
             Assert.Matches(@"public string\? AssetDepartmentName \{", ext);
 
-            var ts = File.ReadAllText(Directory.GetFiles(layout.TsDir, "entities_gen.ts", SearchOption.AllDirectories).Single());
+            var ts = File.ReadAllText(Directory.GetFiles(layout.TSDir, "entities_gen.ts", SearchOption.AllDirectories).Single());
             Assert.Matches(@"AssetFloorLevel\?: number\r?\n", ts);
             Assert.Contains("AssetDepartmentName?: string | null", ts);
         }

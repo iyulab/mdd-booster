@@ -16,7 +16,7 @@ public static class ModelPrimaryKey
     }
 
     /// <summary>PK 필드명이 `id`가 아닌가 (공유/명명 PK — 컬럼 재매핑 대상).</summary>
-    public static bool IsNonIdPk(FieldNode pkField)
+    public static bool IsNonIdPK(FieldNode pkField)
     {
         ArgumentNullException.ThrowIfNull(pkField);
         return !string.Equals(pkField.Name, "id", StringComparison.OrdinalIgnoreCase);

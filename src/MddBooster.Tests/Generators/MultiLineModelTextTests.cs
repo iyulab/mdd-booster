@@ -64,7 +64,7 @@ public class MultiLineModelTextTests
     {
         var (models, _) = Load();
 
-        var result = TsFieldSchemaRenderer.RenderAll(models);
+        var result = TSFieldSchemaRenderer.RenderAll(models);
 
         Assert.Contains("label: 'Shown on invoices.\\nSecond line.'", result);
         Assert.DoesNotContain("Shown on invoices.\n", result);
@@ -75,7 +75,7 @@ public class MultiLineModelTextTests
     {
         var (models, ast) = Load();
 
-        var content = TsFormRenderer.RenderAll(models, ast.Enums, FormImportFixtures.TestImports)["Order"];
+        var content = TSFormRenderer.RenderAll(models, ast.Enums, FormImportFixtures.TestImports)["Order"];
 
         Assert.Contains("label={'Shown on invoices.\\nSecond line.'}", content);
         Assert.DoesNotContain("Shown on invoices.\n", content);
@@ -86,7 +86,7 @@ public class MultiLineModelTextTests
     {
         var (_, ast) = Load();
 
-        var result = TsEnumLabelsRenderer.RenderAll(ast.Enums);
+        var result = TSEnumLabelsRenderer.RenderAll(ast.Enums);
 
         Assert.Contains("  draft: 'Customer\\'s draft',", result);
     }

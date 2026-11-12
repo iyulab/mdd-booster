@@ -203,7 +203,7 @@ public static class EntityConfigurationRenderer
         foreach (var model in ordered)
         {
             var pk = ModelPrimaryKey.Find(model);
-            if (pk is null || !ModelPrimaryKey.IsNonIdPk(pk)) continue;
+            if (pk is null || !ModelPrimaryKey.IsNonIdPK(pk)) continue;
 
             var name = NameCasing.ToPascalCase(model.Name);
             var column = SourceLiteral.CSharpString(NameCasing.ToPascalCase(pk.Name));

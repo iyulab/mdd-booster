@@ -14,7 +14,7 @@ namespace MddBooster.Generators.TypeScript;
 /// generator reported as written and the consumer's compiler rejected, in a
 /// project this code never runs in.
 /// </remarks>
-internal static class TsModuleSpecifier
+internal static class TSModuleSpecifier
 {
     /// <summary>
     /// The module specifier prefix that addresses <paramref name="targetDir"/>

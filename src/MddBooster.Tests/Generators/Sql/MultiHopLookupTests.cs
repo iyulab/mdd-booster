@@ -205,7 +205,7 @@ public sealed class MultiHopLookupTests : IDisposable
         Assert.Contains("public string? ViaOptional", pair.Read);
         Assert.DoesNotContain("public string? ViaRequired", pair.Read);
 
-        var ts = MddBooster.Generators.TypeScript.TsInterfaceRenderer.RenderAll(models);
+        var ts = MddBooster.Generators.TypeScript.TSInterfaceRenderer.RenderAll(models);
         Assert.Contains("ViaOptional?: string | null", ts);
         Assert.Contains("ViaRequired?: string" + Environment.NewLine, ts);
     }

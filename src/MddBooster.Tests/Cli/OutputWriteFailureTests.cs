@@ -57,7 +57,7 @@ public class OutputWriteFailureTests
         try { Directory.Delete(root, recursive: true); } catch { }
     }
 
-    private const string TsThenModel = """
+    private const string TSThenModel = """
         { "sources": ["./tables.m3l.md"], "targets": [
           { "type": "TypeScript", "outputPath": "../ts" },
           { "type": "Model", "projectPath": "../model", "namespace": "N", "dbContextName": "Db" } ] }
@@ -69,7 +69,7 @@ public class OutputWriteFailureTests
         var root = NewRoot();
         try
         {
-            Assert.Equal(0, Build(root, TsThenModel).Exit);
+            Assert.Equal(0, Build(root, TSThenModel).Exit);
             var locked = Directory.EnumerateFiles(Path.Combine(root, "model"), "Item.cs", SearchOption.AllDirectories).Single();
             // What makes the write fail differs by platform: Windows refuses to replace a read-only
             // file, while on Unix a file in a writable directory can be deleted and recreated whatever
@@ -79,7 +79,7 @@ public class OutputWriteFailureTests
             else
                 File.SetUnixFileMode(Path.GetDirectoryName(locked)!, UnixFileMode.UserRead | UnixFileMode.UserExecute);
 
-            var (exit, stderr) = Build(root, TsThenModel);
+            var (exit, stderr) = Build(root, TSThenModel);
 
             Assert.Equal(1, exit);
             Assert.Contains("[model] 출력을 쓰지 못했습니다", stderr);

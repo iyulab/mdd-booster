@@ -10,7 +10,7 @@ namespace MddBooster.Tests.Generators.TypeScript;
 /// used to be literals, which meant the consumer — who may not edit the file —
 /// had to build the folder layout those literals named.
 /// </summary>
-public sealed class TsFormImportsTests
+public sealed class TSFormImportsTests
 {
     private static IReadOnlyList<ResolvedModel> Models(out IReadOnlyList<M3L.Native.EnumNode> enums)
     {
@@ -20,12 +20,12 @@ public sealed class TsFormImportsTests
         return new InterfaceResolver(ast).ResolveAll();
     }
 
-    private static string Render(TsFormModuleImports modules)
+    private static string Render(TSFormModuleImports modules)
     {
         var models = Models(out var enums);
-        var imports = new TsFormImports { GeneratedTypesBase = "../types", Modules = modules };
+        var imports = new TSFormImports { GeneratedTypesBase = "../types", Modules = modules };
 
-        return TsFormRenderer.RenderAll(models, enums, imports)["OrderItem"];
+        return TSFormRenderer.RenderAll(models, enums, imports)["OrderItem"];
     }
 
     /// <summary>
@@ -36,12 +36,12 @@ public sealed class TsFormImportsTests
     /// the missing key.
     /// </summary>
     [Theory]
-    [InlineData(nameof(TsFormModuleImports.Layout))]
-    [InlineData(nameof(TsFormModuleImports.Controls))]
-    [InlineData(nameof(TsFormModuleImports.SelectOptions))]
+    [InlineData(nameof(TSFormModuleImports.Layout))]
+    [InlineData(nameof(TSFormModuleImports.Controls))]
+    [InlineData(nameof(TSFormModuleImports.SelectOptions))]
     public void Every_foreign_module_must_be_named_by_the_caller(string property)
     {
-        var member = typeof(TsFormModuleImports).GetProperty(property)!;
+        var member = typeof(TSFormModuleImports).GetProperty(property)!;
 
         Assert.True(member.IsDefined(typeof(RequiredMemberAttribute), inherit: false),
             $"{property} must stay required — a default here names a layout or package for the consumer.");
@@ -50,7 +50,7 @@ public sealed class TsFormImportsTests
     [Fact]
     public void Each_module_can_be_pointed_somewhere_else_independently()
     {
-        var form = Render(new TsFormModuleImports
+        var form = Render(new TSFormModuleImports
         {
             Layout = "@example/layout",
             Controls = "@example/controls",
@@ -69,7 +69,7 @@ public sealed class TsFormImportsTests
     [Fact]
     public void Configuring_the_foreign_modules_does_not_move_the_generated_type_imports()
     {
-        var form = Render(new TsFormModuleImports
+        var form = Render(new TSFormModuleImports
         {
             Layout = "@example/layout",
             Controls = "@example/controls",

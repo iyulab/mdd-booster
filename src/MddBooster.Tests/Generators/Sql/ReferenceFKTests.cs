@@ -4,7 +4,7 @@ using MddBooster.Generators.Sql;
 
 namespace MddBooster.Tests.Generators.Sql;
 
-public class ReferenceFkTests
+public class ReferenceFKTests
 {
     private static string FixturePath(string name) =>
         Path.Combine(AppContext.BaseDirectory, "fixtures", name);

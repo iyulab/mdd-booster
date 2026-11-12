@@ -44,7 +44,7 @@ public class DbContextPostgresNamingTests
     }
 
     [Fact]
-    public void PostgresNaming_SharedPkRemapsIdToSnakePkColumn()
+    public void PostgresNaming_SharedPKRemapsIdToSnakePKColumn()
     {
         var mapping = ModelMappingRenderer.Render(
             Load("shared-pk-extension.m3l.md"), "TestDbContext", "Test.Ns", postgresNaming: true);

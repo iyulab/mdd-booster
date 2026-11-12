@@ -10,19 +10,19 @@ namespace MddBooster.Tests.Generators.Model;
 /// 설계: `IyuEntity.Id` 상속을 유지하고 DbContext fluent `HasColumnName`으로
 /// PK 컬럼에 재매핑한다. Guid와 양립 불가한 PK는 명시적 오류.
 /// </summary>
-public class SharedPkRenderTests
+public class SharedPKRenderTests
 {
     private static string FixturePath(string name) =>
         Path.Combine(AppContext.BaseDirectory, "fixtures", name);
 
-    private static IReadOnlyList<ResolvedModel> LoadSharedPk() =>
+    private static IReadOnlyList<ResolvedModel> LoadSharedPK() =>
         new InterfaceResolver(new M3lLoader().LoadFile(FixturePath("shared-pk-extension.m3l.md")))
             .ResolveAll().ToList();
 
     [Fact]
     public void Entity_elides_shared_pk_field_and_keeps_other_fk_fields()
     {
-        var profile = LoadSharedPk().Single(m => m.Name == "AssetMaintenanceProfile");
+        var profile = LoadSharedPK().Single(m => m.Name == "AssetMaintenanceProfile");
 
         var rendered = EntityPairRenderer.Render(profile, "Test.Entities");
 
@@ -36,7 +36,7 @@ public class SharedPkRenderTests
     [Fact]
     public void DbContext_remaps_inherited_Id_to_shared_pk_column_for_base_and_ext()
     {
-        var models = LoadSharedPk();
+        var models = LoadSharedPK();
 
         var mapping = ModelMappingRenderer.Render(models, "TestDbContext", "Test.Ns");
 
@@ -51,7 +51,7 @@ public class SharedPkRenderTests
     [Fact]
     public void DbContext_does_not_remap_models_whose_pk_is_id()
     {
-        var models = LoadSharedPk();
+        var models = LoadSharedPK();
 
         var mapping = ModelMappingRenderer.Render(models, "TestDbContext", "Test.Ns");
 
@@ -62,7 +62,7 @@ public class SharedPkRenderTests
     [Fact]
     public void Shared_pk_sql_column_and_dbcontext_mapping_agree()
     {
-        var models = LoadSharedPk();
+        var models = LoadSharedPK();
         var profile = models.Single(m => m.Name == "AssetMaintenanceProfile");
         var pkField = profile.Fields.Single(f => f.Name == "asset_id");
 
@@ -81,7 +81,7 @@ public class SharedPkRenderTests
     [Fact]
     public void Shared_pk_end_to_end_produces_well_formed_csharp()
     {
-        var models = LoadSharedPk();
+        var models = LoadSharedPK();
 
         var sources = models
             .Select(m => EntityPairRenderer.Render(m, "Test.Entities"))

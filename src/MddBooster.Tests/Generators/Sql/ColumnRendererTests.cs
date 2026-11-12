@@ -32,7 +32,7 @@ public class ColumnRendererTests
     /// 생성기가 `"pk"` 정확 일치만 검사해 `@primary` 모델이 PK 없는 DDL로 조용히 생성됨.
     /// </summary>
     [Fact]
-    public void Render_PrimaryAliasIdField_EmitsPrimaryKeyLikePk()
+    public void Render_PrimaryAliasIdField_EmitsPrimaryKeyLikePK()
     {
         var ast = new M3lLoader().LoadFile(FixturePath("primary-alias.m3l.md"));
         var model = new InterfaceResolver(ast).ResolveAll().Single(m => m.Name == "Sample");

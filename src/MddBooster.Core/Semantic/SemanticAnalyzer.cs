@@ -495,7 +495,7 @@ public sealed class SemanticAnalyzer
                     $"'{model.Name}.{field.Name}' @lookup 경로 '{path}'가 'fk.column' 형태가 아닙니다.",
                     field.Loc));
                 break;
-            case LookupPathFailure.MissingFk:
+            case LookupPathFailure.MissingFK:
                 diagnostics.Add(new SemanticDiagnostic(
                     "MDD004",
                     $"'{model.Name}.{field.Name}' @lookup({path}): {where}에 FK 필드 '{segment}'가 존재하지 않습니다.",

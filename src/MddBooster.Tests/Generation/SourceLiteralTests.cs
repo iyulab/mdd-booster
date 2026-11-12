@@ -51,7 +51,7 @@ public class SourceLiteralTests
         Assert.DoesNotContain('\r', literal);
         Assert.DoesNotContain('\u2028', literal);
         Assert.DoesNotContain('\u2029', literal);
-        Assert.Equal(text, DecodeJsSingleQuoted(literal));
+        Assert.Equal(text, DecodeJSSingleQuoted(literal));
     }
 
     [Fact]
@@ -85,7 +85,7 @@ public class SourceLiteralTests
     /// ECMAScript SingleEscapeCharacter and UnicodeEscapeSequence. Rejects anything else, so an
     /// escape this decoder does not know is a test failure rather than a silent pass.
     /// </summary>
-    private static string DecodeJsSingleQuoted(string literal)
+    private static string DecodeJSSingleQuoted(string literal)
     {
         var body = literal[1..^1];
         var sb = new System.Text.StringBuilder();
