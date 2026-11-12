@@ -7,7 +7,7 @@ namespace MddBooster.Generators.Sql.Postgres;
 /// 타입 이름은 pg_catalog 별칭 관용(소문자, <c>varchar</c>/<c>timestamptz</c>)을 따른다 —
 /// 엔진이 저장하는 형태도 이 별칭이라, 카탈로그와 비교하는 도구에서 표기 차이가 diff 를 만들지 않는다.
 /// </summary>
-public static class PgTypeMapper
+public static class PostgresTypeMapper
 {
     /// <summary>
     /// 필드 타입 해석. enum이면 <see cref="EnumSqlConvention.ColumnLength"/> 폭의

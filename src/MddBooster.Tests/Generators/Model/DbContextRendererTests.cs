@@ -120,7 +120,7 @@ public class DbContextRendererTests
 
     /// <summary>
     /// Postgres naming mode: same declarations, on the write entity's configuration (alongside
-    /// its column mapping), and the constraint/index names mirror PgTableRenderer's
+    /// its column mapping), and the constraint/index names mirror PostgresTableRenderer's
     /// <c>uq_{table}_{field}</c>/<c>ix_{table}_{field}</c> — snake_case, matching the real PG object name.
     /// </summary>
     [Fact]

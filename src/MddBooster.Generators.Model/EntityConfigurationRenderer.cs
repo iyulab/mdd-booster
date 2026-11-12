@@ -308,7 +308,7 @@ public static class EntityConfigurationRenderer
     /// Emits <c>HasIndex()</c>/<c>HasIndex().IsUnique()</c> for every stored, non-PK field
     /// carrying <c>@unique</c> or <c>@index</c> — the Model-target counterpart TableRenderer's own
     /// disposition note names. PK is skipped: it already carries a unique index by definition, the
-    /// same reason TableRenderer/PgTableRenderer skip it. A field declaring both wins as unique
+    /// same reason TableRenderer/PostgresTableRenderer skip it. A field declaring both wins as unique
     /// only, mirroring TableRenderer's <c>@unique @index</c> exclusion (a unique constraint already
     /// owns its index). <paramref name="indexNamePrefix"/> is the SQL/PG object-name prefix
     /// (<c>model.Name</c> for SQL Server, the mapped snake_case table for Postgres) so the emitted
@@ -346,7 +346,7 @@ public static class EntityConfigurationRenderer
     /// <c>### Indexes</c> 섹션의 복합 <c>@unique(...)</c>/<c>@index(...)</c> directive를
     /// <c>HasIndex(x =&gt; new { ... })</c>로 emit한다 — <see cref="AppendIndexes"/>는 필드
     /// 레벨(단일 컬럼) attribute만 훑으므로 별개다. 명명은 SQL/PG 렌더러(<c>TableRenderer</c>/
-    /// <c>PgTableRenderer</c>)의 <c>AppendSectionIndexes</c>와 맞춘다 — SQL Server는
+    /// <c>PostgresTableRenderer</c>)의 <c>AppendSectionIndexes</c>와 맞춘다 — SQL Server는
     /// PascalCase 컬럼 조인(<c>UK_</c>/<c>IX_</c>), PG는 원문 snake_case 컬럼 조인
     /// (<c>uq_</c>/<c>ix_</c>). <c>nulls: "not_distinct"</c>가 선언된 unique
     /// entry는 SQL Server에서 <c>SqlServerIndexConvention</c>의 자동 filtered-index를

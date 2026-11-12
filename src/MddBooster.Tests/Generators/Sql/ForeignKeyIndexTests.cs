@@ -41,8 +41,8 @@ public class ForeignKeyIndexTests
         TableRenderer.Render(model, "dbo", Model.Value.Enums, false, emitForeignKeyIndexes: on,
             allModels: Model.Value.Models);
 
-    private static string Pg(ResolvedModel model, bool on) =>
-        PgTableRenderer.Render(model, "public", Model.Value.TableNames, Model.Value.Lookup,
+    private static string PostgresDdl(ResolvedModel model, bool on) =>
+        PostgresTableRenderer.Render(model, "public", Model.Value.TableNames, Model.Value.Lookup,
             Model.Value.Enums, false, emitForeignKeyIndexes: on).Sql;
 
     private static IReadOnlyList<string> Planned(ResolvedModel model) =>
@@ -72,7 +72,7 @@ public class ForeignKeyIndexTests
             var column = NameCasing.ToPascalCase(field.Name);
             Assert.DoesNotContain($"[IX_{model.Name}_{column}]", Tsql(model, on: false));
             Assert.DoesNotContain(
-                $"ix_{tableNames[model.Name]}_{field.Name} ", Pg(model, on: false));
+                $"ix_{tableNames[model.Name]}_{field.Name} ", PostgresDdl(model, on: false));
         }
     }
 
@@ -91,7 +91,7 @@ public class ForeignKeyIndexTests
             Tsql(workOrder, on: true));
         Assert.Contains(
             "CREATE INDEX ix_work_order_requester_id ON public.work_order (requester_id);",
-            Pg(workOrder, on: true));
+            PostgresDdl(workOrder, on: true));
     }
 
     [Fact]
@@ -160,7 +160,7 @@ public class ForeignKeyIndexTests
             $"{modelName}.{column} 이 `@index` 를 잃었다 — 이 테스트는 겹침이 있을 때만 무엇인가를 잰다");
 
         var table = Model.Value.TableNames[modelName];
-        Assert.DoesNotContain($"CREATE INDEX ix_{table}_{column} ", Pg(model, on: false));
+        Assert.DoesNotContain($"CREATE INDEX ix_{table}_{column} ", PostgresDdl(model, on: false));
         Assert.DoesNotContain($"[IX_{modelName}_{pascalColumn}]", Tsql(model, on: false));
     }
 

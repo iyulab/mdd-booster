@@ -32,7 +32,7 @@ public class StandaloneViewBuildTests
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", "standalone-views.m3l.md"));
 
     private const string TsqlTarget = """{ "type": "Sql", "projectPath": "../db", "schema": "dbo", "emitSqlProj": false }""";
-    private const string PgTarget = """{ "type": "Sql", "dialect": "postgres", "projectPath": "../db" }""";
+    private const string PostgresTarget = """{ "type": "Sql", "dialect": "postgres", "projectPath": "../db" }""";
 
     [Fact]
     public void An_aggregate_view_renders_its_rollups_and_group_on_SQL_Server()
@@ -126,7 +126,7 @@ public class StandaloneViewBuildTests
         finally { Cleanup(root); }
     }
 
-    private const string PgModel = """
+    private const string PostgresModel = """
         # Namespace: test
 
         ## Client
@@ -166,7 +166,7 @@ public class StandaloneViewBuildTests
     [Fact]
     public void Expression_free_views_render_on_PostgreSQL()
     {
-        var mddDir = Scaffold(PgModel, PgTarget, out var root);
+        var mddDir = Scaffold(PostgresModel, PostgresTarget, out var root);
         try
         {
             Assert.Equal(0, new BuildCommand().Run(mddDir));
@@ -196,7 +196,7 @@ public class StandaloneViewBuildTests
     {
         // The filter is written in M3L's portable subset (§10.7), so this dialect translates it rather than leaving the
         // view out — before expressions had a defined language it could only skip it (MDD029).
-        var mddDir = Scaffold(PgModel, PgTarget, out var root);
+        var mddDir = Scaffold(PostgresModel, PostgresTarget, out var root);
         using var stderr = new ConsoleErrorCapture(this);
         try
         {
@@ -236,7 +236,7 @@ public class StandaloneViewBuildTests
             - spent: decimal(12,2) @rollup(Purchase.client_id, sum(amount))
             - average: decimal(12,2) @computed("spent / NULLIF(purchases, 0)")
             """;
-        var mddDir = Scaffold(model, PgTarget, out var root);
+        var mddDir = Scaffold(model, PostgresTarget, out var root);
         try
         {
             Assert.Equal(0, new BuildCommand().Run(mddDir));
@@ -306,7 +306,7 @@ public class StandaloneViewBuildTests
     [Fact]
     public void A_left_join_renders_as_LEFT_JOIN_and_a_join_as_INNER_JOIN_on_PostgreSQL()
     {
-        var mddDir = Scaffold(LeftJoinModel, PgTarget, out var root);
+        var mddDir = Scaffold(LeftJoinModel, PostgresTarget, out var root);
         try
         {
             Assert.Equal(0, new BuildCommand().Run(mddDir));
@@ -339,7 +339,7 @@ public class StandaloneViewBuildTests
     [Fact]
     public void Without_a_Sql_target_the_build_says_the_views_are_not_generated()
     {
-        var mddDir = Scaffold(PgModel, """{ "type": "Model", "projectPath": "../db", "namespace": "T.Entities", "dbContextName": "TDb" }""", out var root);
+        var mddDir = Scaffold(PostgresModel, """{ "type": "Model", "projectPath": "../db", "namespace": "T.Entities", "dbContextName": "TDb" }""", out var root);
         using var stderr = new ConsoleErrorCapture(this);
         try
         {

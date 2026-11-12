@@ -30,7 +30,7 @@ internal static class BaseColumns
 {
     /// <summary>
     /// Stored (physical) fields in declaration order. The base table always has every
-    /// one of these columns — <see cref="TableRenderer"/>/<c>PgTableRenderer</c> must
+    /// one of these columns — <see cref="TableRenderer"/>/<c>PostgresTableRenderer</c> must
     /// call this unfiltered. <paramref name="excludeFieldInternal"/> is for the *view*
     /// renderers only: a field-level <c>@internal</c> field stays a real column on the
     /// table but drops out of the read-surface views (FullView/UdView) that project it.

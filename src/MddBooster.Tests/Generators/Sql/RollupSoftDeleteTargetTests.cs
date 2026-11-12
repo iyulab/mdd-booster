@@ -82,7 +82,7 @@ public class RollupSoftDeleteTargetTests
         var tables = new Dictionary<string, string> { ["Order"] = "order", ["OrderItem"] = "order_item", ["Note"] = "note" };
         var views = tables.ToDictionary(t => t.Key, t => t.Value + "_full_view");
 
-        var sql = PgFullViewRenderer.Render(
+        var sql = PostgresFullViewRenderer.Render(
             plans.Single(p => p.Model.Name == "Order"), "public", tables, views,
             models.ToDictionary(m => m.Name), Derived(plans));
 
@@ -97,7 +97,7 @@ public class RollupSoftDeleteTargetTests
         var orderItem = Load().Single(m => m.Name == "OrderItem");
 
         Assert.Contains("WHERE [DeletedAt] IS NULL", UdViewRenderer.Render(orderItem, "dbo"));
-        Assert.Contains("WHERE b.deleted_at IS NULL;", PgUdViewRenderer.Render(orderItem, "public", "order_item", "order_item_ud_view"));
+        Assert.Contains("WHERE b.deleted_at IS NULL;", PostgresUdViewRenderer.Render(orderItem, "public", "order_item", "order_item_ud_view"));
     }
 
     private static string RenderOrder()

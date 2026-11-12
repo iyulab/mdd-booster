@@ -83,7 +83,7 @@ public class EnumArrayFieldGenerationTests
         var lookup = models.ToDictionary(m => m.Name, StringComparer.Ordinal);
         var tableNames = PostgresIdentifiers.BuildTableNameMap(models.Select(m => m.Name));
 
-        var on = PgTableRenderer.Render(models.Single(), "public", tableNames, lookup, Enums(ast), emitEnumCheckConstraints: true).Sql;
+        var on = PostgresTableRenderer.Render(models.Single(), "public", tableNames, lookup, Enums(ast), emitEnumCheckConstraints: true).Sql;
         Assert.Contains("states varchar(20)[] NOT NULL", on);
         Assert.Contains(
             "CHECK (array_position(states, NULL) IS NULL AND array_remove(states, NULL)::text[] <@ ARRAY['draft', 'in_review', 'done']::text[])",
@@ -91,7 +91,7 @@ public class EnumArrayFieldGenerationTests
         Assert.Contains("CHECK (array_remove(past_states, NULL)::text[] <@ ARRAY['draft', 'in_review', 'done']::text[])", on);
         Assert.Contains("CHECK (single IN ('draft', 'in_review', 'done'))", on);
 
-        var off = PgTableRenderer.Render(models.Single(), "public", tableNames, lookup, Enums(ast)).Sql;
+        var off = PostgresTableRenderer.Render(models.Single(), "public", tableNames, lookup, Enums(ast)).Sql;
         Assert.Contains("CHECK (array_position(states, NULL) IS NULL)", off);
         Assert.DoesNotContain("<@", off);
     }

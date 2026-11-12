@@ -178,7 +178,7 @@ GO
         var tableNames = PostgresIdentifiers.BuildTableNameMap(models.Select(m => m.Name));
         var enums = ast.Enums.ToDictionary(e => e.Name, StringComparer.Ordinal);
 
-        var artifact = PgTableRenderer.Render(models.Single(), "public", tableNames, lookup, enums);
+        var artifact = PostgresTableRenderer.Render(models.Single(), "public", tableNames, lookup, enums);
 
         // `notes text?[]` and `ranks short?[]?` declare nullable elements, so they carry no element CHECK.
         var expected = """

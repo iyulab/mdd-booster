@@ -66,7 +66,7 @@ public class ReferentialActionTests
         var tableNames = PostgresIdentifiers.BuildTableNameMap(models.Select(m => m.Name));
         var enums = ast.Enums.ToDictionary(e => e.Name, StringComparer.Ordinal);
 
-        var sql = PgTableRenderer.Render(lookup["Invoice"], "public", tableNames, lookup, enums).Sql;
+        var sql = PostgresTableRenderer.Render(lookup["Invoice"], "public", tableNames, lookup, enums).Sql;
 
         Assert.Matches(@"FOREIGN KEY \(plain_id\) REFERENCES public\.customer \(id\)(?! ON DELETE)", sql);
         Assert.Contains("FOREIGN KEY (kept_id) REFERENCES public.customer (id) ON DELETE NO ACTION", sql);

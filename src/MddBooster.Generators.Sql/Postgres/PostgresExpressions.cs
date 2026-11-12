@@ -32,7 +32,7 @@ internal static class PostgresExpressions
     {
         var sql = Render(selected, column);
         if (selected.IsRaw || !ComputedValues.IsCast(field)) return sql;
-        var type = PgTypeMapper.Map(field.Type!, FieldAttributes.StringArgs(field.Params));
+        var type = PostgresTypeMapper.Map(field.Type!, FieldAttributes.StringArgs(field.Params));
         // PostgreSQL's cast to an integer rounds; SQL Server's truncates toward zero — truncate first, so both agree.
         return ComputedValues.IsIntegral(field)
             ? $"CAST(trunc(({sql})::numeric) AS {type})"

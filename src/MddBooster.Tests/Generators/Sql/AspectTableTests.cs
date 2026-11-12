@@ -73,7 +73,7 @@ public class AspectTableTests
     {
         var (lookup, tableNames, enums) = Load();
 
-        var artifact = PgTableRenderer.Render(lookup[Aspect], "public", tableNames, lookup, enums);
+        var artifact = PostgresTableRenderer.Render(lookup[Aspect], "public", tableNames, lookup, enums);
 
         Assert.Contains("CONSTRAINT pk_asset_maintenance_profile PRIMARY KEY (asset_id)", artifact.Sql);
         Assert.Contains(

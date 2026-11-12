@@ -224,9 +224,9 @@ public sealed class StandaloneViewReadModelBuildTests
         Assert.True(tsql.Exists("db", "dbo", "Views_gen", "ActiveProducts.sql"));
 
         using var pg = Build("postgres", ProductOnly);
-        var pgConfiguration = pg.Read("entities", "Entity_gen", "ActiveProductsConfiguration.cs");
-        Assert.Contains("builder.ToView(\"active_products\");", pgConfiguration);
-        Assert.Contains("builder.Property(x => x.Stock).HasColumnName(\"stock\");", pgConfiguration);
+        var postgresConfiguration = pg.Read("entities", "Entity_gen", "ActiveProductsConfiguration.cs");
+        Assert.Contains("builder.ToView(\"active_products\");", postgresConfiguration);
+        Assert.Contains("builder.Property(x => x.Stock).HasColumnName(\"stock\");", postgresConfiguration);
         Assert.True(pg.Exists("db", "views_gen", "active_products.sql"));
     }
 

@@ -183,13 +183,13 @@ public sealed class SemanticAnalyzer
                         "숫자로 시작하지 않게.",
                         model.Source.Loc));
                 }
-                else if (_dialects.Contains(SqlDialect.PostgreSql) && Naming.PostgresIdentifiers.Check(name) is { } pgViolation)
+                else if (_dialects.Contains(SqlDialect.PostgreSql) && Naming.PostgresIdentifiers.Check(name) is { } postgresViolation)
                 {
                     // The PostgreSQL generator writes a declared name unquoted and refuses, at generation time, one it
                     // cannot write that way. The same gate is asked here so the build says it with its diagnostics.
                     diagnostics.Add(new SemanticDiagnostic(
                         "MDD042",
-                        $"'{model.Name}' 인덱스 이름을 PostgreSQL 이 쓸 수 없다 — {pgViolation}.",
+                        $"'{model.Name}' 인덱스 이름을 PostgreSQL 이 쓸 수 없다 — {postgresViolation}.",
                         model.Source.Loc));
                 }
                 else if (seen.TryGetValue(name, out var first))

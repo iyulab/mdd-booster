@@ -109,10 +109,10 @@ public sealed class PreScriptWriterTests : IDisposable
         var steps = RenameSteps.Of(Load(model));
 
         var pg = new PreScriptWriter(SqlDialect.PostgreSql, "public", n => PostgresIdentifiers.ToSnakeCase(n));
-        var pgTable = pg.Render(steps[0]);
-        Assert.Contains("ALTER TABLE public.customer_order RENAME CONSTRAINT pk_sales_order TO pk_customer_order;", pgTable);
-        Assert.Contains("ALTER TABLE public.customer_order RENAME CONSTRAINT uq_sales_order_code TO uq_customer_order_code;", pgTable);
-        Assert.Contains("ALTER INDEX public.ix_sales_order_code RENAME TO ix_customer_order_code;", pgTable);
+        var postgresTable = pg.Render(steps[0]);
+        Assert.Contains("ALTER TABLE public.customer_order RENAME CONSTRAINT pk_sales_order TO pk_customer_order;", postgresTable);
+        Assert.Contains("ALTER TABLE public.customer_order RENAME CONSTRAINT uq_sales_order_code TO uq_customer_order_code;", postgresTable);
+        Assert.Contains("ALTER INDEX public.ix_sales_order_code RENAME TO ix_customer_order_code;", postgresTable);
         Assert.Contains("ALTER TABLE public.customer_order RENAME CONSTRAINT uq_customer_order_code TO uq_customer_order_order_code;",
             pg.Render(steps[1]));
 
@@ -143,13 +143,13 @@ public sealed class PreScriptWriterTests : IDisposable
             steps.Select(s => (s.Kind, s.From)));
 
         var pg = new PreScriptWriter(SqlDialect.PostgreSql, "public", n => PostgresIdentifiers.ToSnakeCase(n));
-        var pgTable = pg.Render(steps[0]);
-        Assert.Contains("RENAME CONSTRAINT uq_sales_order_code_seq TO uq_customer_order_code_seq;", pgTable);
-        Assert.Contains("RENAME CONSTRAINT uq_sales_order_customer_code_seq TO uq_customer_order_customer_code_seq;", pgTable);
-        Assert.Contains("ALTER INDEX public.ix_sales_order_seq_code RENAME TO ix_customer_order_seq_code;", pgTable);
-        var pgColumn = pg.Render(steps[1]);
-        Assert.Contains("RENAME CONSTRAINT uq_customer_order_code_seq TO uq_customer_order_customer_code_seq;", pgColumn);
-        Assert.Contains("ALTER INDEX public.ix_customer_order_seq_code RENAME TO ix_customer_order_seq_customer_code;", pgColumn);
+        var postgresTable = pg.Render(steps[0]);
+        Assert.Contains("RENAME CONSTRAINT uq_sales_order_code_seq TO uq_customer_order_code_seq;", postgresTable);
+        Assert.Contains("RENAME CONSTRAINT uq_sales_order_customer_code_seq TO uq_customer_order_customer_code_seq;", postgresTable);
+        Assert.Contains("ALTER INDEX public.ix_sales_order_seq_code RENAME TO ix_customer_order_seq_code;", postgresTable);
+        var postgresColumn = pg.Render(steps[1]);
+        Assert.Contains("RENAME CONSTRAINT uq_customer_order_code_seq TO uq_customer_order_customer_code_seq;", postgresColumn);
+        Assert.Contains("ALTER INDEX public.ix_customer_order_seq_code RENAME TO ix_customer_order_seq_customer_code;", postgresColumn);
 
         var ts = new PreScriptWriter(SqlDialect.SqlServer, "dbo", n => n);
         var tsTable = ts.Render(steps[0]);
@@ -161,7 +161,7 @@ public sealed class PreScriptWriterTests : IDisposable
         Assert.Contains("EXEC sp_rename N'[dbo].[CustomerOrder].[IX_CustomerOrder_Seq_Code]', N'IX_CustomerOrder_Seq_CustomerCode', N'INDEX';", tsColumn);
 
         // The index the model names is the model's; the two statements above are the only ones that touch composites.
-        foreach (var script in new[] { pgTable, pgColumn, tsTable, tsColumn })
+        foreach (var script in new[] { postgresTable, postgresColumn, tsTable, tsColumn })
             Assert.DoesNotContain("ux_fixed", script);
     }
 

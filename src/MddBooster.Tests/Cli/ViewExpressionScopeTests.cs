@@ -13,7 +13,7 @@ namespace MddBooster.Tests.Cli;
 public sealed class ViewExpressionScopeTests
 {
     private const string TsqlTarget = """{ "type": "Sql", "projectPath": "../db", "schema": "dbo", "emitSqlProj": false }""";
-    private const string PgTarget = """{ "type": "Sql", "dialect": "postgres", "projectPath": "../db" }""";
+    private const string PostgresTarget = """{ "type": "Sql", "dialect": "postgres", "projectPath": "../db" }""";
 
     private const string Models = """
         # Namespace: test
@@ -82,7 +82,7 @@ public sealed class ViewExpressionScopeTests
     [Fact]
     public void The_same_view_on_postgresql()
     {
-        var (exit, stderr, root) = Build(Models + View, PgTarget);
+        var (exit, stderr, root) = Build(Models + View, PostgresTarget);
         try
         {
             Assert.True(exit == 0, stderr);
@@ -101,7 +101,7 @@ public sealed class ViewExpressionScopeTests
     public void A_postgresql_filter_names_relations_as_the_model_does()
     {
         var (exit, stderr, root) = Build(Models + View.Replace("- where: \"region = 'east' AND Client.active\"",
-            "- where_raw: \"Client.region ILIKE 'e%' AND Purchase.amount > 0\" platform: postgresql"), PgTarget);
+            "- where_raw: \"Client.region ILIKE 'e%' AND Purchase.amount > 0\" platform: postgresql"), PostgresTarget);
         try
         {
             Assert.True(exit == 0, stderr);
@@ -112,7 +112,7 @@ public sealed class ViewExpressionScopeTests
 
     [Theory]
     [InlineData(TsqlTarget)]
-    [InlineData(PgTarget)]
+    [InlineData(PostgresTarget)]
     public void A_name_the_context_cannot_read_stops_the_build(string target)
     {
         var (exit, stderr, root) = Build(Models.Replace("- active: boolean", """
@@ -203,7 +203,7 @@ public sealed class ViewExpressionScopeTests
     public void A_postgresql_filter_s_string_literals_are_left_alone()
     {
         var (exit, stderr, root) = Build(Models + View.Replace("- where: \"region = 'east' AND Client.active\"",
-            "- where_raw: \"Client.region <> 'Client.region'\" platform: postgresql"), PgTarget);
+            "- where_raw: \"Client.region <> 'Client.region'\" platform: postgresql"), PostgresTarget);
         try
         {
             Assert.True(exit == 0, stderr);

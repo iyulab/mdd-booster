@@ -4,7 +4,7 @@ using MddBooster.Generators.Sql.Postgres;
 
 namespace MddBooster.Tests.Generators.Sql.Postgres;
 
-public class PgTypeMapperTests
+public class PostgresTypeMapperTests
 {
     [Theory]
     [InlineData("identifier", null, "uuid")]
@@ -27,7 +27,7 @@ public class PgTypeMapperTests
     [InlineData("string", "30", "varchar(30)")]
     public void Map_SimpleTypes(string m3lType, string? param, string expected)
     {
-        var actual = PgTypeMapper.Map(m3lType, param is null ? null : new List<string> { param });
+        var actual = PostgresTypeMapper.Map(m3lType, param is null ? null : new List<string> { param });
         Assert.Equal(expected, actual);
     }
 
@@ -45,32 +45,32 @@ public class PgTypeMapperTests
     {
         var expected = MddBooster.Core.Types.M3lPrimitives.ImplicitMaxLength[m3lType];
 
-        Assert.Equal($"varchar({expected})", PgTypeMapper.Map(m3lType, null));
+        Assert.Equal($"varchar({expected})", PostgresTypeMapper.Map(m3lType, null));
     }
 
     [Fact]
     public void Map_DecimalWithPrecisionAndScale_EmitsNumeric()
     {
-        Assert.Equal("numeric(12,2)", PgTypeMapper.Map("decimal", new List<string> { "12", "2" }));
+        Assert.Equal("numeric(12,2)", PostgresTypeMapper.Map("decimal", new List<string> { "12", "2" }));
     }
 
     [Fact]
     public void Map_DecimalWithoutParams_EmitsNumericDefault()
     {
-        Assert.Equal("numeric(18,2)", PgTypeMapper.Map("decimal", null));
+        Assert.Equal("numeric(18,2)", PostgresTypeMapper.Map("decimal", null));
     }
 
     [Fact]
     public void Map_BinaryWithLength_EmitsByteaWithoutLength()
     {
         // PG bytea는 길이 상한이 없다 — 길이 인자는 DDL에선 소실되며, 이는 문서화된 완화다
-        Assert.Equal("bytea", PgTypeMapper.Map("binary", new List<string> { "128" }));
+        Assert.Equal("bytea", PostgresTypeMapper.Map("binary", new List<string> { "128" }));
     }
 
     [Fact]
     public void Map_UnknownType_ThrowsNotSupportedException()
     {
-        Assert.Throws<NotSupportedException>(() => PgTypeMapper.Map("alien", null));
+        Assert.Throws<NotSupportedException>(() => PostgresTypeMapper.Map("alien", null));
     }
 
     [Fact]
@@ -81,6 +81,6 @@ public class PgTypeMapperTests
         var enumLookup = ast.Enums.ToDictionary(e => e.Name, StringComparer.Ordinal);
 
         // Status(draft, published) — 최장 9자, 하한 20 → varchar(20)
-        Assert.Equal("varchar(20)", PgTypeMapper.MapFieldType("Status", null, enumLookup));
+        Assert.Equal("varchar(20)", PostgresTypeMapper.MapFieldType("Status", null, enumLookup));
     }
 }

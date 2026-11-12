@@ -75,7 +75,7 @@ public class DeclaredOnDeleteTests
         var tables = MddBooster.Core.Naming.PostgresIdentifiers.BuildTableNameMap(models.Select(m => m.Name));
         var enums = ast.Enums.ToDictionary(e => e.Name, StringComparer.Ordinal);
 
-        var sql = PgTableRenderer.Render(lookup["Invoice"], "public", tables, lookup, enums).Sql;
+        var sql = PostgresTableRenderer.Render(lookup["Invoice"], "public", tables, lookup, enums).Sql;
 
         Assert.Contains("FOREIGN KEY (owner_id) REFERENCES public.customer (id) ON DELETE CASCADE", sql);
         Assert.Contains("FOREIGN KEY (guard_id) REFERENCES public.customer (id) ON DELETE RESTRICT", sql);

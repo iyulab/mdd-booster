@@ -118,7 +118,7 @@ public class RollupWhereDerivedColumnTests
     [Fact]
     public void The_postgres_renderer_asks_the_same_question()
     {
-        var sql = PgFullViewRenderer.RenderRollupSubquery(
+        var sql = PostgresFullViewRenderer.RenderRollupSubquery(
             Count("effective_channel = 'partner'"), "public", "b", "id",
             tableNameMap: new Dictionary<string, string> { ["OrderItem"] = "order_item" },
             viewNameMap: new Dictionary<string, string> { ["OrderItem"] = "order_item_full_view" },

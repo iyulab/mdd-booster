@@ -421,10 +421,10 @@ public sealed class BuildCommand
 
         // 방언 정합 검사 — Sql 타깃이 snake DB를 만드는데 Model 타깃이 기본 매핑이면
         // (또는 그 역이면) 런타임 DB 오류가 되어서야 드러난다. 빌드 시점 경고로 표면화.
-        var sqlPg = cfg.Targets.Any(t => t.Type == "Sql" && IsPostgresDialect(t));
+        var sqlPostgres = cfg.Targets.Any(t => t.Type == "Sql" && IsPostgresDialect(t));
         foreach (var modelTarget in cfg.Targets.Where(t => t.Type == "Model"))
         {
-            if (sqlPg != IsPostgresDialect(modelTarget)
+            if (sqlPostgres != IsPostgresDialect(modelTarget)
                 && cfg.Targets.Any(t => t.Type == "Sql"))
             {
                 Console.Error.WriteLine(
@@ -885,11 +885,11 @@ public sealed class BuildCommand
                     throw new InvalidOperationException(
                         "dialect 'postgres'는 emitRefreshScript를 지원하지 않습니다 (sp_refreshview는 T-SQL 개념) — 옵션을 제거하세요.");
                 }
-                if (target.PostgresVersion is { } version && version < MddBooster.Generators.Sql.Postgres.PgTableRenderer.MinimumPostgresVersion)
+                if (target.PostgresVersion is { } version && version < MddBooster.Generators.Sql.Postgres.PostgresTableRenderer.MinimumPostgresVersion)
                 {
                     throw new InvalidOperationException(
                         $"postgresVersion {version}은 지원하지 않습니다 — 산출물은 PostgreSQL " +
-                        $"{MddBooster.Generators.Sql.Postgres.PgTableRenderer.MinimumPostgresVersion} 이상을 전제합니다 " +
+                        $"{MddBooster.Generators.Sql.Postgres.PostgresTableRenderer.MinimumPostgresVersion} 이상을 전제합니다 " +
                         "(UNIQUE NULLS NOT DISTINCT). 값을 올리거나 옵션을 제거하세요.");
                 }
                 return new MddBooster.Generators.Sql.Postgres.PostgresSqlGenerator(
@@ -901,7 +901,7 @@ public sealed class BuildCommand
                         EmitForeignKeyIndexes = target.EmitForeignKeyIndexes ?? true,
                         PreScriptsPath = target.PreScriptsPath,
                         PostgresVersion = target.PostgresVersion
-                            ?? MddBooster.Generators.Sql.Postgres.PgTableRenderer.MinimumPostgresVersion,
+                            ?? MddBooster.Generators.Sql.Postgres.PostgresTableRenderer.MinimumPostgresVersion,
                     });
 
             default:

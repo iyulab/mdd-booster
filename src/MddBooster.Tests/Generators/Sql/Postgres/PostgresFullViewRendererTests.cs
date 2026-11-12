@@ -3,7 +3,7 @@ using MddBooster.Generators.Sql.Postgres;
 
 namespace MddBooster.Tests.Generators.Sql.Postgres;
 
-public class PgFullViewRendererTests
+public class PostgresFullViewRendererTests
 {
     // `RollupDef` is constructed directly, same seam as `FullViewRendererTests` uses for
     // the T-SQL renderer — the point here is the generator's own handling of an
@@ -20,7 +20,7 @@ public class PgFullViewRendererTests
             Where = "$parent.production_state = 'active'",
         };
 
-        var sql = PgFullViewRenderer.RenderRollupSubquery(
+        var sql = PostgresFullViewRenderer.RenderRollupSubquery(
             def, "public", "b", "id",
             tableNameMap: new Dictionary<string, string> { ["Order"] = "order" },
             viewNameMap: new Dictionary<string, string>(),
@@ -45,7 +45,7 @@ public class PgFullViewRendererTests
             Where = "b.production_state = 'active'",
         };
 
-        var sql = PgFullViewRenderer.RenderRollupSubquery(
+        var sql = PostgresFullViewRenderer.RenderRollupSubquery(
             def, "public", "b", "id",
             tableNameMap: new Dictionary<string, string> { ["Order"] = "order" },
             viewNameMap: new Dictionary<string, string>(),

@@ -25,7 +25,7 @@ public sealed class PostgresSqlGeneratorOptions
     /// The PostgreSQL major version the output may rely on. Default 15 — the lowest the output supports, so the
     /// default changes nothing. From 18 a generated primary key defaults to the time-ordered <c>uuidv7()</c>.
     /// </summary>
-    public int PostgresVersion { get; init; } = PgTableRenderer.MinimumPostgresVersion;
+    public int PostgresVersion { get; init; } = PostgresTableRenderer.MinimumPostgresVersion;
 
     /// <summary>
     /// Where declared renames (<c>@renamed_from</c>) are written as run-once pre-comparison scripts — see
@@ -61,7 +61,7 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var violations = context.Models.SelectMany(PgTableRenderer.RowVersionIndexViolations).ToList();
+        var violations = context.Models.SelectMany(PostgresTableRenderer.RowVersionIndexViolations).ToList();
         violations.AddRange(ExpressionRefusals.Violations(context, SqlDialect.PostgreSql));
         if (violations.Count > 0)
         {
@@ -89,12 +89,12 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
         var violations = new List<string>();
 
         // 1. 테이블 — 위반은 모델 단위로 멈추지 않고 전부 수집한 뒤 한 번에 실패
-        var tableArtifacts = new List<PgTableArtifact>();
+        var tableArtifacts = new List<PostgresTableArtifact>();
         foreach (var model in context.GeneratedModels)
         {
             try
             {
-                var artifact = PgTableRenderer.Render(
+                var artifact = PostgresTableRenderer.Render(
                     model, _options.Schema, tableNames, modelLookup, enumLookup,
                     _options.EmitEnumCheckConstraints,
                     _options.EmitForeignKeyIndexes,
@@ -136,7 +136,7 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
         foreach (var plan in renderablePlans.Where(p => p.NeedsFullView))
         {
             var table = tableNames[plan.Model.Name];
-            var fullView = PgFullViewRenderer.FullViewNameOf(table);
+            var fullView = PostgresFullViewRenderer.FullViewNameOf(table);
             var v = PostgresIdentifiers.Check(fullView);
             if (v is not null)
             {
@@ -154,7 +154,7 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
         foreach (var plan in renderablePlans.Where(p => p.NeedsUdView))
         {
             var table = tableNames[plan.Model.Name];
-            var udView = PgFullViewRenderer.UdViewNameOf(table);
+            var udView = PostgresFullViewRenderer.UdViewNameOf(table);
             var v = PostgresIdentifiers.Check(udView);
             if (v is not null)
             {
@@ -207,13 +207,13 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
             if (plan.NeedsUdView)
             {
                 var udView = udViewNames[plan.Model.Name];
-                var sql = PgUdViewRenderer.Render(plan.Model, _options.Schema, table, udView);
+                var sql = PostgresUdViewRenderer.Render(plan.Model, _options.Schema, table, udView);
                 File.WriteAllText(Path.Combine(viewsGenDir, udView + ".sql"), sql);
             }
 
             if (plan.NeedsFullView)
             {
-                var sql = PgFullViewRenderer.Render(
+                var sql = PostgresFullViewRenderer.Render(
                     plan, _options.Schema, tableNames, fullViewNames, modelLookup, derivedFieldsByModel);
                 File.WriteAllText(Path.Combine(viewsGenDir, fullViewNames[plan.Model.Name] + ".sql"), sql);
             }
@@ -221,7 +221,7 @@ public sealed class PostgresSqlGenerator : IArtifactGenerator
 
         foreach (var view in standaloneViews.Where(v => !context.References.Contains(v)))
         {
-            var sql = PgStandaloneViewRenderer.Render(
+            var sql = PostgresStandaloneViewRenderer.Render(
                 view, _options.Schema, tableNames, fullViewNames, standaloneViewNames, derivedFieldsByModel);
             File.WriteAllText(Path.Combine(viewsGenDir, standaloneViewNames[view.Name] + ".sql"), sql);
         }
