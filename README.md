@@ -230,7 +230,7 @@ SQL Server 쪽은 `NEWSEQUENTIALID()` 라 새 행이 키 B-tree 의 끝에 모�
 
 ```json
 { "type": "Api", "projectPath": "../src/MyApp.OpsServer", "namespace": "MyApp.OpsServer",
-  "includeEntities": ["ProductionWork", "QRScanLog"] }
+  "includeEntities": ["Invoice", "Payment"] }
 ```
 
 | 규칙 | 동작 |
@@ -263,8 +263,8 @@ SQL Server 쪽은 `NEWSEQUENTIALID()` 라 새 행이 키 B-tree 의 끝에 모�
 빈 문자열 `""` 이다.
 
 ```json
-{ "type": "TypeScript", "outputPath": "../base/ui/src/types",   "excludeOwners": ["insp"] },
-{ "type": "TypeScript", "outputPath": "../insp/ui/src/types",    "includeOwners": ["insp"] }
+{ "type": "TypeScript", "outputPath": "../base/ui/src/types",   "excludeOwners": ["sales"] },
+{ "type": "TypeScript", "outputPath": "../sales/ui/src/types",    "includeOwners": ["sales"] }
 ```
 
 - **drift 하지 않는다** — 모듈 파일에 모델이 늘면 그 소유자의 타깃에 저절로 나타나고 다른 타깃에는
@@ -272,7 +272,7 @@ SQL Server 쪽은 `NEWSEQUENTIALID()` 라 새 행이 키 B-tree 의 끝에 모�
   모델은 모듈 타깃에서 빠진 채 베이스 타깃에 샌다.
 - 규칙은 엔티티 목록과 같다: 표면 타깃 전용 · `includeOwners` 와 `excludeOwners` 동시 지정은 빌드 오류 ·
   선언된 적 없는 소유자는 빌드 오류(있는 소유자를 나열한다).
-- 엔티티 목록과 **함께** 쓰면 교집합이다 — 예: `includeOwners: ["insp"]` + `excludeEntities: ["InspDraft"]`.
+- 엔티티 목록과 **함께** 쓰면 교집합이다 — 예: `includeOwners: ["sales"]` + `excludeEntities: ["SalesDraft"]`.
 - **enum 도 같은 축으로 갈린다**(TypeScript 타깃). 소유자 축이 있는 타깃은 자기 소유자의 enum 을 전부, 다른 소유자의
   enum 은 **자기 모델이 참조하는 것만** 낸다 — 베이스 타깃에 모듈 enum 이 새지 않고, 모듈 타깃이 베이스 어휘 전량을
   되풀이하지 않는다. 소유자 축이 없는 타깃은 지금처럼 enum 전부를 낸다.
@@ -281,7 +281,7 @@ SQL Server 쪽은 `NEWSEQUENTIALID()` 라 새 행이 키 B-tree 의 끝에 모�
 선언**하는 것이 싫다면, 베이스 타깃 출력을 재수출하는 배럴을 가리킨다:
 
 ```json
-{ "type": "TypeScript", "outputPath": "../insp/ui/src/types", "includeOwners": ["insp"],
+{ "type": "TypeScript", "outputPath": "../sales/ui/src/types", "includeOwners": ["sales"],
   "sharedTypesImport": "@acme/base-ui/types" }
 ```
 
@@ -307,7 +307,7 @@ export * from './enum_labels_gen'
 { "type": "Model", "projectPath": "../Acme.Host", "namespace": "Acme.Host", "dbContextName": "AcmeDbContext",
   "modules": [
     { "owners": [""],      "projectPath": "../Acme.Core.Entities",  "namespace": "Acme.Core.Entities" },
-    { "owners": ["maint"], "projectPath": "../Acme.Maint.Entities", "namespace": "Acme.Maint.Entities" } ] }
+    { "owners": ["billing"], "projectPath": "../Acme.Billing.Entities", "namespace": "Acme.Billing.Entities" } ] }
 ```
 
 - **순서가 층이다 — 아래층부터.** 한 모듈의 선언은 자기와 **앞** 모듈의 선언만 가리킨다: `@reference` 대상(`::aspect` 의
@@ -329,17 +329,17 @@ export * from './enum_labels_gen'
 ```json
 "modules": [
   { "owners": ["core"],     "projectPath": "../Acme.Core.Entities", "namespace": "Acme.Core.Entities" },
-  { "owners": ["", "maint"], "projectPath": "../Acme.Maint.Entities", "namespace": "Acme.Maint.Entities", "dependsOn": ["core"] },
-  { "owners": ["fleet"],    "projectPath": "../Acme.Fleet.Entities", "namespace": "Acme.Fleet.Entities", "dependsOn": ["core"] } ]
+  { "owners": ["", "billing"], "projectPath": "../Acme.Billing.Entities", "namespace": "Acme.Billing.Entities", "dependsOn": ["core"] },
+  { "owners": ["shipping"],    "projectPath": "../Acme.Shipping.Entities", "namespace": "Acme.Shipping.Entities", "dependsOn": ["core"] } ]
 ```
 
 - `dependsOn` 은 **소유자 이름의 목록**이다(`""` 는 접두어 없는 파일) — 그 소유자를 가진 모듈을 가리킨다. 목록에서 **앞** 모듈만 가리킬 수 있다 —
   순서가 아래층부터라는 규칙은 그대로다. 없는 소유자 · 자기 · 뒤 모듈은 구성 오류(종료 코드 4)다.
 - 적으면 «앞 모듈 전부» 대신 그 모듈이 딛는 모듈의 **닫힘**(가리킨 모듈과, 그들이 딛는 모듈 — 전이)이 쓰인다: ⑴ 생성 파일이 `using` 하는 네임스페이스
-  ⑵ 방향 검사 — 닫힘 밖(형제 제품)을 가리키는 선언은 빌드 오류 ⑶ 아래 데이터 인터페이스의 이음. 위 예에서 `fleet` 의 파일은 `core` 만 `using` 하고,
-  `fleet` 모델이 `maint` 모델을 가리키면 오류다.
+  ⑵ 방향 검사 — 닫힘 밖(형제 제품)을 가리키는 선언은 빌드 오류 ⑶ 아래 데이터 인터페이스의 이음. 위 예에서 `shipping` 의 파일은 `core` 만 `using` 하고,
+  `shipping` 모델이 `billing` 모델을 가리키면 오류다.
 - **적지 않으면 종전 그대로** — 앞 모듈 전부를 딛고, 생성물은 바이트 그대로다. `"dependsOn": []` 는 «아무것도 딛지 않는다».
-- 닫힘 안의 형은 `using` 으로 보일 뿐, **프로젝트 참조는 여전히 소비자가 짠다** — `fleet` 프로젝트는 `core` 프로젝트를 참조하고 `maint` 를 참조하지 않는다.
+- 닫힘 안의 형은 `using` 으로 보일 뿐, **프로젝트 참조는 여전히 소비자가 짠다** — `shipping` 프로젝트는 `core` 프로젝트를 참조하고 `billing` 을 참조하지 않는다.
 
 **층의 코드가 컨텍스트를 무엇으로 받는가 — `dataInterface`.** 컨텍스트는 구체 형 하나라, 위층 코드가 그것을 받으면 컨텍스트
 프로젝트(모든 모듈을 참조)를 참조하게 되고 다른 제품 층의 형까지 컴파일 시점에 본다. 모듈 행에 인터페이스 이름을 적으면 그 층의
@@ -348,7 +348,7 @@ export * from './enum_labels_gen'
 ```json
 "modules": [
   { "owners": [""],      "projectPath": "../Acme.Core.Entities",  "namespace": "Acme.Core.Entities",  "dataInterface": "ICoreData" },
-  { "owners": ["maint"], "projectPath": "../Acme.Maint.Entities", "namespace": "Acme.Maint.Entities", "dataInterface": "IMaintData" } ]
+  { "owners": ["billing"], "projectPath": "../Acme.Billing.Entities", "namespace": "Acme.Billing.Entities", "dataInterface": "IBillingData" } ]
 ```
 
 ```csharp
@@ -357,21 +357,21 @@ public interface ICoreData                       // Acme.Core.Entities — 가�
     DbSet<TEntity> Set<TEntity>() where TEntity : class;
     DatabaseFacade Database { get; }
     // ChangeTracker · Entry · Add/Remove(Range) · SaveChanges(Async)
-    DbSet<Asset> Assets { get; }
-    DbSet<AssetExt> AssetsExt { get; }
+    DbSet<Customer> Customers { get; }
+    DbSet<CustomerExt> CustomersExt { get; }
 }
-public interface IMaintData : ICoreData { DbSet<MaintWorkOrder> MaintWorkOrders { get; } /* … */ }
-public partial class AcmeDbContext : IyuDbContext, IMaintData { … }   // 생성 컨텍스트가 맨 위 것을 구현한다
+public interface IBillingData : ICoreData { DbSet<BillingInvoice> BillingInvoices { get; } /* … */ }
+public partial class AcmeDbContext : IyuDbContext, IBillingData { … }   // 생성 컨텍스트가 맨 위 것을 구현한다
 ```
 
 - 인터페이스는 **그 층(과 아래 층 중 인터페이스를 적지 않은 모듈)의 셋**을 싣고 바로 아래 인터페이스를 잇는다. 가장 아래 것이
   `references` 의 형의 셋과 컨텍스트 면(데이터 서비스가 쓰는 `DbContext` 멤버 — 그대로의 서명)을 싣는다. 모든 멤버가 컨텍스트에
   이미 같은 서명으로 있어 따로 구현되는 것이 없다 — 층의 코드가 받는 것은 **컨텍스트 그 인스턴스**다(변경 추적 · 트랜잭션 하나).
-- 호스트는 같은 scoped 인스턴스를 각 인터페이스로 등록한다 — `services.AddScoped<IMaintData>(sp => sp.GetRequiredService<AcmeDbContext>())`.
+- 호스트는 같은 scoped 인스턴스를 각 인터페이스로 등록한다 — `services.AddScoped<IBillingData>(sp => sp.GetRequiredService<AcmeDbContext>())`.
   그러면 위층 서버 코드는 자기 인터페이스만 받고 컨텍스트 프로젝트를 참조하지 않는다.
 - **`dependsOn` 과 함께**(위 «형제 층») — 인터페이스는 모듈이 딛는 모듈 가운데 **가장 가까운 인터페이스를 모두** 잇는다(둘 이상이면 다중 이음):
-  `fleet` 의 `IFleetData` 는 `ICoreData` 만 잇고 `maint` 의 `IMaintData` 를 보지 못한다. 닫힘 안에 인터페이스를 적지 않은 모듈이 있으면 그 셋은 이 인터페이스에
-  실린다(종전과 같다). 생성 컨텍스트는 **맨 위 인터페이스 전부**를 구현한다(`: IyuDbContext, IMaintData, IFleetData`). 인터페이스가 있는 모듈 가운데
+  `shipping` 의 `IShippingData` 는 `ICoreData` 만 잇고 `billing` 의 `IBillingData` 를 보지 못한다. 닫힘 안에 인터페이스를 적지 않은 모듈이 있으면 그 셋은 이 인터페이스에
+  실린다(종전과 같다). 생성 컨텍스트는 **맨 위 인터페이스 전부**를 구현한다(`: IyuDbContext, IBillingData, IShippingData`). 인터페이스가 있는 모듈 가운데
   가장 아래 것은 **하나**여야 한다 — 서로 아래층을 모르는 인터페이스가 둘이면 컨텍스트 면(`Set<T>` · `Database` …)이 둘에 중복돼, 둘을 함께 받는 코드가 모호해진다.
   공통 층에 `dataInterface` 를 둔다(아니면 구성 오류).
 - 선택이다 — 적지 않으면 아무것도 생기지 않는다. 형 이름이 아니거나 · 두 모듈이 같은 이름이거나 · 생성되는 형(엔티티 · 구성 ·
@@ -610,17 +610,17 @@ Api 타깃은 기본으로 엔티티마다 **두 표면**을 등록한다 — OD
 
 ```json
 { "type": "Api", "projectPath": "../src/MyApp.OpsServer", "namespace": "MyApp.OpsServer",
-  "entitiesNamespace": "MyApp.Entities", "includeEntities": ["ProductionWork"] }
+  "entitiesNamespace": "MyApp.Entities", "includeEntities": ["Invoice"] }
 ```
 
 #### 생성 이름 규약
 
-| 표면 | 규칙 | 예 (`QRScanLog`) |
+| 표면 | 규칙 | 예 (`HTTPRequestLog`) |
 |---|---|---|
-| OData entity set | PascalCase 복수 (DbSet 이름과 일치) | `QRScanLogs` |
-| GraphQL query / mutation prefix | camelCase (선행 약어를 묶어 소문자화 — .NET `JsonNamingPolicy.CamelCase` 와 동일) | `qrScanLogs` / `qrScanLog` |
-| TypeScript 폼 헬퍼 | camelCase | `qrScanLogFromEntity` |
-| PostgreSQL 식별자 | snake_case (같은 단어분리 규칙) | `qr_scan_log` |
+| OData entity set | PascalCase 복수 (DbSet 이름과 일치) | `HTTPRequestLogs` |
+| GraphQL query / mutation prefix | camelCase (선행 약어를 묶어 소문자화 — .NET `JsonNamingPolicy.CamelCase` 와 동일) | `httpRequestLogs` / `httpRequestLog` |
+| TypeScript 폼 헬퍼 | camelCase | `httpRequestLogFromEntity` |
+| PostgreSQL 식별자 | snake_case (같은 단어분리 규칙) | `http_request_log` |
 
 후행 약어는 보존한다: `OrderQR` → `orderQR`.
 
@@ -671,14 +671,14 @@ DDL과 EF 매핑이 서로 다른 네이밍을 전제하게 된다).
 스키마 관리 도구의 관례: 테이블당 한 파일. `schema` 기본 `public`):
 
 - **식별자 = 비인용 snake_case**: 테이블명은 모델명 Pascal→snake 결정적 변환
-  (`WorkOrder→work_order`, `FMSCode→fms_code`, `Iso14224Class→iso14224_class`),
+  (`SalesOrder→sales_order`, `SKUCode→sku_code`, `Tier3Plan→tier3_plan`),
   컬럼명은 M3L 필드명 그대로(이미 snake). **오류 게이트 4종** — 패턴
   `^[a-z][a-z0-9_]*$` · 63바이트(NAMEDATALEN, 제약명 포함 — PG의 무음 절단 차단) ·
   fold 충돌 · **PG 예약어**(`Order`, `User`, `Group` 등은 모델명으로 쓸 수 없다 —
   인용 식별자는 생성하지 않으므로 오류). 위반은 전부 모아 한 번에 보고.
 - **제약은 이름 있는 제약**으로: `pk_{t}` · `fk_{t}_{col}` · `uq_{t}_{cols}` · `ck_{t}_{col}`.
   FK는 대상 모델의 **PK 물리명**을 참조하므로 공유 PK 확장 테이블 재참조가 성립
-  (`REFERENCES facility_profile (facility_id)`).
+  (`REFERENCES customer_billing_profile (customer_id)`).
 - **인덱스**: `@index`/`### Indexes` 선언은 `CREATE TABLE` 뒤의 독립 문
   (`CREATE INDEX ix_{table}_{cols} ON {schema}.{table} (...)`)으로 방출한다.
   PK·UNIQUE 제약이 소유하는 인덱스는 중복 방출하지 않고, `CONCURRENTLY` 는 쓰지 않는다
@@ -839,29 +839,29 @@ UdView 위에 있어 이미 거르고, 기본 테이블을 읽는 서브쿼리�
 한 행에 의존 행이 최대 하나). 이때 Model 타깃이 **읽기(`Ext`) 타입에 navigation 을 쌍으로** 방출한다.
 
 ```markdown
-## AssetMaintenanceProfile
+## CustomerBillingProfile
 
 - id: identifier @pk @generated
-- asset_id: identifier @not_null @reference(Asset) @unique "자산"
+- customer_id: identifier @not_null @reference(Customer) @unique "고객"
 ```
 
 ```csharp
-// AssetMaintenanceProfileExt.cs — 의존 쪽 (forward)
-public AssetExt Asset { get; set; } = null!;
+// CustomerBillingProfileExt.cs — 의존 쪽 (forward)
+public CustomerExt Customer { get; set; } = null!;
 
-// AssetExt.cs — 대상 쪽 (reverse)
-public AssetMaintenanceProfileExt? MaintenanceProfile { get; set; }
+// CustomerExt.cs — 대상 쪽 (reverse)
+public CustomerBillingProfileExt? BillingProfile { get; set; }
 ```
 
 규칙 네 가지:
 
 | | |
 |---|---|
-| **가리키는 것은 «읽기» 타입** | `AssetExt` 이지 `Asset` 이 아니다. 읽기 타입이 쓰기 타입을 가리키면 모든 프로젝션이 쓰기 모델을 끌고 온다 |
-| **쓰기 엔티티는 그대로** | `AssetMaintenanceProfile.cs` 는 아무것도 얻지 않는다. 쓰기 축의 navigation 은 삽입 순서 추론용으로 이미 따로 있다 |
+| **가리키는 것은 «읽기» 타입** | `CustomerExt` 이지 `Customer` 가 아니다. 읽기 타입이 쓰기 타입을 가리키면 모든 프로젝션이 쓰기 모델을 끌고 온다 |
+| **쓰기 엔티티는 그대로** | `CustomerBillingProfile.cs` 는 아무것도 얻지 않는다. 쓰기 축의 navigation 은 삽입 순서 추론용으로 이미 따로 있다 |
 | **널 허용은 양쪽이 다르다** | forward 는 FK 를 따른다(`@not_null` 이면 비-널, `identifier?` 면 널 허용). **reverse 는 언제나 널 허용** — 대상 행에 의존 행이 없을 수 있다 |
-| **정방향 이름** | **FK 필드명**에서 온다 — 끝의 `_id` 를 떼고 PascalCase(`asset_id` → `Asset`, `owner_id` → `Owner`). 대상 모델명이 아니다. FK 속성(`OwnerId`)과 navigation(`Owner`)을 이 생성기가 **둘 다** 만들고 후자를 전자에서 유도하므로 EF 관례가 요구하는 짝이 어긋날 수 없다 |
-| **역방향 이름** | 의존 모델명이 대상 모델명으로 시작하면 그 접두를 뗀 나머지(`AssetMaintenanceProfile` → `MaintenanceProfile`), 아니면 모델명 전체(`Contractor` → `Contractor`). 파일이 `# Prefix:` 를 선언했으면 **그 접두는 보존한다**(`insp` + `InspAssetInspectionProfile` → `InspInspectionProfile`) — 접두는 누가 선언했는지를 나르므로, 그것까지 떼면 두 소유자가 아무도 쓰지 않은 이름에서 충돌한다 |
+| **정방향 이름** | **FK 필드명**에서 온다 — 끝의 `_id` 를 떼고 PascalCase(`customer_id` → `Customer`, `owner_id` → `Owner`). 대상 모델명이 아니다. FK 속성(`OwnerId`)과 navigation(`Owner`)을 이 생성기가 **둘 다** 만들고 후자를 전자에서 유도하므로 EF 관례가 요구하는 짝이 어긋날 수 없다 |
+| **역방향 이름** | 의존 모델명이 대상 모델명으로 시작하면 그 접두를 뗀 나머지(`CustomerBillingProfile` → `BillingProfile`), 아니면 모델명 전체(`Contractor` → `Contractor`). 파일이 `# Prefix:` 를 선언했으면 **그 접두는 보존한다**(`sales` + `SalesCustomerSegment` → `SalesSegment`) — 접두는 누가 선언했는지를 나르므로, 그것까지 떼면 두 소유자가 아무도 쓰지 않은 이름에서 충돌한다 |
 
 **관계 구성 코드(`HasOne`/`WithOne`)는 방출하지 않는다.** EF 관례가 FK 이름과 navigation 이름으로
 이미 1:1 을 추론하기 때문이다(위 「정방향 이름」 참조). ⚠️ **`::aspect` 는 예외가 아니라 «같은
@@ -886,18 +886,18 @@ public AssetMaintenanceProfileExt? MaintenanceProfile { get; set; }
 OData 클라이언트가 참조 대상의 값(이름·코드 등)을 `$expand` 로 같은 요청에서 읽는 길이 이것이다.
 
 ```markdown
-## Asset
+## Customer
 - id: identifier @pk @generated
-- lifecycle_state_id: identifier? @reference(AssetLifecycleState)
+- status_id: identifier? @reference(CustomerStatus)
 ```
 
 ```csharp
-// AssetExt.cs
-public AssetLifecycleStateExt? LifecycleState { get; set; }
+// CustomerExt.cs
+public CustomerStatusExt? Status { get; set; }
 ```
 
 ```
-GET /$data/Assets?$select=Name&$expand=LifecycleState($select=Code,Name)
+GET /$data/Customers?$select=Name&$expand=Status($select=Code,Name)
 ```
 
 | | |
@@ -917,17 +917,17 @@ GET /$data/Assets?$select=Name&$expand=LifecycleState($select=Code,Name)
 사용자, 저장소 서비스가 돌려준 키, 채번 결과. 그것은 모델의 사실이므로 모델에 적는다:
 
 ```markdown
-## WorkOrder : Timestampable
+## SalesOrder : Timestampable
 - id: identifier @pk @generated
 - title: string(100)
-- status: string(20) = "planned" @system
+- status: string(20) = "open" @system
 - closed_by_id: identifier? @reference(Account) @system
 ```
 
 Api 타깃의 생성 등록(`ApiRegistration_gen.cs`)이 그 칸을 제네릭 쓰기 경로에서 뺀다:
 
 ```csharp
-options.ODataModel.ExcludeFromWrite<WorkOrderExt>(x => x.Status, x => x.ClosedById);
+options.ODataModel.ExcludeFromWrite<SalesOrderExt>(x => x.Status, x => x.ClosedById);
 ```
 
 그 뒤의 동작은 런타임의 것이다(런타임 문서의 쓰기 제외 절): 읽기·`$filter`·`$select` 는 그대로이고, 그 칸만 보낸
@@ -1022,35 +1022,35 @@ PostgreSQL `views_gen/<snake_name>.sql`. 빌드가 먼저 뷰를 모델에 대�
 그래서 그 행의 키는 **자기 것이 아니다**.
 
 ```markdown
-## Asset : Timestampable
+## Customer : Timestampable
 - id: identifier @pk @generated
 - name: string(100)
 
-## AssetMaintenanceProfile ::aspect(Asset) : Timestampable
+## CustomerBillingProfile ::aspect(Customer) : Timestampable
 - level: integer?
 ```
 
-**작성자는 키를 쓰지 않는다.** `::aspect(Asset)` 가 만든다:
+**작성자는 키를 쓰지 않는다.** `::aspect(Customer)` 가 만든다:
 
 ```sql
 -- T-SQL
-[AssetId] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY REFERENCES [dbo].[Asset]([Id]) ON DELETE CASCADE
+[CustomerId] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY REFERENCES [dbo].[Customer]([Id]) ON DELETE CASCADE
 
 -- PostgreSQL
-CONSTRAINT pk_asset_maintenance_profile PRIMARY KEY (asset_id),
-CONSTRAINT fk_asset_maintenance_profile_asset_id
-  FOREIGN KEY (asset_id) REFERENCES public.asset (id) ON DELETE CASCADE
+CONSTRAINT pk_customer_billing_profile PRIMARY KEY (customer_id),
+CONSTRAINT fk_customer_billing_profile_customer_id
+  FOREIGN KEY (customer_id) REFERENCES public.customer (id) ON DELETE CASCADE
 ```
 
 ```csharp
-// AssetMaintenanceProfileExt.cs / AssetExt.cs — 1:1 절과 같은 모양의 navigation 쌍
-public AssetExt Asset { get; set; } = null!;
-public AssetMaintenanceProfileExt? MaintenanceProfile { get; set; }
+// CustomerBillingProfileExt.cs / CustomerExt.cs — 1:1 절과 같은 모양의 navigation 쌍
+public CustomerExt Customer { get; set; } = null!;
+public CustomerBillingProfileExt? BillingProfile { get; set; }
 
 // DbContext — 여기서는 «명시 구성»을 낸다
-modelBuilder.Entity<AssetMaintenanceProfileExt>()
-    .HasOne(e => e.Asset).WithOne(e => e.MaintenanceProfile)
-    .HasForeignKey<AssetMaintenanceProfileExt>(e => e.Id)
+modelBuilder.Entity<CustomerBillingProfileExt>()
+    .HasOne(e => e.Customer).WithOne(e => e.BillingProfile)
+    .HasForeignKey<CustomerBillingProfileExt>(e => e.Id)
     .OnDelete(DeleteBehavior.Cascade);
 ```
 
@@ -1059,7 +1059,7 @@ modelBuilder.Entity<AssetMaintenanceProfileExt>()
 | **키를 선언하면 오류(MDD021)** | 키는 base 의 것이다. ⚠️ 이것은 **이 생성기의 규칙**이지 언어의 규칙이 아니다 — M3L 명세 §3.4.8 은 *「How a generator stores either is not part of the language」* 로 저장 방식을 언어 밖에 둔다. 대리 키 + 유니크 FK 로 저장하는 생성기라면 모순이 아니다 |
 | **이름 약속은 경고(MDD019)** | 모델명은 `<Base><Name>` 또는 `<Prefix><Base><Name>`. 어기면 base 쪽 navigation 이 **모델명 전체**가 되고 경고가 그 사실을 알린다. 오류가 아닌 이유는 기존 테이블의 개명을 강요하지 않기 위해서다 |
 | **navigation 이름 충돌은 오류(MDD020)** | 한 base 에 같은 이름을 내는 aspect 가 둘이거나, base 의 기존 필드와 겹칠 때. 이쪽은 「덜 좋은 이름」이 아니라 컴파일되지 않는 코드다 |
-| **base 를 밝히지 않은 «키 = FK» 는 오류(MDD022)** | `- asset_id: identifier @pk @reference(Asset)` 처럼 키가 곧 다른 모델의 FK 인데 `::aspect` 가 없으면 빌드가 선다. 그 모양은 «한 행에 딸린 정보»(aspect)일 수도 «한 종류»(장래 `::subtype`)일 수도 있고 둘은 삭제·조회·navigation 이 다르게 생성되므로, 생성기가 짐작하지 않고 작성자가 밝힌다. 안내문이 `## <Model> ::aspect(<Base>)` 를 제시한다 — 키 필드는 지운다. ⚠️ 옮기면 DDL 이 한 곳 바뀐다: FK 에 `ON DELETE CASCADE` 가 붙는다(aspect 는 base 행과 한 단위다) |
+| **base 를 밝히지 않은 «키 = FK» 는 오류(MDD022)** | `- customer_id: identifier @pk @reference(Customer)` 처럼 키가 곧 다른 모델의 FK 인데 `::aspect` 가 없으면 빌드가 선다. 그 모양은 «한 행에 딸린 정보»(aspect)일 수도 «한 종류»(장래 `::subtype`)일 수도 있고 둘은 삭제·조회·navigation 이 다르게 생성되므로, 생성기가 짐작하지 않고 작성자가 밝힌다. 안내문이 `## <Model> ::aspect(<Base>)` 를 제시한다 — 키 필드는 지운다. ⚠️ 옮기면 DDL 이 한 곳 바뀐다: FK 에 `ON DELETE CASCADE` 가 붙는다(aspect 는 base 행과 한 단위다) |
 | **`ON DELETE CASCADE`** | aspect 는 base 행과 **한 단위로** 존재한다. 보통 `@reference` 는 cascade 하지 않는다 |
 | **두 방언이 같다** | 관계는 CLR 축의 사실이다. `dialect: "postgres"` 에서도 같은 구성이 나간다 |
 
@@ -1454,7 +1454,7 @@ consumer-repo/
 | MDD050 | `### Relations` 의 이름 있는 역방향 항목이 자기 키를 말하지 않는다(`- <posts` + `- target: Post` 만 — 생성기는 키를 추측하지 않는다). 또는 선언한 navigation 이름이 다른 필드의 속성 이름과 같다. 항목이 키와 어긋나는 경우(키가 아님 · 다른 대상 · 이 모델을 가리키지 않는 역방향 키)는 파서 오류 `M3L-E010` 으로 빌드가 선다 |
 | MDD051(경고) | 모델이 `@renamed_from` 으로 개명을 선언했는데 Sql 타깃에 `preScriptsPath` 가 없다 — 그 타깃은 개명을 실행하지 않고, 산출물을 반영하면 옛 이름은 제거 · 새 이름은 빈 채로 생성으로 읽힌다(«개명») |
 | MDD052(경고) | rollup 의 `@indexed`(미리 저장하는 집계)는 생성하지 않는다 — 그 롤업은 뷰를 읽을 때 계산된다(두 방언 같음) |
-| MDD053 | 한 빌드에 같은 짧은 이름의 선언이 둘(다른 네임스페이스 — M3L 은 허용한다) — 생성되는 형 · 테이블 · 셋 이름이 짧은 이름에서 나와 부딪히므로 생성 전에 선다. 오류는 둘의 한정 이름(`inventory.Product`, `sales.Product`)을 적는다. 네임스페이스마다 따로 내는 출력은 아직 없다. 그래서 한정 이름이나 import 별칭으로 쓴 이름(`@reference(core.Asset)` · `: c.Stamped` · `from: core.Asset` · 형 `core.Status` · 뷰 `join` 의 `on` 식 안의 `core.Asset.id`)은 파서가 해석한 선언의 짧은 이름으로 읽힌다 |
+| MDD053 | 한 빌드에 같은 짧은 이름의 선언이 둘(다른 네임스페이스 — M3L 은 허용한다) — 생성되는 형 · 테이블 · 셋 이름이 짧은 이름에서 나와 부딪히므로 생성 전에 선다. 오류는 둘의 한정 이름(`inventory.Product`, `sales.Product`)을 적는다. 네임스페이스마다 따로 내는 출력은 아직 없다. 그래서 한정 이름이나 import 별칭으로 쓴 이름(`@reference(core.Customer)` · `: c.Stamped` · `from: core.Customer` · 형 `core.Status` · 뷰 `join` 의 `on` 식 안의 `core.Customer.id`)은 파서가 해석한 선언의 짧은 이름으로 읽힌다 |
 | MDD054(경고) | 읽기 모델로 내지 않는 뷰의 열에 `@searchable` — 키 열(`- id: identifier @from(<관계>.id)`)이 없거나 뷰가 `@internal` 이면 읽기 타입이 없고, `$search` 는 읽기 타입의 속성에만 걸린다. 선언은 어디에도 닿지 않으므로 지우거나 읽기 모델로 낸다 |
 | MDD055 | 모델의 기본키 열이 둘 이상이다(`@primary(1)` + `@primary(2)`) — 복합 기본키는 어느 타깃도 생성하지 않는다(런타임 엔티티 기반 클래스의 키는 하나다). 하나의 `identifier` 기본키로 모델링하고 열 짝의 유일성은 복합 `@unique(열, 열)` 로 지킨다. 세 타깃(Sql 두 방언 · Model)이 같은 지점에서 선다 |
 | MDD048 | 필드가 명세는 정의하지만 이 생성기가 생성하지 않는 모양이다 — 인라인 `enum`(필드 안에 값) · `map<K, V>` · 하위 필드를 갖는 `object`, 그리고 생성하지 않는 조합의 배열 `T[]`(의미 형 원소 `email[]` · `phone[]` · `url[]` · `binary`/`json`/`rowversion`/`byte`/`time`/`datetime` 원소 · 파생 필드 · 기본값 · `@reference`/`@pk`/`@unique`/`@index`/`@searchable`/`@min`/`@max` · `### Indexes` 항목). 메시지가 그 조합과 고칠 길을 말한다. 어느 타깃도 그 모양을 낼 수 없다. 별도 모델 + `@reference` · 최상위 `::enum` · 직렬화한 `text` 칸으로 나눈다 |
@@ -1576,7 +1576,7 @@ navigation 은 `<Name>` 이다 — 세 자리가 한 답(소유자의 «이름 �
 출처는 `(standard)`):
 
 ```
-[m3l] 확장: Asset ← insp(2), (standard)(1)
+[m3l] 확장: Customer ← sales(2), (standard)(1)
 ```
 
 확장 필드는 타깃별로 특수 취급되지 않는다 — SQL 컬럼, C# 속성, TypeScript 타입 멤버 어디서나
