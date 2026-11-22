@@ -1,8 +1,8 @@
 # M3L support in mdd-booster
 
 > **Specification:** the M3L language is defined upstream, in the `m3l` project. This generator pins
-> **`M3L.Native` 0.26.0**; the specification at that version is
-> [`docs/specification.md` @ 0.26.0](https://github.com/iyulab/m3l/blob/c3c6da56c85adbf3d2d21e9336400fea3b46a056/docs/specification.md).
+> **`M3L.Native` 0.27.0**; the specification at that version is
+> [`docs/specification.md` @ 0.27.0](https://github.com/iyulab/m3l/blob/fbaab53a0458f3f42a8150737b30efee5ae218cb/docs/specification.md).
 > Section numbers below are that document's.
 
 This page answers the question a reader of the specification brings here: **where this generator
