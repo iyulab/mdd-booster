@@ -138,20 +138,9 @@ public static class TSFieldSchemaRenderer
         // The authored label (FieldAttributes.DisplayLabel); unlike FieldAttributes.EffectiveLabel this
         // does NOT fall back to the PascalCase field name — presence of a label here signals
         // authored, meaningful text, and every field mechanically has a PascalCase name.
-        string? label = MddBooster.Core.Ast.FieldAttributes.DisplayLabel(field);
-
-        // A lookup with no label of its own borrows the one on the field it reads: the target
-        // already names this value, and making the author repeat that string is how the two drift.
-        // Only lookups can do this — a rollup is an aggregate (`count`, `sum(x)`) and a computed is
-        // an expression, so neither has a single target *field* whose name would apply.
-        // An explicit label always wins; if the target has none either, nothing is invented — the
-        // PascalCase fallback is deliberately not used here (see the comment above).
-        if (label is null && derived == "lookup")
-        {
-            var target = LookupTarget.Resolve(owner, field, allModels);
-            if (target is not null)
-                label = MddBooster.Core.Ast.FieldAttributes.DisplayLabel(target);
-        }
+        // A lookup with no label of its own borrows its target's (FieldLabels.Authored). If neither has one, nothing is
+        // invented — the PascalCase fallback is deliberately not used here (see the comment above).
+        string? label = FieldLabels.Authored(field, owner, allModels);
         string? group = MddBooster.Core.Ast.FieldAttributes.EffectiveGroup(field);
 
         return new FieldConstraints(required, maxLength, min, max, label, group, derived, engineSet);

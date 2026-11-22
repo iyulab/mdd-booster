@@ -16,6 +16,25 @@
 
 ---
 
+## Unreleased
+
+### TypeScript 타깃이 엔티티의 «읽기 서술» 을 낸다 — `entity_description_gen.ts`
+
+- **엔티티마다 절 → 칸의 순서 있는 서술을 데이터로 낸다**: `{ name, label, hint?, kind, list?, enum?, reference?, via?, derived?, readOnly? }`.
+  폼이 코드 안에 인라인으로 쥐고 있던 절 · 라벨을 상세 · 미리보기 · 인쇄 · 감사 기록 보기가 같이 쓴다. 컴포넌트가 아니라 데이터라 어느 UI
+  프레임워크든 자기 렌더러로 그린다. 종전에는 읽는 화면마다 라벨 목록을 손으로 다시 적어야 했고 폼과 따로 낡았다.
+- **`field_schema_gen.ts` 는 그대로다** — 그것은 쓰기 쪽(사람이 넣는 값의 제약)이고 순회하며 입력을 검사하는 코드가 있다. 새 파일은 읽는
+  쪽이라 `required` · `maxLength` · `min` · `max` 를 싣지 않는다.
+- **라벨 · 절은 폼과 같은 정본에서 나온다**: 라벨은 적은 표시 라벨, 없으면 칸 이름(`@lookup` 은 읽는 칸의 라벨을 빌림 — 필드 스키마와 같은 함수) ·
+  힌트는 `@help` · 절은 폼과 같은 규칙(`@group` 이 처음 나온 차례, 그룹 없는 칸은 «기타», 모두 그렇다면 제목 없음). 이 규칙들을 폼 렌더러 안에서
+  꺼내 한 곳에 두었고(구조 변경 — 폼 출력은 한 글자도 안 바뀐다) 폼과 서술이 그것을 같이 읽는다.
+- 참조 칸은 `kind: 'reference'` 와 대상 엔티티, 열거 칸은 `kind: 'enum'` 과 타입 이름, `@lookup` 은 읽어 오는 참조 칸을 `via` 로 알린다.
+  파생 칸 · 시스템이 쓰는 칸 · 물려받은 타임스탬프는 빼지 않고 `readOnly: true` 로 표시한다. **«참조 대상의 대표 칸» 은 모델에 없는 사실이라
+  싣지 않는다**(모델에서 참조 옆에 보일 값을 말하는 길은 `@lookup`).
+- 기존 산출물은 한 글자도 바뀌지 않는다 — `outputPath` 에 파일 하나가 더해질 뿐이다. 엔티티 필터와 필드 단위 `@internal` 은 `field_schema_gen.ts` 와 같이 적용된다.
+- **이행 안내.** `outputPath` 의 `*_gen.ts` 를 한 모듈로 다시 내보내는 파일(배럴)이 있다면, 새로 생기는 이름(`FieldKind` · `FieldDescription` ·
+  `SectionDescription` · `EntityDescription` · `EntityDescriptions`)이 기존 이름과 겹치지 않는지 확인한다. README 에 `entity_description_gen.ts` 의 소비 계약 절이 있다.
+
 ## 0.48.1
 
 ### 핀 `M3L.Native` 0.27.0

@@ -72,7 +72,7 @@ GO
 | **Sql** | tsql(기본): `dbo/Tables_gen/{Entity}.sql`, `dbo/Views_gen/{Entity}_{full,ext}.sql`, `.sqlproj` ItemGroup 패치 · postgres: `tables_gen/{table}.sql` (snake_case, 아래 방언 절) | SSDT 프로젝트 · desired-state 스타일 스키마 관리 도구 |
 | **Model** | `Entity_gen/{I,}{Entity}{,Ext}.cs` + 형마다 EF 매핑 `Entity_gen/{Entity}{,Ext}Configuration.cs`(`IEntityTypeConfiguration<T>` — auto-`ToView` 포함), `Enum_gen/{Enum}.cs`, `DbContext_gen/{Name}.cs`(DbSet · 구성 적용) | C# classlib (EF Core + 소비앱의 런타임 패키지) |
 | **Api** | `Api_gen/ApiRegistration_gen.cs` (OData + GraphQL 엔티티 페어 등록) | ASP.NET Core 서버 (OData/GraphQL 런타임) |
-| **TypeScript** | `outputPath` 아래 `enums_gen.ts` · `entities_gen.ts` · `entity_names_gen.ts` · `enum_labels_gen.ts` · `field_schema_gen.ts`, 그리고 `formsOutputPath` 를 주면 `{Entity}Form_gen.tsx` (옵션은 아래 «TypeScript 타깃 옵션») | 프론트엔드(타입 · 폼 · 필드 스키마) |
+| **TypeScript** | `outputPath` 아래 `enums_gen.ts` · `entities_gen.ts` · `entity_names_gen.ts` · `enum_labels_gen.ts` · `field_schema_gen.ts` · `entity_description_gen.ts`, 그리고 `formsOutputPath` 를 주면 `{Entity}Form_gen.tsx` (옵션은 아래 «TypeScript 타깃 옵션») | 프론트엔드(타입 · 폼 · 필드 스키마 · 엔티티 서술) |
 
 **에이전트 skill** — [`skills/mdd/SKILL.md`](./skills/mdd/SKILL.md) 는 모델 수정 → `mdd build` → 종료 코드 · 진단 코드로 고치기 → 생성물 diff 검토 순환과 함정(생성 파일 직접 수정 금지 · 경고를 CI 에서 거는 법 · 개명)을 [Agent Skills](https://agentskills.io) 형식으로 담는다. 에이전트의 skills 디렉터리에 두면 된다.
 
@@ -474,6 +474,43 @@ for (const [field, rules] of Object.entries(FieldSchema.Order)) {
 **생성 폼(`*Form_gen.tsx`)은 이 맵을 읽지 않는다** — 값을 인라인으로 방출한다. 즉 이 맵의
 소비자는 전부 소비앱 쪽이고, 무엇이 깨지는지는 이쪽에서 보이지 않는다.
 
+#### `entity_description_gen.ts` — 소비 계약
+
+`field_schema_gen.ts` 가 **쓰는 쪽**(사람이 넣는 값의 제약)이라면 이 파일은 **읽는 쪽**이다 — 엔티티의 칸을 절 · 차례 · 라벨 · 힌트 · 형 ·
+참조 대상과 함께 **데이터**로 낸다. 폼이 코드 안에 인라인으로 가진 서술을, 상세 · 미리보기 · 인쇄 · 감사 기록 보기가 같이 쓰게 한다(컴포넌트가 아니라
+데이터이므로 어느 UI 프레임워크든 자기 렌더러로 그린다).
+
+```ts
+export const EntityDescriptions = {
+  Order: {
+    sections: [
+      { title: '기본', fields: [
+        { name: 'Number', label: '전표번호', hint: '예: C-0001', kind: 'text' },
+        { name: 'CustomerId', label: 'CustomerId', kind: 'reference', reference: 'Customer' },
+      ] },
+      { title: '진행', fields: [
+        { name: 'Level', label: 'Level', kind: 'enum', enum: 'Level' },
+        { name: 'CustomerName', label: '고객 상호', kind: 'text', via: 'CustomerId', derived: 'lookup', readOnly: true },
+      ] },
+    ],
+  },
+} as const satisfies Record<string, EntityDescription>
+```
+
+- **무엇이 실리는가** — 엔티티 표면의 모든 칸(기본키와 `@internal` 칸 제외)을 선언 순서로. 파생 칸(`derived`) · 시스템이 쓰는 칸 · 모든 엔티티가
+  물려받는 타임스탬프는 **빼지 않고** `readOnly: true` 로 표시한다 — 읽는 화면은 폼과 달리 그것들을 보일 수 있고, 거르는 것은 소비자의 몫이다.
+  목록 칸(`T[]`)은 `list: true`.
+- **절은 폼과 같은 규칙이다** — `@group` 이 처음 나온 차례, 그룹이 없는 칸은 «기타», 모든 칸이 그룹 없이 «기타» 뿐이면 제목(`title`)이 없다.
+  같은 규칙을 한 곳에서 읽으므로 폼의 절 제목과 이 파일의 절 제목은 어긋나지 않는다.
+- **`label` 은 폼이 보이는 이름이다** — 적은 표시 라벨(`- name(라벨): type`), 없으면 칸 이름(PascalCase); `@lookup` 은 읽는 칸의 라벨을 빌린다
+  (`field_schema_gen.ts` 와 같은 함수). **`hint` 는 `@help`** 이다 — 라벨은 짧게, 부연은 힌트로 가르면 읽는 화면이 라벨만 쓸 수 있다.
+- **`kind`** — `text` · `number` · `boolean` · `date` · `time` · `datetime` · `json` · `binary` · `enum`(`enum` 에 `enums_gen.ts` 의 타입 이름;
+  표시 이름은 `enum_labels_gen.ts` 의 `<Enum>Labels`) · `reference`(`reference` 에 가리키는 엔티티 이름). `@lookup` 칸의 `via` 는 그 값을 읽어 오는
+  **이 엔티티의 참조 칸**이다 — «참조 칸 옆에 lookup 값을 붙여 보이는» 보기를 그릴 수 있다.
+- **싣지 않는 것** — `required` · `maxLength` · `min` · `max`(그것은 `field_schema_gen.ts`), 값의 서식(날짜 · 통화), 그리고 **«참조 대상의 대표 칸»**:
+  모델에 그런 사실이 없다. 참조 옆에 사람이 읽는 값을 보이려면 모델에 `@lookup` 칸을 두고 `via` 로 짝짓는다.
+- **엔티티 필터와 필드 단위 `@internal`** 은 `field_schema_gen.ts` 와 같이 적용된다.
+
 #### 폼만 좁히기 (`formsInclude` / `formsExclude`)
 
 위 필터는 타깃의 **엔티티 파생 산출물 전체**(타입·필드 스키마·폼)에 걸린다. 그래서 *「타입은
@@ -632,7 +669,7 @@ Api 타깃은 기본으로 엔티티마다 **두 표면**을 등록한다 — OD
 |---|---|---|
 | `ApiRegistration_gen.cs` · `Controllers_gen.cs` | ✅ 제외 | 범용 CRUD·시크릿 컬럼을 데이터 API에 노출하지 않는다 |
 | `entity_names_gen.ts` (`EntitySetName`) | ✅ 제외 | OData entity set 이름의 미러다. 남겨 두면 존재하지 않는 경로를 타입세이프하게 광고한다 |
-| `entities_gen.ts` · `field_schema_gen.ts` · `*Form_gen.tsx` | ❌ 유지 | 타입은 데이터 API 전용이 아니다 — 전용 엔드포인트로 관리되는 엔티티에도 유용하다 |
+| `entities_gen.ts` · `field_schema_gen.ts` · `entity_description_gen.ts` · `*Form_gen.tsx` | ❌ 유지 | 타입은 데이터 API 전용이 아니다 — 전용 엔드포인트로 관리되는 엔티티에도 유용하다 |
 | Sql · Model 타깃 전체 | ❌ 유지 | 스토리지·EF 매핑은 노출과 무관하다 |
 
 #### 필드 단위 `@internal` — 저장하되 노출하지 않는다
@@ -649,7 +686,7 @@ Api 타깃은 기본으로 엔티티마다 **두 표면**을 등록한다 — OD
 | 기반 테이블 · 쓰기 엔티티(`Account`) · EF 매핑 | ✅ 그대로 — 저장·인증 경로가 쓴다 |
 | `FullView`/`UdView` 의 `SELECT` · 인터페이스(`IAccount`) · 읽기 타입(`AccountExt`) | ❌ 빠진다 (같은 빌드·같은 술어라 짝이 어긋나지 않는다) |
 | 데이터 API — OData 응답·`$select`·`$filter`·`$expand`, GraphQL 선택, 제네릭 POST/PATCH 본문 | ❌ 없다 — 두 표면이 모두 읽기 타입에서 만들어진다. 쓰기 본문에 그 칸을 실으면 모르는 속성으로 거절된다 |
-| `entities_gen.ts` · `field_schema_gen.ts` · `*Form_gen.tsx` | ❌ 빠진다 — 이 셋은 OData wire 모양의 미러인데, 그 칸은 어느 wire 에도 없다 |
+| `entities_gen.ts` · `field_schema_gen.ts` · `entity_description_gen.ts` · `*Form_gen.tsx` | ❌ 빠진다 — 이 넷은 OData wire 모양의 미러인데, 그 칸은 어느 wire 에도 없다 |
 
 - **표식 하나가 두 표면을 함께 닫는다** — 런타임의 표면별 제외(`ODataModel.Exclude` + `GraphQL.Exclude`)를 두 벌로 걸 필요가 없다.
 - 이미 배포된 뷰는 재생성 시 `SELECT` 목록이 바뀐다 — 적용 전에 diff 로 범위를 볼 것.

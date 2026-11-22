@@ -5,13 +5,14 @@ using MddBooster.Core.Semantic;
 namespace MddBooster.Generators.TypeScript;
 
 /// <summary>
-/// End-to-end generator that produces five TypeScript files from M3L models:
+/// End-to-end generator that produces six TypeScript files from M3L models:
 /// <list type="bullet">
 ///   <item><c>enums_gen.ts</c> — Union literal types for every M3L enum</item>
 ///   <item><c>entities_gen.ts</c> — TypeScript interfaces for every M3L entity</item>
 ///   <item><c>entity_names_gen.ts</c> — <c>ENTITY_NAMES</c> const array + <c>EntitySetName</c> type</item>
 ///   <item><c>enum_labels_gen.ts</c> — <c>{Enum}Labels</c> const map from enum value to display label</item>
 ///   <item><c>field_schema_gen.ts</c> — <c>FieldSchema</c> const map of field validation constraints</item>
+///   <item><c>entity_description_gen.ts</c> — <c>EntityDescriptions</c>: every entity's fields in sections, for reading screens</item>
 /// </list>
 /// </summary>
 public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IArtifactGenerator
@@ -74,6 +75,11 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
         var fieldSchemaContent = TSFieldSchemaRenderer.RenderAll(models);
         File.WriteAllText(Path.Combine(outDir, "field_schema_gen.ts"), fieldSchemaContent);
 
+        // entity_description_gen.ts — the reading side of the same fields: sections, labels, hints, kinds, references. Same entity
+        // filter and the same field-level @internal rule as field_schema_gen.ts; no write-axis statements (those are the schema's).
+        var entityDescriptionContent = TSEntityDescriptionRenderer.RenderAll(models, enumNames);
+        File.WriteAllText(Path.Combine(outDir, "entity_description_gen.ts"), entityDescriptionContent);
+
         // {Entity}Form_gen.tsx (optional) — 필드 단위 @internal 칸을 내지 않는다: 폼은 OData 쓰기 본문을
         // 만드는데, 읽기 타입에 없는 칸은 EDM 에도 없어 서버가 모르는 속성으로 거절한다. «저장 칸을 폼에서
         // 읽기 전용으로»는 별개의 쓰기 축(@immutable·@generated 등)이 맡는다.
@@ -84,7 +90,7 @@ public sealed class TypeScriptGenerator(TypeScriptGeneratorOptions options) : IA
 
             Directory.CreateDirectory(formsDir);
 
-            // The forms import the five files written above. Both directories are
+            // The forms import the files written above. Both directories are
             // independent user input, so the specifier between them is derived —
             // assuming a layout is what made a wrong pair emit files that this
             // generator reported as written and the consumer's compiler rejected.
