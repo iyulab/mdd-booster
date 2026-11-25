@@ -16,7 +16,7 @@
 
 ---
 
-## Unreleased
+## 0.49.0
 
 ### TypeScript 타깃이 엔티티의 «읽기 서술» 을 낸다 — `entity_description_gen.ts`
 
