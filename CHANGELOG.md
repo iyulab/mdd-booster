@@ -16,7 +16,7 @@
 
 ---
 
-## Unreleased
+## 0.50.0
 
 ### Added
 
