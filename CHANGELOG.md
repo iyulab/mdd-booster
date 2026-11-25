@@ -16,6 +16,18 @@
 
 ---
 
+## Unreleased
+
+### Added
+
+- **Conditional indexes** — `where:` on `@index` and `@unique` (M3L §3.3.5), in all three index forms. SQL Server gets a filtered
+  index (`CREATE [UNIQUE] NONCLUSTERED INDEX … WHERE …`; a conditional `@unique` is an index, not an inline constraint),
+  PostgreSQL a partial index (`CREATE [UNIQUE] INDEX … WHERE …`, with `NULLS NOT DISTINCT` when declared), and the Model target
+  `.HasFilter("…")` with the same text the SQL target writes. On SQL Server, the `IS NOT NULL` filter a nullable multi-column
+  `@unique` already had is joined to the condition with `AND`, in the SQL and the EF mapping alike. The condition is the conjunction
+  of comparisons between a stored field and a constant, `IN` lists and `IS [NOT] NULL` — what SQL Server's filtered index takes;
+  anything else, or a condition on a full-text index, is `MDD056`. Needs `M3L.Native` 0.28.0, now the pinned version.
+
 ## 0.49.0
 
 ### TypeScript 타깃이 엔티티의 «읽기 서술» 을 낸다 — `entity_description_gen.ts`

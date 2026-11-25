@@ -69,7 +69,7 @@ public static class PostgresTableRenderer
 
         var warnings = new List<string>();
         var constraints = new List<(string Name, string Body)>();
-        var indexes = new List<(string Name, string Columns)>();
+        var indexes = new List<PostgresIndex>();
 
         // PK — 물리명은 필드명 그대로 (공유 PK 확장 테이블이면 `{parent}_id`)
         var pkField = ModelPrimaryKey.Find(model);
@@ -125,7 +125,7 @@ public static class PostgresTableRenderer
         foreach (var field in storedFields)
         {
             if (!Has(field, "index") || Has(field, "pk") || Has(field, "unique")) continue;
-            indexes.Add((GeneratedObjectNames.For(true, GeneratedObjectNames.Kind.Index, tableName, field.Name), field.Name));
+            indexes.Add(new PostgresIndex(GeneratedObjectNames.For(true, GeneratedObjectNames.Kind.Index, tableName, field.Name), field.Name));
         }
 
         AppendSectionIndexes(model, tableName, constraints, indexes);
@@ -135,7 +135,7 @@ public static class PostgresTableRenderer
         {
             foreach (var field in ForeignKeyIndexPlanner.Plan(model))
             {
-                indexes.Add((GeneratedObjectNames.For(true, GeneratedObjectNames.Kind.Index, tableName, field.Name), field.Name));
+                indexes.Add(new PostgresIndex(GeneratedObjectNames.For(true, GeneratedObjectNames.Kind.Index, tableName, field.Name), field.Name));
             }
         }
 
@@ -178,7 +178,7 @@ public static class PostgresTableRenderer
         // 넘을 수 있고, PG는 NOTICE만 내고 조용히 절단한다. 절단 대신 오류.
         // 인덱스명도 같은 네임스페이스를 쓰므로 같은 게이트를 통과해야 한다 — 다중 컬럼
         // 인덱스명(ix_{t}_{c1}_{c2}_…)은 제약명보다 쉽게 63바이트를 넘는다.
-        foreach (var (name, _) in constraints.Concat(indexes))
+        foreach (var name in constraints.Select(c => c.Name).Concat(indexes.Select(i => i.Name)))
         {
             var violation = PostgresIdentifiers.Check(name);
             if (violation is not null)
@@ -218,12 +218,15 @@ public static class PostgresTableRenderer
 
         // 인덱스는 CREATE TABLE 뒤의 독립 문이다. CONCURRENTLY 는 쓰지 않는다 — 적용은
         // 하나의 트랜잭션으로 이뤄지고 concurrent 빌드는 트랜잭션 안에서 실행할 수 없다.
-        foreach (var (name, columns) in indexes)
+        foreach (var index in indexes)
         {
             sb.AppendLine();
-            sb.Append("CREATE INDEX ").Append(name)
+            sb.Append(index.Unique ? "CREATE UNIQUE INDEX " : "CREATE INDEX ").Append(index.Name)
               .Append(" ON ").Append(schema).Append('.').Append(tableName)
-              .Append(" (").Append(columns).AppendLine(");");
+              .Append(" (").Append(index.Columns).Append(')');
+            if (index.NullsNotDistinct) sb.Append(" NULLS NOT DISTINCT");
+            if (index.Where is not null) sb.Append(" WHERE ").Append(index.Where);
+            sb.AppendLine(";");
         }
 
         return new PostgresTableArtifact(tableName, sb.ToString(), warnings);
@@ -320,12 +323,23 @@ public static class PostgresTableRenderer
     /// </summary>
     private static void AppendSectionIndexes(
         ResolvedModel model, string tableName,
-        List<(string Name, string Body)> constraints, List<(string Name, string Columns)> indexes)
+        List<(string Name, string Body)> constraints, List<PostgresIndex> indexes)
     {
         foreach (var entry in SectionIndexParser.Parse(model))
         {
             var cols = entry.Columns;
-            if (entry.IsUnique)
+            if (entry.Where is not null)
+            {
+                // A conditional index (M3L §3.3.5). A constraint takes no condition, so a conditional @unique is a partial
+                // unique index — the same uniqueness among the rows the condition admits.
+                indexes.Add(new PostgresIndex(
+                    entry.Name ?? GeneratedObjectNames.For(true, entry.IsUnique ? GeneratedObjectNames.Kind.Unique : GeneratedObjectNames.Kind.Index, tableName, cols),
+                    string.Join(", ", cols),
+                    Unique: entry.IsUnique,
+                    NullsNotDistinct: entry.IsUnique && entry.Nulls == "not_distinct",
+                    Where: IndexConditions.PostgreSql(entry.Where, c => c)));
+            }
+            else if (entry.IsUnique)
             {
                 var uniqueKeyword = entry.Nulls == "not_distinct"
                     ? "UNIQUE NULLS NOT DISTINCT"
@@ -336,7 +350,7 @@ public static class PostgresTableRenderer
             }
             else
             {
-                indexes.Add((
+                indexes.Add(new PostgresIndex(
                     entry.Name ?? GeneratedObjectNames.For(true, GeneratedObjectNames.Kind.Index, tableName, cols),
                     string.Join(", ", cols)));
             }
@@ -387,4 +401,7 @@ public static class PostgresTableRenderer
 
     private static IReadOnlyList<string>? ExtractStringParams(List<JsonElement>? paramsList) =>
         MddBooster.Core.Ast.FieldAttributes.StringArgs(paramsList);
+
+    // An index the table's script creates after CREATE TABLE.
+    private sealed record PostgresIndex(string Name, string Columns, bool Unique = false, bool NullsNotDistinct = false, string? Where = null);
 }

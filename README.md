@@ -813,6 +813,7 @@ MDD_DEBUG=1 mdd build ./mdd
 | `@computed("expr")` → `_ext` 뷰 표현식 컬럼 + `[Computed]` | ✅ |
 | `@indexed` + rollup (미리 저장하는 집계 — SQL Server 색인 뷰 · PostgreSQL 구체화 뷰) | ❌ — 생성하지 않는다. 롤업은 읽을 때 계산되고 빌드가 `MDD052` 로 알린다. SQL Server 의 색인 뷰는 FullView 의 모양(롤업의 상관 하위 쿼리 · lookup 의 외부 조인 · 다른 뷰 읽기)을 담을 수 없다 — 종전 판은 FullView 에 `WITH SCHEMABINDING` 만 붙였는데 거기엔 색인을 만들 수 없었고, 다른 FullView 를 읽는 모델에서는 배포가 Msg 4513 으로 실패했다 |
 | `@unique(col1, col2)` 복합 | ✅ — 널 허용 컬럼이 섞이면 filtered unique index (`WHERE … IS NOT NULL`)로 방출한다. 그러지 않으면 두 번째 전체-NULL 행이 거부된다. `nulls: "not_distinct"`를 붙이면 그 필터를 만들지 않고 SQL:2023 `UNIQUE NULLS NOT DISTINCT` 의미(NULL도 그 자체로 유일성 경쟁에 참여)로 방출한다 — SQL Server는 필터 없는 inline `CONSTRAINT UNIQUE`(plain `UNIQUE`가 이미 이 의미), PostgreSQL 15+는 `UNIQUE NULLS NOT DISTINCT` 문법을 그대로 쓴다 |
+| 조건 색인 `where:` (`@unique(…, where: "…")` · `@index(…, where: "…")` · 하위 항목 `- where: "…"`, 명세 §3.3.5) | ✅ — SQL Server 는 filtered index(`CREATE [UNIQUE] NONCLUSTERED INDEX … WHERE …` — 조건 있는 `@unique` 는 인라인 제약이 아니다), PostgreSQL 은 partial index(`CREATE [UNIQUE] INDEX … WHERE …`, `nulls: "not_distinct"` 면 `NULLS NOT DISTINCT`), Model 타깃은 SQL 과 같은 글자의 `.HasFilter("…")`. 널 허용 복합 `@unique` 의 SQL Server `IS NOT NULL` 필터는 조건 앞에 `AND` 로 붙는다(EF 도 같은 글자 — 공급자의 자동 필터를 대신한다). 조건은 이 표의 저장 칸과 상수의 비교를 `AND` 로 이은 것이다(`=` `!=` `<` `<=` `>` `>=` · `IN (상수, …)` · `IS [NOT] NULL` · 불리언 칸 하나) — SQL Server 의 filtered index 가 받는 꼴이고 두 방언이 같은 색인을 낸다. 그 밖은 `MDD056` |
 | `### Indexes` 섹션 (`- @unique(...)` / `- @index(...)` · `- name: @index(...)` · `- name` + `fields:`/`unique:`) | ✅ — 항목의 이름(`- ux_scope: …`, `- customer_orders`)이 그 인덱스·제약의 데이터베이스 이름이다(SQL 두 방언 · EF `HasDatabaseName`, M3L 명세 §3.3.3). 괄호 안은 설명이다. 이름이 없는 지시자(`- @index(...)`)는 `name:` 을, 그것도 없으면 모델과 열에서 짓는다(`IX_{Model}_{Cols}` · `ix_{table}_{cols}`) |
 | `@inherits(FQN)` → C# 베이스클래스 오버라이드 (도메인 중립, verbatim) | ✅ |
 | `@implements(FQN, ...)` → C# 인터페이스 append (도메인 중립, verbatim) | ✅ |
@@ -857,6 +858,7 @@ UdView 위에 있어 이미 거르고, 기본 테이블을 읽는 서브쿼리�
 `@index(c1)`)도 같은 방식으로 `HasIndex(x => new { ... })`로 방출된다. `nulls: "not_distinct"`가
 붙은 복합 `@unique`는 SQL Server에서 `.HasFilter(null)`(널 허용 컬럼이 섞였을 때만), PostgreSQL에서
 `.AreNullsDistinct(false)`를 함께 방출한다 — SQL 타깃의 같은 선언과 동일한 의미(§"SQL 타깃" 참조).
+조건 색인(`where:`)은 SQL 타깃이 쓰는 것과 같은 글자의 `.HasFilter("…")` 를 붙인다.
 
 **`[Required]` 는 `NOT NULL` 보다 좁다.** SQL `NOT NULL` 컬럼은 빈 문자열을 허용하지만
 `[Required]` 는 거부하고, 판정 전에 trim 하므로 공백만 있는 값도 거부한다. 널 허용하지 않는
@@ -1493,6 +1495,7 @@ consumer-repo/
 | MDD052(경고) | rollup 의 `@indexed`(미리 저장하는 집계)는 생성하지 않는다 — 그 롤업은 뷰를 읽을 때 계산된다(두 방언 같음) |
 | MDD053 | 한 빌드에 같은 짧은 이름의 선언이 둘(다른 네임스페이스 — M3L 은 허용한다) — 생성되는 형 · 테이블 · 셋 이름이 짧은 이름에서 나와 부딪히므로 생성 전에 선다. 오류는 둘의 한정 이름(`inventory.Product`, `sales.Product`)을 적는다. 네임스페이스마다 따로 내는 출력은 아직 없다. 그래서 한정 이름이나 import 별칭으로 쓴 이름(`@reference(core.Customer)` · `: c.Stamped` · `from: core.Customer` · 형 `core.Status` · 뷰 `join` 의 `on` 식 안의 `core.Customer.id`)은 파서가 해석한 선언의 짧은 이름으로 읽힌다 |
 | MDD054(경고) | 읽기 모델로 내지 않는 뷰의 열에 `@searchable` — 키 열(`- id: identifier @from(<관계>.id)`)이 없거나 뷰가 `@internal` 이면 읽기 타입이 없고, `$search` 는 읽기 타입의 속성에만 걸린다. 선언은 어디에도 닿지 않으므로 지우거나 읽기 모델로 낸다 |
+| MDD056 | 색인 조건(`where:`, 명세 §3.3.5)을 색인에 둘 수 없다 — 이 표의 저장 칸이 아닌 이름(관계 경로 · `$parent` · 파생 칸 · 없는 칸)을 읽거나, 이식 가능한 식(§10.7)이 아니거나, «저장 칸 비교 상수» 를 `AND` 로 이은 꼴이 아니거나(`OR` · `NOT` · `LIKE` · `BETWEEN` · 함수 · 칸 대 칸 · 산술), 전문(`fulltext: true`) 색인에 붙었다. 메시지가 걸린 곳을 말한다. 그대로 내면 배포에서 실패하거나 선언과 다른 색인이 된다 |
 | MDD055 | 모델의 기본키 열이 둘 이상이다(`@primary(1)` + `@primary(2)`) — 복합 기본키는 어느 타깃도 생성하지 않는다(런타임 엔티티 기반 클래스의 키는 하나다). 하나의 `identifier` 기본키로 모델링하고 열 짝의 유일성은 복합 `@unique(열, 열)` 로 지킨다. 세 타깃(Sql 두 방언 · Model)이 같은 지점에서 선다 |
 | MDD048 | 필드가 명세는 정의하지만 이 생성기가 생성하지 않는 모양이다 — 인라인 `enum`(필드 안에 값) · `map<K, V>` · 하위 필드를 갖는 `object`, 그리고 생성하지 않는 조합의 배열 `T[]`(의미 형 원소 `email[]` · `phone[]` · `url[]` · `binary`/`json`/`rowversion`/`byte`/`time`/`datetime` 원소 · 파생 필드 · 기본값 · `@reference`/`@pk`/`@unique`/`@index`/`@searchable`/`@min`/`@max` · `### Indexes` 항목). 메시지가 그 조합과 고칠 길을 말한다. 어느 타깃도 그 모양을 낼 수 없다. 별도 모델 + `@reference` · 최상위 `::enum` · 직렬화한 `text` 칸으로 나눈다 |
 | MDD024(경고) | `mdd.json` 에 이 생성기가 정의하지 않은 키가 있다(루트 또는 `targets[n]`) — 무시되며, 가까운 알려진 키가 있으면 제안한다. 분석이 아니라 설정 단계에서 나오고, 다른 경고처럼 `treatWarningsAsErrors`·`warningsAsErrors` 로 빌드를 세울 수 있다 — 편집기 밖(CI)에서 오타를 잡는 길. `_` 로 시작하는 설명 키와 `$schema` 는 보고하지 않는다. `sources` 가 비어 있으면 설정 오류(종료 코드 4) |

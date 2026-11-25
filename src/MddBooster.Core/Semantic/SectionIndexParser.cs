@@ -24,12 +24,17 @@ namespace MddBooster.Core.Semantic;
 /// model and its columns. Not the text in parentheses after an item name: that is a description.
 /// </param>
 /// <param name="FullText">Whether the model asked for a full-text index (<c>@index(…, fulltext: true)</c>).</param>
+/// <param name="Where">
+/// The condition of a conditional index (<c>where: "…"</c>, M3L §3.3.5) as written — a portable expression over the
+/// table's own fields — or <see langword="null"/> for an index over every row. <see cref="IndexConditions"/> writes it.
+/// </param>
 public sealed record SectionIndexEntry(
     IReadOnlyList<string> Columns,
     bool IsUnique,
     string? Nulls = null,
     string? Name = null,
-    bool FullText = false);
+    bool FullText = false,
+    string? Where = null);
 
 /// <summary>
 /// Reads a model's <c>### Indexes</c> section into column lists.
@@ -93,7 +98,7 @@ public static class SectionIndexParser
     /// One entry as an index, or <see langword="null"/> when it is not one. The upstream AST carries three forms: a
     /// directive (<c>type: "directive"</c>) and an item with a directive (<c>type: "indexed"</c>) list their columns in
     /// <c>args</c>; an item written with sub-items (§3.3.3) carries them as <c>fields</c>, with no <c>type</c>. In all
-    /// three, <c>name</c> is the index's name and <c>unique</c>/<c>nulls</c>/<c>fulltext</c> mean the same.
+    /// three, <c>name</c> is the index's name and <c>unique</c>/<c>nulls</c>/<c>fulltext</c>/<c>where</c> mean the same.
     /// </summary>
     private static SectionIndexEntry? Read(JsonElement entry)
     {
@@ -128,7 +133,11 @@ public static class SectionIndexParser
             : null;
         var fullText = entry.TryGetProperty("fulltext", out var fullTextProp)
                        && fullTextProp.ValueKind == JsonValueKind.True;
-        return new SectionIndexEntry(columns, isUnique, nulls, name, fullText);
+        var where = entry.TryGetProperty("where", out var whereProp) && whereProp.ValueKind == JsonValueKind.String
+                    && !string.IsNullOrWhiteSpace(whereProp.GetString())
+            ? whereProp.GetString()!.Trim()
+            : null;
+        return new SectionIndexEntry(columns, isUnique, nulls, name, fullText, where);
     }
 
     /// <summary>
