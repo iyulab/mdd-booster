@@ -368,17 +368,29 @@ public static class EntityConfigurationRenderer
 
             var sb = body.Statement(entityName).Append(".HasIndex(x => new { ").Append(propertyAccess).Append(" })");
 
+            var anyNullable = entry.Columns.Any(c =>
+                columnNullability.TryGetValue(c, out var n) && n);
             if (entry.IsUnique)
             {
                 sb.Append(".IsUnique()");
 
-                var anyNullable = entry.Columns.Any(c =>
-                    columnNullability.TryGetValue(c, out var n) && n);
                 if (entry.Nulls == "not_distinct")
                 {
                     sb.Append(isPostgres ? ".AreNullsDistinct(false)"
-                        : anyNullable ? ".HasFilter(null)" : "");
+                        : anyNullable && entry.Where is null ? ".HasFilter(null)" : "");
                 }
+            }
+
+            // A conditional index (M3L §3.3.5): the filter is the text the SQL target writes. On SQL Server it replaces the
+            // provider's own NULL filter of a nullable unique index, so the NULL filter goes in with it, as the SQL does.
+            if (entry.Where is not null)
+            {
+                var filter = isPostgres
+                    ? IndexConditions.PostgreSql(entry.Where, c => c)
+                    : IndexConditions.SqlServer(entry.Where,
+                        entry.IsUnique && anyNullable && entry.Nulls != "not_distinct" ? entry.Columns : [],
+                        IndexConditions.SqlServerColumn)!;
+                sb.Append(".HasFilter(").Append(SourceLiteral.CSharpString(filter)).Append(')');
             }
 
             // The same name the SQL targets give it: the one the model gives (an item name or a directive's

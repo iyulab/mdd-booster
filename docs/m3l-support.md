@@ -1,8 +1,8 @@
 # M3L support in mdd-booster
 
 > **Specification:** the M3L language is defined upstream, in the `m3l` project. This generator pins
-> **`M3L.Native` 0.27.0**; the specification at that version is
-> [`docs/specification.md` @ 0.27.0](https://github.com/iyulab/m3l/blob/fbaab53a0458f3f42a8150737b30efee5ae218cb/docs/specification.md).
+> **`M3L.Native` 0.28.0**; the specification at that version is
+> [`docs/specification.md` @ 0.28.0](https://github.com/iyulab/m3l/blob/1461e5d3ca808bb04c173944da6f05fad155257a/docs/specification.md).
 > Section numbers below are that document's.
 
 This page answers the question a reader of the specification brings here: **where this generator
@@ -216,6 +216,18 @@ With the default, a multi-column `@unique` over a nullable column becomes a filt
 SQL Server (`WHERE … IS NOT NULL`) and a plain unique constraint on PostgreSQL, whose default is
 already that meaning. With `nulls: "not_distinct"` it is an unfiltered `UNIQUE` constraint on SQL
 Server and `UNIQUE NULLS NOT DISTINCT` on PostgreSQL, which needs PostgreSQL 15 or later.
+
+## §3.3.5 Conditional Indexes
+
+**What this generator implements**: all three index forms, on both SQL dialects and in the EF Core
+mapping. A conditional index is a filtered index on SQL Server and a partial index on PostgreSQL, a
+conditional `@unique` a unique index rather than a constraint, and the EF mapping declares
+`.HasFilter` with the text the SQL target writes. On SQL Server the `IS NOT NULL` filter of a nullable
+multi-column `@unique` is joined to the condition with `AND`. The generator takes a narrower condition
+than the specification: the conjunction (`AND`) of comparisons between a stored field of the table and
+a constant, `IN` lists of constants, `IS [NOT] NULL` and a boolean field alone — the form SQL Server's
+filtered index takes, so that both dialects create the same index. Anything else, and a condition on a
+full-text index, stops the build (`MDD056`).
 
 ## §3.4.6 File Owner (# Prefix:)
 

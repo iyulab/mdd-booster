@@ -72,6 +72,7 @@ public sealed class SemanticAnalyzer
         CheckUnnamedNavigations(diagnostics);
         CheckSearchableReferences(diagnostics);
         CheckFullTextIndexes(diagnostics);
+        CheckIndexConditions(diagnostics);
         CheckDeclaredIndexNames(diagnostics);
         CheckGeneratedIndexNames(diagnostics);
         CheckUnreadIndexItems(diagnostics);
@@ -327,6 +328,60 @@ public sealed class SemanticAnalyzer
                     SemanticSeverity.Warning));
             }
         }
+    }
+
+    /// <summary>
+    /// <c>MDD056</c>: an index condition (<c>where:</c>, M3L §3.3.5) this generator cannot put on an index. It names a
+    /// field that is not a stored column of the table (a relation path, <c>$parent</c>, a derived field, no such field);
+    /// it is outside the portable subset; it is not the conjunction of field-constant comparisons both SQL dialects index
+    /// the same way (<see cref="IndexConditions.Unindexable"/>); or it is on a full-text index, which takes no condition.
+    /// Emitting it anyway would either fail at deploy or create a different index than the one declared.
+    /// </summary>
+    private void CheckIndexConditions(List<SemanticDiagnostic> diagnostics)
+    {
+        foreach (var model in _models)
+        {
+            foreach (var entry in SectionIndexParser.Parse(model).Where(e => e.Where is not null))
+            {
+                var where = entry.Where!;
+                var subject = $"'{model.Name}' @{(entry.IsUnique ? "unique" : "index")}({string.Join(", ", entry.Columns)}, where: \"{where}\")";
+                string? why = null;
+                if (entry.FullText)
+                {
+                    why = "전문(full-text) 인덱스는 조건을 받지 않는다 — fulltext 또는 where 중 하나를 뺀다";
+                }
+                else
+                {
+                    var outOfScope = new List<string>();
+                    var result = PortableExpression.Translate(where, SqlDialect.SqlServer, c => c, condition: true,
+                        outOfScope: name =>
+                        {
+                            var reason = StoredColumnProblem(model, name);
+                            if (reason is not null) outOfScope.Add(reason);
+                            return reason;
+                        });
+                    if (outOfScope.Count > 0)
+                        why = string.Join("; ", outOfScope.Distinct());
+                    else if (result.Sql is null)
+                        why = $"이식 가능한 식(M3L 명세 §10.7)이 아니다({string.Join(", ", result.Unsupported)})";
+                    else if (IndexConditions.Unindexable(where) is { } shape)
+                        why = $"인덱스 조건은 «필드 비교 상수» 를 AND 로 이은 것이다 — {shape}";
+                }
+                if (why is null) continue;
+                diagnostics.Add(new SemanticDiagnostic("MDD056", $"{subject}: {why}", model.Source.Loc));
+            }
+        }
+    }
+
+    // Why an index condition cannot name `name` — or null when it is a stored column of the model's table.
+    private static string? StoredColumnProblem(ResolvedModel model, string name)
+    {
+        if (name.Contains('.') || name.StartsWith('$'))
+            return $"'{name}' (an index condition reads its own table's fields, by name)";
+        var field = model.Fields.FirstOrDefault(f => f.Name == name);
+        if (field is null) return $"'{name}' is not a field of {model.Name}";
+        if (field.Kind != FieldKind.Stored) return $"'{name}' is a derived field, not a stored column";
+        return null;
     }
 
     /// <summary>

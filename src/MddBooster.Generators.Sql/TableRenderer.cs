@@ -187,17 +187,18 @@ public static class TableRenderer
                 // 를 선언했다면 정반대다 — NULL도 다른 값처럼 유일성 경쟁에 참여해야 하고,
                 // 그건 SQL Server의 plain UNIQUE가 **이미 기본으로 하는 일**이라 필터가 필요
                 // 없다: 모두 NOT NULL인 경우와 같은 inline 제약으로 충분하다.
+                // A declared condition (`where:`, M3L §3.3.5) makes it a filtered index too — a constraint takes no
+                // condition — and the NULL filter above, when it is needed, is joined to it (IndexConditions).
                 var anyNullable = cols.Any(c =>
                     columnNullability.TryGetValue(c, out var n) && n);
-                var needsFilteredIndex = anyNullable && entry.Nulls != "not_distinct";
-                if (needsFilteredIndex)
+                var notNullColumns = anyNullable && entry.Nulls != "not_distinct" ? entry.Columns : [];
+                var filter = IndexConditions.SqlServer(entry.Where, notNullColumns, IndexConditions.SqlServerColumn);
+                if (filter is not null)
                 {
-                    var notNullPredicate = string.Join(" AND ",
-                        cols.Select(c => $"[{c}] IS NOT NULL"));
                     postTableStatements.Add(
                         $"CREATE UNIQUE NONCLUSTERED INDEX [{name}] " +
                         $"ON [{schema}].[{model.Name}] ({colList}) " +
-                        $"WHERE {notNullPredicate};");
+                        $"WHERE {filter};");
                 }
                 else
                 {
@@ -207,9 +208,11 @@ public static class TableRenderer
             }
             else
             {
+                var filter = IndexConditions.SqlServer(entry.Where, [], IndexConditions.SqlServerColumn);
                 postTableStatements.Add(
                     $"CREATE NONCLUSTERED INDEX [{name}] " +
-                    $"ON [{schema}].[{model.Name}] ({colList});");
+                    $"ON [{schema}].[{model.Name}] ({colList})" +
+                    (filter is null ? ";" : $" WHERE {filter};"));
             }
         }
     }
