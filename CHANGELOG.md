@@ -16,6 +16,17 @@
 
 ---
 
+## Unreleased
+
+### Added
+
+- **A field-level `@unique(nulls: "not_distinct")`** (M3L §3.3.4.1 · §3.3.4.3) is emitted as the same constraint a model-level
+  `@unique(code, nulls: "not_distinct")` already was: on SQL Server an inline, unfiltered `UNIQUE` constraint (SQL Server's own
+  `UNIQUE` counts a `NULL` as a value), on PostgreSQL `UNIQUE NULLS NOT DISTINCT`, and in the EF mapping `.HasFilter(null)` /
+  `.AreNullsDistinct(false)`. Before, the policy written on a field line did not reach the output, and a nullable field got the
+  filtered index of the default policy. A model without it emits exactly what it did. Needs `M3L.Native` 0.29.0, now the pinned
+  version.
+
 ## 0.50.0
 
 ### Added

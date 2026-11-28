@@ -114,11 +114,13 @@ public static class PostgresTableRenderer
         }
 
         // field-level @unique — PG UNIQUE는 NULL을 distinct로 취급하므로
-        // nullable이어도 filtered index 우회 없이 제약 하나로 정확하다
+        // nullable이어도 filtered index 우회 없이 제약 하나로 정확하다.
+        // `@unique(nulls: "not_distinct")`이면 SQL:2023 `UNIQUE NULLS NOT DISTINCT`(모델 수준 항목과 같은 규칙).
         foreach (var field in storedFields)
         {
             if (!Has(field, "unique") || Has(field, "pk")) continue;
-            constraints.Add((GeneratedObjectNames.For(true, GeneratedObjectNames.Kind.Unique, tableName, field.Name), $"UNIQUE ({field.Name})"));
+            var unique = MddBooster.Core.Ast.FieldAttributes.UniqueNullsNotDistinct(field) ? "UNIQUE NULLS NOT DISTINCT" : "UNIQUE";
+            constraints.Add((GeneratedObjectNames.For(true, GeneratedObjectNames.Kind.Unique, tableName, field.Name), $"{unique} ({field.Name})"));
         }
 
         // field-level @index — PK/UNIQUE 는 제약이 인덱스를 소유하므로 중복 방출하지 않는다

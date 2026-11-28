@@ -1,8 +1,8 @@
 # M3L support in mdd-booster
 
 > **Specification:** the M3L language is defined upstream, in the `m3l` project. This generator pins
-> **`M3L.Native` 0.28.0**; the specification at that version is
-> [`docs/specification.md` @ 0.28.0](https://github.com/iyulab/m3l/blob/1461e5d3ca808bb04c173944da6f05fad155257a/docs/specification.md).
+> **`M3L.Native` 0.29.0**; the specification at that version is
+> [`docs/specification.md` @ 0.29.0](https://github.com/iyulab/m3l/blob/397182032e82b487f276a3e42e81caa26aa338ae/docs/specification.md).
 > Section numbers below are that document's.
 
 This page answers the question a reader of the specification brings here: **where this generator
@@ -209,10 +209,11 @@ says so (`MDD041`).
 **What this generator implements**: this one, in full — every entry of `### Indexes` is read. An
 entry that names no columns makes no index, and the build says so (`MDD043`).
 
-## §3.3.4.3 NULL Handling in Multi-Column Unique Constraints
+## §3.3.4.3 NULL Handling in Unique Constraints
 
-**What this generator implements**: both meanings, on both SQL dialects and in the EF Core mapping.
-With the default, a multi-column `@unique` over a nullable column becomes a filtered unique index on
+**What this generator implements**: both meanings, for a model-level `@unique` and a field-level one
+alike, on both SQL dialects and in the EF Core mapping.
+With the default, a `@unique` over a nullable column becomes a filtered unique index on
 SQL Server (`WHERE … IS NOT NULL`) and a plain unique constraint on PostgreSQL, whose default is
 already that meaning. With `nulls: "not_distinct"` it is an unfiltered `UNIQUE` constraint on SQL
 Server and `UNIQUE NULLS NOT DISTINCT` on PostgreSQL, which needs PostgreSQL 15 or later.

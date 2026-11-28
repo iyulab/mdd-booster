@@ -327,8 +327,15 @@ public static class EntityConfigurationRenderer
 
             if (FieldAttributes.Has(field, "unique"))
             {
-                body.Statement(entityName).Append(".HasIndex(x => x.").Append(property)
-                  .Append(").IsUnique().HasDatabaseName(")
+                var statement = body.Statement(entityName).Append(".HasIndex(x => x.").Append(property)
+                  .Append(").IsUnique()");
+                // `@unique(nulls: "not_distinct")` — the same as a model-level entry: PostgreSQL says so, and on SQL Server
+                // the provider's NULL filter for a nullable unique index is turned off (M3L §3.3.4.3).
+                if (FieldAttributes.UniqueNullsNotDistinct(field))
+                {
+                    statement.Append(isPostgres ? ".AreNullsDistinct(false)" : field.Nullable ? ".HasFilter(null)" : "");
+                }
+                statement.Append(".HasDatabaseName(")
                   .Append(SourceLiteral.CSharpString(GeneratedObjectNames.For(isPostgres, GeneratedObjectNames.Kind.Unique, indexNamePrefix, columnToken)))
                   .AppendLine(");");
             }

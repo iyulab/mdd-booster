@@ -53,7 +53,9 @@ public static class TableRenderer
             if (HasAttribute(field, "pk")) continue; // PK는 이미 유일
 
             var column = NameCasing.ToPascalCase(field.Name);
-            if (field.Nullable)
+            // `@unique(nulls: "not_distinct")`: a NULL is one more value — exactly what SQL Server's own UNIQUE does,
+            // so the constraint stays inline and unfiltered (M3L §3.3.4.3, as for a model-level entry).
+            if (field.Nullable && !MddBooster.Core.Ast.FieldAttributes.UniqueNullsNotDistinct(field))
             {
                 postTableStatements.Add(
                     $"CREATE UNIQUE NONCLUSTERED INDEX [{GeneratedObjectNames.For(false, GeneratedObjectNames.Kind.Unique, model.Name, column)}] " +

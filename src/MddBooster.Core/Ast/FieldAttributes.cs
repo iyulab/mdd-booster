@@ -29,6 +29,13 @@ public static class FieldAttributes
         return field.Attributes.FirstOrDefault(a => Matches(a.Name, name));
     }
 
+    /// <summary>
+    /// Whether the field's <c>@unique</c> declares that a <c>NULL</c> competes for uniqueness like any value
+    /// (<c>@unique(nulls: "not_distinct")</c>, M3L §3.3.4.1 · §3.3.4.3 — SQL:2023 <c>NULLS NOT DISTINCT</c>). The same policy a
+    /// model-level entry's <c>nulls</c> declares, emitted by the same rules.
+    /// </summary>
+    public static bool UniqueNullsNotDistinct(FieldNode field) => Find(field, "unique")?.Nulls == "not_distinct";
+
     private static bool Matches(string declared, string queried) =>
         string.Equals(Canonical(declared), Canonical(queried), StringComparison.OrdinalIgnoreCase);
 
